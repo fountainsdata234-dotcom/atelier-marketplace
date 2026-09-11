@@ -639,7 +639,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
           {visiblePosts.map((post) => {
             const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
             const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
@@ -656,14 +656,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className={`rounded-[1.7rem] border overflow-hidden transition-all group flex flex-col justify-between ${
+                className={`rounded-[1.5rem] border overflow-hidden transition-all group flex flex-col justify-between ${
                   isDarkMode
                     ? 'bg-[#121316] border-neutral-800/90 hover:border-amber-500/40'
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
                 } ${post.isPromoted ? 'ring-1 ring-amber-500/50 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_20px_40px_rgba(251,191,36,0.12)]' : ''}`}
               >
                 {/* Post Header: Tailor Handle, Location & Promoted Symbol */}
-                <div className="p-3.5 flex items-center justify-between border-b border-neutral-800/40">
+                <div className="p-3 flex items-center justify-between border-b border-neutral-800/40">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-xs flex items-center justify-center">
                       {post.authorName.charAt(0)}
@@ -703,7 +703,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Garment Image with High-Res Zoom / Save */}
-                <div className={`relative aspect-4/5 w-full bg-neutral-900 overflow-hidden group/img ${post.isPromoted ? 'p-2 border-[3px] border-amber-500/60 bg-gradient-to-br from-amber-500/10 via-transparent to-amber-500/20 rounded-[1.5rem]' : ''}`}>
+                <div className={`relative aspect-[4/4.8] w-full bg-neutral-900 overflow-hidden group/img ${post.isPromoted ? 'p-2 border-[3px] border-amber-500/60 bg-gradient-to-br from-amber-500/10 via-transparent to-amber-500/20 rounded-[1.5rem]' : ''}`}>
                   <img
                     src={post.imageUrl}
                     alt={post.title}
@@ -745,7 +745,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Post Body: Title, Description, Tags, Custom Pricing */}
-                <div className="p-4 space-y-3 flex-1">
+                <div className="p-3 space-y-2.5 flex-1">
                   <div>
                     <h3 className="font-serif font-bold text-lg leading-snug">
                       {post.title}
@@ -770,7 +770,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   )}
 
                   {/* Seller price / negotiable state */}
-                  <div className="p-2.5 rounded-xl border border-neutral-800/80 bg-neutral-900/30 text-[11px] space-y-1">
+                  <div className="p-2 rounded-xl border border-neutral-800/80 bg-neutral-900/30 text-[11px] space-y-1">
                     <span className="text-[9px] uppercase font-bold tracking-wider text-amber-500/80 block">
                       Seller Price
                     </span>
@@ -797,7 +797,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Footer: Like Counter, In-App Message & WhatsApp Button */}
-                <div className="p-3 border-t border-neutral-800/60 bg-neutral-900/20 flex items-center justify-between gap-2">
+                <div className="px-3 py-2.5 border-t border-neutral-800/60 bg-neutral-900/20 flex items-center justify-between gap-2">
                   <button
                     onClick={() => handleLike(post.id)}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${

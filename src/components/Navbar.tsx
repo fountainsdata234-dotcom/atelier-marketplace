@@ -23,6 +23,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleTheme,
   unreadCount = 0
 }) => {
+  const isSeller = currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller');
+
   return (
     <header
       className={`sticky top-0 z-40 w-full border-b backdrop-blur-md transition-colors ${
@@ -77,17 +79,33 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Marketplace</span>
           </button>
 
-          <button
-            onClick={() => onNavigate('collections')}
-            className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
-              currentView === 'collections'
-                ? 'text-amber-400 bg-amber-500/10 font-semibold'
-                : 'text-neutral-400 hover:text-neutral-100'
-            }`}
-          >
-            <Bookmark className="w-3.5 h-3.5 text-amber-500" />
-            <span>Saved</span>
-          </button>
+          {currentUser && !isSeller && (
+            <button
+              onClick={() => onNavigate('collections')}
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+                currentView === 'collections'
+                  ? 'text-amber-400 bg-amber-500/10 font-semibold'
+                  : 'text-neutral-400 hover:text-neutral-100'
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5 text-amber-500" />
+              <span>Saved</span>
+            </button>
+          )}
+
+          {currentUser && isSeller && (
+            <button
+              onClick={() => onNavigate('collections')}
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+                currentView === 'collections'
+                  ? 'text-amber-400 bg-amber-500/10 font-semibold'
+                  : 'text-neutral-400 hover:text-neutral-100'
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5 text-amber-500" />
+              <span>Collection</span>
+            </button>
+          )}
 
           {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') && (
             <button
@@ -175,14 +193,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 </div>
               </div>
-
-              <button
-                onClick={onLogout}
-                title="Log out"
-                className="p-2 rounded-xl text-neutral-400 hover:text-red-400 hover:bg-neutral-800/30 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
             </div>
           ) : (
             <button

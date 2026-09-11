@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Compass, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark, Menu, X, LogIn } from 'lucide-react';
+import { Home, Compass, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark, Menu, X, LogIn, LogOut } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -7,6 +7,7 @@ interface MobileBottomNavProps {
   currentView: string;
   onNavigate: (view: string) => void;
   onOpenAuth: () => void;
+  onLogout?: () => void;
   isDarkMode: boolean;
   unreadCount?: number;
 }
@@ -16,6 +17,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   currentView,
   onNavigate,
   onOpenAuth,
+  onLogout,
   isDarkMode,
   unreadCount = 0
 }) => {
@@ -41,35 +43,15 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         }`}
       >
         <div className="mx-auto max-w-md">
-          <div className="grid grid-cols-5 gap-1.5">
+          <div className="grid grid-cols-3 gap-1.5">
             <button
               onClick={() => handlePrimaryNavigate(currentUser ? 'marketplace' : 'landing')}
               className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
                 primaryActionIsActive(currentUser ? 'marketplace' : 'landing') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
-              <Home className="w-5 h-5" />
-              <span className="text-[10px] font-medium">{currentUser ? 'Explore' : 'Home'}</span>
-            </button>
-
-            <button
-              onClick={() => handlePrimaryNavigate('marketplace')}
-              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
-                primaryActionIsActive('marketplace') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
-              }`}
-            >
               <Compass className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Market</span>
-            </button>
-
-            <button
-              onClick={() => handlePrimaryNavigate('collections')}
-              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
-                primaryActionIsActive('collections') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
-              }`}
-            >
-              <Bookmark className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Saved</span>
+              <span className="text-[10px] font-medium">{currentUser ? 'Explore' : 'Home'}</span>
             </button>
 
             {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller' || currentUser.role === 'admin') ? (
@@ -140,6 +122,19 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <button
                     onClick={() => {
                       setMenuOpen(false);
+                      onNavigate('collections');
+                    }}
+                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
+                      currentView === 'collections' ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-300 hover:bg-neutral-800/60'
+                    }`}
+                  >
+                    <Bookmark className="w-4 h-4" />
+                    {currentUser.role === 'tailor' || currentUser.role === 'fabric_seller' ? 'Collection' : 'Saved'}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
                       onNavigate(currentUser.role === 'admin' ? 'admin' : 'dashboard');
                     }}
                     className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
@@ -150,6 +145,18 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   >
                     <UserIcon className="w-4 h-4" />
                     {currentUser.role === 'admin' ? 'Admin Portal' : 'Account / Studio'}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onNavigate('marketplace');
+                      onLogout?.();
+                    }}
+                    className="w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-red-300 hover:bg-red-500/10"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Log out
                   </button>
                 </>
               ) : (

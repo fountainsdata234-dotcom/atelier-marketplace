@@ -398,6 +398,7 @@ export default function App() {
         currentView={currentView}
         onNavigate={setCurrentView}
         onOpenAuth={() => handleOpenAuthWithRole('buyer')}
+        onLogout={handleLogout}
         isDarkMode={isDarkMode}
       />
 
