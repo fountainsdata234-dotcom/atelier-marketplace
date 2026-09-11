@@ -14,9 +14,9 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode }) => {
           : 'border-neutral-200 bg-white/90 text-neutral-700 shadow-sm'
       }`}
     >
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid gap-8 md:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr]">
-          <div>
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr] md:gap-8">
+          <div className="sm:col-span-2 md:col-span-1">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-neutral-950 shadow-lg shadow-amber-500/20">
                 <Scissors className="h-5 w-5 stroke-[2.2]" />

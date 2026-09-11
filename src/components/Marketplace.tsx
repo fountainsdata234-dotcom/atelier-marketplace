@@ -340,94 +340,94 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   initial={{ opacity: 0.5, scale: 1.02 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.45 }}
-                  className="relative aspect-[16/7] min-h-[320px]"
+                  className="relative aspect-[10/13] min-h-[320px] sm:aspect-[16/7] sm:min-h-[320px]"
                 >
                   <img src={post.imageUrl} alt={post.title} className="absolute inset-0 h-full w-full object-cover" loading="eager" />
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.25),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.9),rgba(0,0,0,0.55),rgba(0,0,0,0.2))]" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.22),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.22),rgba(0,0,0,0.78))] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.25),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.9),rgba(0,0,0,0.55),rgba(0,0,0,0.2))]" />
 
-                  <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-6">
-                    <div className="flex flex-wrap items-center gap-2">
+                  <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-6">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                       {post.isPromoted && (
-                        <span className="rounded-full border border-amber-300/70 bg-amber-400/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-neutral-950">
+                        <span className="rounded-full border border-amber-300/70 bg-amber-400/90 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.18em] text-neutral-950 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.22em]">
                           Promoted
                         </span>
                       )}
-                      <span className="rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-amber-100 backdrop-blur-sm">
+                      <span className="rounded-full border border-white/20 bg-black/35 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-amber-100 backdrop-blur-sm sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.2em]">
                         {post.authorRole === 'tailor' ? 'Bespoke Tailor' : 'Fabric Merchant'}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 rounded-full border border-white/20 bg-black/40 px-2 py-1.5 backdrop-blur-md">
+                    <div className="flex items-center gap-2 rounded-full border border-white/20 bg-black/40 px-1.5 py-1 backdrop-blur-md sm:px-2 sm:py-1.5">
                       {post.authorAvatar ? (
-                        <img src={post.authorAvatar} alt="" className="h-8 w-8 rounded-full object-cover ring-2 ring-amber-300/80" />
+                        <img src={post.authorAvatar} alt="" className="h-7 w-7 rounded-full object-cover ring-2 ring-amber-300/80 sm:h-8 sm:w-8" />
                       ) : (
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-neutral-950 ring-2 ring-amber-200/80">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-neutral-950 ring-2 ring-amber-200/80 sm:h-8 sm:w-8 sm:text-sm">
                           {post.authorName.slice(0, 2).toUpperCase()}
                         </span>
                       )}
-                      <span className="hidden text-xs font-semibold text-white sm:block">{post.authorName}</span>
+                      <span className="hidden text-[10px] font-semibold text-white sm:block sm:text-xs">{post.authorName}</span>
                     </div>
                   </div>
 
-                  <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6 lg:p-8">
-                    <div className="max-w-3xl rounded-[1.5rem] border border-white/10 bg-black/25 p-4 backdrop-blur-md sm:p-5">
-                      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-amber-300 font-semibold">
+                  <div className="absolute inset-x-0 bottom-0 p-3 sm:p-6 lg:p-8">
+                    <div className="max-w-3xl rounded-[1.2rem] border border-white/10 bg-black/25 p-3 backdrop-blur-md sm:rounded-[1.5rem] sm:p-5">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] text-amber-300 font-semibold sm:gap-2 sm:text-[10px] sm:tracking-[0.22em]">
                         <span>{post.authorLocation.city}, {post.authorLocation.country}</span>
                         <span className="text-neutral-400">•</span>
                         <span>{post.pricing.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable price'}</span>
                       </div>
 
-                      <h2 className="mt-2 text-2xl font-serif font-extrabold leading-tight text-white sm:text-4xl">
+                      <h2 className="mt-2 text-xl font-serif font-extrabold leading-tight text-white sm:text-2xl lg:text-4xl">
                         {post.title}
                       </h2>
 
-                      <p className="mt-2 max-w-2xl text-sm text-neutral-200 sm:text-base">
+                      <p className="mt-2 max-w-2xl text-xs text-neutral-200 sm:text-sm lg:text-base">
                         {post.description}
                       </p>
 
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
                         {post.tags.slice(0, 4).map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-amber-200"
+                            className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[8px] font-medium uppercase tracking-[0.14em] text-amber-200 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.16em]"
                           >
                             #{tag}
                           </span>
                         ))}
                       </div>
 
-                      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-200">
-                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2.5 py-1.5">
+                      <div className="mt-4 flex flex-col gap-2 sm:mt-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-neutral-200 sm:gap-2 sm:text-[11px]">
+                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
                             <span className="text-neutral-400">Likes</span> {post.likes.length}
                           </span>
-                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2.5 py-1.5">
+                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
                             <span className="text-neutral-400">Saves</span> {post.saves.length}
                           </span>
-                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2.5 py-1.5">
+                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
                             <span className="text-neutral-400">Rating</span> {post.rating ? post.rating.toFixed(1) : 'New'}
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
                           <button
                             type="button"
                             onClick={() => onSaveImageToViewer(post.imageUrl, post.title)}
-                            className="rounded-xl bg-amber-400 px-3 py-2 text-[11px] font-bold text-neutral-950 transition hover:bg-amber-300"
+                            className="rounded-xl bg-amber-400 px-2.5 py-2 text-[10px] font-bold text-neutral-950 transition hover:bg-amber-300 sm:px-3 sm:text-[11px]"
                           >
                             View Details
                           </button>
                           <button
                             type="button"
                             onClick={() => onSelectPostForMessage(post)}
-                            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-white/10"
+                            className="rounded-xl border border-white/15 bg-white/5 px-2.5 py-2 text-[10px] font-semibold text-white transition hover:bg-white/10 sm:px-3 sm:text-[11px]"
                           >
                             Message Seller
                           </button>
                           <button
                             type="button"
                             onClick={() => openWhatsApp(post)}
-                            className="rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-emerald-500"
+                            className="col-span-2 rounded-xl bg-emerald-600 px-2.5 py-2 text-[10px] font-bold text-white transition hover:bg-emerald-500 sm:col-span-auto sm:px-3 sm:text-[11px]"
                           >
                             WhatsApp
                           </button>
