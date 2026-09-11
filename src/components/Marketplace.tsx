@@ -149,6 +149,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
   const visiblePosts = filteredPosts.slice(0, visiblePostsCount);
 
+  const getGreeting = (userName: string | null | undefined) => {
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    return `${greeting}${userName ? `, ${userName}` : ''}`;
+  };
+
   useEffect(() => {
     setVisiblePostsCount(10);
   }, [searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
@@ -246,7 +252,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const openWhatsApp = (post: ClothPost) => {
     const phone = post.authorWhatsapp?.replace(/\D/g, '') || '2348000000000';
     const text = encodeURIComponent(
-      `Hello ${post.authorName}! I saw your design "${post.title}" on Atelier Marketplace. I would like to place an order or discuss custom tailoring.`
+      `Hello ${post.authorName}! I saw your design "${post.title}" on Fabrilux Atelier. I would like to place an order or discuss custom tailoring.`
     );
     window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
   };
@@ -261,7 +267,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             <span>Curated Haute Couture & Fabrics</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-serif font-bold tracking-tight">
-            Marketplace Feed
+            {getGreeting(currentUser?.name || currentUser?.shopName || currentUser?.handle)}
           </h1>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             Explore handcrafted bespoke garments and fine fabrics from authenticated tailors.
@@ -319,38 +325,138 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 ★
               </div>
               <h2 className="text-sm font-semibold tracking-wide uppercase text-amber-400 font-mono">
-                Atelier Runway
+                Fabrilux Atelier Runway
               </h2>
             </div>
             <span className="text-[11px] text-neutral-400">Selected atelier work</span>
           </div>
-          <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-neutral-950">
+
+          <div className="relative overflow-hidden rounded-[2rem] border border-amber-500/30 bg-neutral-950 shadow-[0_30px_80px_rgba(0,0,0,0.4)]">
             {(() => {
               const post = carouselPosts[activeCarouselIndex];
               return (
-                <motion.div key={post.id} initial={{ opacity: 0.4 }} animate={{ opacity: 1 }} className="relative aspect-[16/7] min-h-56">
-                  <img src={post.imageUrl} alt={post.title} className="absolute inset-0 w-full h-full object-cover" loading="eager" />
-                  <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/35 to-transparent" />
-                  <div className="absolute top-4 right-4 flex items-center gap-2 rounded-full border border-white/20 bg-black/45 px-2 py-1.5 backdrop-blur-md">
-                    {post.authorAvatar ? <img src={post.authorAvatar} alt="" className="h-8 w-8 rounded-full object-cover ring-2 ring-amber-300/80" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-neutral-950 ring-2 ring-amber-200/80">{post.authorName.slice(0, 2).toUpperCase()}</span>}
-                    <span className="hidden text-xs font-semibold text-white sm:block">{post.authorName}</span>
+                <motion.div
+                  key={post.id}
+                  initial={{ opacity: 0.5, scale: 1.02 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.45 }}
+                  className="relative aspect-[16/7] min-h-[320px]"
+                >
+                  <img src={post.imageUrl} alt={post.title} className="absolute inset-0 h-full w-full object-cover" loading="eager" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.25),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.9),rgba(0,0,0,0.55),rgba(0,0,0,0.2))]" />
+
+                  <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 sm:p-6">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {post.isPromoted && (
+                        <span className="rounded-full border border-amber-300/70 bg-amber-400/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-neutral-950">
+                          Promoted
+                        </span>
+                      )}
+                      <span className="rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-amber-100 backdrop-blur-sm">
+                        {post.authorRole === 'tailor' ? 'Bespoke Tailor' : 'Fabric Merchant'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 rounded-full border border-white/20 bg-black/40 px-2 py-1.5 backdrop-blur-md">
+                      {post.authorAvatar ? (
+                        <img src={post.authorAvatar} alt="" className="h-8 w-8 rounded-full object-cover ring-2 ring-amber-300/80" />
+                      ) : (
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-neutral-950 ring-2 ring-amber-200/80">
+                          {post.authorName.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="hidden text-xs font-semibold text-white sm:block">{post.authorName}</span>
+                    </div>
                   </div>
-                  <div className="absolute inset-0 flex items-end p-5 sm:p-8">
-                    <div className="max-w-lg">
-                      <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-amber-300 font-semibold mb-2">
-                        {post.isPromoted && <span className="px-2 py-1 rounded bg-amber-400 text-neutral-950">Promoted</span>}
+
+                  <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6 lg:p-8">
+                    <div className="max-w-3xl rounded-[1.5rem] border border-white/10 bg-black/25 p-4 backdrop-blur-md sm:p-5">
+                      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-amber-300 font-semibold">
+                        <span>{post.authorLocation.city}, {post.authorLocation.country}</span>
+                        <span className="text-neutral-400">•</span>
+                        <span>{post.pricing.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable price'}</span>
                       </div>
-                      <h2 className="text-xl font-serif font-extrabold leading-tight text-white sm:text-4xl">{post.title}</h2>
-                      <p className="mt-2 text-sm font-semibold text-amber-100">{post.authorName} <span className="font-normal text-neutral-200">· {post.authorLocation.city}, {post.authorLocation.country}</span></p>
+
+                      <h2 className="mt-2 text-2xl font-serif font-extrabold leading-tight text-white sm:text-4xl">
+                        {post.title}
+                      </h2>
+
+                      <p className="mt-2 max-w-2xl text-sm text-neutral-200 sm:text-base">
+                        {post.description}
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {post.tags.slice(0, 4).map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] text-amber-200"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-200">
+                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2.5 py-1.5">
+                            <span className="text-neutral-400">Likes</span> {post.likes.length}
+                          </span>
+                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2.5 py-1.5">
+                            <span className="text-neutral-400">Saves</span> {post.saves.length}
+                          </span>
+                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2.5 py-1.5">
+                            <span className="text-neutral-400">Rating</span> {post.rating ? post.rating.toFixed(1) : 'New'}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onSaveImageToViewer(post.imageUrl, post.title)}
+                            className="rounded-xl bg-amber-400 px-3 py-2 text-[11px] font-bold text-neutral-950 transition hover:bg-amber-300"
+                          >
+                            View Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onSelectPostForMessage(post)}
+                            className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-white/10"
+                          >
+                            Message Seller
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openWhatsApp(post)}
+                            className="rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-emerald-500"
+                          >
+                            WhatsApp
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
               );
             })()}
-            {carouselPosts.length > 1 && <>
-              <button onClick={() => setActiveCarouselIndex(index => (index - 1 + carouselPosts.length) % carouselPosts.length)} className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-amber-400 hover:text-neutral-950" aria-label="Previous runway post"><ChevronLeft className="w-4 h-4" /></button>
-              <button onClick={() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length)} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-amber-400 hover:text-neutral-950" aria-label="Next runway post"><ChevronRight className="w-4 h-4" /></button>
-            </>}
+
+            {carouselPosts.length > 1 && (
+              <>
+                <button
+                  onClick={() => setActiveCarouselIndex(index => (index - 1 + carouselPosts.length) % carouselPosts.length)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white transition hover:bg-amber-400 hover:text-neutral-950"
+                  aria-label="Previous runway post"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white transition hover:bg-amber-400 hover:text-neutral-950"
+                  aria-label="Next runway post"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
         </section>
       )}

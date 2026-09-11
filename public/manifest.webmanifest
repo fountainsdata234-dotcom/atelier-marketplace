@@ -1,0 +1,17 @@
+{
+  "name": "Fabrilux Atelier",
+  "short_name": "Fabrilux",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0d10",
+  "theme_color": "#0c0d10",
+  "description": "Fabrilux Atelier marketplace for bespoke fashion and fabric discovery.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

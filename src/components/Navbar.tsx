@@ -34,34 +34,36 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Brand Logo */}
         <div
-          onClick={() => onNavigate('landing')}
+          onClick={() => onNavigate(currentUser ? 'marketplace' : 'landing')}
           className="flex items-center gap-2.5 cursor-pointer group select-none"
         >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center text-neutral-950 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
             <Scissors className="w-5 h-5 stroke-[2]" />
           </div>
           <div>
-            <span className="font-serif font-bold text-lg sm:text-xl tracking-tight block leading-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-500 to-amber-200">
-              ATELIER
+            <span className="font-display text-lg sm:text-xl tracking-[0.14em] block leading-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 font-black">
+              FABRILUX
             </span>
-            <span className="text-[9px] uppercase tracking-widest text-amber-500/80 font-medium block">
-              Bespoke Marketplace
+            <span className="text-[9px] uppercase tracking-[0.28em] text-amber-500/80 font-medium block">
+              Atelier
             </span>
           </div>
         </div>
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center gap-1.5 text-xs font-medium">
-          <button
-            onClick={() => onNavigate('landing')}
-            className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              currentView === 'landing'
-                ? 'text-amber-400 bg-amber-500/10'
-                : 'text-neutral-400 hover:text-neutral-100'
-            }`}
-          >
-            Overview
-          </button>
+          {!currentUser && (
+            <button
+              onClick={() => onNavigate('landing')}
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                currentView === 'landing'
+                  ? 'text-amber-400 bg-amber-500/10'
+                  : 'text-neutral-400 hover:text-neutral-100'
+              }`}
+            >
+              Overview
+            </button>
+          )}
 
           <button
             onClick={() => onNavigate('marketplace')}

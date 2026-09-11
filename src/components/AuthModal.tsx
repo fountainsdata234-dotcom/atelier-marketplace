@@ -272,12 +272,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-black/75 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className={`relative w-full max-w-xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border shadow-2xl p-6 md:p-8 my-8 transition-colors ${
+        className={`relative w-full h-full sm:h-auto sm:max-w-3xl sm:max-h-[calc(100vh-2rem)] overflow-y-auto rounded-none sm:rounded-3xl border shadow-2xl p-4 sm:p-6 md:p-8 my-0 sm:my-8 transition-colors ${
           isDarkMode
             ? 'bg-[#121316] border-neutral-800 text-neutral-100'
             : 'bg-white border-neutral-200 text-neutral-900'
@@ -300,7 +300,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {role === 'admin' && <Shield className="w-6 h-6" />}
           </div>
           <h2 className="text-2xl font-serif font-bold tracking-tight">
-            {isRegistering ? 'Join the Atelier Network' : 'Welcome Back to Atelier'}
+            {isRegistering ? 'Join the Fabrilux Atelier Network' : 'Welcome Back to Fabrilux Atelier'}
           </h2>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             {isRegistering

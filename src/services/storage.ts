@@ -1,4 +1,4 @@
-import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto } from '../types';
+import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, UserRole } from '../types';
 
 const STORAGE_KEYS = {
   USERS: 'atelier_users_v2',
@@ -126,7 +126,20 @@ export const storageService = {
     const users = this.getUsers();
     const index = users.findIndex(existing => existing.id === user.id);
     if (index >= 0) users[index] = { ...users[index], ...user };
-    else users.push(user);
+    else {
+      users.push(user);
+      const hour = new Date().getHours();
+      const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+      this.sendGeneralMessage({
+        recipientId: user.id,
+        recipientName: user.name,
+        senderId: 'atelier-system',
+        senderName: 'Atelier Team',
+        senderRole: 'admin',
+        title: 'Welcome to Atelier',
+        content: `${greeting}, ${user.name}. Welcome to Atelier Marketplace. This is your first inbox message from the platform. Explore the marketplace, follow trusted studios, and message sellers directly whenever you are ready.`,
+      });
+    }
     this.saveUsers(users);
     this.setCurrentUser(index >= 0 ? users[index] : user);
     return index >= 0 ? users[index] : user;
@@ -261,6 +274,17 @@ export const storageService = {
     target.isWarned = true;
     target.warningNote = note.trim().slice(0, 500) || 'Warning issued by administrator.';
     this.saveUsers(users);
+
+    this.sendGeneralMessage({
+      recipientId: userId,
+      recipientName: target.name,
+      senderId: 'atelier-system',
+      senderName: 'Atelier Team',
+      senderRole: 'admin',
+      title: 'Account Notice',
+      content: `Hello ${target.name}, this is an official notice from Atelier Marketplace. ${target.warningNote}`,
+    });
+
     return { success: true, message: `Warning sent to ${target.name}.` };
   },
 
@@ -438,10 +462,11 @@ export const storageService = {
     }
   },
 
-  sendMessage(message: Omit<DirectMessage, 'id' | 'timestamp' | 'isRead'>): DirectMessage {
+  sendMessage(message: Omit<DirectMessage, 'id' | 'timestamp' | 'isRead'> & { type?: 'chat' | 'general' }): DirectMessage {
     const all = this.getAllMessages();
     const newMsg: DirectMessage = {
       ...message,
+      type: message.type || 'chat',
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       timestamp: new Date().toISOString(),
       isRead: false
@@ -450,6 +475,28 @@ export const storageService = {
     localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(all));
     window.dispatchEvent(new CustomEvent('atelier_message_received', { detail: newMsg }));
     return newMsg;
+  },
+
+  sendGeneralMessage(message: {
+    recipientId: string;
+    recipientName: string;
+    senderId?: string;
+    senderName: string;
+    senderRole?: UserRole;
+    title?: string;
+    content: string;
+  }): DirectMessage {
+    return this.sendMessage({
+      senderId: message.senderId || 'atelier-system',
+      senderName: message.senderName,
+      senderRole: message.senderRole || 'admin',
+      recipientId: message.recipientId,
+      recipientName: message.recipientName,
+      postId: '',
+      postTitle: message.title || 'General Inbox',
+      content: message.content,
+      type: 'general',
+    });
   },
 
   getAllMessages(): DirectMessage[] {

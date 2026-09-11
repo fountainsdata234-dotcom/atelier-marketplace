@@ -11,6 +11,9 @@
 
   body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background:
+      radial-gradient(circle at top, rgba(251, 191, 36, 0.16), transparent 24%),
+      linear-gradient(180deg, #0c0d10 0%, #111316 100%);
     transition: background-color 0.3s ease, color 0.3s ease;
   }
 
@@ -20,6 +23,12 @@
 
   .font-display {
     font-family: 'Syne', sans-serif;
+  }
+
+  .brand-wordmark {
+    font-family: 'Syne', sans-serif;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 }
 

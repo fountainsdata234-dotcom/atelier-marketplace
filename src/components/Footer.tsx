@@ -22,8 +22,8 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode }) => {
                 <Scissors className="h-5 w-5 stroke-[2.2]" />
               </div>
               <div>
-                <p className="font-serif text-xl font-bold tracking-tight text-amber-400">ATELIER</p>
-                <p className="text-[10px] uppercase tracking-[0.25em] text-amber-500/80">Bespoke Marketplace</p>
+                <p className="font-display text-xl font-black tracking-[0.14em] text-amber-400">FABRILUX</p>
+                <p className="text-[10px] uppercase tracking-[0.25em] text-amber-500/80">Atelier</p>
               </div>
             </div>
             <p className={`mt-4 max-w-sm text-sm leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
@@ -65,7 +65,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode }) => {
         </div>
 
         <div className={`mt-8 border-t pt-5 text-center text-xs ${isDarkMode ? 'border-neutral-800 text-neutral-500' : 'border-neutral-200 text-neutral-500'}`}>
-          © 2026 Atelier Marketplace. Crafted for bespoke fashion and premium fabric discovery.
+          © 2026 Fabrilux Atelier. Crafted for bespoke fashion and premium fabric discovery.
         </div>
       </div>
     </footer>

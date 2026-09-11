@@ -43,13 +43,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         <div className="mx-auto max-w-md">
           <div className="grid grid-cols-5 gap-1.5">
             <button
-              onClick={() => handlePrimaryNavigate('landing')}
+              onClick={() => handlePrimaryNavigate(currentUser ? 'marketplace' : 'landing')}
               className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
-                primaryActionIsActive('landing') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+                primaryActionIsActive(currentUser ? 'marketplace' : 'landing') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
               <Home className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Home</span>
+              <span className="text-[10px] font-medium">{currentUser ? 'Explore' : 'Home'}</span>
             </button>
 
             <button

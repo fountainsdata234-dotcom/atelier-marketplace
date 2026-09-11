@@ -171,14 +171,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
-            <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs w-full sm:w-auto">
+            <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono text-left sm:text-center">
               <span className="text-amber-400 font-bold">{users.length}</span> Total Users
             </div>
-            <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono">
+            <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono text-left sm:text-center">
               <span className="text-emerald-400 font-bold">{tailorsAndSellers.length}</span> Tailors + Sellers
             </div>
-            <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono">
+            <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono text-left sm:text-center">
               <span className="text-purple-400 font-bold">{posts.length}</span> Live Posts
             </div>
           </div>
@@ -262,88 +262,84 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               No tailors or fabric merchants registered yet.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-800 text-[11px] text-neutral-400 font-mono">
-                    <th className="pb-3 font-medium">Tailor / Shop</th>
-                    <th className="pb-3 font-medium">Role</th>
-                    <th className="pb-3 font-medium">Location</th>
-                    <th className="pb-3 font-medium">Contact / Phone</th>
-                    <th className="pb-3 font-medium">Status</th>
-                    <th className="pb-3 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-800/60">
-                  {tailorsAndSellers.map((tailor) => (
-                    <tr key={tailor.id} className="hover:bg-neutral-800/20 transition-colors">
-                      <td className="py-3.5">
-                        <div className="font-semibold text-neutral-100">{tailor.shopName || tailor.name}</div>
-                        <div className="text-[11px] text-amber-400 font-mono">{tailor.handle}</div>
-                      </td>
-                      <td className="py-3.5 capitalize font-mono text-[11px] text-neutral-300">
-                        {tailor.role.replace('_', ' ')}
-                      </td>
-                      <td className="py-3.5 text-neutral-300">
-                        {tailor.location.city}, {tailor.location.country}
-                      </td>
-                      <td className="py-3.5 font-mono text-[11px] text-neutral-300">
-                        {tailor.phone}
-                      </td>
-                      <td className="py-3.5">
-                        <div className="flex flex-wrap gap-1">
-                          {tailor.isPromoted && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                              ★ Promoted
-                            </span>
-                          )}
-                          {tailor.isBlocked ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
-                              Blocked
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">
-                              Active
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3.5 text-right space-x-2">
-                        {/* Toggle Promote */}
-                        <button
-                          onClick={() => handleTogglePromote(tailor)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            tailor.isPromoted
-                              ? 'bg-neutral-800 text-amber-400 border border-amber-500/50'
-                              : 'bg-amber-400 text-neutral-950 hover:bg-amber-300'
-                          }`}
-                        >
-                          {tailor.isPromoted ? 'Demote' : '★ Promote'}
-                        </button>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {tailorsAndSellers.map((tailor) => (
+                <div
+                  key={tailor.id}
+                  className={`rounded-2xl border p-4 space-y-3 transition-all ${
+                    isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-neutral-100 truncate">{tailor.shopName || tailor.name}</div>
+                      <div className="text-[11px] text-amber-400 font-mono truncate">{tailor.handle}</div>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {tailor.isPromoted && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          ★ Promoted
+                        </span>
+                      )}
+                      {tailor.isBlocked ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
+                          Blocked
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-                        {/* Toggle Block */}
-                        <button
-                          onClick={() => handleToggleBlock(tailor)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            tailor.isBlocked
-                              ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                              : 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500 hover:text-white'
-                          }`}
-                        >
-                          {tailor.isBlocked ? 'Unblock' : 'Block'}
-                        </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-neutral-300">
+                    <div>
+                      <span className="text-neutral-400 block text-[10px] uppercase tracking-wide">Role</span>
+                      <span className="capitalize font-mono">{tailor.role.replace('_', ' ')}</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-400 block text-[10px] uppercase tracking-wide">Location</span>
+                      <span>{tailor.location.city}, {tailor.location.country}</span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="text-neutral-400 block text-[10px] uppercase tracking-wide">Phone</span>
+                      <span className="font-mono">{tailor.phone}</span>
+                    </div>
+                  </div>
 
-                        <button
-                          onClick={() => handleWarnUser(tailor)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500 hover:text-neutral-950 transition-all"
-                        >
-                          Warn
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleTogglePromote(tailor)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        tailor.isPromoted
+                          ? 'bg-neutral-800 text-amber-400 border border-amber-500/50'
+                          : 'bg-amber-400 text-neutral-950 hover:bg-amber-300'
+                      }`}
+                    >
+                      {tailor.isPromoted ? 'Demote' : '★ Promote'}
+                    </button>
+
+                    <button
+                      onClick={() => handleToggleBlock(tailor)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        tailor.isBlocked
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                          : 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500 hover:text-white'
+                      }`}
+                    >
+                      {tailor.isBlocked ? 'Unblock' : 'Block'}
+                    </button>
+
+                    <button
+                      onClick={() => handleWarnUser(tailor)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500 hover:text-neutral-950 transition-all"
+                    >
+                      Warn
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>

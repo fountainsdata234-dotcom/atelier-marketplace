@@ -98,6 +98,7 @@ export interface DirectMessage {
   content: string;
   timestamp: string;
   isRead: boolean;
+  type?: 'chat' | 'general';
 }
 
 export interface BroadcastMessage {

@@ -32,11 +32,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           initial={{ opacity: 0, y: 25 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1 }}
-          className="text-4xl sm:text-6xl lg:text-7xl font-serif font-bold tracking-tight leading-[1.1] mb-6"
+          className="text-4xl sm:text-6xl lg:text-7xl font-display font-black tracking-[-0.04em] leading-[0.98] mb-6"
         >
-          Haute Couture <br />
+          Fabrilux Atelier <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 italic">
-            Tailored To Perfection.
+            Where Bespoke Meets Modern Luxury.
           </span>
         </motion.h1>
 
