@@ -246,7 +246,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const openWhatsApp = (post: ClothPost) => {
     const phone = post.authorWhatsapp?.replace(/\D/g, '') || '2348000000000';
     const text = encodeURIComponent(
-      `Hello ${post.authorName}! I saw your bespoke design "${post.title}" on Atelier Marketplace. I would like to place an order or discuss custom tailoring.`
+      `Hello ${post.authorName}! I saw your design "${post.title}" on Atelier Marketplace. I would like to place an order or discuss custom tailoring.`
     );
     window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
   };
@@ -509,7 +509,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-4">
             <Scissors className="w-8 h-8" />
           </div>
-          <h3 className="text-2xl font-serif font-bold mb-2">No Bespoke Garments Listed Yet</h3>
+          <h3 className="text-2xl font-serif font-bold mb-2">No Garments or Fabric Items Listed Yet</h3>
           <p className={`text-xs max-w-md mx-auto mb-6 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             Every piece on Atelier is created and posted by real registered tailors and fabric sellers. No demo or dummy clothes are generated.
           </p>
@@ -550,7 +550,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className={`rounded-2xl border overflow-hidden transition-all group flex flex-col justify-between ${
+                className={`rounded-[1.7rem] border overflow-hidden transition-all group flex flex-col justify-between ${
                   isDarkMode
                     ? 'bg-[#121316] border-neutral-800/90 hover:border-amber-500/40'
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
@@ -597,13 +597,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Garment Image with High-Res Zoom / Save */}
-                <div className="relative aspect-4/5 w-full bg-neutral-900 overflow-hidden group/img">
+                <div className={`relative aspect-4/5 w-full bg-neutral-900 overflow-hidden group/img ${post.isPromoted ? 'p-2 border-[3px] border-amber-500/60 bg-gradient-to-br from-amber-500/10 via-transparent to-amber-500/20 rounded-[1.5rem]' : ''}`}>
                   <img
                     src={post.imageUrl}
                     alt={post.title}
-                    className="w-full h-full object-cover object-center group-hover/img:scale-102 transition-transform duration-500"
+                    className="w-full h-full object-cover object-center group-hover/img:scale-102 transition-transform duration-500 rounded-[1.1rem]"
                     referrerPolicy="no-referrer"
                     loading="lazy"
+                    draggable={false}
+                    onContextMenu={(event) => event.preventDefault()}
                   />
 
                   {/* Top image overlay badges */}
@@ -661,28 +663,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     </div>
                   )}
 
-                  {/* Custom Pricing Breakdown by Material & Complexity */}
+                  {/* Seller price / negotiable state */}
                   <div className="p-2.5 rounded-xl border border-neutral-800/80 bg-neutral-900/30 text-[11px] space-y-1">
                     <span className="text-[9px] uppercase font-bold tracking-wider text-amber-500/80 block">
-                      Custom Pricing Estimates:
+                      Seller Price
                     </span>
                     <div className="flex items-center justify-between text-neutral-400">
-                      <span>Standard Cut:</span>
-                      <span className="font-mono font-semibold text-neutral-200">
-                        ${post.pricing.basic}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-neutral-400">
-                      <span>With Premium Fabric:</span>
-                      <span className="font-mono font-semibold text-amber-400">
-                        ${post.pricing.premiumMaterial}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-neutral-400">
-                      <span>Bespoke Handcrafting:</span>
-                      <span className="font-mono font-semibold text-amber-300">
-                        ${post.pricing.bespokeComplexity}
-                      </span>
+                      <span>{post.pricing.basic > 0 ? `${post.pricing.currency || post.authorLocation.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable'}</span>
                     </div>
                   </div>
 

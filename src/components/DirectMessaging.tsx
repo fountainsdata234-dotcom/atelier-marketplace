@@ -231,7 +231,7 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
                       Regarding: {selectedPost.title}
                     </span>
                     <span className="text-[10px] text-amber-400 font-mono">
-                      Pricing: {selectedPost.pricing.currency || selectedPost.authorLocation.currency || 'USD'} {selectedPost.pricing.basic} (Standard) / {selectedPost.pricing.currency || selectedPost.authorLocation.currency || 'USD'} {selectedPost.pricing.premiumMaterial} (Premium)
+                      Seller Price: {selectedPost.pricing.basic > 0 ? `${selectedPost.pricing.currency || selectedPost.authorLocation.currency || 'USD'} ${selectedPost.pricing.basic}` : 'Negotiable'}
                     </span>
                   </div>
                 </div>

@@ -23,6 +23,7 @@ async function request<T>(path: string, options: RequestInit = {}) {
 export const api = {
   getUsers: () => request<User[]>('/api/users'),
   getProfile: () => request<Partial<User>>('/api/profile'),
+  updateUserProfile: (userId: string, updates: Partial<User>) => request<User>(`/api/users/${userId}/profile`, { method: 'PUT', body: JSON.stringify(updates) }),
   getPosts: () => request<ClothPost[]>('/api/posts'),
   saveProfile: (profile: Partial<User>) => request<User>('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }),
   createPost: (post: Omit<ClothPost, 'id' | 'likes' | 'saves' | 'createdAt'>) => request<ClothPost>('/api/posts', { method: 'POST', body: JSON.stringify(post) }),

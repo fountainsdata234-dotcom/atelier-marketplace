@@ -104,6 +104,31 @@ function cleanProfile(input: Record<string, unknown>) {
   };
 }
 
+function buildProfileUpdate(input: Record<string, unknown>) {
+  const updates: Record<string, unknown> = {};
+
+  if (typeof input.name === 'string') updates.name = input.name.trim().slice(0, 120);
+  if (typeof input.role === 'string' && ['buyer', 'tailor', 'fabric_seller', 'admin'].includes(input.role)) updates.role = input.role;
+  if (typeof input.phone === 'string') updates.phone = input.phone.slice(0, 40);
+  if (typeof input.countryCode === 'string') updates.countryCode = input.countryCode.slice(0, 8);
+  if (input.location && typeof input.location === 'object') updates.location = input.location;
+  if (typeof input.whatsappNumber === 'string') updates.whatsappNumber = input.whatsappNumber.slice(0, 40);
+  if (typeof input.shopName === 'string') updates.shopName = input.shopName.trim().slice(0, 120);
+  if (typeof input.bio === 'string') updates.bio = input.bio.trim().slice(0, 1000);
+  if (typeof input.handle === 'string') updates.handle = input.handle.trim().slice(0, 60);
+  if (typeof input.avatarUrl === 'string') updates.avatarUrl = input.avatarUrl.slice(0, 2_000_000);
+  if (typeof input.isPromoted === 'boolean') updates.isPromoted = input.isPromoted;
+  if (typeof input.isBlocked === 'boolean') updates.isBlocked = input.isBlocked;
+  if (typeof input.isWarned === 'boolean') updates.isWarned = input.isWarned;
+  if (typeof input.warningNote === 'string') updates.warningNote = input.warningNote.trim().slice(0, 500);
+  if (typeof input.isSuperAdmin === 'boolean') updates.isSuperAdmin = input.isSuperAdmin;
+  if (typeof input.addedByEmail === 'string') updates.addedByEmail = input.addedByEmail.slice(0, 200);
+  if (Array.isArray(input.followers)) updates.followers = input.followers.filter((item): item is string => typeof item === 'string').slice(0, 200);
+  updates.updatedAt = FieldValue.serverTimestamp();
+
+  return updates;
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'atelier-api' });
 });
@@ -169,6 +194,24 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
 app.get('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   const snapshot = await firestore.collection('profiles').doc(req.authUser!.uid).get();
   res.json({ id: req.authUser!.uid, ...(snapshot.exists ? snapshot.data() : {}) });
+});
+
+app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const updates = buildProfileUpdate(req.body || {});
+  const uid = req.params.uid;
+  const profileRef = firestore.collection('profiles').doc(uid);
+
+  await profileRef.set(updates, { merge: true });
+
+  if (typeof req.body?.isPromoted === 'boolean') {
+    const postsSnapshot = await firestore.collection('posts').where('authorId', '==', uid).get();
+    await Promise.all(postsSnapshot.docs.map(doc =>
+      doc.ref.set({ isPromoted: req.body.isPromoted, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+    ));
+  }
+
+  const saved = await profileRef.get();
+  res.json({ id: uid, ...(saved.data() || {}) });
 });
 
 app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {

@@ -84,7 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Bookmark className="w-3.5 h-3.5 text-amber-500" />
-            <span>Collection</span>
+            <span>Saved</span>
           </button>
 
           {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') && (

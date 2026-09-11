@@ -76,9 +76,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Toggle Promote Tailor
-  const handleTogglePromote = (tailor: User) => {
+  const handleTogglePromote = async (tailor: User) => {
     const updated = !tailor.isPromoted;
     storageService.updateUser(tailor.id, { isPromoted: updated });
+
+    try {
+      await api.updateUserProfile(tailor.id, { isPromoted: updated });
+    } catch (error) {
+      console.error('Profile sync failed while updating promotion state', error);
+    }
   };
 
   // Toggle Block Tailor
@@ -628,7 +634,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="text-[11px] text-amber-400 font-mono">{post.authorName} ({post.authorHandle})</div>
                       </td>
                       <td className="py-3 font-mono text-[11px]">
-                        ${post.pricing.basic} / ${post.pricing.premiumMaterial} / ${post.pricing.bespokeComplexity}
+                        {post.pricing.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable'}
                       </td>
                       <td className="py-3 font-mono text-[11px] text-neutral-400">
                         {new Date(post.createdAt).toLocaleString()}

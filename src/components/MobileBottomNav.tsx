@@ -58,7 +58,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           }`}
         >
           <Bookmark className="w-5 h-5" />
-          <span className="text-[10px]">Collection</span>
+          <span className="text-[10px]">Saved</span>
         </button>
 
         {/* Post / Studio Action */}

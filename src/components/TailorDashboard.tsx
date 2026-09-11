@@ -26,9 +26,41 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
-  const [pricingBasic, setPricingBasic] = useState<number>(120);
-  const [pricingPremium, setPricingPremium] = useState<number>(220);
-  const [pricingBespoke, setPricingBespoke] = useState<number>(350);
+  const [pricingBasic, setPricingBasic] = useState<number>(0);
+
+  const TAG_OPTIONS = ['Menwear', 'Womenwear', 'Commercial', 'Formal', 'Bridal', 'Casual', 'Streetwear', 'Fabrics'];
+
+  const normalizeTags = (rawTags: string): string[] => {
+    const normalized = rawTags
+      .split(',')
+      .map(tag => tag.trim().toLowerCase())
+      .filter(Boolean);
+
+    const matchTag = (value: string) => {
+      const lowered = value.toLowerCase();
+      if (lowered.includes('men') || lowered.includes('male')) return 'Menwear';
+      if (lowered.includes('women') || lowered.includes('female')) return 'Womenwear';
+      if (lowered.includes('commercial') || lowered.includes('retail')) return 'Commercial';
+      if (lowered.includes('formal') || lowered.includes('occasion')) return 'Formal';
+      if (lowered.includes('bridal') || lowered.includes('wedding')) return 'Bridal';
+      if (lowered.includes('casual') || lowered.includes('everyday')) return 'Casual';
+      if (lowered.includes('street') || lowered.includes('urban')) return 'Streetwear';
+      if (lowered.includes('fabric') || lowered.includes('textile') || lowered.includes('cloth')) return 'Fabrics';
+
+      const directMatch = TAG_OPTIONS.find(option => option.toLowerCase() === lowered);
+      return directMatch || null;
+    };
+
+    const result: string[] = [];
+    normalized.forEach(tag => {
+      const mapped = matchTag(tag);
+      if (mapped && !result.includes(mapped)) {
+        result.push(mapped);
+      }
+    });
+
+    return result.slice(0, 4);
+  };
 
   // Image Program State
   const [imageUrl, setImageUrl] = useState('');
@@ -89,10 +121,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       return;
     }
 
-    const tags = tagsInput
-      .split(',')
-      .map(t => t.trim().replace(/^#/, ''))
-      .filter(t => t.length > 0);
+    const tags = normalizeTags(tagsInput);
 
     const postData = {
       authorId: currentUser.id,
@@ -105,12 +134,12 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       isPromoted: currentUser.isPromoted,
       title: title.trim(),
       description: description.trim(),
-      tags: tags.length > 0 ? tags : [currentUser.role === 'fabric_seller' ? 'Textiles' : 'Bespoke'],
+      tags: tags.length > 0 ? tags : [currentUser.role === 'fabric_seller' ? 'Fabrics' : 'Menwear'],
       pricing: {
         currency: currentUser.location.currency || 'USD',
         basic: Number(pricingBasic) || 0,
-        premiumMaterial: Number(pricingPremium) || 0,
-        bespokeComplexity: Number(pricingBespoke) || 0
+        premiumMaterial: 0,
+        bespokeComplexity: 0,
       },
       imageUrl: imageUrl.trim(),
       imageHostSource: compressionStats ? `Firebase Storage · ${compressionStats.compressedSizeKb}KB` : 'External Link'
@@ -124,7 +153,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       return;
     }
 
-    setPostStatus({ type: 'success', message: 'Bespoke post published successfully to the marketplace!' });
+    setPostStatus({ type: 'success', message: 'Post published successfully to the marketplace!' });
     setTitle('');
     setDescription('');
     setTagsInput('');
@@ -316,10 +345,10 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
           </div>
           <div>
             <h2 className="text-xl font-serif font-bold">
-              {currentUser.role === 'fabric_seller' ? 'List Fabric Material' : 'Publish Bespoke Garment Post'}
+              {currentUser.role === 'fabric_seller' ? 'List Fabric Material' : 'Publish Garment Post'}
             </h2>
             <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Attach custom pricing tiers for material and complexity. Images are processed via our high-efficiency link program.
+              Add a clear seller price for your item or leave it negotiable. Images are processed via our high-efficiency upload program.
             </p>
           </div>
         </div>
@@ -357,7 +386,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   disabled={currentUser.isBlocked}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder={currentUser.role === 'fabric_seller' ? 'e.g. Royal Italian 100% Cashmere Wool' : 'e.g. Bespoke Double-Breasted Tuxedo'}
+                  placeholder={currentUser.role === 'fabric_seller' ? 'e.g. Royal Italian 100% Cashmere Wool' : 'e.g. Double-Breasted Tuxedo'}
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none"
                 />
               </div>
@@ -379,69 +408,53 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
               <div>
                 <label className="block text-xs font-medium text-neutral-400 mb-1.5">
-                  Tags (Separated by commas) *
+                  Tags (general categories)
                 </label>
                 <input
                   type="text"
                   disabled={currentUser.isBlocked}
                   value={tagsInput}
                   onChange={(e) => setTagsInput(e.target.value)}
-                  placeholder="e.g. Tuxedo, ItalianWool, Bespoke, Wedding, Kaftan, Luxury"
+                  placeholder="e.g. menwear, womenwear, formal, bridal"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none"
                 />
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {TAG_OPTIONS.map(tag => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setTagsInput(prev => {
+                        const currentValues = prev.split(',').map(item => item.trim()).filter(Boolean);
+                        return currentValues.includes(tag) ? prev : `${prev ? `${prev}, ` : ''}${tag}`;
+                      })}
+                      className="px-2.5 py-1 rounded-full text-[10px] border border-neutral-700 bg-neutral-800/60 text-neutral-300 hover:border-amber-500 hover:text-amber-300"
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Custom Pricing Breakdown by Material & Complexity */}
+              {/* Pricing: one field, currency already selected from country */}
               <div className="p-4 rounded-2xl border border-neutral-800 bg-neutral-900/40 space-y-3">
                 <span className="text-xs font-semibold text-amber-400 block font-mono">
-                  Custom Pricing Structure ({currentUser.location.currency || 'USD'})
+                  Seller Price ({currentUser.location.currency || 'USD'})
                 </span>
-                <div className="grid grid-cols-3 gap-3 text-xs">
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 mb-1">Standard Cut</label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-2 text-neutral-500 text-xs">{currentUser.location.currency || 'USD'}</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={currentUser.isBlocked}
-                        value={pricingBasic}
-                        onChange={(e) => setPricingBasic(Number(e.target.value))}
-                        className="w-full pl-6 pr-2 py-1.5 text-xs rounded-lg bg-neutral-800 border border-neutral-700 font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 mb-1">With Fine Material</label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-2 text-neutral-500 text-xs">{currentUser.location.currency || 'USD'}</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={currentUser.isBlocked}
-                        value={pricingPremium}
-                        onChange={(e) => setPricingPremium(Number(e.target.value))}
-                        className="w-full pl-6 pr-2 py-1.5 text-xs rounded-lg bg-neutral-800 border border-neutral-700 font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-neutral-400 mb-1">Bespoke Handcrafted</label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-2 text-neutral-500 text-xs">{currentUser.location.currency || 'USD'}</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={currentUser.isBlocked}
-                        value={pricingBespoke}
-                        onChange={(e) => setPricingBespoke(Number(e.target.value))}
-                        className="w-full pl-6 pr-2 py-1.5 text-xs rounded-lg bg-neutral-800 border border-neutral-700 font-mono"
-                      />
-                    </div>
-                  </div>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-2 text-neutral-500 text-xs">{currentUser.location.currency || 'USD'}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    disabled={currentUser.isBlocked}
+                    value={pricingBasic}
+                    onChange={(e) => setPricingBasic(Number(e.target.value))}
+                    placeholder="Leave blank for negotiable"
+                    className="w-full pl-6 pr-2 py-1.5 text-xs rounded-lg bg-neutral-800 border border-neutral-700 font-mono"
+                  />
                 </div>
+                <p className="text-[10px] text-neutral-400">
+                  Leave it empty and the item will appear as negotiable.
+                </p>
               </div>
             </div>
 
