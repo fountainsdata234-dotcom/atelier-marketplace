@@ -219,7 +219,17 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       onOpenAuth();
       return;
     }
-    api.toggleSave(post.id).then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated'))).catch(error => setLocationStatus(error.message));
+
+    storageService.addSavedPhoto({
+      url: post.imageUrl,
+      title: post.title,
+      postId: post.id,
+    });
+
+    api.toggleSave(post.id)
+      .then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated')))
+      .catch(error => setLocationStatus(error.message));
+
     onSaveImageToViewer(post.imageUrl, post.title);
   };
 

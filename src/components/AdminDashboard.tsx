@@ -83,6 +83,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     storageService.updateUser(tailor.id, { isBlocked: updated });
   };
 
+  // Warn User
+  const handleWarnUser = (tailor: User) => {
+    const note = window.prompt(
+      `Send a warning note to ${tailor.name} (${tailor.email}):`,
+      tailor.warningNote || 'Please review the platform rules and avoid misuse of the marketplace.'
+    );
+
+    if (note === null) return;
+
+    const result = storageService.warnUser(tailor.id, note);
+    alert(result.message);
+  };
+
   // Send Broadcast
   const handleSendBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,10 +166,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <span className="text-amber-400 font-bold">{users.length}</span> Total Users
             </div>
             <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono">
-              <span className="text-emerald-400 font-bold">{tailorsAndSellers.length}</span> Sellers
+              <span className="text-emerald-400 font-bold">{tailorsAndSellers.length}</span> Tailors + Sellers
             </div>
             <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono">
-              <span className="text-purple-400 font-bold">{posts.length}</span> Posts
+              <span className="text-purple-400 font-bold">{posts.length}</span> Live Posts
             </div>
           </div>
         </div>
@@ -308,6 +321,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           }`}
                         >
                           {tailor.isBlocked ? 'Unblock' : 'Block'}
+                        </button>
+
+                        <button
+                          onClick={() => handleWarnUser(tailor)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500 hover:text-neutral-950 transition-all"
+                        >
+                          Warn
                         </button>
                       </td>
                     </tr>

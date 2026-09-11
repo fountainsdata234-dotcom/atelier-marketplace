@@ -1,4 +1,4 @@
-import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage } from '../types';
+import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto } from '../types';
 
 const STORAGE_KEYS = {
   USERS: 'atelier_users_v2',
@@ -8,7 +8,8 @@ const STORAGE_KEYS = {
   MESSAGES: 'atelier_messages_v2',
   BROADCASTS: 'atelier_broadcasts_v2',
   DARK_MODE: 'atelier_dark_mode_v2',
-  SAVED_PHOTOS: 'atelier_saved_photos_v2'
+  SAVED_PHOTOS: 'atelier_saved_photos_v2',
+  COLLECTION_PACKAGES: 'atelier_collection_packages_v2'
 };
 
 const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
@@ -80,6 +81,40 @@ export const storageService = {
     } catch {
       return [];
     }
+  },
+
+  getSavedPhotos(): SavedPhoto[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.SAVED_PHOTOS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveSavedPhotos(photos: SavedPhoto[]): void {
+    localStorage.setItem(STORAGE_KEYS.SAVED_PHOTOS, JSON.stringify(photos));
+    window.dispatchEvent(new CustomEvent('atelier_saved_photos_updated'));
+  },
+
+  addSavedPhoto(photo: Omit<SavedPhoto, 'id' | 'savedAt'>): SavedPhoto | null {
+    const currentUser = this.getCurrentUser();
+    if (!currentUser) return null;
+
+    const photos = this.getSavedPhotos().filter(item => item.url !== photo.url);
+    const added: SavedPhoto = {
+      ...photo,
+      id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      savedAt: new Date().toISOString(),
+    };
+
+    const updated = [added, ...photos].slice(0, 120);
+    this.saveSavedPhotos(updated);
+    return added;
+  },
+
+  removeSavedPhoto(id: string): void {
+    this.saveSavedPhotos(this.getSavedPhotos().filter(photo => photo.id !== id));
   },
 
   saveUsers(users: User[]): void {
@@ -218,6 +253,17 @@ export const storageService = {
     return { success: true, message: `Administrator ${target.email} was removed.` };
   },
 
+  warnUser(userId: string, note: string): { success: boolean; message: string } {
+    const users = this.getUsers();
+    const target = users.find(u => u.id === userId);
+    if (!target) return { success: false, message: 'User not found.' };
+
+    target.isWarned = true;
+    target.warningNote = note.trim().slice(0, 500) || 'Warning issued by administrator.';
+    this.saveUsers(users);
+    return { success: true, message: `Warning sent to ${target.name}.` };
+  },
+
   // POSTS
   getPosts(): ClothPost[] {
     try {
@@ -231,6 +277,25 @@ export const storageService = {
   savePosts(posts: ClothPost[]): void {
     localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(posts));
     window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+  },
+
+  getCollectionPackageState(): { freeSlots: number; unlockedSlots: number } {
+    const stored = localStorage.getItem(STORAGE_KEYS.COLLECTION_PACKAGES);
+    const parsed = stored ? JSON.parse(stored) : null;
+    const current = parsed || { freeSlots: 5, unlockedSlots: 5 };
+    return {
+      freeSlots: Math.max(0, Number(current.freeSlots) || 5),
+      unlockedSlots: Math.max(0, Number(current.unlockedSlots) || 5),
+    };
+  },
+
+  updateCollectionPackageState(unlockedSlots: number): { freeSlots: number; unlockedSlots: number } {
+    const next = {
+      freeSlots: 5,
+      unlockedSlots: Math.max(5, Math.min(50, Number(unlockedSlots) || 5)),
+    };
+    localStorage.setItem(STORAGE_KEYS.COLLECTION_PACKAGES, JSON.stringify(next));
+    return next;
   },
 
   createPost(postData: Omit<ClothPost, 'id' | 'likes' | 'saves' | 'createdAt'>): { success: boolean; post?: ClothPost; message?: string } {

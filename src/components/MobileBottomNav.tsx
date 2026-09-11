@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Compass, PlusCircle, MessageSquare, User as UserIcon, Shield, Scissors } from 'lucide-react';
+import { Home, Compass, PlusCircle, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -48,6 +48,17 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         >
           <Compass className="w-5 h-5" />
           <span className="text-[10px]">Market</span>
+        </button>
+
+        {/* Collection */}
+        <button
+          onClick={() => onNavigate('collections')}
+          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${
+            currentView === 'collections' ? 'text-amber-400 font-semibold' : 'text-neutral-400'
+          }`}
+        >
+          <Bookmark className="w-5 h-5" />
+          <span className="text-[10px]">Collection</span>
         </button>
 
         {/* Post / Studio Action */}

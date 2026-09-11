@@ -33,10 +33,20 @@ export interface User {
   avatarUrl?: string;
   isPromoted: boolean;
   isBlocked: boolean;
+  isWarned?: boolean;
+  warningNote?: string;
   followers: string[]; // User IDs of followers
   createdAt: string;
   isSuperAdmin?: boolean;
   addedByEmail?: string;
+}
+
+export interface SavedPhoto {
+  id: string;
+  url: string;
+  title: string;
+  savedAt: string;
+  postId?: string;
 }
 
 export interface ClothPost {

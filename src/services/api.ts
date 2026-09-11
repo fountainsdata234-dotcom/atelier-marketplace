@@ -1,7 +1,7 @@
 import { firebaseAuth } from './firebase';
 import { ClothPost, DirectMessage, User } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 
 async function request<T>(path: string, options: RequestInit = {}) {
   const token = firebaseAuth.currentUser ? await firebaseAuth.currentUser.getIdToken() : null;
