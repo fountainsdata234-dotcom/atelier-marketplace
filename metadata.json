@@ -1,0 +1,6 @@
+{
+  "name": "Atelier - Tailor & Fabric Marketplace",
+  "description": "A high-fidelity fashion marketplace for bespoke tailors, fabric sellers, and customers with location monitoring, direct WhatsApp ordering, and admin management.",
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

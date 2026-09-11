@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && (request.auth.token.admin == true || request.auth.token.role == 'admin'); }
+
+    match /profiles/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if signedIn() && request.auth.uid == userId && request.resource.data.id == userId;
+      allow update: if signedIn() && (request.auth.uid == userId || isAdmin()) && request.resource.data.id == userId;
+      allow delete: if isAdmin();
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if signedIn() && (resource.data.authorId == request.auth.uid || isAdmin());
+
+      match /ratings/{userId} {
+        allow read: if true;
+        allow create, update: if signedIn() && request.auth.uid == userId;
+        allow delete: if signedIn() && (request.auth.uid == userId || isAdmin());
+      }
+
+      match /likes/{userId} {
+        allow read: if true;
+        allow create, delete: if signedIn() && request.auth.uid == userId;
+      }
+
+      match /saves/{userId} {
+        allow read: if true;
+        allow create, delete: if signedIn() && request.auth.uid == userId;
+      }
+    }
+
+    match /messages/{messageId} {
+      allow read: if signedIn() && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.senderId == request.auth.uid;
+      allow update: if signedIn() && resource.data.recipientId == request.auth.uid;
+      allow delete: if false;
+    }
+  }
+}
