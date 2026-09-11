@@ -15,6 +15,7 @@ import { AuthModal } from './components/AuthModal';
 import { SocialShareModal } from './components/SocialShareModal';
 import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
+import { Footer } from './components/Footer';
 import { configureFirebaseAuth, logoutFromFirebase, subscribeToFirebaseAuth, toAppUser } from './services/firebase';
 import { api } from './services/api';
 
@@ -71,8 +72,23 @@ export default function App() {
         }
         const baseUser = await toAppUser(firebaseUser);
         const savedProfile = await api.getProfile().catch(() => ({}));
-        const user = storageService.upsertUser({ ...baseUser, ...savedProfile, id: firebaseUser.uid, email: firebaseUser.email || baseUser.email });
+        const mergedUser = {
+          ...baseUser,
+          ...savedProfile,
+          id: firebaseUser.uid,
+          email: firebaseUser.email || baseUser.email,
+          role: baseUser.role === 'admin' ? 'admin' : (savedProfile.role || baseUser.role),
+          isSuperAdmin: baseUser.isSuperAdmin,
+        };
+        const user = storageService.upsertUser(mergedUser);
         setCurrentUser(user);
+        if (user.role === 'admin') {
+          setCurrentView('admin');
+        } else if (user.role === 'tailor' || user.role === 'fabric_seller') {
+          setCurrentView('dashboard');
+        } else if (currentView === 'landing' || currentView === 'messages') {
+          setCurrentView('marketplace');
+        }
         await api.saveProfile(user).catch(error => console.error('Profile sync failed', error));
         void refreshAllData();
       });
@@ -337,6 +353,8 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      <Footer isDarkMode={isDarkMode} />
 
       {/* 6. Mobile Bottom App Navigation Dock */}
       <MobileBottomNav

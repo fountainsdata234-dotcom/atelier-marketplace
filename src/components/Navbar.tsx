@@ -89,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {currentUser?.role === 'admin' && (
+          {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && (
             <button
               onClick={() => onNavigate('admin')}
               className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${

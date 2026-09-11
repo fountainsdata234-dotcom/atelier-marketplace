@@ -40,6 +40,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
   const [activeCarouselIndex, setActiveCarouselIndex] = useState<number>(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [visiblePostsCount, setVisiblePostsCount] = useState<number>(10);
 
   // Extract unique tags across all posts
   const allTags = useMemo(() => {
@@ -82,6 +83,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     });
     return Array.from(suggestions.values()).slice(0, 7);
   }, [posts, searchQuery]);
+
+  useEffect(() => {
+    setVisiblePostsCount(10);
+  }, [searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 350;
+      if (nearBottom && visiblePostsCount < filteredPosts.length) {
+        setVisiblePostsCount(prev => Math.min(prev + 10, filteredPosts.length));
+      }
+    };
+
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [filteredPosts.length, visiblePostsCount]);
 
   useEffect(() => {
     if (carouselPosts.length < 2) return;
@@ -176,6 +193,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
     return result;
   }, [posts, users, searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
+
+  const visiblePosts = filteredPosts.slice(0, visiblePostsCount);
 
   // Handle Like
   const handleLike = (postId: string) => {
@@ -310,7 +329,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <div className="max-w-lg">
                       <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-amber-300 font-semibold mb-2">
                         {post.isPromoted && <span className="px-2 py-1 rounded bg-amber-400 text-neutral-950">Promoted</span>}
-                        <span>{post.authorRole === 'tailor' ? 'Bespoke tailoring' : 'Fine fabrics'}</span>
                       </div>
                       <h2 className="text-xl font-serif font-extrabold leading-tight text-white sm:text-4xl">{post.title}</h2>
                       <p className="mt-2 text-sm font-semibold text-amber-100">{post.authorName} <span className="font-normal text-neutral-200">· {post.authorLocation.city}, {post.authorLocation.country}</span></p>
@@ -506,7 +524,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredPosts.map((post) => {
+          {visiblePosts.map((post) => {
             const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
             const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
 
@@ -526,7 +544,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   isDarkMode
                     ? 'bg-[#121316] border-neutral-800/90 hover:border-amber-500/40'
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
-                }`}
+                } ${post.isPromoted ? 'ring-1 ring-amber-500/50 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_20px_40px_rgba(251,191,36,0.12)]' : ''}`}
               >
                 {/* Post Header: Tailor Handle, Location & Promoted Symbol */}
                 <div className="p-3.5 flex items-center justify-between border-b border-neutral-800/40">
