@@ -146,8 +146,12 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     };
 
     try {
-      await api.createPost(postData);
-      window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      const createdPost = await api.createPost(postData);
+      const cachedPosts = storageService.getPosts();
+      storageService.savePosts([
+        { ...createdPost, likes: createdPost.likes || [], saves: createdPost.saves || [], rating: createdPost.rating || 0, ratingCount: createdPost.ratingCount || 0, ratingsByUser: createdPost.ratingsByUser || {} },
+        ...cachedPosts.filter(item => item.id !== createdPost.id)
+      ]);
     } catch (error) {
       setPostStatus({ type: 'error', message: error instanceof Error ? error.message : 'Failed to publish post.' });
       return;
@@ -164,7 +168,12 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   // Delete Post
   const handleDeletePost = (postId: string) => {
     if (confirm('Are you sure you want to remove this bespoke design?')) {
-      api.deletePost(postId).then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated'))).catch(error => setPostStatus({ type: 'error', message: error.message }));
+      api.deletePost(postId)
+        .then(() => {
+          const cachedPosts = storageService.getPosts().filter(post => post.id !== postId);
+          storageService.savePosts(cachedPosts);
+        })
+        .catch(error => setPostStatus({ type: 'error', message: error.message }));
     }
   };
 

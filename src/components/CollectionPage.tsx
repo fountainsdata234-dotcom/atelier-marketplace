@@ -56,9 +56,9 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
               <Bookmark className="w-3.5 h-3.5" />
               Saved Inspiration Hub
             </div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-bold mt-2">My Collection</h1>
+            <h1 className="text-2xl sm:text-3xl font-serif font-bold mt-2">Saved Images</h1>
             <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Each seller gets a free collection pack. Unlock more slots when you want to store additional inspirations and outfit references.
+              Your personal saved-image archive. Keep inspiration references here, and use the collection slots to store the looks you want to revisit later.
             </p>
           </div>
 
@@ -85,7 +85,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            Personal Collection
+            Saved Images
           </div>
 
           {savedPhotos.length > 0 && (

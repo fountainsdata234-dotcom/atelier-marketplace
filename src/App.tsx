@@ -122,20 +122,38 @@ export default function App() {
   }, []);
 
   const refreshAllData = async () => {
+    const localUsers = storageService.getUsers();
+    const localPosts = storageService.getPosts();
     setCurrentUser(storageService.getCurrentUser());
-    try {
-      const [remoteUsers, remotePosts] = await Promise.all([api.getUsers(), api.getPosts()]);
-      storageService.saveUsers(remoteUsers);
-      storageService.savePosts(remotePosts);
-      setUsers(remoteUsers);
-      setPosts(remotePosts);
-    } catch (error) {
-      console.error('Remote marketplace data unavailable', error);
-      setUsers(storageService.getUsers());
-      setPosts(storageService.getPosts());
+
+    if (localUsers.length > 0) {
+      setUsers(localUsers);
     }
+    if (localPosts.length > 0 || posts.length > 0) {
+      setPosts(localPosts);
+    }
+
     setPromoPlans(storageService.getPromoPlans());
     setBroadcasts(storageService.getBroadcasts());
+
+    try {
+      const results = await Promise.allSettled([api.getUsers(), api.getPosts()]);
+
+      const remoteUsers = results[0].status === 'fulfilled' ? results[0].value : null;
+      const remotePosts = results[1].status === 'fulfilled' ? results[1].value : null;
+
+      if (remoteUsers) {
+        storageService.saveUsers(remoteUsers);
+        setUsers(remoteUsers);
+      }
+
+      if (remotePosts) {
+        storageService.savePosts(remotePosts);
+        setPosts(remotePosts);
+      }
+    } catch (error) {
+      console.error('Remote marketplace data unavailable', error);
+    }
   };
 
   // Toggle Theme

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Home, Compass, PlusCircle, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark } from 'lucide-react';
+import React, { useState } from 'react';
+import { Home, Compass, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark, Menu, X, LogIn } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -19,119 +19,155 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   isDarkMode,
   unreadCount = 0
 }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const primaryActionIsActive = (targetView: string) => currentView === targetView;
+
+  const studioLabel = currentUser?.role === 'admin' ? 'Admin' : 'Studio';
+  const studioView = currentUser?.role === 'admin' ? 'admin' : 'dashboard';
+
+  const handlePrimaryNavigate = (view: string) => {
+    setMenuOpen(false);
+    onNavigate(view);
+  };
+
   return (
-    <div
-      className={`md:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 py-1.5 transition-colors ${
-        isDarkMode
-          ? 'bg-[#0c0d10]/95 border-neutral-800 text-neutral-300'
-          : 'bg-white/95 border-neutral-200 text-neutral-700 shadow-lg'
-      }`}
-    >
-      <div className="flex items-center justify-around">
-        {/* Home */}
-        <button
-          onClick={() => onNavigate('landing')}
-          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${
-            currentView === 'landing' ? 'text-amber-400 font-semibold' : 'text-neutral-400'
-          }`}
-        >
-          <Home className="w-5 h-5" />
-          <span className="text-[10px]">Home</span>
-        </button>
+    <>
+      <div
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 py-1.5 transition-colors ${
+          isDarkMode
+            ? 'bg-[#0c0d10]/95 border-neutral-800 text-neutral-300'
+            : 'bg-white/95 border-neutral-200 text-neutral-700 shadow-lg'
+        }`}
+      >
+        <div className="mx-auto max-w-md">
+          <div className="grid grid-cols-5 gap-1.5">
+            <button
+              onClick={() => handlePrimaryNavigate('landing')}
+              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+                primaryActionIsActive('landing') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+              }`}
+            >
+              <Home className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Home</span>
+            </button>
 
-        {/* Marketplace */}
-        <button
-          onClick={() => onNavigate('marketplace')}
-          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${
-            currentView === 'marketplace' ? 'text-amber-400 font-semibold' : 'text-neutral-400'
-          }`}
-        >
-          <Compass className="w-5 h-5" />
-          <span className="text-[10px]">Market</span>
-        </button>
+            <button
+              onClick={() => handlePrimaryNavigate('marketplace')}
+              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+                primaryActionIsActive('marketplace') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+              }`}
+            >
+              <Compass className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Market</span>
+            </button>
 
-        {/* Collection */}
-        <button
-          onClick={() => onNavigate('collections')}
-          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${
-            currentView === 'collections' ? 'text-amber-400 font-semibold' : 'text-neutral-400'
-          }`}
-        >
-          <Bookmark className="w-5 h-5" />
-          <span className="text-[10px]">Saved</span>
-        </button>
+            <button
+              onClick={() => handlePrimaryNavigate('collections')}
+              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+                primaryActionIsActive('collections') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+              }`}
+            >
+              <Bookmark className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Saved</span>
+            </button>
 
-        {/* Post / Studio Action */}
-        {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') ? (
-          <button
-            onClick={() => onNavigate('dashboard')}
-            className="flex flex-col items-center -mt-4"
-          >
-            <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-neutral-950 flex items-center justify-center shadow-lg shadow-amber-500/30">
-              <Scissors className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <span className="text-[10px] font-semibold text-amber-400 mt-0.5">Studio</span>
-          </button>
-        ) : currentUser?.role === 'admin' ? (
-          <button
-            onClick={() => onNavigate('admin')}
-            className="flex flex-col items-center -mt-4"
-          >
-            <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-neutral-950 flex items-center justify-center shadow-lg shadow-amber-500/30">
-              <Shield className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <span className="text-[10px] font-semibold text-amber-400 mt-0.5">Admin</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => onNavigate('marketplace')}
-            className="flex flex-col items-center gap-0.5 p-2 rounded-xl text-neutral-400"
-          >
-            <PlusCircle className="w-5 h-5 text-amber-500" />
-            <span className="text-[10px]">Explore</span>
-          </button>
-        )}
+            {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller' || currentUser.role === 'admin') ? (
+              <button
+                onClick={() => handlePrimaryNavigate(studioView)}
+                className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+                  primaryActionIsActive(studioView) ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+                }`}
+              >
+                {currentUser.role === 'admin' ? <Shield className="w-5 h-5" /> : <Scissors className="w-5 h-5" />}
+                <span className="text-[10px] font-medium">{studioLabel}</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onOpenAuth()}
+                className="flex flex-col items-center gap-0.5 rounded-xl p-2 text-neutral-400 transition-all"
+              >
+                <LogIn className="w-5 h-5 text-amber-500" />
+                <span className="text-[10px] font-medium">Join</span>
+              </button>
+            )}
 
-        {/* Messages */}
-        <button
-          onClick={() => {
-            if (!currentUser) onOpenAuth();
-            else onNavigate('messages');
-          }}
-          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl relative transition-colors ${
-            currentView === 'messages' ? 'text-amber-400 font-semibold' : 'text-neutral-400'
-          }`}
-        >
-          <MessageSquare className="w-5 h-5" />
-          {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-2 w-3.5 h-3.5 bg-amber-500 text-neutral-950 text-[8px] font-bold rounded-full flex items-center justify-center">
-              {unreadCount}
-            </span>
-          )}
-          <span className="text-[10px]">Chat</span>
-        </button>
-
-        {/* Profile / Auth */}
-        <button
-          onClick={() => {
-            if (!currentUser) {
-              onOpenAuth();
-            } else if (currentUser.role === 'admin') {
-              onNavigate('admin');
-            } else if (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') {
-              onNavigate('dashboard');
-            } else {
-              onNavigate('marketplace');
-            }
-          }}
-          className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-colors ${
-            currentView === 'admin' || currentView === 'dashboard' ? 'text-amber-400 font-semibold' : 'text-neutral-400'
-          }`}
-        >
-          <UserIcon className="w-5 h-5" />
-          <span className="text-[10px]">{currentUser ? 'Account' : 'Join'}</span>
-        </button>
+            <button
+              onClick={() => setMenuOpen(prev => !prev)}
+              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+                menuOpen ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+              }`}
+            >
+              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              <span className="text-[10px] font-medium">More</span>
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {menuOpen && (
+        <div className="md:hidden fixed inset-x-0 bottom-16 z-50 px-4">
+          <div
+            className={`mx-auto max-w-md rounded-2xl border p-2 shadow-2xl backdrop-blur-xl ${
+              isDarkMode
+                ? 'bg-[#111316]/95 border-neutral-700 text-neutral-100'
+                : 'bg-white/95 border-neutral-200 text-neutral-900'
+            }`}
+          >
+            <div className="space-y-1.5">
+              {currentUser ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onNavigate('messages');
+                    }}
+                    className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
+                      currentView === 'messages' ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-300 hover:bg-neutral-800/60'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4" />
+                      Messages
+                    </span>
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-neutral-950">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onNavigate(currentUser.role === 'admin' ? 'admin' : 'dashboard');
+                    }}
+                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
+                      currentView === 'admin' || currentView === 'dashboard'
+                        ? 'bg-amber-500/10 text-amber-400'
+                        : 'text-neutral-300 hover:bg-neutral-800/60'
+                    }`}
+                  >
+                    <UserIcon className="w-4 h-4" />
+                    {currentUser.role === 'admin' ? 'Admin Portal' : 'Account / Studio'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenAuth();
+                  }}
+                  className="w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-neutral-300 hover:bg-neutral-800/60"
+                >
+                  <LogIn className="w-4 h-4 text-amber-400" />
+                  Sign In / Register
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
