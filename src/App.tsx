@@ -125,6 +125,8 @@ export default function App() {
     setCurrentUser(storageService.getCurrentUser());
     try {
       const [remoteUsers, remotePosts] = await Promise.all([api.getUsers(), api.getPosts()]);
+      storageService.saveUsers(remoteUsers);
+      storageService.savePosts(remotePosts);
       setUsers(remoteUsers);
       setPosts(remotePosts);
     } catch (error) {

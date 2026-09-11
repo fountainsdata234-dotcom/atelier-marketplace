@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Users, UserPlus, UserX, Star, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2 } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage } from '../types';
@@ -39,6 +39,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Tab State: 'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'
   const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'>('sellers');
+
+  useEffect(() => {
+    setEditablePlans(promoPlans);
+  }, [promoPlans]);
 
   // Filtered lists
   const tailorsAndSellers = users.filter(u => u.role === 'tailor' || u.role === 'fabric_seller');

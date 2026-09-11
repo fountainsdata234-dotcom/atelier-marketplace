@@ -36,21 +36,19 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
     }).catch(error => console.error('Messages unavailable', error));
   }, []);
 
-  // Find all distinct conversation partners
-  const partnerIds = Array.from(
-    new Set(
-      allMessages
-        .filter(m => m.senderId === currentUser.id || m.recipientId === currentUser.id)
-        .map(m => (m.senderId === currentUser.id ? m.recipientId : m.senderId))
-    )
-  );
+  // Build the available conversation partner list from all registered users so
+  // admins and buyers can message any seller/customer immediately, even before a
+  // conversation thread already exists.
+  const conversationPartners = allUsers
+    .filter(u => u.id !== currentUser.id)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  const conversationPartners = partnerIds
-    .map(id => allUsers.find(u => u.id === id))
-    .filter((u): u is User => !!u);
-
-  // If initial recipient provided and not yet in partners, add to top
-  if (initialRecipient && !conversationPartners.some(p => p.id === initialRecipient.id)) {
+  // If initial recipient is supplied, keep it pinned to the top of the list.
+  if (initialRecipient) {
+    const initialIndex = conversationPartners.findIndex(p => p.id === initialRecipient.id);
+    if (initialIndex >= 0) {
+      conversationPartners.splice(initialIndex, 1);
+    }
     conversationPartners.unshift(initialRecipient);
   }
 

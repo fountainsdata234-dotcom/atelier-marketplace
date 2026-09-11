@@ -84,53 +84,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     return Array.from(suggestions.values()).slice(0, 7);
   }, [posts, searchQuery]);
 
-  useEffect(() => {
-    setVisiblePostsCount(10);
-  }, [searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
-
-  useEffect(() => {
-    const onScroll = () => {
-      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 350;
-      if (nearBottom && visiblePostsCount < filteredPosts.length) {
-        setVisiblePostsCount(prev => Math.min(prev + 10, filteredPosts.length));
-      }
-    };
-
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [filteredPosts.length, visiblePostsCount]);
-
-  useEffect(() => {
-    if (carouselPosts.length < 2) return;
-    const timer = window.setInterval(() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length), 4500);
-    return () => window.clearInterval(timer);
-  }, [carouselPosts.length]);
-
-  // Request browser geolocation for Near Me proximity filtering
-  const handleEnableLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus('Geolocation is not supported by your browser.');
-      return;
-    }
-
-    setLocationStatus('Pinpointing your coordinates...');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserCoords({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setNearMeActive(true);
-        setLocationStatus('GPS active: Tailors prioritized by proximity.');
-      },
-      (error) => {
-        setLocationStatus('Could not retrieve GPS location. You can select your city manually below.');
-        setNearMeActive(false);
-      },
-      { timeout: 10000 }
-    );
-  };
-
   // Filter and sort posts
   const filteredPosts = useMemo(() => {
     let result = posts.filter(post => {
@@ -195,6 +148,53 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [posts, users, searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
 
   const visiblePosts = filteredPosts.slice(0, visiblePostsCount);
+
+  useEffect(() => {
+    setVisiblePostsCount(10);
+  }, [searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 350;
+      if (nearBottom && visiblePostsCount < filteredPosts.length) {
+        setVisiblePostsCount(prev => Math.min(prev + 10, filteredPosts.length));
+      }
+    };
+
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [filteredPosts.length, visiblePostsCount]);
+
+  useEffect(() => {
+    if (carouselPosts.length < 2) return;
+    const timer = window.setInterval(() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length), 4500);
+    return () => window.clearInterval(timer);
+  }, [carouselPosts.length]);
+
+  // Request browser geolocation for Near Me proximity filtering
+  const handleEnableLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setLocationStatus('Pinpointing your coordinates...');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setNearMeActive(true);
+        setLocationStatus('GPS active: Tailors prioritized by proximity.');
+      },
+      (error) => {
+        setLocationStatus('Could not retrieve GPS location. You can select your city manually below.');
+        setNearMeActive(false);
+      },
+      { timeout: 10000 }
+    );
+  };
 
   // Handle Like
   const handleLike = (postId: string) => {
