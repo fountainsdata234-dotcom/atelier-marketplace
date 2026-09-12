@@ -15,6 +15,7 @@ interface MarketplaceProps {
   onSaveImageToViewer: (url: string, title: string) => void;
   onSharePost: (post: ClothPost) => void;
   onShareTailorProfile: (user: User) => void;
+  onTryItOn: (post: ClothPost) => void;
   isDarkMode: boolean;
 }
 
@@ -27,6 +28,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onSaveImageToViewer,
   onSharePost,
   onShareTailorProfile,
+  onTryItOn,
   isDarkMode
 }) => {
   // Search & Filter States
@@ -412,10 +414,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
                           <button
                             type="button"
-                            onClick={() => onSaveImageToViewer(post.imageUrl, post.title)}
+                            onClick={() => onTryItOn(post)}
                             className="rounded-xl bg-amber-400 px-2.5 py-2 text-[10px] font-bold text-neutral-950 transition hover:bg-amber-300 sm:px-3 sm:text-[11px]"
                           >
-                            View Details
+                            Try it on
                           </button>
                           <button
                             type="button"
@@ -735,13 +737,21 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </button>
 
                   {/* Quick Preview trigger */}
-                  <button
-                    onClick={() => onSaveImageToViewer(post.imageUrl, post.title)}
-                    className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-black/70 hover:bg-black text-amber-300 border border-amber-500/30 flex items-center gap-1 opacity-0 group-hover/img:opacity-100 transition-opacity"
-                  >
-                    <Download className="w-3 h-3" />
-                    <span>View & Save Full Res</span>
-                  </button>
+                  <div className="absolute bottom-2.5 right-2.5 flex gap-1.5 opacity-0 transition-opacity group-hover/img:opacity-100">
+                    <button
+                      onClick={() => onSaveImageToViewer(post.imageUrl, post.title)}
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-black/70 hover:bg-black text-amber-300 border border-amber-500/30 flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Details</span>
+                    </button>
+                    <button
+                      onClick={() => onTryItOn(post)}
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-500/30"
+                    >
+                      Try it on
+                    </button>
+                  </div>
                 </div>
 
                 {/* Post Body: Title, Description, Tags, Custom Pricing */}
@@ -784,7 +794,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <span>{post.saves.length} Saves</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2">
-                    <span className="text-[10px] text-neutral-400">Rate this work</span>
+                    <button
+                      onClick={() => onTryItOn(post)}
+                      className="rounded-xl bg-amber-500 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-950 transition hover:bg-amber-300"
+                    >
+                      Try it on
+                    </button>
                     <div className="flex items-center gap-0.5" aria-label="Rate this cloth from one to five stars">
                       {[1, 2, 3, 4, 5].map(star => (
                         <button key={star} type="button" onClick={() => handleRate(post.id, star)} className="p-0.5 text-neutral-600 hover:text-amber-400" aria-label={`${star} star${star === 1 ? '' : 's'}`}>

@@ -157,7 +157,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (!isRegistering) {
       const firebaseUser = await loginWithEmail(email.trim(), password);
       const user = storageService.upsertUser(await toAppUser(firebaseUser));
-      setSuccessMsg(`Welcome back, ${user.name}!`);
+      setSuccessMsg(`Welcome back, ${user.name}! Your Fabrilux Atelier studio is ready for your next bespoke discovery.`);
       setTimeout(() => {
         onSuccess(user);
         onClose();
@@ -223,7 +223,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     });
     await api.saveProfile(newUser);
 
-    setSuccessMsg(`Account created successfully as ${role.replace('_', ' ')}!`);
+    setSuccessMsg(`Welcome to Fabrilux Atelier. Your premium studio access is ready, and your tailored journey begins now.`);
     setTimeout(() => {
       onSuccess(newUser);
       onClose();

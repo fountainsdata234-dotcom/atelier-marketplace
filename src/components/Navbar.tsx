@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scissors, Sun, Moon, MapPin, MessageSquare, Shield, LogOut, Compass, PlusCircle, User as UserIcon, Bookmark } from 'lucide-react';
+import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -39,14 +39,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={() => onNavigate(currentUser ? 'marketplace' : 'landing')}
           className="flex items-center gap-2.5 cursor-pointer group select-none"
         >
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center text-neutral-950 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
-            <Scissors className="w-5 h-5 stroke-[2]" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Fabrilux Atelier logo"
+            className="h-10 w-10 rounded-xl object-cover shadow-md shadow-amber-500/20 ring-1 ring-white/40 transition-transform duration-200 group-hover:scale-105"
+          />
           <div>
-            <span className="font-display text-lg sm:text-xl tracking-[0.14em] block leading-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 font-black">
+            <span className="font-display text-lg sm:text-xl tracking-[0.14em] block leading-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-400 font-black">
               FABRILUX
             </span>
-            <span className="text-[9px] uppercase tracking-[0.28em] text-amber-500/80 font-medium block">
+            <span className="text-[9px] uppercase tracking-[0.28em] text-amber-600/80 font-medium block">
               Atelier
             </span>
           </div>

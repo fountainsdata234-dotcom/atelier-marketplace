@@ -179,6 +179,45 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+      <div className="glass-panel overflow-hidden rounded-[28px] p-4 sm:p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-600">Welcome message</p>
+            <h2 className="mt-1 text-xl font-bold text-slate-900 md:text-2xl">Welcome to Fabrilux Atelier</h2>
+          </div>
+          <div className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+            New member
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-[22px] bg-gradient-to-r from-amber-600 to-orange-500 p-4 text-white shadow-lg shadow-orange-500/20">
+            <p className="text-xs uppercase tracking-[0.18em] text-orange-100">General greeting</p>
+            <p className="mt-2 text-sm leading-relaxed text-orange-50">
+              Hello {currentUser.name || 'there'}, welcome to your premium fashion studio. Start by publishing your first garment or fabric, connect with buyers globally, and let your brand look polished on mobile and desktop.
+            </p>
+          </div>
+
+          <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Invoice snapshot</p>
+            <div className="mt-3 space-y-2 text-sm text-slate-700">
+              <div className="flex items-center justify-between">
+                <span>Studio plan</span>
+                <span className="font-semibold">Starter</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Due</span>
+                <span className="font-semibold">$0.00</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+                <span className="font-semibold text-slate-900">Total</span>
+                <span className="font-bold text-slate-900">$0.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Studio Header & Stats Banner */}
       <div className={`p-6 rounded-3xl border transition-all ${
         isDarkMode

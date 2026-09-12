@@ -17,79 +17,95 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-16">
       {/* Hero Section */}
-      <section className="text-center max-w-4xl mx-auto pt-6 pb-12">
+      <section className="mx-auto max-w-6xl px-3 pb-10 pt-6 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium tracking-wider uppercase border border-amber-500/30 bg-amber-500/10 text-amber-400 mb-6"
+          className="glass-panel overflow-hidden rounded-[32px] p-4 sm:p-6 lg:p-8"
         >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>The Global Bespoke Tailoring & Fabric Exchange</span>
-        </motion.div>
+          <div className="grid items-center gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="text-center lg:text-left">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-700">
+                <Sparkles className="w-3.5 h-3.5" />
+                Bespoke tailoring marketplace
+              </div>
 
-        <motion.h1
-          initial={{ opacity: 0, y: 25 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1 }}
-          className="text-4xl sm:text-6xl lg:text-7xl font-display font-black tracking-[-0.04em] leading-[0.98] mb-6"
-        >
-          Fabrilux Atelier <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 italic">
-            Where Bespoke Meets Modern Luxury.
-          </span>
-        </motion.h1>
+              <h1 className="text-4xl font-black leading-none tracking-[-0.06em] text-slate-900 sm:text-5xl lg:text-7xl">
+                Fabric Reality
+              </h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className={`text-base sm:text-xl font-light max-w-2xl mx-auto mb-10 leading-relaxed ${
-            isDarkMode ? 'text-neutral-300' : 'text-neutral-600'
-          }`}
-        >
-          Connect with bespoke tailors and premier fabric merchants worldwide. Filter by city, order custom cuts via direct WhatsApp or messaging, and experience couture craftsmanship.
-        </motion.p>
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base">
+                Discover premium fabrics, connect with expert tailors, and try garments on in a modern digital fitting studio built for mobile shoppers.
+              </p>
 
-        {/* Action Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="flex flex-wrap items-center justify-center gap-4"
-        >
-          <button
-            onClick={onExploreMarketplace}
-            className="px-7 py-3.5 rounded-xl font-medium text-sm text-neutral-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:shadow-lg hover:shadow-amber-500/25 transition-all duration-200 flex items-center gap-2 cursor-pointer"
-          >
-            <Compass className="w-4 h-4" />
-            <span>Explore Marketplace</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+                <button
+                  onClick={onExploreMarketplace}
+                  className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
+                >
+                  <Compass className="w-4 h-4" />
+                  Explore marketplace
+                  <ArrowRight className="w-4 h-4" />
+                </button>
 
-          <button
-            onClick={() => onOpenAuth('tailor')}
-            className={`px-7 py-3.5 rounded-xl font-medium text-sm border transition-all duration-200 flex items-center gap-2 cursor-pointer ${
-              isDarkMode
-                ? 'border-neutral-700 bg-neutral-900/60 hover:bg-neutral-800 text-neutral-100 hover:border-amber-500/40'
-                : 'border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-900 hover:border-amber-600/40 shadow-sm'
-            }`}
-          >
-            <Scissors className="w-4 h-4 text-amber-500" />
-            <span>Join as Tailor / Fabric Seller</span>
-          </button>
+                <button
+                  onClick={() => onOpenAuth('buyer')}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-amber-300 hover:text-amber-700"
+                >
+                  Register as client
+                </button>
+              </div>
 
-          <button
-            onClick={() => onOpenAuth('buyer')}
-            className={`px-6 py-3.5 rounded-xl font-medium text-sm transition-all duration-200 flex items-center gap-2 cursor-pointer ${
-              isDarkMode
-                ? 'text-neutral-300 hover:text-white bg-neutral-800/40 hover:bg-neutral-800'
-                : 'text-neutral-700 hover:text-neutral-950 bg-neutral-100 hover:bg-neutral-200'
-            }`}
-          >
-            <ShoppingBag className="w-4 h-4 text-amber-500" />
-            <span>Register as Client</span>
-          </button>
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-3 text-xs text-slate-500 lg:justify-start">
+                <span className="rounded-full bg-slate-100 px-2.5 py-1.5">Worldwide tailors</span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1.5">Mobile-first shopping</span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1.5">Virtual fit estimate</span>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="soft-card relative overflow-hidden rounded-[28px] p-4">
+                <div className="rounded-[22px] bg-gradient-to-br from-amber-100 via-white to-orange-50 p-4">
+                  <div className="mb-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                    <span>Featured</span>
+                    <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Live fit</span>
+                  </div>
+
+                  <div className="rounded-[22px] bg-gradient-to-br from-slate-900 to-slate-700 p-4 text-white">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-slate-300">Classic senator</p>
+                        <h2 className="mt-1 text-2xl font-semibold">Royal Blue</h2>
+                      </div>
+                      <div className="rounded-full bg-white/10 px-2 py-1 text-xs">Try on</div>
+                    </div>
+
+                    <div className="flex h-48 items-end justify-center rounded-[20px] bg-[radial-gradient(circle_at_top,rgba(147,197,253,0.35),transparent_30%),linear-gradient(180deg,#0f172a,#111827)] p-3">
+                      <div className="relative h-32 w-24 rounded-t-[56px] bg-gradient-to-b from-amber-400 to-orange-500 shadow-[0_18px_35px_rgba(249,115,22,0.35)]">
+                        <div className="absolute -left-9 top-6 h-16 w-8 rounded-full bg-orange-200/80" />
+                        <div className="absolute -right-9 top-6 h-16 w-8 rounded-full bg-orange-200/80" />
+                        <div className="absolute left-1/2 top-5 h-7 w-7 -translate-x-1/2 rounded-full bg-slate-900/15" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between rounded-2xl bg-white px-3 py-2 shadow-sm">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">From</p>
+                      <p className="text-lg font-bold text-slate-900">$148</p>
+                    </div>
+                    <button
+                      onClick={() => onOpenAuth('buyer')}
+                      className="rounded-full bg-amber-400 px-4 py-2 text-xs font-bold text-slate-900"
+                    >
+                      Shop now
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </motion.div>
       </section>
 

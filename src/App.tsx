@@ -17,6 +17,7 @@ import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
 import { Footer } from './components/Footer';
 import { CollectionPage } from './components/CollectionPage';
+import { FittingRoom } from './components/FittingRoom';
 import { configureFirebaseAuth, logoutFromFirebase, subscribeToFirebaseAuth, toAppUser } from './services/firebase';
 import { api } from './services/api';
 
@@ -30,8 +31,9 @@ export default function App() {
     return saved ? saved === 'dark' : true;
   });
 
-  // Navigation View: 'landing' | 'marketplace' | 'collections' | 'dashboard' | 'admin' | 'messages'
+  // Navigation View: 'landing' | 'marketplace' | 'collections' | 'dashboard' | 'admin' | 'messages' | 'fitting'
   const [currentView, setCurrentView] = useState<string>('landing');
+  const [selectedGarmentTitle, setSelectedGarmentTitle] = useState<string>('Classic Senator');
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -308,7 +310,26 @@ export default function App() {
                 onSaveImageToViewer={handleSaveImageToViewer}
                 onSharePost={handleSharePost}
                 onShareTailorProfile={handleShareTailorProfile}
+                onTryItOn={(post) => {
+                  setSelectedGarmentTitle(post.title);
+                  setCurrentView('fitting');
+                }}
                 isDarkMode={isDarkMode}
+              />
+            </motion.div>
+          )}
+
+          {currentView === 'fitting' && (
+            <motion.div
+              key="fitting"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.35 }}
+            >
+              <FittingRoom
+                garmentTitle={selectedGarmentTitle}
+                onBack={() => setCurrentView('marketplace')}
               />
             </motion.div>
           )}
