@@ -32,6 +32,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   isDarkMode
 }) => {
   // Search & Filter States
+  const tailorPosts = useMemo(() => posts.filter(post => post.authorRole === 'tailor'), [posts]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
@@ -52,7 +53,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [posts]);
 
   const carouselPosts = useMemo(() => {
-    const eligible = posts.filter(post => !users.find(user => user.id === post.authorId)?.isBlocked);
+    const eligible = tailorPosts.filter(post => !users.find(user => user.id === post.authorId)?.isBlocked);
     const weighted = eligible.flatMap(post => {
       const author = users.find(user => user.id === post.authorId);
       const weight = post.isPromoted || author?.isPromoted ? 4 : 1;
@@ -62,8 +63,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [posts, users]);
 
   const trendingPosts = useMemo(() => {
-    const qualityRated = posts.filter(post => (post.rating || 0) >= 4.5);
-    const source = qualityRated.length > 0 ? qualityRated : posts;
+    const qualityRated = tailorPosts.filter(post => (post.rating || 0) >= 4.5);
+    const source = qualityRated.length > 0 ? qualityRated : tailorPosts;
     return [...source]
       .filter(post => !users.find(user => user.id === post.authorId)?.isBlocked)
       .sort((a, b) => {
@@ -78,17 +79,17 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
     const suggestions = new Map<string, string>();
-    posts.forEach(post => {
+    tailorPosts.forEach(post => {
       [post.title, post.authorName, ...post.tags].forEach(value => {
         if (value.toLowerCase().includes(query)) suggestions.set(value.toLowerCase(), value);
       });
     });
     return Array.from(suggestions.values()).slice(0, 7);
-  }, [posts, searchQuery]);
+  }, [tailorPosts, searchQuery]);
 
   // Filter and sort posts
   const filteredPosts = useMemo(() => {
-    let result = posts.filter(post => {
+    let result = tailorPosts.filter(post => {
       // Find author to check blocked status
       const author = users.find(u => u.id === post.authorId);
       if (author?.isBlocked) return false;
@@ -147,7 +148,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }
 
     return result;
-  }, [posts, users, searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
+  }, [tailorPosts, users, searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
 
   const visiblePosts = filteredPosts.slice(0, visiblePostsCount);
 
@@ -412,13 +413,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-                          <button
-                            type="button"
-                            onClick={() => onTryItOn(post)}
-                            className="rounded-xl bg-amber-400 px-2.5 py-2 text-[10px] font-bold text-neutral-950 transition hover:bg-amber-300 sm:px-3 sm:text-[11px]"
-                          >
-                            Try it on
-                          </button>
+                          {post.authorRole === 'tailor' && (
+                            <button
+                              type="button"
+                              onClick={() => onTryItOn(post)}
+                              className="rounded-xl bg-amber-400 px-2.5 py-2 text-[10px] font-bold text-neutral-950 transition hover:bg-amber-300 sm:px-3 sm:text-[11px]"
+                            >
+                              Try it on
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => onSelectPostForMessage(post)}
@@ -794,12 +797,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <span>{post.saves.length} Saves</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2">
-                    <button
-                      onClick={() => onTryItOn(post)}
-                      className="rounded-xl bg-amber-500 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-950 transition hover:bg-amber-300"
-                    >
-                      Try it on
-                    </button>
+                    {post.authorRole === 'tailor' && (
+                      <button
+                        onClick={() => onTryItOn(post)}
+                        className="rounded-xl bg-amber-500 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-950 transition hover:bg-amber-300"
+                      >
+                        Try it on
+                      </button>
+                    )}
                     <div className="flex items-center gap-0.5" aria-label="Rate this cloth from one to five stars">
                       {[1, 2, 3, 4, 5].map(star => (
                         <button key={star} type="button" onClick={() => handleRate(post.id, star)} className="p-0.5 text-neutral-600 hover:text-amber-400" aria-label={`${star} star${star === 1 ? '' : 's'}`}>

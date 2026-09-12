@@ -21,6 +21,49 @@ import { FittingRoom } from './components/FittingRoom';
 import { configureFirebaseAuth, logoutFromFirebase, subscribeToFirebaseAuth, toAppUser } from './services/firebase';
 import { api } from './services/api';
 
+class FittingRoomErrorBoundary extends React.Component<{
+  children: React.ReactNode;
+  onReset: () => void;
+}, {
+  hasError: boolean;
+}> {
+  constructor(props: { children: React.ReactNode; onReset: () => void }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('Fitting room crashed:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-4 py-12">
+          <div className="w-full rounded-[28px] border border-amber-200 bg-white/90 p-8 text-center shadow-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-600">Virtual fitting</p>
+            <h2 className="mt-3 text-3xl font-bold text-slate-900">The fitting room needs a quick reset</h2>
+            <p className="mt-3 text-sm text-slate-600">The 3D viewer had an issue, but your marketplace is still safe to use.</p>
+            <button
+              type="button"
+              onClick={this.props.onReset}
+              className="mt-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20"
+            >
+              Back to marketplace
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
   // Intro Loading animation state
   const [showIntro, setShowIntro] = useState<boolean>(true);
@@ -327,10 +370,12 @@ export default function App() {
               exit={{ opacity: 0, y: -15 }}
               transition={{ duration: 0.35 }}
             >
-              <FittingRoom
-                garmentTitle={selectedGarmentTitle}
-                onBack={() => setCurrentView('marketplace')}
-              />
+              <FittingRoomErrorBoundary onReset={() => setCurrentView('marketplace')}>
+                <FittingRoom
+                  garmentTitle={selectedGarmentTitle}
+                  onBack={() => setCurrentView('marketplace')}
+                />
+              </FittingRoomErrorBoundary>
             </motion.div>
           )}
 
