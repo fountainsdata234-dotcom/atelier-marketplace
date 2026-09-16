@@ -36,7 +36,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </h1>
 
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base">
-                Discover premium fabrics, connect with expert tailors, and try garments on in a modern digital fitting studio built for mobile shoppers.
+                Discover premium fabrics, connect with expert tailors, and manage every order and saved design from one polished marketplace.
               </p>
 
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3 lg:justify-start">

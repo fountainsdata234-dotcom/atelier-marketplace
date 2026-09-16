@@ -103,7 +103,7 @@ export async function uploadUserImage(file: Blob, userId: string, folder: 'profi
 
 export async function isFirebaseAdmin(user: FirebaseUser) {
   const token = await user.getIdTokenResult();
-  return token.claims.admin === true || token.claims.role === 'admin';
+  return user.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com' || token.claims.admin === true || token.claims.role === 'admin';
 }
 
 export async function toAppUser(firebaseUser: FirebaseUser, role: UserRole = 'buyer'): Promise<User> {

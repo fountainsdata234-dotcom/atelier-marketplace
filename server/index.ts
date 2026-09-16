@@ -73,7 +73,7 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
 
   try {
     const token = await adminAuth.verifyIdToken(header.slice(7));
-    req.authUser = { uid: token.uid, email: token.email, admin: token.admin === true || token.role === 'admin' };
+    req.authUser = { uid: token.uid, email: token.email, admin: token.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com' || token.admin === true || token.role === 'admin' };
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired authentication token.' });
@@ -88,10 +88,10 @@ function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFuncti
   next();
 }
 
-function cleanProfile(input: Record<string, unknown>) {
+function cleanProfile(input: Record<string, unknown>, allowAdmin: boolean) {
   return {
     name: typeof input.name === 'string' ? input.name.trim().slice(0, 120) : '',
-    role: ['buyer', 'tailor', 'fabric_seller'].includes(String(input.role)) ? input.role : 'buyer',
+    ...(allowAdmin && input.role === 'admin' ? { role: 'admin' } : ['buyer', 'tailor', 'fabric_seller'].includes(String(input.role)) ? { role: input.role } : {}),
     phone: typeof input.phone === 'string' ? input.phone.slice(0, 40) : '',
     countryCode: typeof input.countryCode === 'string' ? input.countryCode.slice(0, 8) : '',
     location: input.location && typeof input.location === 'object' ? input.location : {},
@@ -215,7 +215,7 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
 });
 
 app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
-  const profile = cleanProfile(req.body || {});
+  const profile = cleanProfile(req.body || {}, req.authUser?.admin === true);
   await firestore.collection('profiles').doc(req.authUser!.uid).set({
     ...profile,
     id: req.authUser!.uid,

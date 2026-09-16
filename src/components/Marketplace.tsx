@@ -15,8 +15,6 @@ interface MarketplaceProps {
   onSaveImageToViewer: (url: string, title: string) => void;
   onSharePost: (post: ClothPost) => void;
   onShareTailorProfile: (user: User) => void;
-  onTryItOn: (post: ClothPost) => void;
-  onOpenFittingRoom: () => void;
   isDarkMode: boolean;
 }
 
@@ -29,8 +27,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onSaveImageToViewer,
   onSharePost,
   onShareTailorProfile,
-  onTryItOn,
-  onOpenFittingRoom,
   isDarkMode
 }) => {
   // Search & Filter States
@@ -233,6 +229,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       onOpenAuth();
       return;
     }
+    const localResult = storageService.ratePost(postId, currentUser.id, rating);
+    if (localResult) window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
     api.ratePost(postId, rating).then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated'))).catch(error => setLocationStatus(error.message));
   };
 
@@ -481,15 +479,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-                          {post.authorRole === 'tailor' && (
-                            <button
-                              type="button"
-                              onClick={() => onTryItOn(post)}
-                              className="rounded-xl bg-amber-400 px-2.5 py-2 text-[10px] font-bold text-neutral-950 transition hover:bg-amber-300 sm:px-3 sm:text-[11px]"
-                            >
-                              Try it on
-                            </button>
-                          )}
                           <button
                             type="button"
                             onClick={() => onSelectPostForMessage(post)}
@@ -701,13 +690,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={onOpenFittingRoom}
-              className="px-5 py-2.5 rounded-xl text-xs font-semibold text-amber-300 border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 transition-all"
-            >
-              Open Virtual Fitting Room
-            </button>
             {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') ? (
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: 'dashboard' }))}
@@ -735,6 +717,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             const distanceKm = userCoords && post.authorLocation.lat && post.authorLocation.lng
               ? calculateDistanceKm(userCoords.lat, userCoords.lng, post.authorLocation.lat, post.authorLocation.lng)
               : null;
+            const userRating = currentUser ? (post.ratingsByUser?.[currentUser.id] || 0) : (post.rating || 0);
 
             return (
               <motion.article
@@ -830,14 +813,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       <Download className="w-3 h-3" />
                       <span>Details</span>
                     </button>
-                    {post.authorRole === 'tailor' && (
-                      <button
-                        onClick={() => onTryItOn(post)}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-500/30"
-                      >
-                        Try it on
-                      </button>
-                    )}
                   </div>
                 </div>
 
@@ -881,18 +856,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <span>{post.saves.length} Saves</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2">
-                    {post.authorRole === 'tailor' && (
-                      <button
-                        onClick={() => onTryItOn(post)}
-                        className="rounded-xl bg-amber-500 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-950 transition hover:bg-amber-300"
-                      >
-                        Try it on
-                      </button>
-                    )}
                     <div className="flex items-center gap-0.5" aria-label="Rate this cloth from one to five stars">
                       {[1, 2, 3, 4, 5].map(star => (
-                        <button key={star} type="button" onClick={() => handleRate(post.id, star)} className="p-0.5 text-neutral-600 hover:text-amber-400" aria-label={`${star} star${star === 1 ? '' : 's'}`}>
-                          <Star className={`w-3.5 h-3.5 ${post.rating && post.rating >= star ? 'fill-amber-400 text-amber-400' : ''}`} />
+                        <button key={star} type="button" onClick={() => handleRate(post.id, star)} className="rounded p-0.5 text-neutral-600 transition hover:scale-110 hover:text-amber-400" aria-label={`Rate ${star} out of 5`} title={`Rate ${star} out of 5`}>
+                          <Star className={`h-3.5 w-3.5 ${userRating >= star ? 'fill-amber-400 text-amber-400' : ''}`} />
                         </button>
                       ))}
                       {post.ratingCount ? <span className="ml-1 text-[10px] text-amber-400">{(post.rating || 0).toFixed(1)} ({post.ratingCount})</span> : null}

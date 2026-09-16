@@ -194,9 +194,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="flex items-center gap-2">
               <div
                 onClick={() => {
-                  if (currentUser.role === 'admin') onNavigate('admin');
-                  else if (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') onNavigate('dashboard');
-                  else onNavigate('marketplace');
+                  onNavigate('profile');
                 }}
                 className="flex items-center gap-2 py-1 px-2.5 rounded-xl border border-neutral-700/60 bg-neutral-800/40 hover:border-amber-500/40 cursor-pointer transition-colors"
               >

@@ -144,16 +144,16 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <button
                     onClick={() => {
                       setMenuOpen(false);
-                      onNavigate(currentUser.role === 'admin' ? 'admin' : 'dashboard');
+                      onNavigate('profile');
                     }}
                     className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
-                      currentView === 'admin' || currentView === 'dashboard'
+                      currentView === 'profile'
                         ? 'bg-amber-500/10 text-amber-400'
                         : 'text-neutral-300 hover:bg-neutral-800/60'
                     }`}
                   >
                     <UserIcon className="w-4 h-4" />
-                    {currentUser.role === 'admin' ? 'Admin Portal' : 'Account / Studio'}
+                    Profile
                   </button>
 
                   <button

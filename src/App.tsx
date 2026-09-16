@@ -17,52 +17,9 @@ import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
 import { Footer } from './components/Footer';
 import { CollectionPage } from './components/CollectionPage';
-import { FittingRoom } from './components/FittingRoom';
+import { ProfilePage } from './components/ProfilePage';
 import { configureFirebaseAuth, logoutFromFirebase, subscribeToFirebaseAuth, toAppUser } from './services/firebase';
 import { api } from './services/api';
-
-class FittingRoomErrorBoundary extends React.Component<{
-  children: React.ReactNode;
-  onReset: () => void;
-}, {
-  hasError: boolean;
-}> {
-  constructor(props: { children: React.ReactNode; onReset: () => void }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error) {
-    console.error('Fitting room crashed:', error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="mx-auto flex min-h-[70vh] max-w-2xl items-center justify-center px-4 py-12">
-          <div className="w-full rounded-[28px] border border-amber-200 bg-white/90 p-8 text-center shadow-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-600">Virtual fitting</p>
-            <h2 className="mt-3 text-3xl font-bold text-slate-900">The fitting room needs a quick reset</h2>
-            <p className="mt-3 text-sm text-slate-600">The 3D viewer had an issue, but your marketplace is still safe to use.</p>
-            <button
-              type="button"
-              onClick={this.props.onReset}
-              className="mt-6 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20"
-            >
-              Back to marketplace
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
 
 export default function App() {
   // Intro Loading animation state
@@ -76,9 +33,8 @@ export default function App() {
     return saved ? saved === 'dark' : true;
   });
 
-  // Navigation View: 'landing' | 'marketplace' | 'collections' | 'dashboard' | 'admin' | 'messages' | 'fitting'
+  // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages'
   const [currentView, setCurrentView] = useState<string>('landing');
-  const [selectedGarmentTitle, setSelectedGarmentTitle] = useState<string>('Classic Senator');
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -131,13 +87,14 @@ export default function App() {
           return;
         }
         const baseUser = await toAppUser(firebaseUser);
-        const savedProfile = await api.getProfile().catch(() => ({}));
+        const savedProfile = await api.getProfile().catch(() => undefined);
+        const savedRole = savedProfile?.role;
         const mergedUser = {
           ...baseUser,
           ...savedProfile,
           id: firebaseUser.uid,
           email: firebaseUser.email || baseUser.email,
-          role: baseUser.role === 'admin' ? 'admin' : (savedProfile.role || baseUser.role),
+          role: baseUser.role === 'admin' ? 'admin' : (savedRole || baseUser.role),
           isSuperAdmin: baseUser.isSuperAdmin,
         };
         const user = storageService.upsertUser(mergedUser);
@@ -387,33 +344,8 @@ export default function App() {
                 onSaveImageToViewer={handleSaveImageToViewer}
                 onSharePost={handleSharePost}
                 onShareTailorProfile={handleShareTailorProfile}
-                onTryItOn={(post) => {
-                  setSelectedGarmentTitle(post.title);
-                  setCurrentView('fitting');
-                }}
-                onOpenFittingRoom={() => {
-                  setSelectedGarmentTitle('Classic Senator');
-                  setCurrentView('fitting');
-                }}
                 isDarkMode={isDarkMode}
               />
-            </motion.div>
-          )}
-
-          {currentView === 'fitting' && (
-            <motion.div
-              key="fitting"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35 }}
-            >
-              <FittingRoomErrorBoundary onReset={() => setCurrentView('marketplace')}>
-                <FittingRoom
-                  garmentTitle={selectedGarmentTitle}
-                  onBack={() => setCurrentView('marketplace')}
-                />
-              </FittingRoomErrorBoundary>
             </motion.div>
           )}
 
@@ -429,6 +361,12 @@ export default function App() {
                 currentUser={currentUser}
                 isDarkMode={isDarkMode}
               />
+            </motion.div>
+          )}
+
+          {currentView === 'profile' && currentUser && (
+            <motion.div key="profile" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.35 }}>
+              <ProfilePage currentUser={currentUser} isDarkMode={isDarkMode} onNavigate={setCurrentView} onLogout={handleLogout} />
             </motion.div>
           )}
 
