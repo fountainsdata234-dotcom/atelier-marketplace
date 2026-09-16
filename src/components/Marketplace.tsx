@@ -63,23 +63,26 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [posts]);
 
   const carouselPosts = useMemo(() => {
-    const eligible = tailorPosts.filter(post => !users.find(user => user.id === post.authorId)?.isBlocked);
-    const weighted = eligible.flatMap(post => {
-      const author = users.find(user => user.id === post.authorId);
-      const weight = post.isPromoted || author?.isPromoted ? 4 : 1;
-      return Array.from({ length: weight }, () => post);
-    });
-    return [...weighted].sort(() => Math.random() - 0.5).filter((post, index, list) => list.findIndex(item => item.id === post.id) === index).slice(0, 8);
+    return tailorPosts
+      .filter(post => !users.find(user => user.id === post.authorId)?.isBlocked)
+      .sort((a, b) => {
+        const authorA = users.find(user => user.id === a.authorId);
+        const authorB = users.find(user => user.id === b.authorId);
+        const scoreA = (a.isPromoted || authorA?.isPromoted ? 100000 : 0) + (a.rating || 0) * 100 + Math.min(a.ratingCount || 0, 50) * 2 + a.likes.length + a.saves.length + new Date(a.createdAt).getTime() / 1e11;
+        const scoreB = (b.isPromoted || authorB?.isPromoted ? 100000 : 0) + (b.rating || 0) * 100 + Math.min(b.ratingCount || 0, 50) * 2 + b.likes.length + b.saves.length + new Date(b.createdAt).getTime() / 1e11;
+        return scoreB - scoreA;
+      })
+      .slice(0, 8);
   }, [posts, users]);
 
   const trendingPosts = useMemo(() => {
-    const qualityRated = tailorPosts.filter(post => (post.rating || 0) >= 4.5);
-    const source = qualityRated.length > 0 ? qualityRated : tailorPosts;
-    return [...source]
+    return [...tailorPosts]
       .filter(post => !users.find(user => user.id === post.authorId)?.isBlocked)
       .sort((a, b) => {
-        const scoreA = (a.rating || 0) * 10 + a.likes.length * 2 + a.saves.length * 3 + (a.isPromoted ? 8 : 0) + new Date(a.createdAt).getTime() / 1e10;
-        const scoreB = (b.rating || 0) * 10 + b.likes.length * 2 + b.saves.length * 3 + (b.isPromoted ? 8 : 0) + new Date(b.createdAt).getTime() / 1e10;
+        const authorA = users.find(user => user.id === a.authorId);
+        const authorB = users.find(user => user.id === b.authorId);
+        const scoreA = (a.isPromoted || authorA?.isPromoted ? 10000 : 0) + (a.rating || 0) * 100 + Math.min(a.ratingCount || 0, 50) * 2 + a.likes.length * 2 + a.saves.length * 3 + new Date(a.createdAt).getTime() / 1e10;
+        const scoreB = (b.isPromoted || authorB?.isPromoted ? 10000 : 0) + (b.rating || 0) * 100 + Math.min(b.ratingCount || 0, 50) * 2 + b.likes.length * 2 + b.saves.length * 3 + new Date(b.createdAt).getTime() / 1e10;
         return scoreB - scoreA;
       })
       .slice(0, 5);

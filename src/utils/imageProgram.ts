@@ -12,6 +12,33 @@ export interface ProcessedImageResult {
   blob?: Blob;
 }
 
+export async function compressImageBlob(file: Blob, maxDim = 1400): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  let width = bitmap.width;
+  let height = bitmap.height;
+  if (width > maxDim || height > maxDim) {
+    if (width > height) {
+      height = Math.round((height * maxDim) / width);
+      width = maxDim;
+    } else {
+      width = Math.round((width * maxDim) / height);
+      height = maxDim;
+    }
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas context unavailable');
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not compress image')), 'image/jpeg', 0.78);
+  });
+}
+
 export async function compressAndGenerateImageLink(
   file: File
 ): Promise<ProcessedImageResult> {

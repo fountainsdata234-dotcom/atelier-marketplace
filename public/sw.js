@@ -1,5 +1,5 @@
-const CACHE_NAME = 'fabrilux-atelier-v2';
-const OFFLINE_URLS = ['/index.html', '/favicon.svg', '/manifest.webmanifest'];
+const CACHE_NAME = 'fabrilux-atelier-v3';
+const OFFLINE_URLS = ['/index.html', '/logo.png', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

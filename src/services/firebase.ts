@@ -15,6 +15,7 @@ import {
 } from 'firebase/auth';
 import { User, UserRole } from '../types';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { compressImageBlob } from '../utils/imageProgram';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -78,7 +79,8 @@ export async function uploadUserImage(file: Blob, userId: string, folder: 'profi
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8787';
   const token = firebaseAuth.currentUser ? await firebaseAuth.currentUser.getIdToken() : null;
   const formData = new FormData();
-  formData.append('image', file, fileName);
+  const compressedFile = file.type.startsWith('image/') ? await compressImageBlob(file) : file;
+  formData.append('image', compressedFile, `${fileName.replace(/\.[^.]+$/, '')}.jpg`);
   formData.append('folder', folder);
   formData.append('userId', userId);
 

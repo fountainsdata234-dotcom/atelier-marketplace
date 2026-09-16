@@ -8,9 +8,9 @@
   "description": "Fabrilux Atelier marketplace for bespoke fashion and fabric discovery.",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any 192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

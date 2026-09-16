@@ -4,6 +4,7 @@ import cors from 'cors';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
 import multer from 'multer';
+import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
 import { adminAuth, firestore } from './firebaseAdmin.js';
 
@@ -154,6 +155,12 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
   const safeFolder = ['profiles', 'posts', 'atelier'].includes(requestedFolder) ? requestedFolder : 'atelier';
 
   try {
+    const optimizedBuffer = await sharp(req.file.buffer)
+      .rotate()
+      .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 78, progressive: true, mozjpeg: true })
+      .toBuffer();
+
     const result = await new Promise<{ secure_url: string; public_id: string; width?: number; height?: number }>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
@@ -176,7 +183,7 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
         }
       );
 
-      uploadStream.end(req.file!.buffer);
+      uploadStream.end(optimizedBuffer);
     });
 
     res.status(201).json({

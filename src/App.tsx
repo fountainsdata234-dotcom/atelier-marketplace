@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole } from './types';
 import { storageService } from './services/storage';
@@ -26,6 +26,8 @@ export default function App() {
   const [showIntro, setShowIntro] = useState<boolean>(true);
   const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const pullStartY = useRef<number | null>(null);
 
   // Theme state: default to sophisticated dark luxury aesthetic with full light toggle
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -78,6 +80,25 @@ export default function App() {
     window.addEventListener('offline', handleOffline);
     window.addEventListener('beforeinstallprompt', handleInstallPrompt);
     window.addEventListener('appinstalled', handleInstalled);
+    let lastTouchY: number | null = null;
+    const handleTouchStart = (event: TouchEvent) => {
+      pullStartY.current = window.scrollY <= 2 ? event.touches[0]?.clientY ?? null : null;
+      lastTouchY = pullStartY.current;
+    };
+    const handleTouchMove = (event: TouchEvent) => {
+      if (pullStartY.current !== null) lastTouchY = event.touches[0]?.clientY ?? null;
+    };
+    const handlePullRefresh = async () => {
+      if (pullStartY.current === null || lastTouchY === null || lastTouchY - pullStartY.current < 80 || window.scrollY > 2) return;
+      pullStartY.current = null;
+      lastTouchY = null;
+      setIsRefreshing(true);
+      await refreshAllData();
+      setIsRefreshing(false);
+    };
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handlePullRefresh, { passive: true });
 
     let unsubscribeFirebase: (() => void) | undefined;
     configureFirebaseAuth().then(() => {
@@ -132,6 +153,9 @@ export default function App() {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
       window.removeEventListener('appinstalled', handleInstalled);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handlePullRefresh);
       window.removeEventListener('atelier_users_updated', handleUsersUpdate);
       window.removeEventListener('atelier_posts_updated', handlePostsUpdate);
       window.removeEventListener('atelier_plans_updated', handlePlansUpdate);
@@ -307,6 +331,7 @@ export default function App() {
           You are offline. Showing saved Fabrilux content; new data will sync when connection returns.
         </div>
       )}
+      {isRefreshing && <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200">Refreshing marketplace...</div>}
 
       {/* 5. Main View Content */}
       <main className="flex-1 pb-20 md:pb-8">
