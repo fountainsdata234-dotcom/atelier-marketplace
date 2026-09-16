@@ -14,22 +14,22 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
   useEffect(() => {
     const timer1 = setTimeout(() => {
       setStage(1);
-      setProgress(45);
-    }, 120);
+      setProgress(48);
+    }, 70);
 
     const timer2 = setTimeout(() => {
       setStage(2);
-      setProgress(85);
-    }, 240);
+      setProgress(84);
+    }, 150);
 
     const timer3 = setTimeout(() => {
       setProgress(100);
       setStage(3);
-    }, 360);
+    }, 220);
 
     const finishTimer = setTimeout(() => {
       onComplete();
-    }, 480);
+    }, 290);
 
     return () => {
       clearTimeout(timer1);

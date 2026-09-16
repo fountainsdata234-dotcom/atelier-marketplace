@@ -18,6 +18,7 @@ import { BroadcastBanner } from './components/BroadcastBanner';
 import { Footer } from './components/Footer';
 import { CollectionPage } from './components/CollectionPage';
 import { ProfilePage } from './components/ProfilePage';
+import { ArtisanDirectory } from './components/ArtisanDirectory';
 import { configureFirebaseAuth, logoutFromFirebase, subscribeToFirebaseAuth, toAppUser } from './services/firebase';
 import { api } from './services/api';
 
@@ -35,11 +36,16 @@ export default function App() {
     return saved ? saved === 'dark' : true;
   });
 
-  // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages'
+  // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>('landing');
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [warningModal, setWarningModal] = useState<{ open: boolean; title: string; content: string }>({
+    open: false,
+    title: 'Account warning',
+    content: '',
+  });
   const [users, setUsers] = useState<User[]>([]);
   const [posts, setPosts] = useState<ClothPost[]>([]);
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
@@ -139,12 +145,22 @@ export default function App() {
     const handleAuthChange = (e: any) => setCurrentUser(e.detail);
     const handleBroadcastsUpdate = () => setBroadcasts(storageService.getBroadcasts());
     const handleNavigateTab = (e: any) => setCurrentView(e.detail);
+    const handleWarningMessage = (event: Event) => {
+      const detail = (event as CustomEvent<{ title?: string; content: string }>).detail;
+      if (!detail?.content) return;
+      setWarningModal({
+        open: true,
+        title: detail.title || 'Account warning',
+        content: detail.content,
+      });
+    };
 
     window.addEventListener('atelier_users_updated', handleUsersUpdate);
     window.addEventListener('atelier_posts_updated', handlePostsUpdate);
     window.addEventListener('atelier_plans_updated', handlePlansUpdate);
     window.addEventListener('atelier_auth_changed', handleAuthChange);
     window.addEventListener('atelier_broadcast_received', handleBroadcastsUpdate);
+    window.addEventListener('atelier_warning_message', handleWarningMessage);
     window.addEventListener('navigate_to_tab', handleNavigateTab);
 
     return () => {
@@ -161,6 +177,7 @@ export default function App() {
       window.removeEventListener('atelier_plans_updated', handlePlansUpdate);
       window.removeEventListener('atelier_auth_changed', handleAuthChange);
       window.removeEventListener('atelier_broadcast_received', handleBroadcastsUpdate);
+      window.removeEventListener('atelier_warning_message', handleWarningMessage);
       window.removeEventListener('navigate_to_tab', handleNavigateTab);
     };
   }, []);
@@ -171,6 +188,23 @@ export default function App() {
     const result = await installPrompt.userChoice;
     if (result.outcome === 'accepted') setInstallPrompt(null);
   };
+
+  useEffect(() => {
+    if (!currentUser) {
+      setWarningModal((prev) => ({ ...prev, open: false, content: '' }));
+      return;
+    }
+
+    if (currentUser.isWarned && currentUser.warningNote) {
+      setWarningModal({
+        open: true,
+        title: `Warning for ${currentUser.name}`,
+        content: currentUser.warningNote,
+      });
+    } else {
+      setWarningModal((prev) => ({ ...prev, open: false, content: '' }));
+    }
+  }, [currentUser]);
 
   const refreshAllData = async () => {
     const localUsers = storageService.getUsers();
@@ -374,6 +408,23 @@ export default function App() {
             </motion.div>
           )}
 
+          {currentView === 'artisan' && (
+            <motion.div
+              key="artisan"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.35 }}
+            >
+              <ArtisanDirectory
+                users={users}
+                posts={posts}
+                currentUser={currentUser}
+                isDarkMode={isDarkMode}
+              />
+            </motion.div>
+          )}
+
           {currentView === 'collections' && (
             <motion.div
               key="collections"
@@ -516,6 +567,61 @@ export default function App() {
         imageTitle={savePictureTitle}
         isDarkMode={isDarkMode}
       />
+
+      <AnimatePresence>
+        {warningModal.open && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.96, opacity: 0, y: 8 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-amber-500/30 bg-gradient-to-br from-[#17130d] via-[#101216] to-[#0f1116] text-white shadow-2xl shadow-amber-500/10"
+            >
+              <div className="flex items-center justify-between border-b border-amber-500/20 bg-amber-500/10 px-5 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/40">
+                    <span className="text-xl">⚠</span>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-300/80">Official notice</p>
+                    <h3 className="text-base font-serif font-bold text-amber-100">{warningModal.title}</h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWarningModal((prev) => ({ ...prev, open: false }))}
+                  className="rounded-full border border-amber-500/25 px-2 py-1 text-xs text-neutral-300 hover:bg-amber-500/10"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="space-y-4 p-5">
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm leading-relaxed text-neutral-200">
+                  {warningModal.content}
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-neutral-400">
+                  <span>Action required</span>
+                  <span className="font-semibold text-amber-300">Read & comply</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWarningModal((prev) => ({ ...prev, open: false }))}
+                  className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-bold text-neutral-950 shadow-lg shadow-amber-500/20 transition hover:brightness-110"
+                >
+                  I understand the warning
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

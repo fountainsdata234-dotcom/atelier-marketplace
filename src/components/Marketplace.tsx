@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Send, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
 import { ClothPost, FabricRequest, User, UserLocation } from '../types';
@@ -43,6 +43,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [activeCarouselIndex, setActiveCarouselIndex] = useState<number>(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [visiblePostsCount, setVisiblePostsCount] = useState<number>(10);
+  const [focusIndex, setFocusIndex] = useState(0);
+  const trendScrollRef = useRef<HTMLDivElement | null>(null);
   const [requestPost, setRequestPost] = useState<ClothPost | null>(null);
   const [requestStatus, setRequestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [requestForm, setRequestForm] = useState({
@@ -193,6 +195,33 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     return () => window.clearInterval(timer);
   }, [carouselPosts.length]);
 
+  useEffect(() => {
+    const node = trendScrollRef.current;
+    if (!node || trendingPosts.length === 0) return;
+
+    const handleScroll = () => {
+      const center = node.scrollLeft + node.clientWidth / 2;
+      let nearestIndex = 0;
+      let lowestDistance = Number.POSITIVE_INFINITY;
+
+      Array.from(node.children).forEach((child, index) => {
+        const element = child as HTMLElement;
+        const childCenter = element.offsetLeft + element.offsetWidth / 2;
+        const distance = Math.abs(childCenter - center);
+        if (distance < lowestDistance) {
+          lowestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+
+      setFocusIndex(nearestIndex);
+    };
+
+    handleScroll();
+    node.addEventListener('scroll', handleScroll, { passive: true });
+    return () => node.removeEventListener('scroll', handleScroll);
+  }, [trendingPosts]);
+
   // Request browser geolocation for Near Me proximity filtering
   const handleEnableLocation = () => {
     if (!navigator.geolocation) {
@@ -224,7 +253,19 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       onOpenAuth();
       return;
     }
-    api.toggleLike(postId).then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated'))).catch(error => setLocationStatus(error.message));
+
+    const updated = storageService.toggleLikePost(postId, currentUser.id);
+    window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+
+    api.toggleLike(postId)
+      .then(() => {
+        window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      })
+      .catch(error => {
+        setLocationStatus(error.message);
+        storageService.toggleLikePost(postId, currentUser.id);
+        window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      });
   };
 
   const handleRate = (postId: string, rating: number) => {
@@ -244,15 +285,21 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       return;
     }
 
+    const result = storageService.toggleSavePost(post.id, currentUser.id);
     storageService.addSavedPhoto({
       url: post.imageUrl,
       title: post.title,
       postId: post.id,
     });
+    window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
 
     api.toggleSave(post.id)
       .then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated')))
-      .catch(error => setLocationStatus(error.message));
+      .catch(error => {
+        setLocationStatus(error.message);
+        storageService.toggleSavePost(post.id, currentUser.id);
+        window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      });
 
     onSaveImageToViewer(post.imageUrl, post.title);
   };
@@ -536,11 +583,35 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       {trendingPosts.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-400" /><h2 className="text-sm font-semibold tracking-wide uppercase text-emerald-400 font-mono">Trending Craft</h2><span className="text-[11px] text-neutral-400">Latest quality and engagement signals</span></div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {trendingPosts.map(post => <button key={post.id} onClick={() => setSearchQuery(post.title)} className="min-w-56 max-w-64 text-left rounded-xl border border-neutral-800 overflow-hidden bg-neutral-900/70 hover:border-emerald-400/50 transition-colors">
-              <img src={post.imageUrl} alt="" className="w-full h-28 object-cover" loading="lazy" />
-              <div className="p-3"><p className="text-xs font-semibold truncate">{post.title}</p><p className="text-[10px] text-neutral-400 mt-1">{post.authorName} · {post.likes.length + post.saves.length} signals</p>{post.rating ? <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-1"><Star className="w-3 h-3 fill-current" /> {post.rating.toFixed(1)}</span> : <span className="text-[10px] text-emerald-400 mt-1 block">Rising now</span>}</div>
-            </button>)}
+          <div ref={trendScrollRef} className="flex gap-3 overflow-x-auto pb-3 scroll-smooth snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            {trendingPosts.map((post, index) => {
+              const isFocused = index === focusIndex;
+              return (
+                <button
+                  key={post.id}
+                  type="button"
+                  onClick={() => setSearchQuery(post.title)}
+                  className="group relative min-w-[260px] max-w-[320px] flex-1 shrink-0 snap-center overflow-hidden rounded-[1.5rem] border bg-neutral-900/70 text-left transition-all duration-300 ease-out"
+                  style={{
+                    transform: `scale(${isFocused ? 1 : 0.92}) translateY(${isFocused ? '0px' : '12px'})`,
+                    opacity: isFocused ? 1 : 0.45,
+                    filter: isFocused ? 'blur(0px)' : 'blur(0.8px)',
+                    borderColor: isFocused ? 'rgba(251, 191, 36, 0.45)' : 'rgba(255,255,255,0.08)',
+                    boxShadow: isFocused ? '0 30px 70px rgba(251, 191, 36, 0.12)' : '0 8px 24px rgba(0,0,0,0.12)',
+                  }}
+                >
+                  <div className="relative overflow-hidden">
+                    <img src={post.imageUrl} alt="" className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-3">
+                      <p className="text-xs font-semibold truncate text-white">{post.title}</p>
+                      <p className="mt-1 text-[10px] text-neutral-200">{post.authorName} · {post.likes.length + post.saves.length} signals</p>
+                      {post.rating ? <span className="mt-1 flex items-center gap-1 text-[10px] text-amber-400"><Star className="h-3 w-3 fill-current" /> {post.rating.toFixed(1)}</span> : <span className="mt-1 block text-[10px] text-emerald-400">Rising now</span>}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}

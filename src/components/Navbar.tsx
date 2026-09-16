@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors } from 'lucide-react';
+import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -85,6 +85,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Compass className="w-3.5 h-3.5 text-amber-500" />
             <span>Marketplace</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('artisan')}
+            className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+              currentView === 'artisan'
+                ? 'text-amber-400 bg-amber-500/10 font-semibold'
+                : 'text-neutral-400 hover:text-neutral-100'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-amber-500" />
+            <span>Artisan</span>
           </button>
 
           {currentUser && !isSeller && (

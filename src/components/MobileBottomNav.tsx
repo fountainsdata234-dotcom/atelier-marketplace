@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Compass, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark, Menu, X, LogIn, LogOut, Download } from 'lucide-react';
+import { Home, Compass, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark, Menu, X, LogIn, LogOut, Download, Users } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -79,7 +79,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             )}
 
             <button
-              onClick={() => setMenuOpen(prev => !prev)}
+              onClick={() => { setMenuOpen(prev => !prev); }}
               className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
                 menuOpen ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
@@ -126,6 +126,19 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                         {unreadCount}
                       </span>
                     )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onNavigate('artisan');
+                    }}
+                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors ${
+                      currentView === 'artisan' ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-300 hover:bg-neutral-800/60'
+                    }`}
+                  >
+                    <Users className="w-4 h-4" />
+                    Artisan network
                   </button>
 
                   <button

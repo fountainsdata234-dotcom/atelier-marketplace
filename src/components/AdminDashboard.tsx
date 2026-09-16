@@ -98,15 +98,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Warn User
   const handleWarnUser = (tailor: User) => {
-    const note = window.prompt(
+    const defaultMessage = tailor.warningNote || 'Please review the platform rules and avoid misuse of the marketplace.';
+    const draft = window.prompt(
       `Send a warning note to ${tailor.name} (${tailor.email}):`,
-      tailor.warningNote || 'Please review the platform rules and avoid misuse of the marketplace.'
+      defaultMessage
     );
 
-    if (note === null) return;
+    if (draft === null) return;
 
-    const result = storageService.warnUser(tailor.id, note);
-    alert(result.message);
+    const result = storageService.warnUser(tailor.id, draft);
+    setAdminStatus(result.message);
+    window.dispatchEvent(new CustomEvent('atelier_warning_message', {
+      detail: { title: `Warning for ${tailor.name}`, content: draft }
+    }));
+    const updatedUser = storageService.getUsers().find((user) => user.id === tailor.id);
+    if (updatedUser) {
+      window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: updatedUser }));
+    }
   };
 
   // Send Broadcast
@@ -142,9 +150,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Delete Post as Admin
-  const handleDeletePost = (postId: string) => {
-    if (confirm('Delete this post from the marketplace as administrator?')) {
-      storageService.deletePost(postId, currentUser.id, true);
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm('Delete this post from the marketplace as administrator?')) return;
+
+    const localDeleted = storageService.deletePost(postId, currentUser.id, true);
+    if (localDeleted) {
+      window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+    }
+
+    try {
+      await api.deletePost(postId);
+      const latestPosts = storageService.getPosts().filter(post => post.id !== postId);
+      storageService.savePosts(latestPosts);
+    } catch (error) {
+      console.error('Admin post delete sync failed', error);
     }
   };
 

@@ -202,11 +202,12 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
   // Delete Post
   const handleDeletePost = (postId: string) => {
-    if (confirm('Are you sure you want to remove this bespoke design?')) {
+    if (window.confirm('Are you sure you want to remove this bespoke design?')) {
       api.deletePost(postId)
         .then(() => {
           const cachedPosts = storageService.getPosts().filter(post => post.id !== postId);
           storageService.savePosts(cachedPosts);
+          window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
         })
         .catch(error => setPostStatus({ type: 'error', message: error.message }));
     }
@@ -220,8 +221,8 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-600">Welcome message</p>
             <h2 className="mt-1 text-xl font-bold text-slate-900 md:text-2xl">Welcome to Fabrilux Atelier</h2>
           </div>
-          <div className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-            New member
+          <div className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 ring-1 ring-amber-500/30">
+            Premium studio
           </div>
         </div>
 
