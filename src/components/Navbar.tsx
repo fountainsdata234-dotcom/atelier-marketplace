@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark } from 'lucide-react';
+import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -11,6 +11,9 @@ interface NavbarProps {
   isDarkMode: boolean;
   onToggleTheme: () => void;
   unreadCount?: number;
+  isOnline: boolean;
+  canInstall: boolean;
+  onInstall: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -21,7 +24,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   isDarkMode,
   onToggleTheme,
-  unreadCount = 0
+  unreadCount = 0,
+  isOnline,
+  canInstall,
+  onInstall
 }) => {
   const isSeller = currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller');
 
@@ -159,6 +165,21 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Utility Buttons */}
         <div className="flex items-center gap-3">
+          {!isOnline && (
+            <span className="hidden items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold text-amber-300 sm:flex" role="status">
+              <WifiOff className="h-3 w-3" /> Offline cache
+            </span>
+          )}
+          {canInstall && (
+            <button
+              onClick={onInstall}
+              aria-label="Install Fabrilux Atelier app"
+              title="Install app"
+              className="hidden items-center gap-1.5 rounded-xl border border-amber-500/40 px-2.5 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-500/10 sm:flex"
+            >
+              <Download className="h-3.5 w-3.5" /> Install
+            </button>
+          )}
           {/* Dark/Light Mode Toggle */}
           <button
             onClick={onToggleTheme}

@@ -46,6 +46,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Filtered lists
   const tailorsAndSellers = users.filter(u => u.role === 'tailor' || u.role === 'fabric_seller');
+  const tailors = users.filter(u => u.role === 'tailor');
+  const fabricSellers = users.filter(u => u.role === 'fabric_seller');
+  const customers = users.filter(u => u.role === 'buyer');
   const adminUsers = users.filter(u => u.role === 'admin');
 
   // Handle Add Admin
@@ -171,12 +174,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs w-full sm:w-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs w-full sm:w-auto">
             <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono text-left sm:text-center">
               <span className="text-amber-400 font-bold">{users.length}</span> Total Users
             </div>
             <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono text-left sm:text-center">
-              <span className="text-emerald-400 font-bold">{tailorsAndSellers.length}</span> Tailors + Sellers
+              <span className="text-emerald-400 font-bold">{tailors.length}</span> Tailors
+            </div>
+            <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono text-left sm:text-center">
+              <span className="text-cyan-400 font-bold">{fabricSellers.length}</span> Fabric Sellers
+            </div>
+            <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono text-left sm:text-center">
+              <span className="text-blue-400 font-bold">{customers.length}</span> Customers
             </div>
             <div className="px-3 py-1.5 rounded-xl bg-neutral-900/60 border border-neutral-800 font-mono text-left sm:text-center">
               <span className="text-purple-400 font-bold">{posts.length}</span> Live Posts

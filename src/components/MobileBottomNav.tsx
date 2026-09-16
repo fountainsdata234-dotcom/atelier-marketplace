@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Compass, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark, Menu, X, LogIn, LogOut } from 'lucide-react';
+import { Home, Compass, MessageSquare, User as UserIcon, Shield, Scissors, Bookmark, Menu, X, LogIn, LogOut, Download } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -10,6 +10,8 @@ interface MobileBottomNavProps {
   onLogout?: () => void;
   isDarkMode: boolean;
   unreadCount?: number;
+  canInstall?: boolean;
+  onInstall?: () => void;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
@@ -19,7 +21,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onOpenAuth,
   onLogout,
   isDarkMode,
-  unreadCount = 0
+  unreadCount = 0,
+  canInstall = false,
+  onInstall
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -97,6 +101,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             }`}
           >
             <div className="space-y-1.5">
+              {canInstall && onInstall && (
+                <button onClick={() => { setMenuOpen(false); onInstall(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-amber-400 hover:bg-amber-500/10">
+                  <Download className="h-4 w-4" /> Install Fabrilux app
+                </button>
+              )}
               {currentUser ? (
                 <>
                   <button

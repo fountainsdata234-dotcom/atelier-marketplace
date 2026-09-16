@@ -108,7 +108,7 @@ function buildProfileUpdate(input: Record<string, unknown>) {
   const updates: Record<string, unknown> = {};
 
   if (typeof input.name === 'string') updates.name = input.name.trim().slice(0, 120);
-  if (typeof input.role === 'string' && ['buyer', 'tailor', 'fabric_seller', 'admin'].includes(input.role)) updates.role = input.role;
+  if (typeof input.role === 'string' && ['buyer', 'tailor', 'fabric_seller'].includes(input.role)) updates.role = input.role;
   if (typeof input.phone === 'string') updates.phone = input.phone.slice(0, 40);
   if (typeof input.countryCode === 'string') updates.countryCode = input.countryCode.slice(0, 8);
   if (input.location && typeof input.location === 'object') updates.location = input.location;
@@ -268,15 +268,22 @@ app.post('/api/posts', requireAuth, async (req: AuthenticatedRequest, res) => {
     res.status(400).json({ error: 'A title and image are required.' });
     return;
   }
+  const authorProfile = await firestore.collection('profiles').doc(req.authUser!.uid).get();
+  const authorRole = authorProfile.data()?.role;
+  if (authorRole !== 'tailor' && authorRole !== 'fabric_seller') {
+    res.status(403).json({ error: 'Only approved tailors and fabric sellers can publish marketplace items.' });
+    return;
+  }
   const post = {
     authorId: req.authUser!.uid,
+    authorRole,
     title: input.title.trim().slice(0, 160),
     description: typeof input.description === 'string' ? input.description.trim().slice(0, 3000) : '',
     imageUrl: input.imageUrl.slice(0, 2_000_000),
     tags: Array.isArray(input.tags) ? input.tags.filter((tag: unknown) => typeof tag === 'string').slice(0, 30) : [],
     pricing: input.pricing && typeof input.pricing === 'object' ? input.pricing : {},
     createdAt: new Date().toISOString(),
-    isPromoted: false,
+    isPromoted: authorProfile.data()?.isPromoted === true,
     isBlocked: false,
     likes: [],
     saves: [],

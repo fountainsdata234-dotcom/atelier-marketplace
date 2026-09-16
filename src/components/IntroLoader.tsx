@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Scissors, Sparkles, Compass } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 interface IntroLoaderProps {
   onComplete: () => void;
@@ -85,19 +85,14 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
             className="absolute inset-2 rounded-full bg-amber-500/20 blur-xl"
           />
 
-          {/* Central Monogram / Atelier Icon */}
+          {/* Central branded logo */}
           <motion.div
             initial={{ scale: 0.6, rotate: -25, opacity: 0 }}
             animate={{ scale: 1, rotate: 0, opacity: 1 }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
             className="relative z-10 w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 via-neutral-900/80 to-amber-700/20 border border-amber-500/40 backdrop-blur-md flex items-center justify-center shadow-2xl shadow-amber-900/20"
           >
-            <motion.div
-              animate={{ rotate: [0, 15, -15, 0] }}
-              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <Scissors className="w-10 h-10 text-amber-400 stroke-[1.5]" />
-            </motion.div>
+            <img src="/favicon.svg" alt="Fabrilux Atelier" className="h-12 w-12 rounded-xl object-cover" />
           </motion.div>
 
           {/* Orbiting Sparkle */}

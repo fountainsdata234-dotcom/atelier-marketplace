@@ -67,6 +67,8 @@ class FittingRoomErrorBoundary extends React.Component<{
 export default function App() {
   // Intro Loading animation state
   const [showIntro, setShowIntro] = useState<boolean>(true);
+  const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   // Theme state: default to sophisticated dark luxury aesthetic with full light toggle
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -108,6 +110,18 @@ export default function App() {
   useEffect(() => {
     storageService.init();
     void refreshAllData();
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const handleInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const handleInstalled = () => setInstallPrompt(null);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+    window.addEventListener('appinstalled', handleInstalled);
 
     let unsubscribeFirebase: (() => void) | undefined;
     configureFirebaseAuth().then(() => {
@@ -157,6 +171,10 @@ export default function App() {
 
     return () => {
       unsubscribeFirebase?.();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
       window.removeEventListener('atelier_users_updated', handleUsersUpdate);
       window.removeEventListener('atelier_posts_updated', handlePostsUpdate);
       window.removeEventListener('atelier_plans_updated', handlePlansUpdate);
@@ -165,6 +183,13 @@ export default function App() {
       window.removeEventListener('navigate_to_tab', handleNavigateTab);
     };
   }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === 'accepted') setInstallPrompt(null);
+  };
 
   const refreshAllData = async () => {
     const localUsers = storageService.getUsers();
@@ -315,7 +340,16 @@ export default function App() {
         onLogout={handleLogout}
         isDarkMode={isDarkMode}
         onToggleTheme={handleToggleTheme}
+        isOnline={isOnline}
+        canInstall={Boolean(installPrompt)}
+        onInstall={handleInstallApp}
       />
+
+      {!isOnline && (
+        <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200" role="status">
+          You are offline. Showing saved Fabrilux content; new data will sync when connection returns.
+        </div>
+      )}
 
       {/* 5. Main View Content */}
       <main className="flex-1 pb-20 md:pb-8">
@@ -470,6 +504,8 @@ export default function App() {
         onOpenAuth={() => handleOpenAuthWithRole('buyer')}
         onLogout={handleLogout}
         isDarkMode={isDarkMode}
+        canInstall={Boolean(installPrompt)}
+        onInstall={handleInstallApp}
       />
 
       {/* 7. Global Floating / Modal Direct Messaging */}
