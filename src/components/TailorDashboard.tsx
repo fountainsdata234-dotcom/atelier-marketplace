@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Scissors, Sparkles, Upload, Image as ImageIcon, Link as LinkIcon, Share2, Star, AlertTriangle, CheckCircle, Trash2, Heart, Bookmark, Phone, MessageSquare, DollarSign, Tag, Clock } from 'lucide-react';
-import { User, ClothPost, AdminPromoPlan } from '../types';
+import { User, ClothPost, AdminPromoPlan, FabricRequest } from '../types';
 import { compressAndGenerateImageLink, validateImageLink, ProcessedImageResult } from '../utils/imageProgram';
 import { storageService } from '../services/storage';
 import { firebaseAuth, uploadUserImage } from '../services/firebase';
@@ -68,11 +68,46 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [compressionStats, setCompressionStats] = useState<ProcessedImageResult | null>(null);
   const [postStatus, setPostStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [fabricRequests, setFabricRequests] = useState<FabricRequest[]>([]);
+  const [requestStatus, setRequestStatus] = useState<string | null>(null);
 
   // Filter posts belonging to this tailor/seller
   const myPosts = posts.filter(p => p.authorId === currentUser.id);
   const totalLikes = myPosts.reduce((acc, p) => acc + p.likes.length, 0);
   const totalSaves = myPosts.reduce((acc, p) => acc + p.saves.length, 0);
+
+  React.useEffect(() => {
+    const loadRequests = async () => {
+      const cached = storageService.getFabricRequests().filter(request => request.sellerId === currentUser.id);
+      setFabricRequests(cached);
+      try {
+        const remote = await api.getFabricRequests();
+        const incoming = remote.filter(request => request.sellerId === currentUser.id);
+        setFabricRequests(incoming);
+        storageService.saveFabricRequests([
+          ...incoming,
+          ...storageService.getFabricRequests().filter(request => !incoming.some(item => item.id === request.id)),
+        ]);
+      } catch {
+        // Local cache keeps the studio usable when the API is unavailable.
+      }
+    };
+    void loadRequests();
+    const handleRequestsUpdated = () => setFabricRequests(storageService.getFabricRequests().filter(request => request.sellerId === currentUser.id));
+    window.addEventListener('atelier_requests_updated', handleRequestsUpdated);
+    return () => window.removeEventListener('atelier_requests_updated', handleRequestsUpdated);
+  }, [currentUser.id]);
+
+  const updateRequestStatus = async (request: FabricRequest, status: FabricRequest['status']) => {
+    try {
+      const updated = await api.updateFabricRequestStatus(request.id, status);
+      storageService.saveFabricRequests(storageService.getFabricRequests().map(item => item.id === updated.id ? updated : item));
+      setRequestStatus('Request status updated.');
+    } catch {
+      storageService.updateFabricRequestStatus(request.id, status);
+      setRequestStatus('Request saved locally and will sync when the API is available.');
+    }
+  };
 
   // Handle file upload through Image Link Program
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -312,6 +347,34 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
           </div>
         </div>
       )}
+
+      <section className={`rounded-3xl border p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+        <div className="flex flex-col gap-2 border-b border-neutral-800/60 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2"><MessageSquare className="h-4 w-4 text-amber-400" /><h2 className="text-xl font-serif font-bold">Client requests</h2></div>
+            <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Every request arrives with the quantity, delivery details, and buyer notes attached.</p>
+          </div>
+          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-300">{fabricRequests.filter(request => request.status === 'new').length} new</span>
+        </div>
+        {requestStatus && <p className="mt-3 text-xs text-emerald-400">{requestStatus}</p>}
+        {fabricRequests.length === 0 ? (
+          <div className="py-8 text-center text-xs text-neutral-500">No client requests yet. New structured inquiries will appear here.</div>
+        ) : (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {fabricRequests.map(request => (
+              <article key={request.id} className={`overflow-hidden rounded-2xl border ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}>
+                <div className="flex gap-3 p-4">
+                  <img src={request.postImageUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                  <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-sm font-semibold">{request.postTitle}</h3><span className="rounded-full border border-amber-500/30 px-2 py-0.5 text-[9px] uppercase tracking-wider text-amber-300">{request.status}</span></div><p className="mt-1 text-xs text-neutral-400">From {request.buyerName} · {request.buyerEmail}</p><p className="mt-1 text-xs text-neutral-300">{request.quantity} {request.quantityUnit}{request.preferredColor ? ` · ${request.preferredColor}` : ''}{request.budget ? ` · Budget ${request.currency} ${request.budget}` : ''}</p></div>
+                </div>
+                <div className="grid gap-2 border-t border-neutral-800/60 px-4 py-3 text-xs text-neutral-400 sm:grid-cols-2"><span>Deliver to: <strong className="font-medium text-neutral-200">{request.deliveryLocation}</strong></span><span>Needed by: <strong className="font-medium text-neutral-200">{request.neededBy || 'Flexible'}</strong></span></div>
+                {request.notes && <p className="border-t border-neutral-800/60 px-4 py-3 text-xs leading-relaxed text-neutral-300">{request.notes}</p>}
+                <div className="flex flex-wrap gap-2 border-t border-neutral-800/60 px-4 py-3"><button type="button" onClick={() => updateRequestStatus(request, 'reviewed')} className="rounded-lg border border-neutral-700 px-2.5 py-1.5 text-[10px] font-semibold hover:border-amber-500 hover:text-amber-300">Mark reviewed</button><button type="button" onClick={() => updateRequestStatus(request, 'quoted')} className="rounded-lg border border-emerald-500/40 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-300 hover:bg-emerald-500/10">Quoted</button><button type="button" onClick={() => updateRequestStatus(request, 'closed')} className="rounded-lg border border-neutral-700 px-2.5 py-1.5 text-[10px] font-semibold hover:border-neutral-500">Close</button></div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Promotion & Premium Plans Section (Requested 3 Admin Cards) */}
       <section className="space-y-4">

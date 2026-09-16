@@ -101,6 +101,32 @@ export interface DirectMessage {
   type?: 'chat' | 'general';
 }
 
+export type FabricRequestStatus = 'new' | 'reviewed' | 'quoted' | 'closed';
+
+export interface FabricRequest {
+  id: string;
+  postId: string;
+  postTitle: string;
+  postImageUrl: string;
+  sellerId: string;
+  sellerName: string;
+  sellerRole: 'tailor' | 'fabric_seller';
+  buyerId: string;
+  buyerName: string;
+  buyerEmail: string;
+  quantity: number;
+  quantityUnit: 'yards' | 'meters' | 'pieces';
+  preferredColor?: string;
+  budget?: number;
+  currency: string;
+  deliveryLocation: string;
+  neededBy?: string;
+  notes: string;
+  status: FabricRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BroadcastMessage {
   id: string;
   sender: string;

@@ -357,6 +357,10 @@ export default function App() {
                   setSelectedGarmentTitle(post.title);
                   setCurrentView('fitting');
                 }}
+                onOpenFittingRoom={() => {
+                  setSelectedGarmentTitle('Classic Senator');
+                  setCurrentView('fitting');
+                }}
                 isDarkMode={isDarkMode}
               />
             </motion.div>

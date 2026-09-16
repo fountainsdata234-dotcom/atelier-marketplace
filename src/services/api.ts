@@ -1,5 +1,5 @@
 import { firebaseAuth } from './firebase';
-import { ClothPost, DirectMessage, User } from '../types';
+import { ClothPost, DirectMessage, FabricRequest, User } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 
@@ -33,4 +33,7 @@ export const api = {
   ratePost: (postId: string, rating: number) => request<void>(`/api/posts/${postId}/rating`, { method: 'POST', body: JSON.stringify({ rating }) }),
   getMessages: () => request<DirectMessage[]>('/api/messages'),
   sendMessage: (message: Omit<DirectMessage, 'id' | 'timestamp' | 'isRead'>) => request<DirectMessage>('/api/messages', { method: 'POST', body: JSON.stringify(message) }),
+  createFabricRequest: (requestData: Omit<FabricRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => request<FabricRequest>('/api/fabric-requests', { method: 'POST', body: JSON.stringify(requestData) }),
+  getFabricRequests: () => request<FabricRequest[]>('/api/fabric-requests'),
+  updateFabricRequestStatus: (requestId: string, status: FabricRequest['status']) => request<FabricRequest>(`/api/fabric-requests/${requestId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 };

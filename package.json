@@ -11,7 +11,8 @@
     "start": "node ./node_modules/tsx/dist/cli.mjs server/index.ts",
     "server:check": "node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.server.json",
     "clean": "rm -rf dist server.js",
-    "lint": "node ./node_modules/typescript/bin/tsc --noEmit"
+    "lint": "node ./node_modules/typescript/bin/tsc --noEmit",
+    "postinstall": "node scripts/patch-three-fbx-loader.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

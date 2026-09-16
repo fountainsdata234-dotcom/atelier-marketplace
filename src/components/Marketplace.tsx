@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Send, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
-import { ClothPost, User, UserLocation } from '../types';
+import { ClothPost, FabricRequest, User, UserLocation } from '../types';
 import { WORLD_COUNTRIES, calculateDistanceKm } from '../data/worldData';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -16,6 +16,7 @@ interface MarketplaceProps {
   onSharePost: (post: ClothPost) => void;
   onShareTailorProfile: (user: User) => void;
   onTryItOn: (post: ClothPost) => void;
+  onOpenFittingRoom: () => void;
   isDarkMode: boolean;
 }
 
@@ -29,10 +30,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onSharePost,
   onShareTailorProfile,
   onTryItOn,
+  onOpenFittingRoom,
   isDarkMode
 }) => {
   // Search & Filter States
-  const tailorPosts = useMemo(() => posts.filter(post => post.authorRole === 'tailor'), [posts]);
+  const sellerPosts = useMemo(() => posts.filter(post => post.authorRole === 'tailor' || post.authorRole === 'fabric_seller'), [posts]);
+  const tailorPosts = sellerPosts;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
@@ -44,6 +47,17 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [activeCarouselIndex, setActiveCarouselIndex] = useState<number>(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [visiblePostsCount, setVisiblePostsCount] = useState<number>(10);
+  const [requestPost, setRequestPost] = useState<ClothPost | null>(null);
+  const [requestStatus, setRequestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [requestForm, setRequestForm] = useState({
+    quantity: '1',
+    quantityUnit: 'pieces' as FabricRequest['quantityUnit'],
+    preferredColor: '',
+    budget: '',
+    deliveryLocation: '',
+    neededBy: '',
+    notes: '',
+  });
 
   // Extract unique tags across all posts
   const allTags = useMemo(() => {
@@ -260,6 +274,60 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
   };
 
+  const openRequestCard = (post: ClothPost) => {
+    if (!currentUser) {
+      onOpenAuth();
+      return;
+    }
+    setRequestPost(post);
+    setRequestStatus(null);
+    setRequestForm(form => ({
+      ...form,
+      deliveryLocation: [currentUser.location.city, currentUser.location.state, currentUser.location.country].filter(Boolean).join(', '),
+    }));
+  };
+
+  const submitRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!requestPost || !currentUser) return;
+
+    const quantity = Number(requestForm.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0 || !requestForm.deliveryLocation.trim()) {
+      setRequestStatus({ type: 'error', message: 'Enter a valid quantity and delivery location.' });
+      return;
+    }
+
+    const requestData = {
+      postId: requestPost.id,
+      postTitle: requestPost.title,
+      postImageUrl: requestPost.imageUrl,
+      sellerId: requestPost.authorId,
+      sellerName: requestPost.authorName,
+      sellerRole: requestPost.authorRole,
+      buyerId: currentUser.id,
+      buyerName: currentUser.name,
+      buyerEmail: currentUser.email,
+      quantity,
+      quantityUnit: requestForm.quantityUnit,
+      preferredColor: requestForm.preferredColor.trim(),
+      budget: requestForm.budget ? Number(requestForm.budget) : undefined,
+      currency: requestPost.pricing.currency || currentUser.location.currency || 'USD',
+      deliveryLocation: requestForm.deliveryLocation.trim(),
+      neededBy: requestForm.neededBy,
+      notes: requestForm.notes.trim(),
+    };
+
+    try {
+      const created = await api.createFabricRequest(requestData);
+      storageService.saveFabricRequests([created, ...storageService.getFabricRequests().filter(item => item.id !== created.id)]);
+    } catch {
+      storageService.createFabricRequest(requestData);
+    }
+
+    setRequestStatus({ type: 'success', message: 'Request sent. The seller can now review your details.' });
+    window.setTimeout(() => setRequestPost(null), 900);
+  };
+
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       {/* Top Header & Search Bar */}
@@ -435,6 +503,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                             className="col-span-2 rounded-xl bg-emerald-600 px-2.5 py-2 text-[10px] font-bold text-white transition hover:bg-emerald-500 sm:col-span-auto sm:px-3 sm:text-[11px]"
                           >
                             WhatsApp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openRequestCard(post)}
+                            className="col-span-2 rounded-xl bg-amber-400 px-2.5 py-2 text-[10px] font-bold text-neutral-950 transition hover:bg-amber-300 sm:col-span-auto sm:px-3 sm:text-[11px]"
+                          >
+                            Request this item
                           </button>
                         </div>
                       </div>
@@ -626,6 +701,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={onOpenFittingRoom}
+              className="px-5 py-2.5 rounded-xl text-xs font-semibold text-amber-300 border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 transition-all"
+            >
+              Open Virtual Fitting Room
+            </button>
             {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') ? (
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: 'dashboard' }))}
@@ -748,12 +830,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       <Download className="w-3 h-3" />
                       <span>Details</span>
                     </button>
-                    <button
-                      onClick={() => onTryItOn(post)}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-500/30"
-                    >
-                      Try it on
-                    </button>
+                    {post.authorRole === 'tailor' && (
+                      <button
+                        onClick={() => onTryItOn(post)}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-500/30"
+                      >
+                        Try it on
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -811,7 +895,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                           <Star className={`w-3.5 h-3.5 ${post.rating && post.rating >= star ? 'fill-amber-400 text-amber-400' : ''}`} />
                         </button>
                       ))}
-                      {post.ratingCount ? <span className="ml-1 text-[10px] text-amber-400">{post.rating.toFixed(1)} ({post.ratingCount})</span> : null}
+                      {post.ratingCount ? <span className="ml-1 text-[10px] text-amber-400">{(post.rating || 0).toFixed(1)} ({post.ratingCount})</span> : null}
                     </div>
                   </div>
                 </div>
@@ -850,6 +934,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       <Phone className="w-3.5 h-3.5" />
                       <span>WhatsApp</span>
                     </button>
+                    <button
+                      onClick={() => openRequestCard(post)}
+                      className="px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-neutral-950 flex items-center gap-1.5 transition-colors"
+                      title="Send a structured request"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Request</span>
+                    </button>
                   </div>
                 </div>
               </motion.article>
@@ -857,6 +949,47 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           })}
         </div>
       )}
+
+      <AnimatePresence>
+        {requestPost && (
+          <motion.div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onMouseDown={(event) => { if (event.target === event.currentTarget) setRequestPost(null); }}
+          >
+            <motion.form
+              onSubmit={submitRequest}
+              initial={{ opacity: 0, y: 18, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18 }}
+              className={`max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl border p-5 shadow-2xl sm:p-7 ${isDarkMode ? 'border-neutral-700 bg-[#121316] text-white' : 'border-neutral-200 bg-white text-neutral-900'}`}
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-neutral-700/50 pb-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Structured request</p>
+                  <h2 className="mt-1 text-2xl font-serif font-bold">Request {requestPost.title}</h2>
+                  <p className="mt-1 text-xs text-neutral-400">Sent to {requestPost.authorName}, {requestPost.authorRole === 'tailor' ? 'Master Tailor' : 'Fabric Merchant'}.</p>
+                </div>
+                <button type="button" onClick={() => setRequestPost(null)} className="rounded-full px-3 py-1 text-xl text-neutral-400 hover:bg-neutral-800" aria-label="Close request form">×</button>
+              </div>
+
+              {requestStatus && <div className={`mt-4 rounded-xl border p-3 text-xs ${requestStatus.type === 'success' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-red-500/40 bg-red-500/10 text-red-300'}`}>{requestStatus.message}</div>}
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <label className="text-xs font-medium">Quantity *<input required min="0.01" step="0.01" type="number" value={requestForm.quantity} onChange={event => setRequestForm({ ...requestForm, quantity: event.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/50 px-3 py-2.5 text-sm" /></label>
+                <label className="text-xs font-medium">Unit<select value={requestForm.quantityUnit} onChange={event => setRequestForm({ ...requestForm, quantityUnit: event.target.value as FabricRequest['quantityUnit'] })} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/50 px-3 py-2.5 text-sm"><option value="pieces">Pieces</option><option value="yards">Yards</option><option value="meters">Meters</option></select></label>
+                <label className="text-xs font-medium">Preferred color<input value={requestForm.preferredColor} onChange={event => setRequestForm({ ...requestForm, preferredColor: event.target.value })} placeholder="Optional" className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/50 px-3 py-2.5 text-sm" /></label>
+                <label className="text-xs font-medium">Budget<input min="0" type="number" value={requestForm.budget} onChange={event => setRequestForm({ ...requestForm, budget: event.target.value })} placeholder={`Optional (${requestPost.pricing.currency || 'USD'})`} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/50 px-3 py-2.5 text-sm" /></label>
+                <label className="text-xs font-medium sm:col-span-2">Delivery location *<input required value={requestForm.deliveryLocation} onChange={event => setRequestForm({ ...requestForm, deliveryLocation: event.target.value })} placeholder="City, state, country" className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/50 px-3 py-2.5 text-sm" /></label>
+                <label className="text-xs font-medium">Needed by<input type="date" value={requestForm.neededBy} onChange={event => setRequestForm({ ...requestForm, neededBy: event.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/50 px-3 py-2.5 text-sm" /></label>
+                <label className="text-xs font-medium sm:col-span-2">Notes<textarea rows={3} value={requestForm.notes} onChange={event => setRequestForm({ ...requestForm, notes: event.target.value })} placeholder="Add measurements, intended use, or special handling details" className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/50 px-3 py-2.5 text-sm" /></label>
+              </div>
+              <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row"><button type="button" onClick={() => setRequestPost(null)} className="rounded-xl border border-neutral-700 px-4 py-2.5 text-xs font-semibold text-neutral-300 hover:bg-neutral-800">Cancel</button><button type="submit" className="rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300"><Send className="mr-1.5 inline h-3.5 w-3.5" />Send request</button></div>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

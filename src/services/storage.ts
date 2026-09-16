@@ -1,4 +1,4 @@
-import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, UserRole } from '../types';
+import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, UserRole, FabricRequest, FabricRequestStatus } from '../types';
 
 const STORAGE_KEYS = {
   USERS: 'atelier_users_v2',
@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   DARK_MODE: 'atelier_dark_mode_v2',
   SAVED_PHOTOS: 'atelier_saved_photos_v2',
   COLLECTION_PACKAGES: 'atelier_collection_packages_v2'
+  ,FABRIC_REQUESTS: 'atelier_fabric_requests_v1'
 };
 
 const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
@@ -69,6 +70,9 @@ export const storageService = {
     }
     if (!localStorage.getItem(STORAGE_KEYS.BROADCASTS)) {
       localStorage.setItem(STORAGE_KEYS.BROADCASTS, JSON.stringify([]));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.FABRIC_REQUESTS)) {
+      localStorage.setItem(STORAGE_KEYS.FABRIC_REQUESTS, JSON.stringify([]));
     }
     
   },
@@ -443,6 +447,43 @@ export const storageService = {
     const updated = plans.map(p => p.id === id ? { ...p, ...updates } : p);
     this.savePromoPlans(updated);
     return updated;
+  },
+
+  // STRUCTURED FABRIC REQUESTS
+  getFabricRequests(): FabricRequest[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.FABRIC_REQUESTS);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveFabricRequests(requests: FabricRequest[]): void {
+    localStorage.setItem(STORAGE_KEYS.FABRIC_REQUESTS, JSON.stringify(requests));
+    window.dispatchEvent(new CustomEvent('atelier_requests_updated'));
+  },
+
+  createFabricRequest(request: Omit<FabricRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>): FabricRequest {
+    const now = new Date().toISOString();
+    const created: FabricRequest = {
+      ...request,
+      id: `request-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      status: 'new',
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.saveFabricRequests([created, ...this.getFabricRequests()]);
+    return created;
+  },
+
+  updateFabricRequestStatus(id: string, status: FabricRequestStatus): FabricRequest | null {
+    const requests = this.getFabricRequests();
+    const index = requests.findIndex(request => request.id === id);
+    if (index < 0) return null;
+    requests[index] = { ...requests[index], status, updatedAt: new Date().toISOString() };
+    this.saveFabricRequests(requests);
+    return requests[index];
   },
 
   // DIRECT MESSAGING

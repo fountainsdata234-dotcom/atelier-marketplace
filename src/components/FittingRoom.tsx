@@ -3,7 +3,7 @@ import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { Html, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import { ArrowLeft, RotateCw, ZoomIn, Sparkles, RefreshCw, Save, Gauge, Ruler, Move3d, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, RotateCw, ZoomIn, Sparkles, RefreshCw, Save, Gauge, Ruler, Move3d, Eye, EyeOff, PersonStanding } from 'lucide-react';
 import { useFittingStore } from '../store/fittingStore';
 
 type FittingRoomProps = {
@@ -13,7 +13,9 @@ type FittingRoomProps = {
 
 const fabricPalette = ['#d97706', '#f59e0b', '#f97316', '#ef4444', '#7c3aed', '#1f2937'];
 
-function AvatarModel() {
+type Pose = 'stand' | 'hands-up' | 'bend';
+
+function HumanMannequin({ pose }: { pose: Pose }) {
   const {
     selectedGender,
     measurements,
@@ -23,58 +25,56 @@ function AvatarModel() {
     isSimulating,
   } = useFittingStore();
 
-  const avatarRef = useRef<THREE.Group>(null);
-  const avatarModel = useLoader(FBXLoader, '/3d/avatars/male/fabric-male.fbx');
-
+  const mannequinRef = useRef<THREE.Group>(null);
+  const humanModel = useLoader(FBXLoader, '/3d/avatars/male/human-mannequin.fbx');
+  const garmentMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: garmentColor, roughness: 0.88, side: THREE.DoubleSide }), [garmentColor]);
   const model = useMemo(() => {
-    if (!avatarModel) return null;
-
-    const root = avatarModel.clone(true);
-    root.name = selectedGender === 'male' ? 'fabric-male-avatar' : 'fabric-female-avatar';
-    root.scale.setScalar(0.0125);
-    root.position.set(0, -1.85, 0);
-    root.rotation.y = selectedGender === 'female' ? -0.4 : 0.35;
-
+    const root = humanModel.clone(true);
+    root.name = 'real-human-mannequin';
+    root.rotation.set(pose === 'bend' ? -0.18 : 0, 0, 0);
     root.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
-
       child.castShadow = true;
       child.receiveShadow = true;
-
-      const materialList = Array.isArray(child.material) ? child.material : [child.material];
-      materialList.forEach((material) => {
-        if (!(material instanceof THREE.MeshStandardMaterial)) return;
-
-        material.roughness = 0.8;
-        material.metalness = 0.08;
-        material.envMapIntensity = 1.2;
-        material.needsUpdate = true;
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach((material) => {
+        if (material instanceof THREE.MeshStandardMaterial) {
+          material.roughness = 0.8;
+          material.metalness = 0.02;
+          material.needsUpdate = true;
+        }
       });
     });
 
+    const bounds = new THREE.Box3().setFromObject(root);
+    const sourceHeight = Math.max(bounds.getSize(new THREE.Vector3()).y, 0.001);
+    root.scale.setScalar(3.9 / sourceHeight);
+    root.updateMatrixWorld(true);
+
+    const normalizedBounds = new THREE.Box3().setFromObject(root);
+    const normalizedCenter = normalizedBounds.getCenter(new THREE.Vector3());
+    root.position.set(-normalizedCenter.x, -2.07 - normalizedBounds.min.y, -normalizedCenter.z);
     return root;
-  }, [avatarModel, selectedGender]);
+  }, [humanModel, pose]);
+
+  const bodyScale = measurements.height / 175;
+  const widthScale = measurements.chest / 102;
+  const depthScale = measurements.waist / 88;
 
   useFrame((state) => {
-    if (!avatarRef.current) return;
-    avatarRef.current.rotation.y = THREE.MathUtils.lerp(
-      avatarRef.current.rotation.y,
-      (Math.sin(state.clock.elapsedTime * 0.5) * 0.18) + (selectedGender === 'female' ? -0.08 : 0.18),
-      0.05,
-    );
+    if (!mannequinRef.current) return;
+    mannequinRef.current.rotation.y = THREE.MathUtils.lerp(mannequinRef.current.rotation.y, Math.sin(state.clock.elapsedTime * 0.35) * 0.08, 0.05);
   });
 
   return (
-    <group ref={avatarRef} position={[0, 0, 0]}>
-      {model && <primitive object={model} />}
+    <group ref={mannequinRef} scale={[bodyScale * widthScale, bodyScale, bodyScale * depthScale]}>
+      <primitive object={model} />
 
       {garmentVisible && (
-        <group position={[0, 1.08, 0.05]} scale={[0.96 + measurements.chest / 220, 1 + measurements.height / 620, 0.96]}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[1.65, 2.25, 0.85]} />
-            <meshStandardMaterial color={garmentColor} roughness={0.9} metalness={0.04} />
-          </mesh>
-        </group>
+        <mesh position={[0, 1.08, 0.05]} scale={[0.96 + measurements.chest / 220, 1 + measurements.height / 620, 0.96]} castShadow receiveShadow>
+          <boxGeometry args={[1.65, 2.25, 0.85]} />
+          <primitive object={garmentMaterial} attach="material" />
+        </mesh>
       )}
 
       {showMeasurements && (
@@ -100,7 +100,7 @@ function AvatarModel() {
   );
 }
 
-function Scene() {
+function Scene({ pose }: { pose: Pose }) {
   const { selectedGender } = useFittingStore();
 
   return (
@@ -119,7 +119,7 @@ function Scene() {
         <meshStandardMaterial color="#edf2f8" roughness={1} />
       </mesh>
 
-      <AvatarModel />
+      <HumanMannequin pose={pose} />
       <OrbitControls enablePan enableZoom minDistance={4} maxDistance={9} target={[0, 0.6, 0]} />
     </>
   );
@@ -146,6 +146,7 @@ export const FittingRoom: React.FC<FittingRoomProps> = ({ onBack, garmentTitle =
   } = useFittingStore();
 
   const [activeTab, setActiveTab] = useState<'body' | 'fabric' | 'fit'>('body');
+  const [pose, setPose] = useState<Pose>('stand');
 
   const reading = useMemo(() => [
     { label: 'Height', value: measurements.height },
@@ -241,7 +242,7 @@ export const FittingRoom: React.FC<FittingRoomProps> = ({ onBack, garmentTitle =
                 camera={{ position: [0, 1.45, 5.8], fov: 28, near: 0.1, far: 40 }}
               >
                 <Suspense fallback={<Html center><div className="rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-xs font-medium text-slate-600 shadow-lg">Loading digital mannequin…</div></Html>}>
-                  <Scene />
+                  <Scene pose={pose} />
                 </Suspense>
               </Canvas>
 
@@ -282,6 +283,28 @@ export const FittingRoom: React.FC<FittingRoomProps> = ({ onBack, garmentTitle =
 
             {activeTab === 'body' && (
               <div className="space-y-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <PersonStanding className="h-4 w-4 text-amber-600" />
+                    <span>Body view</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([
+                      ['stand', 'Stand'],
+                      ['hands-up', 'Raise hands'],
+                      ['bend', 'Bend'],
+                    ] as const).map(([nextPose, label]) => (
+                      <button
+                        key={nextPose}
+                        type="button"
+                        onClick={() => setPose(nextPose)}
+                        className={`rounded-xl px-2 py-2 text-[11px] font-semibold transition ${pose === nextPose ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-200'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {Object.entries(measurements).map(([key, value]) => {
                   const config = {
                     height: { label: 'Height', min: 140, max: 220 },

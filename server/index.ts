@@ -364,6 +364,80 @@ app.delete('/api/posts/:postId', requireAuth, async (req: AuthenticatedRequest, 
   res.status(204).send();
 });
 
+app.post('/api/fabric-requests', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const input = req.body || {};
+  const quantity = Number(input.quantity);
+  const postId = typeof input.postId === 'string' ? input.postId : '';
+  const sellerId = typeof input.sellerId === 'string' ? input.sellerId : '';
+
+  if (input.buyerId !== req.authUser!.uid || !postId || !sellerId || !Number.isFinite(quantity) || quantity <= 0) {
+    res.status(400).json({ error: 'A valid buyer, seller, post, and quantity are required.' });
+    return;
+  }
+
+  const postSnapshot = await firestore.collection('posts').doc(postId).get();
+  if (!postSnapshot.exists || postSnapshot.data()?.authorId !== sellerId) {
+    res.status(400).json({ error: 'The selected marketplace item is no longer available.' });
+    return;
+  }
+
+  const post = postSnapshot.data() || {};
+  const request = {
+    postId,
+    postTitle: String(input.postTitle || post.title || '').trim().slice(0, 160),
+    postImageUrl: String(input.postImageUrl || post.imageUrl || '').slice(0, 2_000_000),
+    sellerId,
+    sellerName: String(input.sellerName || '').trim().slice(0, 120),
+    sellerRole: input.sellerRole === 'fabric_seller' ? 'fabric_seller' : 'tailor',
+    buyerId: req.authUser!.uid,
+    buyerName: String(input.buyerName || '').trim().slice(0, 120),
+    buyerEmail: String(input.buyerEmail || req.authUser!.email || '').trim().slice(0, 200),
+    quantity: Math.min(quantity, 100000),
+    quantityUnit: ['yards', 'meters', 'pieces'].includes(input.quantityUnit) ? input.quantityUnit : 'pieces',
+    preferredColor: typeof input.preferredColor === 'string' ? input.preferredColor.trim().slice(0, 80) : '',
+    budget: Number.isFinite(Number(input.budget)) && Number(input.budget) > 0 ? Math.min(Number(input.budget), 1_000_000_000) : null,
+    currency: String(input.currency || 'USD').slice(0, 8),
+    deliveryLocation: String(input.deliveryLocation || '').trim().slice(0, 240),
+    neededBy: typeof input.neededBy === 'string' ? input.neededBy.slice(0, 10) : '',
+    notes: String(input.notes || '').trim().slice(0, 2000),
+    status: 'new',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const created = await firestore.collection('fabricRequests').add(request);
+  res.status(201).json({ id: created.id, ...request });
+});
+
+app.get('/api/fabric-requests', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const [buyerRequests, sellerRequests] = await Promise.all([
+    firestore.collection('fabricRequests').where('buyerId', '==', req.authUser!.uid).limit(200).get(),
+    firestore.collection('fabricRequests').where('sellerId', '==', req.authUser!.uid).limit(200).get(),
+  ]);
+  const unique = new Map<string, Record<string, unknown>>();
+  [...buyerRequests.docs, ...sellerRequests.docs].forEach(doc => unique.set(doc.id, { id: doc.id, ...doc.data() }));
+  const requests = [...unique.values()].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  res.json(requests);
+});
+
+app.patch('/api/fabric-requests/:requestId/status', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const status = ['new', 'reviewed', 'quoted', 'closed'].includes(req.body?.status) ? req.body.status : null;
+  const requestRef = firestore.collection('fabricRequests').doc(req.params.requestId);
+  const requestSnapshot = await requestRef.get();
+  const requestData = requestSnapshot.data();
+  if (!requestSnapshot.exists || (!req.authUser!.admin && requestData?.sellerId !== req.authUser!.uid && requestData?.buyerId !== req.authUser!.uid)) {
+    res.status(403).json({ error: 'You cannot update this request.' });
+    return;
+  }
+  if (!status) {
+    res.status(400).json({ error: 'Invalid request status.' });
+    return;
+  }
+  const updatedAt = new Date().toISOString();
+  await requestRef.set({ status, updatedAt }, { merge: true });
+  res.json({ id: requestSnapshot.id, ...requestData, status, updatedAt });
+});
+
 app.post('/api/admin/users/:uid/block', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   const blocked = Boolean(req.body?.blocked);
   await firestore.collection('profiles').doc(req.params.uid).set({ isBlocked: blocked, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
