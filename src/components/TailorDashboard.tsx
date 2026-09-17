@@ -262,6 +262,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 <span className="font-bold text-slate-900">$0.00</span>
               </div>
             </div>
+            {currentUser.isWarned && currentUser.warningNote && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-700"><strong className="block text-[10px] uppercase tracking-wider">Urgent account alert</strong><span className="mt-1 block leading-relaxed">{currentUser.warningNote}</span></div>}
           </div>
         </div>
       </div>

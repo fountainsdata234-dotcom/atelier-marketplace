@@ -41,12 +41,6 @@ export default function App() {
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [warningModal, setWarningModal] = useState<{ open: boolean; title: string; content: string }>({
-    open: false,
-    title: 'Account warning',
-    content: '',
-  });
-  const dismissedWarningRef = useRef<string | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [posts, setPosts] = useState<ClothPost[]>([]);
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
@@ -145,22 +139,12 @@ export default function App() {
     const handleAuthChange = (e: any) => setCurrentUser(e.detail);
     const handleBroadcastsUpdate = () => setBroadcasts(storageService.getBroadcasts());
     const handleNavigateTab = (e: any) => setCurrentView(e.detail);
-    const handleWarningMessage = (event: Event) => {
-      const detail = (event as CustomEvent<{ title?: string; content: string }>).detail;
-      if (!detail?.content) return;
-      setWarningModal({
-        open: true,
-        title: detail.title || 'Account warning',
-        content: detail.content,
-      });
-    };
 
     window.addEventListener('atelier_users_updated', handleUsersUpdate);
     window.addEventListener('atelier_posts_updated', handlePostsUpdate);
     window.addEventListener('atelier_plans_updated', handlePlansUpdate);
     window.addEventListener('atelier_auth_changed', handleAuthChange);
     window.addEventListener('atelier_broadcast_received', handleBroadcastsUpdate);
-    window.addEventListener('atelier_warning_message', handleWarningMessage);
     window.addEventListener('navigate_to_tab', handleNavigateTab);
 
     return () => {
@@ -177,7 +161,6 @@ export default function App() {
       window.removeEventListener('atelier_plans_updated', handlePlansUpdate);
       window.removeEventListener('atelier_auth_changed', handleAuthChange);
       window.removeEventListener('atelier_broadcast_received', handleBroadcastsUpdate);
-      window.removeEventListener('atelier_warning_message', handleWarningMessage);
       window.removeEventListener('navigate_to_tab', handleNavigateTab);
     };
   }, []);
@@ -187,28 +170,6 @@ export default function App() {
     await installPrompt.prompt();
     const result = await installPrompt.userChoice;
     if (result.outcome === 'accepted') setInstallPrompt(null);
-  };
-
-  useEffect(() => {
-    if (!currentUser) {
-      setWarningModal((prev) => ({ ...prev, open: false, content: '' }));
-      return;
-    }
-
-    if (currentUser.isWarned && currentUser.warningNote && dismissedWarningRef.current !== currentUser.warningNote) {
-      setWarningModal({
-        open: true,
-        title: `Warning for ${currentUser.name}`,
-        content: currentUser.warningNote,
-      });
-    } else {
-      setWarningModal((prev) => ({ ...prev, open: false, content: '' }));
-    }
-  }, [currentUser]);
-
-  const dismissWarning = () => {
-    dismissedWarningRef.current = warningModal.content;
-    setWarningModal((prev) => ({ ...prev, open: false }));
   };
 
   useEffect(() => {
@@ -253,8 +214,18 @@ export default function App() {
 
       // An empty array is a valid authoritative response: it must clear stale local posts.
       if (remotePosts !== null) {
-        storageService.savePosts(remotePosts);
-        setPosts(remotePosts);
+        const normalizedPosts = remotePosts.map(post => ({
+          ...post,
+          likes: Array.isArray(post.likes) ? post.likes : [],
+          saves: Array.isArray(post.saves) ? post.saves : [],
+          tags: Array.isArray(post.tags) ? post.tags : [],
+          ratingsByUser: post.ratingsByUser || {},
+          rating: Number(post.rating) || 0,
+          ratingCount: Number(post.ratingCount) || 0,
+          authorLocation: post.authorLocation || { country: '', state: '', city: '' },
+        }));
+        storageService.savePosts(normalizedPosts);
+        setPosts(normalizedPosts);
       }
     } catch (error) {
       console.error('Remote marketplace data unavailable', error);
@@ -395,6 +366,11 @@ export default function App() {
         <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200" role="status">
           You are offline. Showing saved Fabrilux content; new data will sync when connection returns.
         </div>
+      )}
+      {currentUser?.isWarned && currentUser.warningNote && (
+        <button type="button" onClick={() => setCurrentView('profile')} className="sticky top-16 z-30 flex w-full items-center justify-center gap-2 border-b border-red-500/30 bg-red-500/10 px-4 py-2 text-center text-xs font-semibold text-red-200 transition hover:bg-red-500/20">
+          <span aria-hidden="true">!</span> Urgent account notice: open your account alerts to read it
+        </button>
       )}
       {isRefreshing && <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200">Refreshing marketplace...</div>}
 
@@ -594,60 +570,6 @@ export default function App() {
         isDarkMode={isDarkMode}
       />
 
-      <AnimatePresence>
-        {warningModal.open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ scale: 0.96, opacity: 0, y: 12 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.96, opacity: 0, y: 8 }}
-              transition={{ duration: 0.2 }}
-              className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-amber-500/30 bg-gradient-to-br from-[#17130d] via-[#101216] to-[#0f1116] text-white shadow-2xl shadow-amber-500/10"
-            >
-              <div className="flex items-center justify-between border-b border-amber-500/20 bg-amber-500/10 px-5 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/40">
-                    <span className="text-xl">⚠</span>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-300/80">Official notice</p>
-                    <h3 className="text-base font-serif font-bold text-amber-100">{warningModal.title}</h3>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={dismissWarning}
-                  className="rounded-full border border-amber-500/25 px-2 py-1 text-xs text-neutral-300 hover:bg-amber-500/10"
-                >
-                  Close
-                </button>
-              </div>
-
-              <div className="space-y-4 p-5">
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm leading-relaxed text-neutral-200">
-                  {warningModal.content}
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-neutral-400">
-                  <span>Action required</span>
-                  <span className="font-semibold text-amber-300">Read & comply</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={dismissWarning}
-                  className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-bold text-neutral-950 shadow-lg shadow-amber-500/20 transition hover:brightness-110"
-                >
-                  I understand the warning
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

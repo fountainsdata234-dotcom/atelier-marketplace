@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bookmark, LogOut, Save, UserRound } from 'lucide-react';
+import { AlertTriangle, Bookmark, LogOut, Save, UserRound } from 'lucide-react';
 import { User } from '../types';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
@@ -54,6 +54,19 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <button type="button" onClick={() => onNavigate('collections')} className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition hover:border-amber-500/50 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}><Bookmark className="h-5 w-5 text-amber-400" /><span><strong className="block text-sm">Saved collection</strong><small className="text-xs text-neutral-400">View your saved designs and inspiration.</small></span></button>
           <button type="button" onClick={() => onNavigate('marketplace')} className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition hover:border-amber-500/50 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}><UserRound className="h-5 w-5 text-amber-400" /><span><strong className="block text-sm">Continue exploring</strong><small className="text-xs text-neutral-400">Discover tailors and fabric sellers.</small></span></button>
         </div>
+
+        {currentUser.isWarned && currentUser.warningNote && (
+          <section className="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4" aria-labelledby="account-alert-title">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
+              <div>
+                <h2 id="account-alert-title" className="text-sm font-bold text-red-200">Urgent account alert</h2>
+                <p className="mt-2 text-sm leading-relaxed text-red-100/90">{currentUser.warningNote}</p>
+                <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-red-300/70">Please review this notice before publishing or accepting new requests.</p>
+              </div>
+            </div>
+          </section>
+        )}
 
         <form onSubmit={saveProfile} className="mt-8 grid gap-4 sm:grid-cols-2">
           <label className="text-xs font-semibold">Full name<input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" /></label>

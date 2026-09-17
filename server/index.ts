@@ -294,10 +294,10 @@ app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
 });
 
 app.get('/api/posts', async (_req, res) => {
-  const snapshot = await firestore.collection('posts').where('isBlocked', '!=', true).limit(100).get();
+  const snapshot = await firestore.collection('posts').limit(100).get();
   const profileSnapshot = await firestore.collection('profiles').get();
   const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data()]));
-    const posts: Array<Record<string, unknown> & { id: string }> = await Promise.all(snapshot.docs.map(async doc => {
+    const posts: Array<Record<string, unknown> & { id: string; isBlocked?: boolean }> = (await Promise.all(snapshot.docs.map(async doc => {
     const data = doc.data() as Record<string, unknown>;
     const author = profiles.get(String(data.authorId)) || {};
       const [likesSnapshot, savesSnapshot, ratingsSnapshot] = await Promise.all([
@@ -313,14 +313,15 @@ app.get('/api/posts', async (_req, res) => {
       authorRole: author.role || 'tailor',
       authorHandle: author.handle || '@atelier_member',
       authorAvatar: author.avatarUrl || '',
-      authorLocation: author.location || {},
+      authorLocation: author.location || { country: '', state: '', city: '' },
       authorWhatsapp: author.whatsappNumber || '',
+      isBlocked: data.isBlocked === true,
       likes: likesSnapshot.docs.map(item => item.id),
       saves: savesSnapshot.docs.map(item => item.id),
       rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : 0,
       ratingCount: ratings.length,
     };
-    }));
+    }))).filter(post => post.isBlocked !== true);
   posts.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   res.json(posts);
 });
