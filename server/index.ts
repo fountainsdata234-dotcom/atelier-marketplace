@@ -373,11 +373,16 @@ app.post('/api/posts/:postId/save', requireAuth, async (req: AuthenticatedReques
 app.delete('/api/posts/:postId', requireAuth, async (req: AuthenticatedRequest, res) => {
   const postRef = firestore.collection('posts').doc(req.params.postId);
   const post = await postRef.get();
+  if (!post.exists) {
+    res.status(204).send();
+    return;
+  }
+
   const profile = await firestore.collection('profiles').doc(req.authUser!.uid).get();
   const profileData = profile.exists ? profile.data() as Record<string, unknown> : {};
   const isAdminUser = Boolean(req.authUser!.admin || profileData.role === 'admin');
 
-  if (!post.exists || (post.data()?.authorId !== req.authUser!.uid && !isAdminUser)) {
+  if (post.data()?.authorId !== req.authUser!.uid && !isAdminUser) {
     res.status(403).json({ error: 'You cannot delete this post.' });
     return;
   }

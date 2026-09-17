@@ -154,17 +154,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm('Delete this post from the marketplace as administrator?')) return;
 
-    const localDeleted = storageService.deletePost(postId, currentUser.id, true);
-    if (localDeleted) {
-      window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
-    }
+    const cachedPosts = storageService.getPosts();
+    if (!cachedPosts.some(post => post.id === postId)) return;
+    storageService.deletePost(postId, currentUser.id, true);
 
     try {
       await api.deletePost(postId);
-      const latestPosts = storageService.getPosts().filter(post => post.id !== postId);
-      storageService.savePosts(latestPosts);
+      setAdminStatus('Post deleted from the marketplace.');
     } catch (error) {
-      console.error('Admin post delete sync failed', error);
+      storageService.savePosts(cachedPosts);
+      setAdminStatus(error instanceof Error ? error.message : 'The post could not be deleted.');
     }
   };
 

@@ -232,7 +232,8 @@ export default function App() {
         setUsers(remoteUsers);
       }
 
-      if (remotePosts) {
+      // An empty array is a valid authoritative response: it must clear stale local posts.
+      if (remotePosts !== null) {
         storageService.savePosts(remotePosts);
         setPosts(remotePosts);
       }

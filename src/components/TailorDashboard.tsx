@@ -201,15 +201,21 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   };
 
   // Delete Post
-  const handleDeletePost = (postId: string) => {
-    if (window.confirm('Are you sure you want to remove this bespoke design?')) {
-      api.deletePost(postId)
-        .then(() => {
-          const cachedPosts = storageService.getPosts().filter(post => post.id !== postId);
-          storageService.savePosts(cachedPosts);
-          window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
-        })
-        .catch(error => setPostStatus({ type: 'error', message: error.message }));
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm('Are you sure you want to remove this bespoke design?')) return;
+
+    const cachedPosts = storageService.getPosts();
+    const postExists = cachedPosts.some(post => post.id === postId);
+    if (!postExists) return;
+
+    storageService.deletePost(postId, currentUser.id, false);
+
+    try {
+      await api.deletePost(postId);
+      setPostStatus({ type: 'success', message: 'Post removed from the marketplace.' });
+    } catch (error) {
+      storageService.savePosts(cachedPosts);
+      setPostStatus({ type: 'error', message: error instanceof Error ? error.message : 'The post could not be deleted.' });
     }
   };
 
