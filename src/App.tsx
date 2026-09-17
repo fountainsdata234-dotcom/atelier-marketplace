@@ -172,20 +172,6 @@ export default function App() {
     if (result.outcome === 'accepted') setInstallPrompt(null);
   };
 
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const syncProfile = async () => {
-      const profile = await api.getProfile().catch(() => undefined);
-      if (!profile) return;
-      const updatedUser = storageService.updateUser(currentUser.id, profile);
-      if (updatedUser) setCurrentUser(updatedUser);
-    };
-
-    const interval = window.setInterval(() => { void syncProfile(); }, 5000);
-    return () => window.clearInterval(interval);
-  }, [currentUser?.id]);
-
   const refreshAllData = async () => {
     const localUsers = storageService.getUsers();
     const localPosts = storageService.getPosts();

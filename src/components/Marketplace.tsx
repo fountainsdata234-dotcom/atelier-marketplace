@@ -31,7 +31,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   isDarkMode
 }) => {
   // Search & Filter States
-  const sellerPosts = useMemo(() => posts.filter(post => post.authorRole === 'tailor' || post.authorRole === 'fabric_seller'), [posts]);
+  const sellerPosts = useMemo(() => posts
+    .filter(post => post.authorRole === 'tailor' || post.authorRole === 'fabric_seller')
+    .map(post => ({
+      ...post,
+      title: post.title || 'Untitled atelier post',
+      description: post.description || '',
+      authorName: post.authorName || 'Atelier Member',
+      authorHandle: post.authorHandle || '@atelier_member',
+      authorLocation: post.authorLocation || { country: '', state: '', city: '' },
+      tags: Array.isArray(post.tags) ? post.tags : [],
+      likes: Array.isArray(post.likes) ? post.likes : [],
+      saves: Array.isArray(post.saves) ? post.saves : [],
+      ratingsByUser: post.ratingsByUser || {},
+      rating: Number(post.rating) || 0,
+      ratingCount: Number(post.ratingCount) || 0,
+    })), [posts]);
   const tailorPosts = sellerPosts;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
@@ -64,9 +79,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   // Extract unique tags across all posts
   const allTags = useMemo(() => {
     const tagsSet = new Set<string>();
-    posts.forEach(p => p.tags.forEach(t => tagsSet.add(t.toLowerCase())));
+    sellerPosts.forEach(p => p.tags.forEach(t => tagsSet.add(t.toLowerCase())));
     return Array.from(tagsSet);
-  }, [posts]);
+  }, [sellerPosts]);
 
   const carouselPosts = useMemo(() => {
     return tailorPosts
@@ -106,7 +121,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       const freshness = Math.exp(-Math.max(0, now - new Date(post.createdAt).getTime()) / (30 * 86_400_000));
       const sellerPosts = candidatePosts.filter(item => item.authorId === post.authorId);
       const sellerRating = sellerPosts.reduce((sum, item) => sum + (item.rating || 0), 0) / Math.max(1, sellerPosts.length * 5);
-      const sellerReputation = Math.min(1, sellerRating * 0.8 + Math.min((author?.followers.length || 0) / 100, 1) * 0.2);
+      const followerCount = Array.isArray(author?.followers) ? author.followers.length : 0;
+      const sellerReputation = Math.min(1, sellerRating * 0.8 + Math.min(followerCount / 100, 1) * 0.2);
       return { post, trend: eventScore(post) + post.likes.length * 2 + post.saves.length * 3, personal: interestScore(post), quality, freshness, sellerReputation };
     });
     const maxTrend = Math.max(1, ...rawScores.map(item => item.trend));

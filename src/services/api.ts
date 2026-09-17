@@ -5,6 +5,9 @@ const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'l
 
 async function request<T>(path: string, options: RequestInit = {}) {
   const token = firebaseAuth.currentUser ? await firebaseAuth.currentUser.getIdToken() : null;
+  if (path === '/api/profile' && !token) {
+    throw new Error('Authentication is not ready.');
+  }
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
