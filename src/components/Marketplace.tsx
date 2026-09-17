@@ -751,16 +751,27 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
       {/* Posts Feed Grid */}
       {filteredPosts.length === 0 ? (
-        /* Zero Demo Data Empty State - User strictly instructed no demo clothes! */
         <div className={`text-center py-16 px-6 rounded-3xl border ${
           isDarkMode ? 'bg-[#121316]/50 border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'
         }`}>
           <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-4">
             <Scissors className="w-8 h-8" />
           </div>
-          <h3 className="text-2xl font-serif font-bold mb-2">No Garments or Fabric Items Listed Yet</h3>
+
+          <h3 className="text-2xl font-serif font-bold mb-2">
+            {currentUser?.role === 'tailor'
+              ? 'No cloth posts yet — publish your first collection'
+              : currentUser?.role === 'fabric_seller'
+                ? 'No fabric posts yet — list your first material stock'
+                : 'No cloths are available right now'}
+          </h3>
+
           <p className={`text-xs max-w-md mx-auto mb-6 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-            Every piece on Atelier is created and posted by real registered tailors and fabric sellers. No demo or dummy clothes are generated.
+            {currentUser?.role === 'tailor'
+              ? 'Tailors can publish garments, pricing, and fabric details here for buyers to discover and order.'
+              : currentUser?.role === 'fabric_seller'
+                ? 'Fabric sellers can upload materials, textures, and wholesale details for designers and tailors.'
+                : 'The marketplace is empty right now. Tailors and fabric sellers can post new items to fill the feed.'}
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -769,14 +780,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 onClick={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: 'dashboard' }))}
                 className="px-5 py-2.5 rounded-xl text-xs font-semibold text-neutral-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:shadow-lg hover:shadow-amber-500/25 transition-all"
               >
-                Publish Your First Garment / Fabric Post →
+                {currentUser.role === 'tailor' ? 'Post Your Cloth Collection →' : 'Post Your Fabric Inventory →'}
               </button>
             ) : (
               <button
                 onClick={onOpenAuth}
                 className="px-5 py-2.5 rounded-xl text-xs font-semibold text-neutral-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:shadow-lg hover:shadow-amber-500/25 transition-all"
               >
-                Register as Tailor / Fabric Merchant to Post
+                {currentUser ? 'Join as Tailor / Fabric Seller' : 'Register as Tailor / Fabric Merchant to Post'}
               </button>
             )}
           </div>

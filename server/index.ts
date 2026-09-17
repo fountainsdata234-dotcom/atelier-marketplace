@@ -74,7 +74,10 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
 
   try {
     const token = await adminAuth.verifyIdToken(header.slice(7));
-    req.authUser = { uid: token.uid, email: token.email, admin: token.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com' || token.admin === true || token.role === 'admin' };
+    const profile = await firestore.collection('profiles').doc(token.uid).get();
+    const profileData = profile.exists ? profile.data() as Record<string, unknown> : {};
+    const isAdminFromProfile = profileData.role === 'admin' || token.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com' || token.admin === true || token.role === 'admin';
+    req.authUser = { uid: token.uid, email: token.email, admin: Boolean(isAdminFromProfile) };
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired authentication token.' });
@@ -370,10 +373,15 @@ app.post('/api/posts/:postId/save', requireAuth, async (req: AuthenticatedReques
 app.delete('/api/posts/:postId', requireAuth, async (req: AuthenticatedRequest, res) => {
   const postRef = firestore.collection('posts').doc(req.params.postId);
   const post = await postRef.get();
-  if (!post.exists || (post.data()?.authorId !== req.authUser!.uid && !req.authUser!.admin)) {
+  const profile = await firestore.collection('profiles').doc(req.authUser!.uid).get();
+  const profileData = profile.exists ? profile.data() as Record<string, unknown> : {};
+  const isAdminUser = Boolean(req.authUser!.admin || profileData.role === 'admin');
+
+  if (!post.exists || (post.data()?.authorId !== req.authUser!.uid && !isAdminUser)) {
     res.status(403).json({ error: 'You cannot delete this post.' });
     return;
   }
+
   await postRef.delete();
   res.status(204).send();
 });

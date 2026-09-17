@@ -51,3 +51,34 @@ If you need very high-volume media hosting from day one, a dedicated media platf
 - `npm run server` — start the Express + Firebase backend
 - `npm run lint` — run the frontend TypeScript check
 - `npm run server:check` — run the backend TypeScript check
+
+## Marketplace rules and moderation
+
+### Posting standards
+- Only registered tailors and fabric sellers may publish garment or fabric listings.
+- Buyers may browse, save, like, and message sellers, but they do not create product listings.
+- Listed items must be real marketplace content. Demo, placeholder, or duplicate product entries are not allowed.
+
+### Deletion standards
+- The creator of a post may delete their own listing at any time.
+- Administrators may delete any single post without exception when the content is invalid, misleading, abusive, or against marketplace rules.
+- Deleted posts must disappear instantly from the live marketplace feed everywhere.
+
+### Warning and block actions
+- Administrators may warn a user with a formal in-app notice when rules are broken.
+- Repeated violations may result in a temporary or permanent marketplace restriction.
+- A blocked user cannot publish new posts until the block is removed by an administrator.
+
+### Messaging standards
+- Messaging is business-focused and respectful.
+- A message sent by one user should appear immediately in the recipient's conversation thread.
+- Only approved marketplace conversations should be used for real vendor and buyer communication.
+
+### Empty-state behavior
+- Tailors see: "No cloth posts yet — publish your first collection"
+- Fabric sellers see: "No fabric posts yet — list your first material stock"
+- Customers see: "No cloths are available right now"
+
+### Admin responsibility
+- Admins are expected to maintain trust, remove harmful content, and keep the marketplace organized and accurate.
+- The app is designed so admin delete actions are enforced in both the frontend and the backend to prevent stale or unauthorized content from remaining visible.

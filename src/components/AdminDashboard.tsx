@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Users, UserPlus, UserX, Star, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2 } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage } from '../types';
 import { storageService } from '../services/storage';
+import { api } from '../services/api';
 
 interface AdminDashboardProps {
   currentUser: User;
