@@ -92,6 +92,15 @@ function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFuncti
   next();
 }
 
+function requireSuperAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const isSuperAdmin = req.authUser?.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com';
+  if (!isSuperAdmin) {
+    res.status(403).json({ error: 'Primary administrator access required.' });
+    return;
+  }
+  next();
+}
+
 function cleanProfile(input: Record<string, unknown>, allowAdmin: boolean) {
   return {
     name: typeof input.name === 'string' ? input.name.trim().slice(0, 120) : '',
@@ -222,6 +231,44 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
 
   const saved = await profileRef.get();
   res.json({ id: uid, ...(saved.data() || {}) });
+});
+
+app.post('/api/admin/admins', requireAuth, requireSuperAdmin, async (req: AuthenticatedRequest, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  if (!email || !email.includes('@')) {
+    res.status(400).json({ error: 'A valid administrator email is required.' });
+    return;
+  }
+
+  try {
+    const firebaseUser = await adminAuth.getUserByEmail(email);
+    const claims = firebaseUser.customClaims || {};
+    await adminAuth.setCustomUserClaims(firebaseUser.uid, { ...claims, admin: true, role: 'admin' });
+    const profileRef = firestore.collection('profiles').doc(firebaseUser.uid);
+    await profileRef.set({ role: 'admin', isSuperAdmin: false, email, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    const saved = await profileRef.get();
+    res.status(201).json({ id: firebaseUser.uid, ...(saved.data() || {}) });
+  } catch (error) {
+    if ((error as { code?: string }).code === 'auth/user-not-found') {
+      res.status(404).json({ error: 'That email does not belong to a registered Firebase account yet.' });
+      return;
+    }
+    throw error;
+  }
+});
+
+app.delete('/api/admin/admins/:uid', requireAuth, requireSuperAdmin, async (req: AuthenticatedRequest, res) => {
+  if (req.params.uid === req.authUser!.uid) {
+    res.status(400).json({ error: 'The primary administrator cannot remove their own access.' });
+    return;
+  }
+  const target = await adminAuth.getUser(req.params.uid);
+  const claims = { ...(target.customClaims || {}) };
+  delete claims.admin;
+  delete claims.role;
+  await adminAuth.setCustomUserClaims(req.params.uid, claims);
+  await firestore.collection('profiles').doc(req.params.uid).set({ role: 'buyer', isSuperAdmin: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  res.status(204).send();
 });
 
 app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {

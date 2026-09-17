@@ -53,17 +53,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const adminUsers = users.filter(u => u.role === 'admin');
 
   // Handle Add Admin
-  const handleAddAdmin = (e: React.FormEvent) => {
+  const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminStatus(null);
     if (!newAdminEmail.trim() || !newAdminEmail.includes('@')) {
       setAdminStatus('Please enter a valid email address.');
       return;
     }
-    const res = storageService.addSecondaryAdmin(newAdminEmail.trim().toLowerCase());
-    setAdminStatus(res.message);
-    if (res.success) {
+    try {
+      const added = await api.addAdmin(newAdminEmail.trim().toLowerCase());
+      storageService.upsertUser({
+        ...added,
+        followers: added.followers || [],
+        isPromoted: added.isPromoted || false,
+        isBlocked: added.isBlocked || false,
+        createdAt: added.createdAt || new Date().toISOString(),
+        role: 'admin',
+      });
+      setAdminStatus(`${added.email || newAdminEmail} is now an administrator.`);
       setNewAdminEmail('');
+    } catch (error) {
+      setAdminStatus(error instanceof Error ? error.message : 'Administrator access could not be granted.');
     }
   };
 
@@ -74,8 +84,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
     if (confirm('Are you sure you want to remove this administrator?')) {
-      const res = storageService.deleteSecondaryAdmin(adminId, currentUser);
-      setAdminStatus(res.message);
+      void api.removeAdmin(adminId)
+        .then(() => {
+          const res = storageService.deleteSecondaryAdmin(adminId, currentUser);
+          setAdminStatus(res.message);
+        })
+        .catch(error => setAdminStatus(error instanceof Error ? error.message : 'Administrator access could not be removed.'));
     }
   };
 
@@ -92,13 +106,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Toggle Block Tailor
-  const handleToggleBlock = (tailor: User) => {
+  const handleToggleBlock = async (tailor: User) => {
     const updated = !tailor.isBlocked;
     storageService.updateUser(tailor.id, { isBlocked: updated });
+    try {
+      await api.setUserBlocked(tailor.id, updated);
+      setAdminStatus(`${tailor.name} has been ${updated ? 'blocked' : 'unblocked'}.`);
+    } catch (error) {
+      storageService.updateUser(tailor.id, { isBlocked: !updated });
+      setAdminStatus(error instanceof Error ? error.message : 'The account restriction could not be updated.');
+    }
   };
 
   // Warn User
-  const handleWarnUser = (tailor: User) => {
+  const handleWarnUser = async (tailor: User) => {
     const defaultMessage = tailor.warningNote || 'Please review the platform rules and avoid misuse of the marketplace.';
     const draft = window.prompt(
       `Send a warning note to ${tailor.name} (${tailor.email}):`,
@@ -115,6 +136,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const updatedUser = storageService.getUsers().find((user) => user.id === tailor.id);
     if (updatedUser) {
       window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: updatedUser }));
+    }
+    try {
+      await api.updateUserProfile(tailor.id, { isWarned: true, warningNote: draft.trim().slice(0, 500) });
+    } catch (error) {
+      setAdminStatus(error instanceof Error ? error.message : 'The warning could not be delivered to the server.');
     }
   };
 
