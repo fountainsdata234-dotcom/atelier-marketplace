@@ -73,6 +73,16 @@ export interface ClothPost {
   createdAt: string; 
 }
 
+export type DiscoveryEventType = 'VIEW' | 'LIKE' | 'SAVE' | 'SHARE' | 'ENQUIRY' | 'ADD_TO_CART' | 'PURCHASE' | 'RATING';
+
+export interface DiscoveryEvent {
+  userId?: string;
+  itemId: string;
+  eventType: DiscoveryEventType;
+  timestamp: string;
+  sessionId: string;
+}
+
 export interface AdminPromoPlan {
   id: string;
   caption: string;

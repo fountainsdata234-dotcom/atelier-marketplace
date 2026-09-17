@@ -312,9 +312,18 @@ export default function App() {
     }
     const tailor = users.find(u => u.id === post.authorId);
     if (!tailor) return;
+    storageService.recordDiscoveryEvent(post.id, 'ENQUIRY', currentUser.id);
+    void api.recordDiscoveryEvent(post.id, 'ENQUIRY', sessionStorage.getItem('atelier_session_id') || 'app-session');
     setDirectMessageRecipient(tailor);
     setDirectMessagePost(post);
     setDirectMessageOpen(true);
+  };
+
+  const handleMessageUser = (user: User) => {
+    if (!currentUser) return;
+    setDirectMessageRecipient(user);
+    setDirectMessagePost(null);
+    setCurrentView('messages');
   };
 
   // Trigger Save Image
@@ -332,6 +341,8 @@ export default function App() {
   };
 
   const handleSharePost = (post: ClothPost) => {
+    storageService.recordDiscoveryEvent(post.id, 'SHARE', currentUser?.id);
+    if (currentUser) void api.recordDiscoveryEvent(post.id, 'SHARE', sessionStorage.getItem('atelier_session_id') || 'app-session');
     setSocialShareHandle(post.authorHandle);
     setSocialShareName(`${post.title} by ${post.authorName}`);
     setSocialShareOpen(true);
@@ -498,6 +509,7 @@ export default function App() {
                 posts={posts}
                 promoPlans={promoPlans}
                 broadcasts={broadcasts}
+                onMessageUser={handleMessageUser}
                 isDarkMode={isDarkMode}
               />
             </motion.div>

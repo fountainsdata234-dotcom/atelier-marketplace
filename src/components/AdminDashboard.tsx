@@ -11,6 +11,7 @@ interface AdminDashboardProps {
   posts: ClothPost[];
   promoPlans: AdminPromoPlan[];
   broadcasts: BroadcastMessage[];
+  onMessageUser: (user: User) => void;
   isDarkMode: boolean;
 }
 
@@ -20,6 +21,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   posts,
   promoPlans,
   broadcasts,
+  onMessageUser,
   isDarkMode
 }) => {
   const isSuperAdmin = currentUser.isSuperAdmin === true;
@@ -46,7 +48,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [promoPlans]);
 
   // Filtered lists
-  const tailorsAndSellers = users.filter(u => u.role === 'tailor' || u.role === 'fabric_seller');
+  const moderatableUsers = users.filter(u => u.role !== 'admin');
   const tailors = users.filter(u => u.role === 'tailor');
   const fabricSellers = users.filter(u => u.role === 'fabric_seller');
   const customers = users.filter(u => u.role === 'buyer');
@@ -248,7 +250,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 : 'bg-neutral-800/40 text-neutral-400 hover:text-white'
             }`}
           >
-            Tailors & Merchants ({tailorsAndSellers.length})
+            Marketplace Users ({moderatableUsers.length})
           </button>
 
           <button
@@ -306,18 +308,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div>
               <h2 className="text-xl font-serif font-bold">Registered Tailors & Fabric Sellers</h2>
               <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                Promote tailors to spotlight them on the runway carousel, or block restricted accounts.
+                Message, warn, promote, or block marketplace users. Posts can be removed from the Posts tab.
               </p>
             </div>
           </div>
 
-          {tailorsAndSellers.length === 0 ? (
+          {moderatableUsers.length === 0 ? (
             <div className="p-8 text-center text-xs text-neutral-400">
-              No tailors or fabric merchants registered yet.
+              No marketplace users registered yet.
             </div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {tailorsAndSellers.map((tailor) => (
+              {moderatableUsers.map((tailor) => (
                 <div
                   key={tailor.id}
                   className={`rounded-2xl border p-4 space-y-3 transition-all ${
@@ -363,6 +365,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => onMessageUser(tailor)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500 hover:text-neutral-950 transition-all"
+                    >
+                      Message
+                    </button>
                     <button
                       onClick={() => handleTogglePromote(tailor)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${

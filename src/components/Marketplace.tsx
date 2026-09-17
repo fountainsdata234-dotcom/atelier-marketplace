@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Send, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
-import { ClothPost, FabricRequest, User, UserLocation } from '../types';
+import { ClothPost, DiscoveryEvent, DiscoveryEventType, FabricRequest, User, UserLocation } from '../types';
 import { WORLD_COUNTRIES, calculateDistanceKm } from '../data/worldData';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -44,6 +44,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [visiblePostsCount, setVisiblePostsCount] = useState<number>(10);
   const [focusIndex, setFocusIndex] = useState(0);
+  const [showAllTrending, setShowAllTrending] = useState(false);
+  const [discoveryEvents, setDiscoveryEvents] = useState<DiscoveryEvent[]>(() => storageService.getDiscoveryEvents());
+  const seenPostIdsRef = useRef(new Set<string>());
   const trendScrollRef = useRef<HTMLDivElement | null>(null);
   const [requestPost, setRequestPost] = useState<ClothPost | null>(null);
   const [requestStatus, setRequestStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -78,17 +81,45 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [posts, users]);
 
   const trendingPosts = useMemo(() => {
-    return [...tailorPosts]
-      .filter(post => !users.find(user => user.id === post.authorId)?.isBlocked)
+    const now = Date.now();
+    const eventWeights: Record<DiscoveryEventType, number> = { VIEW: 1, LIKE: 5, SAVE: 7, SHARE: 6, ENQUIRY: 9, ADD_TO_CART: 10, PURCHASE: 14, RATING: 4 };
+    const candidatePosts = tailorPosts.filter(post => !users.find(user => user.id === post.authorId)?.isBlocked);
+    const eventScore = (post: ClothPost) => discoveryEvents.reduce((score, event) => {
+      if (event.itemId !== post.id) return score;
+      const ageHours = Math.max(0, (now - new Date(event.timestamp).getTime()) / 3_600_000);
+      return score + eventWeights[event.eventType] * Math.exp(-ageHours / 168);
+    }, 0);
+    const interestScore = (post: ClothPost) => {
+      if (!currentUser) return 0;
+      return discoveryEvents.reduce((score, event) => {
+        if (event.userId !== currentUser.id) return score;
+        const interactedPost = candidatePosts.find(item => item.id === event.itemId);
+        if (!interactedPost || !interactedPost.tags.some(tag => post.tags.some(postTag => postTag.toLowerCase() === tag.toLowerCase()))) return score;
+        return score + eventWeights[event.eventType];
+      }, 0);
+    };
+
+    const rawScores = candidatePosts.map(post => {
+      const author = users.find(user => user.id === post.authorId);
+      const quality = ((post.rating || 0) / 5) * ((post.ratingCount || 0) / ((post.ratingCount || 0) + 5));
+      const freshness = Math.exp(-Math.max(0, now - new Date(post.createdAt).getTime()) / (30 * 86_400_000));
+      const sellerPosts = candidatePosts.filter(item => item.authorId === post.authorId);
+      const sellerRating = sellerPosts.reduce((sum, item) => sum + (item.rating || 0), 0) / Math.max(1, sellerPosts.length * 5);
+      const sellerReputation = Math.min(1, sellerRating * 0.8 + Math.min((author?.followers.length || 0) / 100, 1) * 0.2);
+      return { post, trend: eventScore(post) + post.likes.length * 2 + post.saves.length * 3, personal: interestScore(post), quality, freshness, sellerReputation };
+    });
+    const maxTrend = Math.max(1, ...rawScores.map(item => item.trend));
+    const maxPersonal = Math.max(1, ...rawScores.map(item => item.personal));
+
+    return rawScores
       .sort((a, b) => {
-        const authorA = users.find(user => user.id === a.authorId);
-        const authorB = users.find(user => user.id === b.authorId);
-        const scoreA = (a.isPromoted || authorA?.isPromoted ? 10000 : 0) + (a.rating || 0) * 100 + Math.min(a.ratingCount || 0, 50) * 2 + a.likes.length * 2 + a.saves.length * 3 + new Date(a.createdAt).getTime() / 1e10;
-        const scoreB = (b.isPromoted || authorB?.isPromoted ? 10000 : 0) + (b.rating || 0) * 100 + Math.min(b.ratingCount || 0, 50) * 2 + b.likes.length * 2 + b.saves.length * 3 + new Date(b.createdAt).getTime() / 1e10;
+        const scoreA = 0.30 * Math.min(a.trend / maxTrend, 1) + 0.25 * Math.min(a.personal / maxPersonal, 1) + 0.20 * a.quality + 0.15 * a.freshness + 0.10 * a.sellerReputation;
+        const scoreB = 0.30 * Math.min(b.trend / maxTrend, 1) + 0.25 * Math.min(b.personal / maxPersonal, 1) + 0.20 * b.quality + 0.15 * b.freshness + 0.10 * b.sellerReputation;
         return scoreB - scoreA;
       })
-      .slice(0, 5);
-  }, [posts, users]);
+      .map(item => item.post)
+      .slice(0, showAllTrending ? 12 : 7);
+  }, [posts, users, currentUser, discoveryEvents, showAllTrending]);
 
   const searchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -196,6 +227,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [carouselPosts.length]);
 
   useEffect(() => {
+    if (!currentUser) return;
+    api.getDiscoveryEvents().then(setDiscoveryEvents).catch(() => undefined);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     const node = trendScrollRef.current;
     if (!node || trendingPosts.length === 0) return;
 
@@ -222,6 +258,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     return () => node.removeEventListener('scroll', handleScroll);
   }, [trendingPosts]);
 
+  useEffect(() => {
+    visiblePosts.slice(0, 10).forEach(post => {
+      if (seenPostIdsRef.current.has(post.id)) return;
+      seenPostIdsRef.current.add(post.id);
+      recordEvent(post.id, 'VIEW');
+    });
+  }, [visiblePosts]);
+
   // Request browser geolocation for Near Me proximity filtering
   const handleEnableLocation = () => {
     if (!navigator.geolocation) {
@@ -247,6 +291,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     );
   };
 
+  const recordEvent = (itemId: string, eventType: DiscoveryEventType) => {
+    const userId = currentUser?.id;
+    storageService.recordDiscoveryEvent(itemId, eventType, userId);
+    setDiscoveryEvents(storageService.getDiscoveryEvents());
+    if (!userId) return;
+    const sessionId = sessionStorage.getItem('atelier_session_id') || `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    sessionStorage.setItem('atelier_session_id', sessionId);
+    void api.recordDiscoveryEvent(itemId, eventType, sessionId);
+  };
+
   // Handle Like
   const handleLike = (postId: string) => {
     if (!currentUser) {
@@ -255,6 +309,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }
 
     const updated = storageService.toggleLikePost(postId, currentUser.id);
+    if (updated.isLiked) recordEvent(postId, 'LIKE');
     window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
 
     api.toggleLike(postId)
@@ -274,6 +329,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       return;
     }
     const localResult = storageService.ratePost(postId, currentUser.id, rating);
+    recordEvent(postId, 'RATING');
     if (localResult) window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
     api.ratePost(postId, rating).then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated'))).catch(error => setLocationStatus(error.message));
   };
@@ -286,6 +342,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }
 
     const result = storageService.toggleSavePost(post.id, currentUser.id);
+    if (result.isSaved) recordEvent(post.id, 'SAVE');
     storageService.addSavedPhoto({
       url: post.imageUrl,
       title: post.title,
@@ -315,6 +372,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
   // Direct WhatsApp Inquiry link
   const openWhatsApp = (post: ClothPost) => {
+    recordEvent(post.id, 'ENQUIRY');
     const phone = post.authorWhatsapp?.replace(/\D/g, '') || '2348000000000';
     const text = encodeURIComponent(
       `Hello ${post.authorName}! I saw your design "${post.title}" on Fabrilux Atelier. I would like to place an order or discuss custom tailoring.`
@@ -364,6 +422,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       neededBy: requestForm.neededBy,
       notes: requestForm.notes.trim(),
     };
+
+    recordEvent(requestPost.id, 'ENQUIRY');
 
     try {
       const created = await api.createFabricRequest(requestData);
@@ -590,7 +650,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 <button
                   key={post.id}
                   type="button"
-                  onClick={() => setSearchQuery(post.title)}
+                  onClick={() => {
+                    recordEvent(post.id, 'VIEW');
+                    setSearchQuery(post.title);
+                    window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 0);
+                  }}
+                  aria-label={`Explore ${post.title}`}
                   className="group relative min-w-[260px] max-w-[320px] flex-1 shrink-0 snap-center overflow-hidden rounded-[1.5rem] border bg-neutral-900/70 text-left transition-all duration-300 ease-out"
                   style={{
                     transform: `scale(${isFocused ? 1 : 0.92}) translateY(${isFocused ? '0px' : '12px'})`,
@@ -613,6 +678,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               );
             })}
           </div>
+          {trendingPosts.length >= 7 && (
+            <div className="flex justify-center pt-1">
+              <button
+                type="button"
+                onClick={() => setShowAllTrending(value => !value)}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+              >
+                {showAllTrending ? 'Show top 7' : 'See more trending'}
+                <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showAllTrending ? 'rotate-90' : ''}`} />
+              </button>
+            </div>
+          )}
         </section>
       )}
 
@@ -811,7 +888,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className={`rounded-[1.5rem] border overflow-hidden transition-all group flex flex-col justify-between ${
+                className={`feed-card-wave rounded-[1.5rem] border overflow-hidden transition-all group flex flex-col justify-between ${
                   isDarkMode
                     ? 'bg-[#121316] border-neutral-800/90 hover:border-amber-500/40'
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
@@ -858,7 +935,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Garment Image with High-Res Zoom / Save */}
-                <div className={`relative aspect-[4/4.8] w-full bg-neutral-900 overflow-hidden group/img ${post.isPromoted ? 'p-2 border-[3px] border-amber-500/60 bg-gradient-to-br from-amber-500/10 via-transparent to-amber-500/20 rounded-[1.5rem]' : ''}`}>
+                <div className={`feed-card-image relative aspect-[4/4.8] w-full bg-neutral-900 overflow-hidden group/img ${post.isPromoted ? 'p-2 border-[3px] border-amber-500/60 bg-gradient-to-br from-amber-500/10 via-transparent to-amber-500/20 rounded-[1.5rem]' : ''}`}>
                   <img
                     src={post.imageUrl}
                     alt={post.title}

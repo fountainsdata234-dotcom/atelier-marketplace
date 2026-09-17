@@ -1,5 +1,5 @@
 import { firebaseAuth } from './firebase';
-import { ClothPost, DirectMessage, FabricRequest, User } from '../types';
+import { ClothPost, DirectMessage, FabricRequest, User, DiscoveryEvent, DiscoveryEventType } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 
@@ -34,6 +34,8 @@ export const api = {
   toggleLike: (postId: string) => request<{ isLiked: boolean }>(`/api/posts/${postId}/like`, { method: 'POST' }),
   toggleSave: (postId: string) => request<{ isSaved: boolean }>(`/api/posts/${postId}/save`, { method: 'POST' }),
   ratePost: (postId: string, rating: number) => request<void>(`/api/posts/${postId}/rating`, { method: 'POST', body: JSON.stringify({ rating }) }),
+  recordDiscoveryEvent: (itemId: string, eventType: DiscoveryEventType, sessionId: string) => request<DiscoveryEvent>('/api/discovery-events', { method: 'POST', body: JSON.stringify({ itemId, eventType, sessionId }) }),
+  getDiscoveryEvents: () => request<DiscoveryEvent[]>('/api/discovery-events'),
   getMessages: () => request<DirectMessage[]>('/api/messages'),
   sendMessage: (message: Omit<DirectMessage, 'id' | 'timestamp' | 'isRead'>) => request<DirectMessage>('/api/messages', { method: 'POST', body: JSON.stringify(message) }),
   createFabricRequest: (requestData: Omit<FabricRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => request<FabricRequest>('/api/fabric-requests', { method: 'POST', body: JSON.stringify(requestData) }),

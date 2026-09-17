@@ -1,4 +1,4 @@
-import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, UserRole, FabricRequest, FabricRequestStatus } from '../types';
+import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, UserRole, FabricRequest, FabricRequestStatus, DiscoveryEvent, DiscoveryEventType } from '../types';
 
 const STORAGE_KEYS = {
   USERS: 'atelier_users_v2',
@@ -10,7 +10,8 @@ const STORAGE_KEYS = {
   DARK_MODE: 'atelier_dark_mode_v2',
   SAVED_PHOTOS: 'atelier_saved_photos_v2',
   COLLECTION_PACKAGES: 'atelier_collection_packages_v2'
-  ,FABRIC_REQUESTS: 'atelier_fabric_requests_v1'
+  ,FABRIC_REQUESTS: 'atelier_fabric_requests_v1',
+  DISCOVERY_EVENTS: 'atelier_discovery_events_v1'
 };
 
 const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
@@ -74,7 +75,40 @@ export const storageService = {
     if (!localStorage.getItem(STORAGE_KEYS.FABRIC_REQUESTS)) {
       localStorage.setItem(STORAGE_KEYS.FABRIC_REQUESTS, JSON.stringify([]));
     }
+    if (!localStorage.getItem(STORAGE_KEYS.DISCOVERY_EVENTS)) {
+      localStorage.setItem(STORAGE_KEYS.DISCOVERY_EVENTS, JSON.stringify([]));
+    }
     
+  },
+
+  recordDiscoveryEvent(itemId: string, eventType: DiscoveryEventType, userId?: string): void {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.DISCOVERY_EVENTS);
+      const events: DiscoveryEvent[] = stored ? JSON.parse(stored) : [];
+      events.push({
+        itemId,
+        eventType,
+        userId,
+        timestamp: new Date().toISOString(),
+        sessionId: sessionStorage.getItem('atelier_session_id') || (() => {
+          const id = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          sessionStorage.setItem('atelier_session_id', id);
+          return id;
+        })(),
+      });
+      localStorage.setItem(STORAGE_KEYS.DISCOVERY_EVENTS, JSON.stringify(events.slice(-5000)));
+    } catch {
+      // Discovery signals are optional and must never block browsing.
+    }
+  },
+
+  getDiscoveryEvents(): DiscoveryEvent[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.DISCOVERY_EVENTS);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
   },
 
   // USERS

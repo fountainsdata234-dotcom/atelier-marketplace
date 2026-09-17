@@ -65,6 +65,8 @@ interface StoredMessage {
   [key: string]: unknown;
 }
 
+const DISCOVERY_EVENT_TYPES = new Set(['VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'ADD_TO_CART', 'PURCHASE', 'RATING']);
+
 async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
@@ -317,6 +319,40 @@ app.get('/api/posts', async (_req, res) => {
 app.get('/api/users', async (_req, res) => {
   const snapshot = await firestore.collection('profiles').limit(500).get();
   res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+});
+
+app.get('/api/discovery-events', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const snapshot = await firestore.collection('discoveryEvents').limit(5000).get();
+  const events = snapshot.docs.map(doc => {
+    const event = doc.data();
+    return {
+      itemId: String(event.itemId || ''),
+      eventType: String(event.eventType || 'VIEW'),
+      timestamp: String(event.timestamp || ''),
+      sessionId: String(event.sessionId || ''),
+      ...(event.userId === req.authUser!.uid ? { userId: req.authUser!.uid } : {}),
+    };
+  }).filter(event => event.itemId && DISCOVERY_EVENT_TYPES.has(event.eventType));
+  res.json(events);
+});
+
+app.post('/api/discovery-events', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const itemId = typeof req.body?.itemId === 'string' ? req.body.itemId.trim().slice(0, 160) : '';
+  const eventType = typeof req.body?.eventType === 'string' ? req.body.eventType : '';
+  const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.trim().slice(0, 120) : '';
+  if (!itemId || !DISCOVERY_EVENT_TYPES.has(eventType) || !sessionId) {
+    res.status(400).json({ error: 'A valid item, event type, and session are required.' });
+    return;
+  }
+  const event = {
+    userId: req.authUser!.uid,
+    itemId,
+    eventType,
+    sessionId,
+    timestamp: new Date().toISOString(),
+  };
+  const created = await firestore.collection('discoveryEvents').add(event);
+  res.status(201).json({ id: created.id, ...event });
 });
 
 app.post('/api/posts', requireAuth, async (req: AuthenticatedRequest, res) => {
