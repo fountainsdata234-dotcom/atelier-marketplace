@@ -72,9 +72,15 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [requestStatus, setRequestStatus] = useState<string | null>(null);
 
   // Filter posts belonging to this tailor/seller
-  const myPosts = posts.filter(p => p.authorId === currentUser.id);
+  const myPosts = posts.filter(p => p.authorId === currentUser.id).map(post => ({
+    ...post,
+    likes: Array.isArray(post.likes) ? post.likes : [],
+    saves: Array.isArray(post.saves) ? post.saves : [],
+    tags: Array.isArray(post.tags) ? post.tags : [],
+  }));
   const totalLikes = myPosts.reduce((acc, p) => acc + p.likes.length, 0);
   const totalSaves = myPosts.reduce((acc, p) => acc + p.saves.length, 0);
+  const followerCount = Array.isArray(currentUser.followers) ? currentUser.followers.length : 0;
 
   React.useEffect(() => {
     const loadRequests = async () => {
@@ -327,7 +333,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-amber-500/20">
           <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800">
             <span className="text-[10px] uppercase tracking-wider text-neutral-400 block font-mono">Followers</span>
-            <span className="text-2xl font-serif font-bold text-amber-400">{currentUser.followers.length}</span>
+                <span className="text-2xl font-serif font-bold text-amber-400">{followerCount}</span>
           </div>
           <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800">
             <span className="text-[10px] uppercase tracking-wider text-neutral-400 block font-mono">Total Likes</span>

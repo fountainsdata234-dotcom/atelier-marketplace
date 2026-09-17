@@ -222,6 +222,15 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
   const uid = req.params.uid;
   const profileRef = firestore.collection('profiles').doc(uid);
 
+  if (typeof req.body?.isBlocked === 'boolean' || typeof req.body?.isWarned === 'boolean' || typeof req.body?.warningNote === 'string') {
+    const targetSnapshot = await profileRef.get();
+    const targetRole = targetSnapshot.data()?.role;
+    if (targetRole !== 'tailor' && targetRole !== 'fabric_seller') {
+      res.status(403).json({ error: 'Customer accounts cannot be blocked or warned.' });
+      return;
+    }
+  }
+
   await profileRef.set(updates, { merge: true });
 
   if (typeof req.body?.isPromoted === 'boolean') {
@@ -417,6 +426,14 @@ app.post('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) =>
     res.status(400).json({ error: 'Invalid message.' });
     return;
   }
+  if (req.authUser!.admin) {
+    const recipientSnapshot = await firestore.collection('profiles').doc(input.recipientId).get();
+    const recipientRole = recipientSnapshot.data()?.role;
+    if (recipientRole !== 'tailor' && recipientRole !== 'fabric_seller') {
+      res.status(403).json({ error: 'Administrators can only message tailors and fabric sellers.' });
+      return;
+    }
+  }
   const message = {
     senderId: req.authUser!.uid,
     senderName: String(input.senderName || '').slice(0, 120),
@@ -550,7 +567,14 @@ app.patch('/api/fabric-requests/:requestId/status', requireAuth, async (req: Aut
 
 app.post('/api/admin/users/:uid/block', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   const blocked = Boolean(req.body?.blocked);
-  await firestore.collection('profiles').doc(req.params.uid).set({ isBlocked: blocked, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  const profileRef = firestore.collection('profiles').doc(req.params.uid);
+  const profileSnapshot = await profileRef.get();
+  const targetRole = profileSnapshot.data()?.role;
+  if (targetRole !== 'tailor' && targetRole !== 'fabric_seller') {
+    res.status(403).json({ error: 'Customer accounts cannot be blocked.' });
+    return;
+  }
+  await profileRef.set({ isBlocked: blocked, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   await adminAuth.updateUser(req.params.uid, { disabled: blocked });
   res.json({ ok: true, blocked });
 });

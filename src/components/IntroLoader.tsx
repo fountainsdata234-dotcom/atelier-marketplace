@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles } from 'lucide-react';
+import { Scissors, Sparkles } from 'lucide-react';
 
 interface IntroLoaderProps {
   onComplete: () => void;
@@ -25,11 +25,11 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
     const timer3 = setTimeout(() => {
       setProgress(100);
       setStage(3);
-    }, 220);
+    }, 720);
 
     const finishTimer = setTimeout(() => {
       onComplete();
-    }, 290);
+    }, 1150);
 
     return () => {
       clearTimeout(timer1);
@@ -95,6 +95,14 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
             <img src="/logo.png" alt="Fabrilux Atelier" className="h-12 w-12 rounded-xl object-cover" />
           </motion.div>
 
+          <motion.div
+            animate={{ x: [-42, 38, -42], y: [18, -10, 18], rotate: [-18, 16, -18] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute z-20 text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
+          >
+            <Scissors className="h-5 w-5" />
+          </motion.div>
+
           {/* Orbiting Sparkle */}
           <motion.div
             animate={{ rotate: 360 }}
@@ -109,7 +117,7 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.7 }}
+            transition={{ delay: 0.2, duration: 0.7 }}
         >
           <span className="text-xs uppercase tracking-[0.35em] text-amber-500/90 font-medium">
             Bespoke Tailoring & Fabric Marketplace

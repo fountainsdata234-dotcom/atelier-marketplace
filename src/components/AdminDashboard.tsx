@@ -48,7 +48,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [promoPlans]);
 
   // Filtered lists
-  const moderatableUsers = users.filter(u => u.role !== 'admin');
+  const moderatableUsers = users.filter(u => u.role === 'tailor' || u.role === 'fabric_seller');
   const tailors = users.filter(u => u.role === 'tailor');
   const fabricSellers = users.filter(u => u.role === 'fabric_seller');
   const customers = users.filter(u => u.role === 'buyer');

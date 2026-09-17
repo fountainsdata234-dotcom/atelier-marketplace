@@ -16,6 +16,7 @@ interface AuthModalProps {
   defaultRole?: UserRole;
   onSuccess: (user: User) => void;
   isDarkMode: boolean;
+  onNavigate?: (view: string) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -23,7 +24,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   defaultRole = 'buyer',
   onSuccess,
-  isDarkMode
+  isDarkMode,
+  onNavigate,
 }) => {
   const [isRegistering, setIsRegistering] = useState<boolean>(true);
   const [role, setRole] = useState<UserRole>(defaultRole);
@@ -55,6 +57,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+
+  const openLegalPage = (view: 'terms' | 'privacy') => {
+    onClose();
+    onNavigate?.(view);
+  };
 
   const avatarInitials = name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'AT';
   const fileExtension = (file: File) => file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
@@ -166,6 +174,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     // REGISTRATION FLOW
+    if (!acceptedPolicies) {
+      setError('Please accept the Terms of Service and Privacy Policy to create an account.');
+      return;
+    }
     if (!name.trim()) {
       setError('Please provide your full or business name.');
       return;
@@ -430,6 +442,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </button>
               </div>
             </div>
+          )}
+
+          {isRegistering && (
+            <label className="flex items-start gap-2 rounded-xl border border-neutral-800 bg-neutral-900/30 p-3 text-[11px] leading-relaxed text-neutral-400">
+              <input type="checkbox" checked={acceptedPolicies} onChange={(event) => setAcceptedPolicies(event.target.checked)} className="mt-0.5 accent-amber-500" />
+              <span>I agree to the <button type="button" onClick={() => openLegalPage('terms')} className="font-semibold text-amber-400 underline underline-offset-2">Terms of Service</button> and <button type="button" onClick={() => openLegalPage('privacy')} className="font-semibold text-amber-400 underline underline-offset-2">Privacy Policy</button>.</span>
+            </label>
           )}
 
           {/* Registration Fields */}

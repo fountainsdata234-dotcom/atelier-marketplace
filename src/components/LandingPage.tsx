@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Scissors, Sparkles, MapPin, MessageSquare, ShieldCheck, Heart, Share2, Compass, ArrowRight, Star, ShoppingBag } from 'lucide-react';
 import { UserRole } from '../types';
+import { CraftAnimationReel } from './CraftAnimationReel';
 
 interface LandingPageProps {
   onOpenAuth: (defaultRole: UserRole) => void;
@@ -32,7 +33,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
 
               <h1 className="text-4xl font-black leading-none tracking-[-0.06em] text-slate-900 sm:text-5xl lg:text-7xl">
-                Fabric Reality
+                <span className="relative inline-block">
+                  Fabric Reality
+                  <motion.span
+                    aria-hidden="true"
+                    animate={{ x: [0, 96, 0], y: [18, -4, 18], rotate: [-18, 12, -18] }}
+                    transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
+                    className="pointer-events-none absolute -right-4 top-0 text-base font-normal text-amber-500 sm:text-xl"
+                  >
+                    ~
+                  </motion.span>
+                </span>
               </h1>
 
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base">
@@ -109,8 +120,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </motion.div>
       </section>
 
+      <CraftAnimationReel />
+
       {/* 3 Pillars / Roles Section */}
-      <section className="py-12 border-t border-amber-500/15">
+      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.6 }} className="py-12 border-t border-amber-500/15">
         <div className="text-center mb-10">
           <h2 className="text-2xl sm:text-3xl font-serif font-bold mb-2">Designed for the Bespoke Fashion Ecosystem</h2>
           <p className={`text-sm ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
@@ -245,10 +258,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Feature Highlights Grid */}
-      <section className="py-12 border-t border-amber-500/15">
+      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.6, delay: 0.08 }} className="py-12 border-t border-amber-500/15">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           <div className="p-4">
             <div className="text-amber-400 font-serif text-3xl font-bold mb-1">Global</div>
@@ -275,7 +288,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
         </div>
-      </section>
+      </motion.section>
     </div>
   );
 };

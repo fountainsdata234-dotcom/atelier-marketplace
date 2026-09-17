@@ -3,9 +3,10 @@ import { MessageSquare, Scissors, Sparkles } from 'lucide-react';
 
 interface FooterProps {
   isDarkMode: boolean;
+  onNavigate?: (view: string) => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ isDarkMode }) => {
+export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
   return (
     <footer
       className={`mt-8 border-t transition-colors ${
@@ -34,18 +35,17 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode }) => {
           <div className="min-w-[120px] flex-1 md:flex-none">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">Explore</p>
             <ul className="space-y-1.5 text-sm">
-              <li><a href="#" className="transition hover:text-amber-400">Marketplace</a></li>
-              <li><a href="#" className="transition hover:text-amber-400">Tailor Studio</a></li>
-              <li><a href="#" className="transition hover:text-amber-400">Fabric Sellers</a></li>
+              <li><button type="button" onClick={() => onNavigate?.('marketplace')} className="transition hover:text-amber-400">Marketplace</button></li>
+              <li><button type="button" onClick={() => onNavigate?.('dashboard')} className="transition hover:text-amber-400">Tailor Studio</button></li>
+              <li><button type="button" onClick={() => onNavigate?.('about')} className="transition hover:text-amber-400">About us</button></li>
             </ul>
           </div>
 
           <div className="min-w-[120px] flex-1 md:flex-none">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">Support</p>
             <ul className="space-y-1.5 text-sm">
-              <li><a href="#" className="transition hover:text-amber-400">Help Center</a></li>
-              <li><a href="#" className="transition hover:text-amber-400">Privacy</a></li>
-              <li><a href="#" className="transition hover:text-amber-400">Terms</a></li>
+              <li><button type="button" onClick={() => onNavigate?.('privacy')} className="transition hover:text-amber-400">Privacy</button></li>
+              <li><button type="button" onClick={() => onNavigate?.('terms')} className="transition hover:text-amber-400">Terms</button></li>
             </ul>
           </div>
 

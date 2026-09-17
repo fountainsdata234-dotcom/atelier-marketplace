@@ -1,5 +1,5 @@
-import React from 'react';
-import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -30,6 +30,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onInstall
 }) => {
   const isSeller = currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const navigate = (view: string) => {
+    onNavigate(view);
+    setMobileMenuOpen(false);
+  };
 
   return (
     <header
@@ -39,10 +44,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           : 'bg-white/90 border-neutral-200/80 text-neutral-900 shadow-xs'
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      <div className="relative mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-3 sm:px-6 lg:px-8">
         {/* Brand Logo */}
         <div
-          onClick={() => onNavigate(currentUser ? 'marketplace' : 'landing')}
+          onClick={() => navigate(currentUser ? 'marketplace' : 'landing')}
           className="flex items-center gap-2.5 cursor-pointer group select-none"
         >
           <img
@@ -51,7 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="h-10 w-10 rounded-xl object-cover shadow-md shadow-amber-500/20 ring-1 ring-white/40 transition-transform duration-200 group-hover:scale-105"
           />
           <div>
-            <span className="font-display text-lg sm:text-xl tracking-[0.14em] block leading-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-400 font-black">
+            <span className="brand-wordmark relative block text-base font-black leading-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-400 sm:text-xl">
               FABRILUX
             </span>
             <span className="text-[9px] uppercase tracking-[0.28em] text-amber-600/80 font-medium block">
@@ -176,7 +181,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Right Utility Buttons */}
-        <div className="flex items-center gap-3">
+        <div className="hidden items-center gap-3 md:flex">
           {!isOnline && (
             <span className="hidden items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold text-amber-300 sm:flex" role="status">
               <WifiOff className="h-3 w-3" /> Offline cache
@@ -245,6 +250,42 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
         </div>
+
+        <button
+          type="button"
+          aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={mobileMenuOpen}
+          onClick={() => setMobileMenuOpen(open => !open)}
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700/60 text-neutral-300 transition hover:border-amber-500/50 hover:text-amber-300 md:hidden"
+        >
+          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+
+        {mobileMenuOpen && (
+          <div className={`absolute left-3 right-3 top-[calc(100%-1px)] z-50 rounded-2xl border p-3 shadow-2xl md:hidden ${
+            isDarkMode ? 'border-neutral-800 bg-[#111317]' : 'border-neutral-200 bg-white'
+          }`}>
+            {currentUser && (
+              <button type="button" onClick={() => navigate('profile')} className="mb-2 flex w-full items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-left">
+                {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-xs font-bold text-amber-300">{currentUser.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span>}
+                <span className="min-w-0"><strong className="block truncate text-sm">{currentUser.name}</strong><small className="block text-[10px] capitalize text-amber-400">{currentUser.isSuperAdmin ? 'Super Admin' : currentUser.role.replace('_', ' ')}</small></span>
+              </button>
+            )}
+            <div className="grid grid-cols-2 gap-1 text-xs">
+              {!currentUser && <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item">Overview</button>}
+              <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
+              <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
+              {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />Saved</button>}
+              {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
+              {currentUser && <button type="button" onClick={() => navigate('messages')} className="mobile-nav-item"><MessageSquare className="h-4 w-4" />Messages {unreadCount > 0 && <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold text-neutral-950">{unreadCount}</span>}</button>}
+              {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}
+            </div>
+            <div className="mt-2 flex items-center gap-2 border-t border-neutral-800 pt-2">
+              <button type="button" onClick={onToggleTheme} className="mobile-nav-item flex-1"><span>{isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}Theme</span></button>
+              {currentUser ? <button type="button" onClick={() => { setMobileMenuOpen(false); onLogout(); }} className="mobile-nav-item flex-1 text-red-300"><LogOut className="h-4 w-4" />Logout</button> : <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item flex-1 text-amber-300">Sign in</button>}
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

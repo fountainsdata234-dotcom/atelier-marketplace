@@ -5,7 +5,6 @@ import { storageService } from './services/storage';
 import { NeedleThreadBackground } from './components/NeedleThreadBackground';
 import { IntroLoader } from './components/IntroLoader';
 import { Navbar } from './components/Navbar';
-import { MobileBottomNav } from './components/MobileBottomNav';
 import { LandingPage } from './components/LandingPage';
 const Marketplace = lazy(() => import('./components/Marketplace').then(module => ({ default: module.Marketplace })));
 const TailorDashboard = lazy(() => import('./components/TailorDashboard').then(module => ({ default: module.TailorDashboard })));
@@ -16,6 +15,7 @@ import { SocialShareModal } from './components/SocialShareModal';
 import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
 import { Footer } from './components/Footer';
+import { LegalPage } from './components/LegalPage';
 const CollectionPage = lazy(() => import('./components/CollectionPage').then(module => ({ default: module.CollectionPage })));
 const ProfilePage = lazy(() => import('./components/ProfilePage').then(module => ({ default: module.ProfilePage })));
 const ArtisanDirectory = lazy(() => import('./components/ArtisanDirectory').then(module => ({ default: module.ArtisanDirectory })));
@@ -46,6 +46,7 @@ export default function App() {
     title: 'Account warning',
     content: '',
   });
+  const dismissedWarningRef = useRef<string | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [posts, setPosts] = useState<ClothPost[]>([]);
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
@@ -78,7 +79,6 @@ export default function App() {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     const handleInstallPrompt = (event: Event) => {
-      event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
     const handleInstalled = () => setInstallPrompt(null);
@@ -195,7 +195,7 @@ export default function App() {
       return;
     }
 
-    if (currentUser.isWarned && currentUser.warningNote) {
+    if (currentUser.isWarned && currentUser.warningNote && dismissedWarningRef.current !== currentUser.warningNote) {
       setWarningModal({
         open: true,
         title: `Warning for ${currentUser.name}`,
@@ -205,6 +205,11 @@ export default function App() {
       setWarningModal((prev) => ({ ...prev, open: false, content: '' }));
     }
   }, [currentUser]);
+
+  const dismissWarning = () => {
+    dismissedWarningRef.current = warningModal.content;
+    setWarningModal((prev) => ({ ...prev, open: false }));
+  };
 
   useEffect(() => {
     if (!currentUser) return;
@@ -394,7 +399,7 @@ export default function App() {
       {isRefreshing && <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200">Refreshing marketplace...</div>}
 
       {/* 5. Main View Content */}
-      <main className="flex-1 pb-20 md:pb-8">
+      <main className="flex-1 pb-8">
         <Suspense fallback={<div className="flex min-h-[45vh] items-center justify-center text-xs uppercase tracking-[0.2em] text-amber-500">Loading Atelier...</div>}>
           <AnimatePresence mode="wait">
           {currentView === 'landing' && (
@@ -533,25 +538,16 @@ export default function App() {
               />
             </motion.div>
           )}
+          {(currentView === 'about' || currentView === 'privacy' || currentView === 'terms') && (
+            <LegalPage page={currentView} isDarkMode={isDarkMode} onBack={() => setCurrentView(currentUser ? 'marketplace' : 'landing')} />
+          )}
           </AnimatePresence>
         </Suspense>
       </main>
 
-      <Footer isDarkMode={isDarkMode} />
+      <Footer isDarkMode={isDarkMode} onNavigate={setCurrentView} />
 
-      {/* 6. Mobile Bottom App Navigation Dock */}
-      <MobileBottomNav
-        currentUser={currentUser}
-        currentView={currentView}
-        onNavigate={setCurrentView}
-        onOpenAuth={() => handleOpenAuthWithRole('buyer')}
-        onLogout={handleLogout}
-        isDarkMode={isDarkMode}
-        canInstall={Boolean(installPrompt)}
-        onInstall={handleInstallApp}
-      />
-
-      {/* 7. Global Floating / Modal Direct Messaging */}
+      {/* 6. Global Floating / Modal Direct Messaging */}
       {directMessageOpen && currentUser && (
         <DirectMessaging
           currentUser={currentUser}
@@ -573,6 +569,7 @@ export default function App() {
         defaultRole={authDefaultRole}
         onSuccess={handleAuthSuccess}
         isDarkMode={isDarkMode}
+        onNavigate={setCurrentView}
       />
 
       {/* 9. Social Share Handle Modal */}
@@ -624,7 +621,7 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setWarningModal((prev) => ({ ...prev, open: false }))}
+                  onClick={dismissWarning}
                   className="rounded-full border border-amber-500/25 px-2 py-1 text-xs text-neutral-300 hover:bg-amber-500/10"
                 >
                   Close
@@ -641,7 +638,7 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setWarningModal((prev) => ({ ...prev, open: false }))}
+                  onClick={dismissWarning}
                   className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-bold text-neutral-950 shadow-lg shadow-amber-500/20 transition hover:brightness-110"
                 >
                   I understand the warning

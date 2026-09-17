@@ -5,6 +5,7 @@ import { ClothPost, DiscoveryEvent, DiscoveryEventType, FabricRequest, User, Use
 import { WORLD_COUNTRIES, calculateDistanceKm } from '../data/worldData';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
+import { MarketplaceInterlude } from './MarketplaceInterlude';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -871,7 +872,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-          {visiblePosts.map((post) => {
+          {visiblePosts.map((post, postIndex) => {
             const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
             const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
 
@@ -882,8 +883,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             const userRating = currentUser ? (post.ratingsByUser?.[currentUser.id] || 0) : (post.rating || 0);
 
             return (
+              <React.Fragment key={post.id}>
               <motion.article
-                key={post.id}
                 layout
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1074,6 +1075,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
                 </div>
               </motion.article>
+              {postIndex === 19 && filteredPosts.length > 20 && (
+                <div className="md:col-span-2 lg:col-span-3">
+                  <MarketplaceInterlude posts={filteredPosts} users={users} isDarkMode={isDarkMode} onSelectSeller={(seller) => onShareTailorProfile(seller)} />
+                </div>
+              )}
+              </React.Fragment>
             );
           })}
         </div>

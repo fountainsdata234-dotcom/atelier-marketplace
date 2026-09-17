@@ -32,6 +32,7 @@
       linear-gradient(180deg, #fff8ef 0%, #fff3df 40%, #f9f5ef 100%);
     color: var(--color-text-light);
     transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, .font-serif-luxury {
@@ -48,9 +49,44 @@
     text-transform: uppercase;
   }
 
+  .brand-wordmark::after {
+    content: '⌁';
+    position: absolute;
+    right: -0.8rem;
+    top: -0.35rem;
+    color: #f59e0b;
+    font-size: 1.2rem;
+    line-height: 1;
+    transform: rotate(-18deg);
+    animation: stitch-loop 2.8s ease-in-out infinite;
+  }
+
   button, input, select {
     font: inherit;
   }
+}
+
+.mobile-nav-item {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  color: rgb(163 163 163);
+  text-align: left;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.mobile-nav-item:hover {
+  background: rgba(245, 158, 11, 0.1);
+  color: rgb(252 211 77);
+}
+
+@keyframes stitch-loop {
+  0%, 100% { transform: translate(0, 0) rotate(-18deg); }
+  35% { transform: translate(-0.25rem, 0.2rem) rotate(8deg); }
+  70% { transform: translate(0.15rem, 0.35rem) rotate(-4deg); }
 }
 
 .glass-panel {
@@ -101,6 +137,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .brand-wordmark::after,
   .feed-card-wave:hover .feed-card-image img {
     animation: none;
   }
