@@ -1,5 +1,5 @@
 import { firebaseAuth } from './firebase';
-import { ClothPost, DirectMessage, FabricRequest, User, DiscoveryEvent, DiscoveryEventType } from '../types';
+import { AdminPromoPlan, ClothPost, DirectMessage, FabricRequest, User, DiscoveryEvent, DiscoveryEventType } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 
@@ -26,6 +26,9 @@ async function request<T>(path: string, options: RequestInit = {}) {
 export const api = {
   getUsers: () => request<User[]>('/api/users'),
   getProfile: () => request<Partial<User>>('/api/profile'),
+  getPromoPlans: () => request<AdminPromoPlan[]>('/api/promo-plans'),
+  savePromoPlans: (plans: AdminPromoPlan[]) => request<AdminPromoPlan[]>('/api/promo-plans', { method: 'PUT', body: JSON.stringify({ plans }) }),
+  toggleFollow: (userId: string) => request<{ followers: string[]; isFollowing: boolean }>(`/api/users/${userId}/follow`, { method: 'POST' }),
   updateUserProfile: (userId: string, updates: Partial<User>) => request<User>(`/api/users/${userId}/profile`, { method: 'PUT', body: JSON.stringify(updates) }),
   addAdmin: (email: string) => request<User>('/api/admin/admins', { method: 'POST', body: JSON.stringify({ email }) }),
   removeAdmin: (userId: string) => request<void>(`/api/admin/admins/${userId}`, { method: 'DELETE' }),

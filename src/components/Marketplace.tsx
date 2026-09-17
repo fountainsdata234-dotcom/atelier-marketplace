@@ -89,6 +89,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     const now = Date.now();
     const eventWeights: Record<DiscoveryEventType, number> = { VIEW: 1, LIKE: 5, SAVE: 7, SHARE: 6, ENQUIRY: 9, ADD_TO_CART: 10, PURCHASE: 14, RATING: 4 };
     const candidatePosts = tailorPosts.filter(post => !users.find(user => user.id === post.authorId)?.isBlocked);
+    const followedSellerIds = new Set(users.filter(user => currentUser && Array.isArray(user.followers) && user.followers.includes(currentUser.id)).map(user => user.id));
     const eventScore = (post: ClothPost) => discoveryEvents.reduce((score, event) => {
       if (event.itemId !== post.id) return score;
       const ageHours = Math.max(0, (now - new Date(event.timestamp).getTime()) / 3_600_000);
@@ -112,7 +113,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       const sellerRating = sellerPosts.reduce((sum, item) => sum + (item.rating || 0), 0) / Math.max(1, sellerPosts.length * 5);
       const followerCount = Array.isArray(author?.followers) ? author.followers.length : 0;
       const sellerReputation = Math.min(1, sellerRating * 0.8 + Math.min(followerCount / 100, 1) * 0.2);
-      return { post, trend: eventScore(post) + post.likes.length * 2 + post.saves.length * 3, personal: interestScore(post), quality, freshness, sellerReputation };
+      return { post, trend: eventScore(post) + post.likes.length * 2 + post.saves.length * 3 + (followedSellerIds.has(post.authorId) ? 25 : 0), personal: interestScore(post), quality, freshness, sellerReputation };
     });
     const maxTrend = Math.max(1, ...rawScores.map(item => item.trend));
     const maxPersonal = Math.max(1, ...rawScores.map(item => item.personal));
@@ -136,8 +137,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         if (value.toLowerCase().includes(query)) suggestions.set(value.toLowerCase(), value);
       });
     });
+    users.filter(user => user.role === 'tailor' || user.role === 'fabric_seller').forEach(user => {
+      [user.name, user.shopName || '', user.handle].forEach(value => {
+        if (value && value.toLowerCase().includes(query)) suggestions.set(value.toLowerCase(), value);
+      });
+    });
     return Array.from(suggestions.values()).slice(0, 7);
-  }, [tailorPosts, searchQuery]);
+  }, [tailorPosts, searchQuery, users]);
 
   // Filter and sort posts
   const filteredPosts = useMemo(() => {
@@ -193,6 +199,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     } else {
       // Priority: Promoted items first, then newest
       result.sort((a, b) => {
+        const followedIds = new Set(users.filter(user => currentUser && Array.isArray(user.followers) && user.followers.includes(currentUser.id)).map(user => user.id));
+        if (followedIds.has(a.authorId) !== followedIds.has(b.authorId)) return followedIds.has(a.authorId) ? -1 : 1;
         if (a.isPromoted && !b.isPromoted) return -1;
         if (!a.isPromoted && b.isPromoted) return 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();

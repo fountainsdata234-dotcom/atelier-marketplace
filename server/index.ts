@@ -219,6 +219,32 @@ app.get('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   res.json({ id: req.authUser!.uid, ...(snapshot.exists ? snapshot.data() : {}) });
 });
 
+app.get('/api/promo-plans', async (_req, res) => {
+  const snapshot = await firestore.collection('settings').doc('promoPlans').get();
+  res.json(snapshot.exists && Array.isArray(snapshot.data()?.plans) ? snapshot.data()?.plans : []);
+});
+
+app.put('/api/promo-plans', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const plans = Array.isArray(req.body?.plans) ? req.body.plans.slice(0, 3).map((plan: Record<string, unknown>, index: number) => ({
+    id: typeof plan.id === 'string' ? plan.id.slice(0, 80) : `promo-${index + 1}`,
+    caption: String(plan.caption || '').trim().slice(0, 120),
+    timeRange: String(plan.timeRange || '').trim().slice(0, 80),
+    description: String(plan.description || '').trim().slice(0, 600),
+    amount: Math.max(0, Number(plan.amount) || 0),
+    currency: String(plan.currency || 'USD').slice(0, 8),
+    whatsappNumber: String(plan.whatsappNumber || '').slice(0, 40),
+    badgeLabel: String(plan.badgeLabel || '').trim().slice(0, 60),
+    accentColor: String(plan.accentColor || '#d97706').slice(0, 20),
+    isActive: plan.isActive !== false,
+  })) : null;
+  if (!plans || plans.length !== 3) {
+    res.status(400).json({ error: 'Exactly three promotion plans are required.' });
+    return;
+  }
+  await firestore.collection('settings').doc('promoPlans').set({ plans, updatedAt: FieldValue.serverTimestamp(), updatedBy: req.authUser!.uid });
+  res.json(plans);
+});
+
 app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   const updates = buildProfileUpdate(req.body || {});
   const uid = req.params.uid;
@@ -331,6 +357,26 @@ app.get('/api/posts', async (_req, res) => {
 app.get('/api/users', async (_req, res) => {
   const snapshot = await firestore.collection('profiles').limit(500).get();
   res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+});
+
+app.post('/api/users/:uid/follow', requireAuth, async (req: AuthenticatedRequest, res) => {
+  if (req.params.uid === req.authUser!.uid) {
+    res.status(400).json({ error: 'You cannot follow your own account.' });
+    return;
+  }
+  const targetRef = firestore.collection('profiles').doc(req.params.uid);
+  const updated = await firestore.runTransaction(async transaction => {
+    const snapshot = await transaction.get(targetRef);
+    const data = snapshot.data() || {};
+    const followers = Array.isArray(data.followers) ? data.followers.filter((value): value is string => typeof value === 'string') : [];
+    const index = followers.indexOf(req.authUser!.uid);
+    const isFollowing = index < 0;
+    if (isFollowing) followers.push(req.authUser!.uid);
+    else followers.splice(index, 1);
+    transaction.set(targetRef, { followers, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return { followers, isFollowing };
+  });
+  res.json(updated);
 });
 
 app.get('/api/discovery-events', requireAuth, async (req: AuthenticatedRequest, res) => {

@@ -16,6 +16,7 @@ import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
 import { Footer } from './components/Footer';
 import { LegalPage } from './components/LegalPage';
+import { SellerProfilePage } from './components/SellerProfilePage';
 const CollectionPage = lazy(() => import('./components/CollectionPage').then(module => ({ default: module.CollectionPage })));
 const ProfilePage = lazy(() => import('./components/ProfilePage').then(module => ({ default: module.ProfilePage })));
 const ArtisanDirectory = lazy(() => import('./components/ArtisanDirectory').then(module => ({ default: module.ArtisanDirectory })));
@@ -38,6 +39,7 @@ export default function App() {
 
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>('landing');
+  const [sharedSeller, setSharedSeller] = useState<User | null>(null);
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -165,6 +167,16 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handle = new URLSearchParams(window.location.search).get('seller')?.trim().toLowerCase();
+    if (!handle || users.length === 0) return;
+    const seller = users.find(user => user.handle.replace(/^@/, '').toLowerCase() === handle);
+    if (seller && (seller.role === 'tailor' || seller.role === 'fabric_seller')) {
+      setSharedSeller(seller);
+      setCurrentView('seller');
+    }
+  }, [users]);
+
   const handleInstallApp = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
@@ -188,10 +200,11 @@ export default function App() {
     setBroadcasts(storageService.getBroadcasts());
 
     try {
-      const results = await Promise.allSettled([api.getUsers(), api.getPosts()]);
+      const results = await Promise.allSettled([api.getUsers(), api.getPosts(), api.getPromoPlans()]);
 
       const remoteUsers = results[0].status === 'fulfilled' ? results[0].value : null;
       const remotePosts = results[1].status === 'fulfilled' ? results[1].value : null;
+      const remotePlans = results[2].status === 'fulfilled' ? results[2].value : null;
 
       if (remoteUsers) {
         storageService.saveUsers(remoteUsers);
@@ -212,6 +225,10 @@ export default function App() {
         }));
         storageService.savePosts(normalizedPosts);
         setPosts(normalizedPosts);
+      }
+      if (remotePlans !== null && remotePlans.length > 0) {
+        storageService.savePromoPlans(remotePlans);
+        setPromoPlans(remotePlans);
       }
     } catch (error) {
       console.error('Remote marketplace data unavailable', error);
@@ -301,6 +318,24 @@ export default function App() {
     setSocialShareName(tailor.shopName || tailor.name);
     setSocialShareOpen(true);
   };
+
+  const handleToggleFollow = async (seller: User) => {
+    if (!currentUser) {
+      handleOpenAuthWithRole('buyer');
+      return;
+    }
+    const result = await api.toggleFollow(seller.id).catch(() => null);
+    if (!result) return;
+    const updated = storageService.updateUser(seller.id, { followers: result.followers });
+    if (updated) {
+      setUsers(storageService.getUsers());
+      setSharedSeller(updated);
+    }
+  };
+
+  const sharedProfileUrl = socialShareHandle
+    ? `${window.location.origin}/?seller=${encodeURIComponent(socialShareHandle.replace(/^@/, ''))}`
+    : window.location.origin;
 
   const handleSharePost = (post: ClothPost) => {
     storageService.recordDiscoveryEvent(post.id, 'SHARE', currentUser?.id);
@@ -440,6 +475,10 @@ export default function App() {
             </motion.div>
           )}
 
+          {currentView === 'seller' && sharedSeller && (
+            <SellerProfilePage seller={sharedSeller} posts={posts} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => setCurrentView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} />
+          )}
+
           {currentView === 'dashboard' && currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') && (
             <motion.div
               key="dashboard"
@@ -541,6 +580,7 @@ export default function App() {
         handle={socialShareHandle}
         name={socialShareName}
         isDarkMode={isDarkMode}
+        profileUrl={sharedProfileUrl}
       />
 
       {/* 10. Save High-Res Picture Modal */}

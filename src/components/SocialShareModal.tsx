@@ -8,6 +8,7 @@ interface SocialShareModalProps {
   handle: string;
   name: string;
   isDarkMode: boolean;
+  profileUrl?: string;
 }
 
 export const SocialShareModal: React.FC<SocialShareModalProps> = ({
@@ -15,13 +16,14 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   onClose,
   handle,
   name,
-  isDarkMode
+  isDarkMode,
+  profileUrl: sharedProfileUrl,
 }) => {
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
 
-  const profileUrl = window.location.origin;
+  const profileUrl = sharedProfileUrl || window.location.origin;
   const shareText = `Explore master bespoke designs and couture creations by ${name} (${handle}) on Atelier Marketplace: ${profileUrl}`;
 
   const handleCopyLink = () => {
@@ -74,7 +76,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
             <input
               type="text"
               readOnly
-              value={`${profileUrl}/#${handle.replace('@', '')}`}
+              value={profileUrl}
               className="flex-1 bg-transparent px-2 text-xs text-neutral-300 font-mono focus:outline-none"
             />
             <button

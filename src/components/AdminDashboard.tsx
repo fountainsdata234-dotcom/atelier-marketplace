@@ -165,9 +165,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Save all 3 Promo Plan templates
-  const handleSavePromoPlans = () => {
+  const handleSavePromoPlans = async () => {
     storageService.savePromoPlans(editablePlans);
-    setPlanSaveStatus('Promotion templates saved and updated live across all tailor dashboards!');
+    try {
+      const savedPlans = await api.savePromoPlans(editablePlans);
+      storageService.savePromoPlans(savedPlans);
+      window.dispatchEvent(new CustomEvent('atelier_plans_updated'));
+      setPlanSaveStatus('Promotion templates saved and updated live across all seller dashboards.');
+    } catch (error) {
+      setPlanSaveStatus(error instanceof Error ? error.message : 'Plans saved on this device but could not sync to the server.');
+    }
     setTimeout(() => setPlanSaveStatus(null), 4000);
   };
 
