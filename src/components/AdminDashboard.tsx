@@ -132,13 +132,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const result = storageService.warnUser(tailor.id, draft);
     setAdminStatus(result.message);
-    window.dispatchEvent(new CustomEvent('atelier_warning_message', {
-      detail: { title: `Warning for ${tailor.name}`, content: draft }
-    }));
-    const updatedUser = storageService.getUsers().find((user) => user.id === tailor.id);
-    if (updatedUser) {
-      window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: updatedUser }));
-    }
     try {
       await api.updateUserProfile(tailor.id, { isWarned: true, warningNote: draft.trim().slice(0, 500) });
     } catch (error) {
