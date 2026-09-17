@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole } from './types';
 import { storageService } from './services/storage';
@@ -7,18 +7,18 @@ import { IntroLoader } from './components/IntroLoader';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { LandingPage } from './components/LandingPage';
-import { Marketplace } from './components/Marketplace';
-import { TailorDashboard } from './components/TailorDashboard';
-import { AdminDashboard } from './components/AdminDashboard';
-import { DirectMessaging } from './components/DirectMessaging';
+const Marketplace = lazy(() => import('./components/Marketplace').then(module => ({ default: module.Marketplace })));
+const TailorDashboard = lazy(() => import('./components/TailorDashboard').then(module => ({ default: module.TailorDashboard })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
+const DirectMessaging = lazy(() => import('./components/DirectMessaging').then(module => ({ default: module.DirectMessaging })));
 import { AuthModal } from './components/AuthModal';
 import { SocialShareModal } from './components/SocialShareModal';
 import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
 import { Footer } from './components/Footer';
-import { CollectionPage } from './components/CollectionPage';
-import { ProfilePage } from './components/ProfilePage';
-import { ArtisanDirectory } from './components/ArtisanDirectory';
+const CollectionPage = lazy(() => import('./components/CollectionPage').then(module => ({ default: module.CollectionPage })));
+const ProfilePage = lazy(() => import('./components/ProfilePage').then(module => ({ default: module.ProfilePage })));
+const ArtisanDirectory = lazy(() => import('./components/ArtisanDirectory').then(module => ({ default: module.ArtisanDirectory })));
 import { configureFirebaseAuth, logoutFromFirebase, subscribeToFirebaseAuth, toAppUser } from './services/firebase';
 import { api } from './services/api';
 
@@ -370,7 +370,8 @@ export default function App() {
 
       {/* 5. Main View Content */}
       <main className="flex-1 pb-20 md:pb-8">
-        <AnimatePresence mode="wait">
+        <Suspense fallback={<div className="flex min-h-[45vh] items-center justify-center text-xs uppercase tracking-[0.2em] text-amber-500">Loading Atelier...</div>}>
+          <AnimatePresence mode="wait">
           {currentView === 'landing' && (
             <motion.div
               key="landing"
@@ -506,7 +507,8 @@ export default function App() {
               />
             </motion.div>
           )}
-        </AnimatePresence>
+          </AnimatePresence>
+        </Suspense>
       </main>
 
       <Footer isDarkMode={isDarkMode} />
