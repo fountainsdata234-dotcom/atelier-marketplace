@@ -20,6 +20,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   });
   const [status, setStatus] = useState<string | null>(null);
 
+  const acknowledgeWarning = async () => {
+    const cleared = storageService.updateUser(currentUser.id, { isWarned: false, warningNote: '' });
+    if (cleared) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cleared }));
+    try {
+      await api.saveProfile({ isWarned: false, warningNote: '' });
+    } catch {
+      setStatus('Notice cleared on this device.');
+    }
+  };
+
   const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
     const updates = { ...form, name: form.name.trim(), handle: form.handle.trim(), phone: form.phone.trim(), bio: form.bio.trim() };
@@ -63,6 +73,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
                 <h2 id="account-alert-title" className="text-sm font-bold text-red-200">Urgent account alert</h2>
                 <p className="mt-2 text-sm leading-relaxed text-red-100/90">{currentUser.warningNote}</p>
                 <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-red-300/70">Please review this notice before publishing or accepting new requests.</p>
+                <button type="button" onClick={() => void acknowledgeWarning()} className="mt-4 rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-400">OK, I have read this</button>
               </div>
             </div>
           </section>

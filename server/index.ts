@@ -115,6 +115,8 @@ function cleanProfile(input: Record<string, unknown>, allowAdmin: boolean) {
     bio: typeof input.bio === 'string' ? input.bio.trim().slice(0, 1000) : '',
     handle: typeof input.handle === 'string' ? input.handle.trim().slice(0, 60) : '',
     avatarUrl: typeof input.avatarUrl === 'string' ? input.avatarUrl.slice(0, 2_000_000) : '',
+    ...(typeof input.isWarned === 'boolean' ? { isWarned: input.isWarned } : {}),
+    ...(typeof input.warningNote === 'string' ? { warningNote: input.warningNote.trim().slice(0, 500) } : {}),
     updatedAt: FieldValue.serverTimestamp(),
   };
 }

@@ -82,6 +82,12 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const totalSaves = myPosts.reduce((acc, p) => acc + p.saves.length, 0);
   const followerCount = Array.isArray(currentUser.followers) ? currentUser.followers.length : 0;
 
+  const acknowledgeWarning = async () => {
+    const cleared = storageService.updateUser(currentUser.id, { isWarned: false, warningNote: '' });
+    if (cleared) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cleared }));
+    await api.saveProfile({ isWarned: false, warningNote: '' }).catch(() => undefined);
+  };
+
   React.useEffect(() => {
     const loadRequests = async () => {
       const cached = storageService.getFabricRequests().filter(request => request.sellerId === currentUser.id);
@@ -262,7 +268,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 <span className="font-bold text-slate-900">$0.00</span>
               </div>
             </div>
-            {currentUser.isWarned && currentUser.warningNote && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-700"><strong className="block text-[10px] uppercase tracking-wider">Urgent account alert</strong><span className="mt-1 block leading-relaxed">{currentUser.warningNote}</span></div>}
+            {currentUser.isWarned && currentUser.warningNote && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-700"><strong className="block text-[10px] uppercase tracking-wider">Urgent account alert</strong><span className="mt-1 block leading-relaxed">{currentUser.warningNote}</span><button type="button" onClick={() => void acknowledgeWarning()} className="mt-3 rounded-lg bg-red-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-red-500">OK, I have read this</button></div>}
           </div>
         </div>
       </div>
