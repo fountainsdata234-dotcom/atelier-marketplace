@@ -73,8 +73,23 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [focusIndex, setFocusIndex] = useState(0);
   const [showAllTrending, setShowAllTrending] = useState(false);
   const [discoveryEvents, setDiscoveryEvents] = useState<DiscoveryEvent[]>(() => storageService.getDiscoveryEvents());
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => storageService.getSearchHistory(currentUser?.id));
   const seenPostIdsRef = useRef(new Set<string>());
   const trendScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setSearchHistory(storageService.getSearchHistory(currentUser?.id));
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    const term = searchQuery.trim();
+    if (term.length < 2) return;
+    const timer = window.setTimeout(() => {
+      storageService.recordSearchTerm(term, currentUser?.id);
+      setSearchHistory(storageService.getSearchHistory(currentUser?.id));
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery, currentUser?.id]);
 
   // Extract unique tags across all posts
   const allTags = useMemo(() => {
@@ -107,13 +122,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       return score + eventWeights[event.eventType] * Math.exp(-ageHours / 168);
     }, 0);
     const interestScore = (post: ClothPost) => {
-      if (!currentUser) return 0;
-      return discoveryEvents.reduce((score, event) => {
+      const interactionScore = !currentUser ? 0 : discoveryEvents.reduce((score, event) => {
         if (event.userId !== currentUser.id) return score;
         const interactedPost = candidatePosts.find(item => item.id === event.itemId);
         if (!interactedPost || !interactedPost.tags.some(tag => post.tags.some(postTag => postTag.toLowerCase() === tag.toLowerCase()))) return score;
         return score + eventWeights[event.eventType];
       }, 0);
+      const searchableText = `${post.title} ${post.description} ${post.tags.join(' ')} ${post.authorName}`.toLowerCase();
+      const searchScore = searchHistory.reduce((score, term, index) => searchableText.includes(term) ? score + Math.max(2, 10 - index) : score, 0);
+      return interactionScore + searchScore;
     };
 
     const rawScores = candidatePosts.map(post => {
@@ -137,7 +154,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       })
       .map(item => item.post)
       .slice(0, showAllTrending ? 12 : 7);
-  }, [posts, users, currentUser, discoveryEvents, showAllTrending]);
+  }, [posts, users, currentUser, discoveryEvents, searchHistory, showAllTrending]);
 
   const searchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -380,7 +397,31 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       });
 
-    onSaveImageToViewer(post.imageUrl, post.title);
+    void downloadImage(post.imageUrl, post.title);
+  };
+
+  const downloadImage = async (imageUrl: string, title: string) => {
+    const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_garment'}.jpg`;
+    try {
+      const response = await fetch(imageUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error('Image download failed');
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      const link = document.createElement('a');
+      link.href = imageUrl;
+      link.download = filename;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
   };
 
   // Handle Follow Tailor
@@ -395,6 +436,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
   // Direct WhatsApp Inquiry link
   const openWhatsApp = (post: ClothPost) => {
+                                                                                                                    
     recordEvent(post.id, 'ENQUIRY');
     const phone = post.authorWhatsapp?.replace(/\D/g, '');
     if (!phone) return;
@@ -940,11 +982,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   {/* Quick Preview trigger */}
                   <div className="absolute bottom-2.5 right-2.5 flex gap-1.5 opacity-0 transition-opacity group-hover/img:opacity-100">
                     <button
-                      onClick={() => onSaveImageToViewer(post.imageUrl, post.title)}
+                      onClick={() => void downloadImage(post.imageUrl, post.title)}
+                      title="Download image to device"
                       className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-black/70 hover:bg-black text-amber-300 border border-amber-500/30 flex items-center gap-1"
                     >
                       <Download className="w-3 h-3" />
-                      <span>Details</span>
+                      <span>Download</span>
                     </button>
                   </div>
                 </div>
@@ -1028,6 +1071,25 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
                 </div>
               </motion.article>
+              {postIndex === 9 && trendingPosts.length > 0 && (
+                <section className={`md:col-span-2 lg:col-span-3 rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-emerald-200 bg-emerald-50'}`}>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500">Keep discovering</p>
+                      <h2 className="mt-1 font-serif text-2xl font-bold">Trending this week</h2>
+                    </div>
+                    <TrendingUp className="h-5 w-5 text-emerald-400" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {trendingPosts.slice(0, 3).map(trendingPost => (
+                      <button key={trendingPost.id} type="button" onClick={() => setSearchQuery(trendingPost.title)} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-emerald-500/15 bg-black/10 p-2 text-left transition hover:border-emerald-400/50">
+                        <img src={trendingPost.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover transition group-hover:scale-105" loading="lazy" />
+                        <span className="min-w-0"><strong className="block truncate text-xs">{trendingPost.title}</strong><small className="mt-1 block truncate text-[10px] text-neutral-400">{trendingPost.authorName} · {trendingPost.likes.length + trendingPost.saves.length} signals</small></span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
               {postIndex === 19 && filteredPosts.length > 20 && (
                 <div className="md:col-span-2 lg:col-span-3">
                   <MarketplaceInterlude posts={filteredPosts} users={users} isDarkMode={isDarkMode} onSelectSeller={(seller) => onShareTailorProfile(seller)} />

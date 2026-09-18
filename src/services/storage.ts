@@ -12,7 +12,8 @@ const STORAGE_KEYS = {
   COLLECTION_PACKAGES: 'atelier_collection_packages_v2',
   SELLER_COLLECTIONS: 'atelier_seller_collections_v1'
   ,FABRIC_REQUESTS: 'atelier_fabric_requests_v1',
-  DISCOVERY_EVENTS: 'atelier_discovery_events_v1'
+  DISCOVERY_EVENTS: 'atelier_discovery_events_v1',
+  SEARCH_HISTORY: 'atelier_search_history_v1'
 };
 
 const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
@@ -107,6 +108,40 @@ export const storageService = {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.DISCOVERY_EVENTS);
       return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  recordSearchTerm(term: string, userId?: string): void {
+    const normalizedTerm = term.trim().toLowerCase();
+    if (normalizedTerm.length < 2) return;
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
+      const history: Record<string, { term: string; count: number; lastSearched: string }[]> = stored ? JSON.parse(stored) : {};
+      const key = userId || 'guest';
+      const userHistory = history[key] || [];
+      const existing = userHistory.find(item => item.term === normalizedTerm);
+      if (existing) {
+        existing.count += 1;
+        existing.lastSearched = new Date().toISOString();
+      } else {
+        userHistory.push({ term: normalizedTerm, count: 1, lastSearched: new Date().toISOString() });
+      }
+      history[key] = userHistory
+        .sort((a, b) => new Date(b.lastSearched).getTime() - new Date(a.lastSearched).getTime())
+        .slice(0, 30);
+      localStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(history));
+    } catch {
+      // Search personalization is optional and must never block browsing.
+    }
+  },
+
+  getSearchHistory(userId?: string): string[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
+      const history: Record<string, { term: string; count: number; lastSearched: string }[]> = stored ? JSON.parse(stored) : {};
+      return (history[userId || 'guest'] || []).map(item => item.term);
     } catch {
       return [];
     }
