@@ -53,6 +53,7 @@ export default function App() {
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [accountNoticeOpen, setAccountNoticeOpen] = useState(false);
 
   // Modals
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -117,7 +118,18 @@ export default function App() {
           return;
         }
         const baseUser = await toAppUser(firebaseUser);
-        const savedProfile = await api.getProfile().catch(() => undefined);
+        let savedProfile: Partial<User> | undefined;
+        try {
+          savedProfile = await api.getProfile();
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('account no longer exists')) {
+            storageService.setCurrentUser(null);
+            setCurrentUser(null);
+            setCurrentView('landing');
+            setAccountNoticeOpen(true);
+            return;
+          }
+        }
         const cachedProfile = storageService.getUsers().find(user => user.id === firebaseUser.uid);
         const profileValue = <T,>(key: keyof User, fallback: T): T => {
           const remoteValue = savedProfile?.[key] as T | undefined;
@@ -151,7 +163,7 @@ export default function App() {
           setCurrentView('admin');
         } else if (user.role === 'tailor' || user.role === 'fabric_seller') {
           setCurrentView('dashboard');
-        } else if (currentView === 'landing' || currentView === 'messages') {
+        } else {
           setCurrentView('marketplace');
         }
         await api.saveProfile(user).catch(error => console.error('Profile sync failed', error));
@@ -256,12 +268,7 @@ export default function App() {
     setBroadcasts(storageService.getBroadcasts());
 
     try {
-      const results = await Promise.allSettled([api.getUsers(), api.getPosts(), api.getPromoPlans()]);
-
-      const remoteUsers = results[0].status === 'fulfilled' ? results[0].value : null;
-      const remotePosts = results[1].status === 'fulfilled' ? results[1].value : null;
-      const remotePlans = results[2].status === 'fulfilled' ? results[2].value : null;
-
+      const remoteUsers = await api.getUsers().catch(() => null);
       if (remoteUsers) {
         const localUsers = storageService.getUsers();
         const mergedUsers = remoteUsers.map(remoteUser => {
@@ -284,6 +291,7 @@ export default function App() {
         setUsers(mergedUsers);
       }
 
+      const remotePosts = await api.getPosts().catch(() => null);
       // An empty array is a valid authoritative response: it must clear stale local posts.
       if (remotePosts !== null) {
         const normalizedPosts = remotePosts.map(post => ({
@@ -299,6 +307,12 @@ export default function App() {
         storageService.savePosts(normalizedPosts);
         setPosts(normalizedPosts);
       }
+
+      // Release the main marketplace as soon as its primary content is ready.
+      // Secondary plans can finish loading without blocking the first useful view.
+      if (showLoader) setIsDataLoading(false);
+
+      const remotePlans = await api.getPromoPlans().catch(() => null);
       if (remotePlans !== null && remotePlans.length > 0) {
         const localPlans = storageService.getPromoPlans();
         const completePlans = [0, 1, 2]
@@ -362,6 +376,11 @@ export default function App() {
     } else {
       setCurrentView('marketplace');
     }
+  };
+
+  const handleAccountNoticeClose = () => {
+    setAccountNoticeOpen(false);
+    void import('./services/firebase').then(({ logoutFromFirebase }) => logoutFromFirebase()).catch(() => undefined);
   };
 
   const handleLogout = () => {
@@ -478,7 +497,7 @@ export default function App() {
         isOnline={isOnline}
         canInstall={Boolean(installPrompt)}
         onInstall={handleInstallApp}
-        onRefresh={() => { setIsRefreshing(true); void refreshAllData(false).finally(() => setIsRefreshing(false)); }}
+        onRefresh={() => { setIsRefreshing(true); void refreshAllData(true).finally(() => setIsRefreshing(false)); }}
         isRefreshing={isRefreshing}
         unreadCount={unreadCount}
       />
@@ -696,6 +715,16 @@ export default function App() {
         isDarkMode={isDarkMode}
         onNavigate={setCurrentView}
       />
+
+      {accountNoticeOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="alertdialog" aria-modal="true" aria-labelledby="account-deleted-title">
+          <div className="w-full max-w-md rounded-3xl border border-red-500/30 bg-[#121316] p-6 text-neutral-100 shadow-2xl">
+            <h2 id="account-deleted-title" className="text-xl font-serif font-bold text-red-300">Account unavailable</h2>
+            <p className="mt-3 text-sm leading-relaxed text-neutral-300">Your seller account was removed by an administrator. Please create a new account and start fresh. Follow the marketplace rules to keep your account active.</p>
+            <button type="button" onClick={handleAccountNoticeClose} className="mt-5 w-full rounded-xl bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition hover:bg-amber-300">I understand</button>
+          </div>
+        </div>
+      )}
 
       {/* 9. Social Share Handle Modal */}
       <SocialShareModal
