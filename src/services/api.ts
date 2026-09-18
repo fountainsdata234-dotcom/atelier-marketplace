@@ -1,15 +1,20 @@
-import { firebaseAuth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
 import { AdminPromoPlan, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, User, DiscoveryEvent, DiscoveryEventType } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 
 let authReady: Promise<void> | null = null;
+let firebaseModule: typeof import('./firebase') | null = null;
 
-function waitForFirebaseAuth() {
-  if (firebaseAuth.currentUser) return Promise.resolve();
+async function getFirebaseModule() {
+  firebaseModule ||= await import('./firebase');
+  return firebaseModule;
+}
+
+async function waitForFirebaseAuth() {
+  const firebase = await getFirebaseModule();
+  if (firebase.firebaseAuth.currentUser) return;
   authReady ||= new Promise(resolve => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, () => {
+    const unsubscribe = firebase.subscribeToFirebaseAuth(() => {
       unsubscribe();
       resolve();
     });
@@ -19,7 +24,8 @@ function waitForFirebaseAuth() {
 
 async function getAuthToken(forceRefresh = false) {
   await waitForFirebaseAuth();
-  return firebaseAuth.currentUser ? firebaseAuth.currentUser.getIdToken(forceRefresh) : null;
+  const firebase = await getFirebaseModule();
+  return firebase.firebaseAuth.currentUser ? firebase.firebaseAuth.currentUser.getIdToken(forceRefresh) : null;
 }
 
 async function request<T>(path: string, options: RequestInit = {}, hasRetried = false) {

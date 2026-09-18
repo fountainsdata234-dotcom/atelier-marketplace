@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
 import { ClothPost, DiscoveryEvent, DiscoveryEventType, User, UserLocation } from '../types';
-import { WORLD_COUNTRIES, calculateDistanceKm } from '../data/worldData';
+import { WORLD_COUNTRIES, calculateDistanceKm } from '../data/geoData';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';

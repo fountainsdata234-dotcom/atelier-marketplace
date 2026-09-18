@@ -10,7 +10,7 @@ const Marketplace = lazy(() => import('./components/Marketplace').then(module =>
 const TailorDashboard = lazy(() => import('./components/TailorDashboard').then(module => ({ default: module.TailorDashboard })));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 const DirectMessaging = lazy(() => import('./components/DirectMessaging').then(module => ({ default: module.DirectMessaging })));
-import { AuthModal } from './components/AuthModal';
+const AuthModal = lazy(() => import('./components/AuthModal').then(module => ({ default: module.AuthModal })));
 import { SocialShareModal } from './components/SocialShareModal';
 import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
@@ -22,7 +22,6 @@ import { SellerProfilePage } from './components/SellerProfilePage';
 const CollectionPage = lazy(() => import('./components/CollectionPage').then(module => ({ default: module.CollectionPage })));
 const ProfilePage = lazy(() => import('./components/ProfilePage').then(module => ({ default: module.ProfilePage })));
 const ArtisanDirectory = lazy(() => import('./components/ArtisanDirectory').then(module => ({ default: module.ArtisanDirectory })));
-import { configureFirebaseAuth, logoutFromFirebase, subscribeToFirebaseAuth, toAppUser } from './services/firebase';
 import { api } from './services/api';
 import { getHandleSlug } from './utils/profile';
 
@@ -111,7 +110,7 @@ export default function App() {
     window.addEventListener('touchend', handlePullRefresh, { passive: true });
 
     let unsubscribeFirebase: (() => void) | undefined;
-    configureFirebaseAuth().then(() => {
+    import('./services/firebase').then(({ configureFirebaseAuth, subscribeToFirebaseAuth, toAppUser }) => configureFirebaseAuth().then(() => {
       unsubscribeFirebase = subscribeToFirebaseAuth(async (firebaseUser) => {
         if (!firebaseUser) {
           setCurrentUser(null);
@@ -158,7 +157,7 @@ export default function App() {
         await api.saveProfile(user).catch(error => console.error('Profile sync failed', error));
         void refreshAllData();
       });
-    }).catch((error) => console.error('Firebase Auth initialization failed', error));
+    })).catch((error) => console.error('Firebase Auth initialization failed', error));
 
     // Listen to reactive update events
     const handleUsersUpdate = () => setUsers(storageService.getUsers());
@@ -361,7 +360,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    logoutFromFirebase().catch((error) => console.error('Firebase logout failed', error));
+    import('./services/firebase').then(({ logoutFromFirebase }) => logoutFromFirebase()).catch((error) => console.error('Firebase logout failed', error));
     storageService.setCurrentUser(null);
     setCurrentUser(null);
     setCurrentView('landing');

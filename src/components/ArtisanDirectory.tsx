@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Compass, MapPin, Navigation, Phone, ShieldCheck, Star, Sparkles, UserPlus } from 'lucide-react';
 import { ClothPost, User } from '../types';
-import { calculateDistanceKm } from '../data/worldData';
+import { calculateDistanceKm } from '../data/geoData';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 interface ArtisanDirectoryProps {
