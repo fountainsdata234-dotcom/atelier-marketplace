@@ -66,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden md:flex items-center gap-1.5 text-xs font-medium">
+        <nav className="hidden lg:flex items-center gap-1.5 text-xs font-medium">
           {!currentUser && (
             <button
               onClick={() => onNavigate('landing')}
@@ -181,7 +181,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Right Utility Buttons */}
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           {!isOnline && (
             <span className="hidden items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold text-amber-300 sm:flex" role="status">
               <WifiOff className="h-3 w-3" /> Offline cache
@@ -256,7 +256,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           aria-expanded={mobileMenuOpen}
           onClick={() => setMobileMenuOpen(open => !open)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700/60 text-neutral-300 transition hover:border-amber-500/50 hover:text-amber-300 md:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700/60 text-neutral-300 transition hover:border-amber-500/50 hover:text-amber-300 lg:hidden"
         >
           <span className="relative">
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -265,7 +265,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
 
         {mobileMenuOpen && (
-          <div className={`absolute left-3 right-3 top-[calc(100%-1px)] z-50 rounded-2xl border p-3 shadow-2xl md:hidden ${
+          <div className={`absolute left-3 right-3 top-[calc(100%-1px)] z-50 rounded-2xl border p-3 shadow-2xl lg:hidden ${
             isDarkMode ? 'border-neutral-800 bg-[#111317]' : 'border-neutral-200 bg-white'
           }`}>
             {currentUser && (

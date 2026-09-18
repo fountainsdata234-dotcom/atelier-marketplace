@@ -40,7 +40,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <>
       <div
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 py-1.5 transition-colors ${
+          className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 py-1.5 transition-colors ${
           isDarkMode
             ? 'bg-[#0c0d10]/95 border-neutral-800 text-neutral-300'
             : 'bg-white/95 border-neutral-200 text-neutral-700 shadow-lg'
@@ -92,7 +92,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       </div>
 
       {menuOpen && (
-        <div className="md:hidden fixed inset-x-0 bottom-16 z-50 px-4">
+        <div className="lg:hidden fixed inset-x-0 bottom-16 z-50 px-4">
           <div
             className={`mx-auto max-w-md rounded-2xl border p-2 shadow-2xl backdrop-blur-xl ${
               isDarkMode

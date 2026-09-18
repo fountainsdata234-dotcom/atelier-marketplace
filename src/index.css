@@ -21,6 +21,13 @@
 
   html {
     scroll-behavior: smooth;
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   body {
@@ -63,6 +70,22 @@
 
   button, input, select {
     font: inherit;
+  }
+
+  img, video, canvas, svg {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 1023px) {
+  .mobile-nav-item {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  input, select, textarea {
+    max-width: 100%;
   }
 }
 

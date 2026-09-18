@@ -15,6 +15,7 @@ import { SocialShareModal } from './components/SocialShareModal';
 import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
 import { Footer } from './components/Footer';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { LegalPage } from './components/LegalPage';
 import { SellerProfilePage } from './components/SellerProfilePage';
 const CollectionPage = lazy(() => import('./components/CollectionPage').then(module => ({ default: module.CollectionPage })));
@@ -480,7 +481,7 @@ export default function App() {
       {isRefreshing && <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200">Refreshing marketplace...</div>}
 
       {/* 5. Main View Content */}
-      <main className="flex-1 pb-8">
+      <main className="min-w-0 flex-1 pb-24 lg:pb-8">
         <Suspense fallback={<div className="flex min-h-[45vh] items-center justify-center text-xs uppercase tracking-[0.2em] text-amber-500">Loading Atelier...</div>}>
           <AnimatePresence mode="wait">
           {currentView === 'landing' && (
@@ -643,6 +644,18 @@ export default function App() {
       </main>
 
       <Footer isDarkMode={isDarkMode} onNavigate={setCurrentView} />
+
+      <MobileBottomNav
+        currentUser={currentUser}
+        currentView={currentView}
+        onNavigate={setCurrentView}
+        onOpenAuth={() => handleOpenAuthWithRole('buyer')}
+        onLogout={handleLogout}
+        isDarkMode={isDarkMode}
+        unreadCount={unreadCount}
+        canInstall={Boolean(installPrompt)}
+        onInstall={handleInstallApp}
+      />
 
       {/* 6. Global Floating / Modal Direct Messaging */}
       {directMessageOpen && currentUser && (
