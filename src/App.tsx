@@ -266,6 +266,7 @@ export default function App() {
 
     setPromoPlans(storageService.getPromoPlans());
     setBroadcasts(storageService.getBroadcasts());
+    if (showLoader) setIsDataLoading(false);
 
     try {
       const remoteUsers = await api.getUsers().catch(() => null);

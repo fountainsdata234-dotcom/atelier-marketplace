@@ -359,6 +359,38 @@ app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   res.json(saved.data());
 });
 
+app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const uid = req.authUser!.uid;
+  const postsSnapshot = await firestore.collection('posts').where('authorId', '==', uid).get();
+  const messages = await Promise.all([
+    firestore.collection('messages').where('senderId', '==', uid).get(),
+    firestore.collection('messages').where('recipientId', '==', uid).get(),
+  ]);
+  const discoveryEvents = await firestore.collection('discoveryEvents').where('userId', '==', uid).get();
+  const fabricRequests = await Promise.all([
+    firestore.collection('fabricRequests').where('buyerId', '==', uid).get(),
+    firestore.collection('fabricRequests').where('sellerId', '==', uid).get(),
+  ]);
+  const removableDocs = [
+    ...messages.flatMap(snapshot => snapshot.docs),
+    ...discoveryEvents.docs,
+    ...fabricRequests.flatMap(snapshot => snapshot.docs),
+  ];
+  for (let index = 0; index < removableDocs.length; index += 400) {
+    const batch = firestore.batch();
+    removableDocs.slice(index, index + 400).forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+  await Promise.all(postsSnapshot.docs.map(post => firestore.recursiveDelete(post.ref)));
+  await firestore.recursiveDelete(firestore.collection('profiles').doc(uid));
+  try {
+    await adminAuth.deleteUser(uid);
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
+  }
+  res.status(204).send();
+});
+
 app.get('/api/posts', async (_req, res) => {
   const snapshot = await firestore.collection('posts').limit(100).get();
   const profileSnapshot = await firestore.collection('profiles').get();

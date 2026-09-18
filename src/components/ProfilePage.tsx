@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Bookmark, Camera, LogOut, Save, UserRound } from 'lucide-react';
+import { AlertTriangle, Bookmark, Camera, LogOut, Save, Trash2, UserRound } from 'lucide-react';
 import { User } from '../types';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
@@ -23,6 +23,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   const [status, setStatus] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -66,6 +67,21 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
       setStatus('Profile saved successfully.');
     } catch {
       setStatus('Saved on this device. It will sync when you reconnect.');
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!window.confirm('Permanently delete your account, profile, posts, messages, collections, and Firebase login? This cannot be undone.')) return;
+    setIsDeletingAccount(true);
+    setStatus(null);
+    try {
+      await api.deleteMyAccount();
+      storageService.deleteUser(currentUser.id);
+      storageService.setCurrentUser(null);
+      onLogout();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Your account could not be deleted. Please try again.');
+      setIsDeletingAccount(false);
     }
   };
 
@@ -114,6 +130,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <label className="text-xs font-semibold sm:col-span-2">Bio<textarea rows={4} value={form.bio} onChange={event => setForm({ ...form, bio: event.target.value })} className="mt-1.5 w-full resize-y rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" /></label>
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={isUploadingAvatar} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300 disabled:opacity-60"><Save className="h-4 w-4" /> Save profile</button>{status && <span className="text-xs text-emerald-400">{status}</span>}</div>
         </form>
+
+        <section className="mt-8 rounded-2xl border border-red-500/25 bg-red-500/5 p-4" aria-labelledby="delete-account-title">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 id="delete-account-title" className="text-sm font-bold text-red-200">Delete account</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-neutral-400">Permanently removes your profile, posts, messages, collections, and Firebase login. This action cannot be reversed.</p>
+            </div>
+            <button type="button" onClick={() => void deleteAccount()} disabled={isDeletingAccount} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-300 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"><Trash2 className="h-4 w-4" /> {isDeletingAccount ? 'Deleting...' : 'Delete my account'}</button>
+          </div>
+        </section>
       </div>
     </div>
   );
