@@ -37,8 +37,11 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
       void api.markMessagesRead().catch(() => undefined);
       storageService.markMessagesRead(currentUser.id);
       window.dispatchEvent(new CustomEvent('atelier_messages_read'));
-    }).catch(error => console.error('Messages unavailable', error));
-  }, []);
+    }).catch(() => {
+      setAllMessages(storageService.getMessages(currentUser.id));
+      setAllUsers(storageService.getUsers());
+    });
+  }, [currentUser.id]);
 
   const announcementMessages = allMessages.filter(message => message.recipientId === currentUser.id && (message.type === 'general' || message.senderId === 'atelier-system'));
   const conversationPartnerIds = new Set(allMessages

@@ -1,10 +1,29 @@
 import { firebaseAuth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { AdminPromoPlan, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, User, DiscoveryEvent, DiscoveryEventType } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 
-async function request<T>(path: string, options: RequestInit = {}) {
-  const token = firebaseAuth.currentUser ? await firebaseAuth.currentUser.getIdToken() : null;
+let authReady: Promise<void> | null = null;
+
+function waitForFirebaseAuth() {
+  if (firebaseAuth.currentUser) return Promise.resolve();
+  authReady ||= new Promise(resolve => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, () => {
+      unsubscribe();
+      resolve();
+    });
+  });
+  return authReady;
+}
+
+async function getAuthToken(forceRefresh = false) {
+  await waitForFirebaseAuth();
+  return firebaseAuth.currentUser ? firebaseAuth.currentUser.getIdToken(forceRefresh) : null;
+}
+
+async function request<T>(path: string, options: RequestInit = {}, hasRetried = false) {
+  const token = await getAuthToken(hasRetried);
   if (path === '/api/profile' && !token) {
     throw new Error('Authentication is not ready.');
   }
@@ -16,6 +35,9 @@ async function request<T>(path: string, options: RequestInit = {}) {
       ...(options.headers || {}),
     },
   });
+  if (response.status === 401 && token && !hasRetried) {
+    return request<T>(path, options, true);
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'The server request failed.');
