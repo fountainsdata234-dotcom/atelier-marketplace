@@ -29,6 +29,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Sub-admin management state
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
+  const [deletedSellerIds, setDeletedSellerIds] = useState<string[]>([]);
 
   // Broadcast message state
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'sellers' | 'buyers'>('all');
@@ -64,7 +65,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Filtered lists
-  const moderatableUsers = users.filter(u => u.role === 'tailor' || u.role === 'fabric_seller');
+  const moderatableUsers = users.filter(u => (u.role === 'tailor' || u.role === 'fabric_seller') && !deletedSellerIds.includes(u.id));
   const tailors = users.filter(u => u.role === 'tailor');
   const fabricSellers = users.filter(u => u.role === 'fabric_seller');
   const customers = users.filter(u => u.role === 'buyer');
@@ -148,6 +149,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch (error) {
       storageService.updateUser(tailor.id, { isBlocked: !updated });
       setAdminStatus(error instanceof Error ? error.message : 'The account restriction could not be updated.');
+    }
+  };
+
+  const handleDeleteSeller = async (tailor: User) => {
+    if (!window.confirm(`Permanently delete ${tailor.shopName || tailor.name}, their posts, messages, profile, and Firebase account? This cannot be undone.`)) return;
+    try {
+      await api.deleteSeller(tailor.id);
+      storageService.deleteUser(tailor.id);
+      setDeletedSellerIds(ids => [...ids, tailor.id]);
+      setAdminStatus(`${tailor.shopName || tailor.name} and all linked account data were permanently deleted.`);
+    } catch (error) {
+      setAdminStatus(error instanceof Error ? error.message : 'The seller account could not be deleted.');
     }
   };
 
@@ -441,6 +454,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500 hover:text-neutral-950 transition-all"
                     >
                       Warn
+                    </button>
+                    <button
+                      onClick={() => void handleDeleteSeller(tailor)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-700/20 text-red-300 border border-red-500/40 hover:bg-red-600 hover:text-white transition-all"
+                    >
+                      <Trash2 className="mr-1 inline-block h-3.5 w-3.5" /> Delete account
                     </button>
                   </div>
                 </div>

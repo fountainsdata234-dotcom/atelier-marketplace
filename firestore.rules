@@ -7,13 +7,13 @@ service cloud.firestore {
     match /profiles/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow create: if signedIn() && request.auth.uid == userId && request.resource.data.id == userId && (request.resource.data.role != 'admin' || isAdmin());
-      allow update: if signedIn() && request.resource.data.id == userId && (isAdmin() || (request.auth.uid == userId && request.resource.data.role == resource.data.role));
+      allow update: if signedIn() && request.resource.data.id == userId && (isAdmin() || (request.auth.uid == userId && request.resource.data.role == resource.data.role && request.resource.data.isBlocked == resource.data.isBlocked && request.resource.data.isPromoted == resource.data.isPromoted));
       allow delete: if isAdmin();
     }
 
     match /posts/{postId} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role in ['tailor', 'fabric_seller'];
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role in ['tailor', 'fabric_seller'] && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isBlocked != true;
       allow update, delete: if signedIn() && (resource.data.authorId == request.auth.uid || isAdmin());
 
       match /ratings/{userId} {
@@ -35,7 +35,7 @@ service cloud.firestore {
 
     match /messages/{messageId} {
       allow read: if signedIn() && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.senderId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.senderId == request.auth.uid && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isBlocked != true && get(/databases/$(database)/documents/profiles/$(request.resource.data.recipientId)).data.isBlocked != true;
       allow update: if signedIn() && resource.data.recipientId == request.auth.uid;
       allow delete: if false;
     }

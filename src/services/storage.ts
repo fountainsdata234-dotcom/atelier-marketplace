@@ -292,6 +292,15 @@ export const storageService = {
     return users[index];
   },
 
+  deleteUser(id: string): void {
+    this.saveUsers(this.getUsers().filter(user => user.id !== id));
+    this.savePosts(this.getPosts().filter(post => post.authorId !== id));
+    const collections = this.getSellerCollections().filter(collection => collection.sellerId !== id);
+    localStorage.setItem(STORAGE_KEYS.SELLER_COLLECTIONS, JSON.stringify(collections));
+    window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+    window.dispatchEvent(new CustomEvent('atelier_collections_updated'));
+  },
+
   addSecondaryAdmin(email: string): { success: boolean; message: string; user?: User } {
     const users = this.getUsers();
     const existing = users.find(u => u.email.toLowerCase() === email.toLowerCase());

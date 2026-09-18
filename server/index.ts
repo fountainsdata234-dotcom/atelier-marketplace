@@ -56,7 +56,7 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 
 interface AuthenticatedRequest extends Request {
-  authUser?: { uid: string; email?: string; admin?: boolean };
+  authUser?: { uid: string; email?: string; admin?: boolean; blocked?: boolean };
 }
 
 interface StoredMessage {
@@ -79,11 +79,19 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
     const profile = await firestore.collection('profiles').doc(token.uid).get();
     const profileData = profile.exists ? profile.data() as Record<string, unknown> : {};
     const isAdminFromProfile = profileData.role === 'admin' || token.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com' || token.admin === true || token.role === 'admin';
-    req.authUser = { uid: token.uid, email: token.email, admin: Boolean(isAdminFromProfile) };
+    req.authUser = { uid: token.uid, email: token.email, admin: Boolean(isAdminFromProfile), blocked: profileData.isBlocked === true };
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired authentication token.' });
   }
+}
+
+function requireActiveAccount(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (req.authUser?.blocked) {
+    res.status(403).json({ error: 'This account is blocked. Publishing and messaging are disabled until an administrator unblocks it.' });
+    return;
+  }
+  next();
 }
 
 function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -368,6 +376,7 @@ app.get('/api/posts', async (_req, res) => {
       authorHandle: author.handle || '@atelier_member',
       authorAvatar: author.avatarUrl || '',
       authorLocation: author.location || { country: '', state: '', city: '' },
+      authorIsBlocked: author.isBlocked === true,
       authorWhatsapp: author.whatsappNumber || '',
       isBlocked: data.isBlocked === true,
       likes: likesSnapshot.docs.map(item => item.id),
@@ -375,7 +384,7 @@ app.get('/api/posts', async (_req, res) => {
       rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : 0,
       ratingCount: ratings.length,
     };
-    }))).filter(post => post.isBlocked !== true);
+    }))).filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
   posts.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   res.json(posts);
 });
@@ -439,7 +448,7 @@ app.post('/api/discovery-events', requireAuth, async (req: AuthenticatedRequest,
   res.status(201).json({ id: created.id, ...event });
 });
 
-app.post('/api/posts', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/posts', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
   const input = req.body || {};
   if (typeof input.title !== 'string' || !input.title.trim() || typeof input.imageUrl !== 'string' || !input.imageUrl.trim()) {
     res.status(400).json({ error: 'A title and image are required.' });
@@ -525,7 +534,7 @@ app.delete('/api/admin/messages/:messageId', requireAuth, requireAdmin, async (r
   res.status(204).send();
 });
 
-app.post('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/messages', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
   const input = req.body || {};
   if (input.senderId !== req.authUser!.uid || typeof input.recipientId !== 'string' || typeof input.content !== 'string' || !input.content.trim()) {
     res.status(400).json({ error: 'Invalid message.' });
@@ -538,6 +547,11 @@ app.post('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) =>
       res.status(403).json({ error: 'Administrators can only message tailors and fabric sellers.' });
       return;
     }
+  }
+  const recipientSnapshot = await firestore.collection('profiles').doc(input.recipientId).get();
+  if (recipientSnapshot.data()?.isBlocked === true) {
+    res.status(403).json({ error: 'This seller is currently unavailable for messaging.' });
+    return;
   }
   const message = {
     senderId: req.authUser!.uid,
@@ -722,6 +736,43 @@ app.post('/api/admin/users/:uid/block', requireAuth, requireAdmin, async (req: A
   await profileRef.set({ isBlocked: blocked, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   await adminAuth.updateUser(req.params.uid, { disabled: blocked });
   res.json({ ok: true, blocked });
+});
+
+app.delete('/api/admin/sellers/:uid', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const uid = req.params.uid;
+  if (uid === req.authUser!.uid) {
+    res.status(400).json({ error: 'You cannot delete your own administrator account.' });
+    return;
+  }
+
+  const profileRef = firestore.collection('profiles').doc(uid);
+  const profileSnapshot = await profileRef.get();
+  if (!profileSnapshot.exists) {
+    res.status(404).json({ error: 'Seller profile not found.' });
+    return;
+  }
+  const role = profileSnapshot.data()?.role;
+  if (role !== 'tailor' && role !== 'fabric_seller') {
+    res.status(403).json({ error: 'Only tailor and fabric seller accounts can be deleted here.' });
+    return;
+  }
+
+  const postsSnapshot = await firestore.collection('posts').where('authorId', '==', uid).get();
+  const messages = await Promise.all([
+    firestore.collection('messages').where('senderId', '==', uid).get(),
+    firestore.collection('messages').where('recipientId', '==', uid).get(),
+  ]);
+  const batch = firestore.batch();
+  messages.flatMap(snapshot => snapshot.docs).forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+  await Promise.all(postsSnapshot.docs.map(post => firestore.recursiveDelete(post.ref)));
+  await firestore.recursiveDelete(profileRef);
+  try {
+    await adminAuth.deleteUser(uid);
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
+  }
+  res.status(204).send();
 });
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {

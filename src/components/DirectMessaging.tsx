@@ -56,11 +56,11 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
     if (message.timestamp > currentLatest) latestMessageByPartner.set(partnerId, message.timestamp);
   });
   const conversationPartners = allUsers
-    .filter(u => u.id !== currentUser.id && conversationPartnerIds.has(u.id))
+    .filter(u => u.id !== currentUser.id && !u.isBlocked && conversationPartnerIds.has(u.id))
     .sort((a, b) => (latestMessageByPartner.get(b.id) || '').localeCompare(latestMessageByPartner.get(a.id) || ''));
 
   // If initial recipient is supplied, keep it pinned to the top of the list.
-  if (initialRecipient) {
+  if (initialRecipient && !initialRecipient.isBlocked) {
     const initialIndex = conversationPartners.findIndex(p => p.id === initialRecipient.id);
     if (initialIndex >= 0) {
       conversationPartners.splice(initialIndex, 1);

@@ -60,6 +60,7 @@ export const api = {
   updateUserProfile: (userId: string, updates: Partial<User>) => request<User>(`/api/users/${userId}/profile`, { method: 'PUT', body: JSON.stringify(updates) }),
   addAdmin: (email: string) => request<User>('/api/admin/admins', { method: 'POST', body: JSON.stringify({ email }) }),
   removeAdmin: (userId: string) => request<void>(`/api/admin/admins/${userId}`, { method: 'DELETE' }),
+  deleteSeller: (userId: string) => request<void>(`/api/admin/sellers/${userId}`, { method: 'DELETE' }),
   setUserBlocked: (userId: string, blocked: boolean) => request<{ ok: boolean; blocked: boolean }>(`/api/admin/users/${userId}/block`, { method: 'POST', body: JSON.stringify({ blocked }) }),
   getPosts: () => request<ClothPost[]>('/api/posts'),
   saveProfile: (profile: Partial<User>) => request<User>('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }),

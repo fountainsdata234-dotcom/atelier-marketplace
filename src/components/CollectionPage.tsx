@@ -35,7 +35,8 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
     };
   }, [currentUser?.id]);
 
-  const canAddMore = savedPhotos.length < collectionState.unlockedSlots;
+  const collectionLimit = currentUser?.isPromoted ? 50 : collectionState.unlockedSlots;
+  const canAddMore = savedPhotos.length < collectionLimit;
 
   const clearCollection = () => {
     storageService.saveSavedPhotos([]);
@@ -47,18 +48,19 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
   };
 
   useEffect(() => {
-    if (currentUser && savedPhotos.length > collectionState.unlockedSlots) {
-      setSavedPhotos(prev => prev.slice(0, collectionState.unlockedSlots));
+    if (currentUser && !currentUser.isPromoted && savedPhotos.length > collectionLimit) {
+      setSavedPhotos(prev => prev.slice(0, collectionLimit));
     }
-  }, [collectionState.unlockedSlots, currentUser, savedPhotos.length]);
+  }, [collectionLimit, currentUser, savedPhotos.length]);
 
   const details = useMemo(() => ({
     used: savedPhotos.length,
-    remaining: Math.max(0, collectionState.unlockedSlots - savedPhotos.length),
+    remaining: Math.max(0, collectionLimit - savedPhotos.length),
     isGuest: !currentUser,
-  }), [savedPhotos.length, collectionState.unlockedSlots, currentUser]);
+  }), [savedPhotos.length, collectionLimit, currentUser]);
 
   const canCreateSellerCollection = currentUser?.role === 'tailor' || currentUser?.role === 'fabric_seller';
+  const sellerCollectionLimit = currentUser?.isPromoted ? 50 : 3;
   const addCollectionImage = () => setCollectionImages(images => images.length >= 12 ? images : [...images, '']);
   const updateCollectionImage = (index: number, value: string) => setCollectionImages(images => images.map((image, imageIndex) => imageIndex === index ? value : image));
   const removeCollectionImage = (index: number) => setCollectionImages(images => images.filter((_, imageIndex) => imageIndex !== index));
@@ -67,6 +69,10 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
     const imageUrls = collectionImages.map(image => image.trim()).filter(Boolean);
     if (!currentUser || !collectionTitle.trim() || imageUrls.length === 0) {
       setCollectionStatus('Add a collection name and at least one image link.');
+      return;
+    }
+    if (sellerCollections.length >= sellerCollectionLimit) {
+      setCollectionStatus(currentUser.isPromoted ? 'You have reached the 50-collection promoted limit.' : 'Promoted access unlocks up to 50 collections without the ad-supported limit.');
       return;
     }
     storageService.saveSellerCollection({ sellerId: currentUser.id, title: collectionTitle.trim(), description: collectionDescription.trim(), imageUrls });
@@ -87,7 +93,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
               <h1 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Curate your storefront</h1>
               <p className="mt-1 max-w-2xl text-xs text-neutral-400">Group a complete edit by theme, season, or material. Each collection can carry up to 12 images.</p>
             </div>
-            <span className="text-xs text-neutral-400">{sellerCollections.length} collection{sellerCollections.length === 1 ? '' : 's'} published</span>
+            <span className="text-xs text-neutral-400">{sellerCollections.length}/{sellerCollectionLimit} collection{sellerCollections.length === 1 ? '' : 's'} published</span>
           </div>
 
           <form onSubmit={createSellerCollection} className="mt-5 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
@@ -95,7 +101,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
               <input value={collectionTitle} onChange={event => setCollectionTitle(event.target.value)} placeholder="Collection name, e.g. The Indigo Edit" className="w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3.5 py-3 text-xs focus:border-amber-500 focus:outline-none" />
               <textarea value={collectionDescription} onChange={event => setCollectionDescription(event.target.value)} rows={4} placeholder="Describe the story, fabric, or occasion behind this edit." className="w-full rounded-xl border border-neutral-700 bg-neutral-900/40 p-3 text-xs focus:border-amber-500 focus:outline-none" />
               {collectionStatus && <p className="text-xs text-amber-400">{collectionStatus}</p>}
-              <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition hover:bg-amber-300"><Plus className="h-4 w-4" /> Publish collection</button>
+              <button type="submit" disabled={sellerCollections.length >= sellerCollectionLimit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> Publish collection</button>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between"><p className="text-xs font-semibold text-neutral-300">Gallery image links</p><span className="text-[10px] text-neutral-500">{collectionImages.filter(Boolean).length}/12 images</span></div>
@@ -147,17 +153,21 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
               <span className="block text-[10px] uppercase tracking-wide text-neutral-400">Remaining</span>
               <span className="font-semibold text-emerald-400">{details.remaining}</span>
             </div>
-            <button
-              onClick={unlockMoreSlots}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-neutral-950 bg-gradient-to-r from-amber-400 to-amber-500"
-            >
-              Unlock +5 slots
-            </button>
+            {currentUser?.isPromoted ? (
+              <span className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs font-semibold text-amber-300">Promoted access · 50 slots · ad-free</span>
+            ) : (
+              <button
+                onClick={unlockMoreSlots}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-neutral-950 bg-gradient-to-r from-amber-400 to-amber-500"
+              >
+                Unlock +5 slots
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      <div className={`rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
+      {!currentUser?.isPromoted && <div className={`rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Sparkles className="w-4 h-4 text-amber-400" />
@@ -223,7 +233,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
             ))}
           </div>
         )}
-      </div>
+      </div>}
 
       <div className={`rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
         <div className="flex items-center gap-2 text-sm font-semibold">
