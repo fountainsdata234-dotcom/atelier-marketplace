@@ -278,7 +278,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {!currentUser && <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item">Overview</button>}
               <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
               <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
-              {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />Saved</button>}
+              {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
               {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
               {currentUser && <button type="button" onClick={() => navigate('messages')} className="mobile-nav-item"><MessageSquare className="h-4 w-4" />Messages {unreadCount > 0 && <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold text-neutral-950">{unreadCount}</span>}</button>}
               {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}

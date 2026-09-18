@@ -396,12 +396,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   // Direct WhatsApp Inquiry link
   const openWhatsApp = (post: ClothPost) => {
     recordEvent(post.id, 'ENQUIRY');
-    const phone = post.authorWhatsapp?.replace(/\D/g, '') || '2348000000000';
+    const phone = post.authorWhatsapp?.replace(/\D/g, '');
+    if (!phone) return;
     const text = encodeURIComponent(
       `Hello ${post.authorName}! I saw your design "${post.title}" on Fabrilux Atelier. I would like to place an order or discuss custom tailoring.`
     );
     window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
   };
+
+  const hasWhatsApp = (post: ClothPost) => Boolean(post.authorWhatsapp?.replace(/\D/g, ''));
 
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
@@ -566,13 +569,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                           >
                             Message Seller
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => openWhatsApp(post)}
-                            className="col-span-2 rounded-xl bg-emerald-600 px-2.5 py-2 text-[10px] font-bold text-white transition hover:bg-emerald-500 sm:col-span-auto sm:px-3 sm:text-[11px]"
-                          >
-                            WhatsApp
-                          </button>
+                          {hasWhatsApp(post) && <button type="button" onClick={() => openWhatsApp(post)} className="col-span-2 rounded-xl bg-emerald-600 px-2.5 py-2 text-[10px] font-bold text-white transition hover:bg-emerald-500 sm:col-span-auto sm:px-3 sm:text-[11px]">WhatsApp</button>}
                         </div>
                       </div>
                     </div>
@@ -1029,14 +1026,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     </button>
 
                     {/* WhatsApp Direct Order Button */}
-                    <button
-                      onClick={() => openWhatsApp(post)}
-                      className="px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-colors shadow-xs"
-                      title="Order on WhatsApp"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>WhatsApp</span>
-                    </button>
+                    {hasWhatsApp(post) && <button onClick={() => openWhatsApp(post)} className="px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-colors shadow-xs" title="Order on WhatsApp"><Phone className="w-3.5 h-3.5" /><span>WhatsApp</span></button>}
                   </div>
                 </div>
               </motion.article>
