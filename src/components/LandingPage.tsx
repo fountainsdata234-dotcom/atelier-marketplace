@@ -92,12 +92,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <div className="rounded-full bg-white/10 px-2 py-1 text-xs">Try on</div>
                     </div>
 
-                    <div className="flex h-48 items-end justify-center rounded-[20px] bg-[radial-gradient(circle_at_top,rgba(147,197,253,0.35),transparent_30%),linear-gradient(180deg,#0f172a,#111827)] p-3">
-                      <div className="relative h-32 w-24 rounded-t-[56px] bg-gradient-to-b from-amber-400 to-orange-500 shadow-[0_18px_35px_rgba(249,115,22,0.35)]">
-                        <div className="absolute -left-9 top-6 h-16 w-8 rounded-full bg-orange-200/80" />
-                        <div className="absolute -right-9 top-6 h-16 w-8 rounded-full bg-orange-200/80" />
-                        <div className="absolute left-1/2 top-5 h-7 w-7 -translate-x-1/2 rounded-full bg-slate-900/15" />
-                      </div>
+                    <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
+                      <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=900&q=85" alt="Richly textured indigo cloth folded in an atelier" className="h-full w-full object-cover transition duration-700 hover:scale-105" referrerPolicy="no-referrer" />
+                      <div className="absolute inset-x-3 bottom-3 rounded-xl border border-white/20 bg-black/35 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm">Textiles with a point of view</div>
                     </div>
                   </div>
 

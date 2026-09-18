@@ -49,6 +49,15 @@ export interface SavedPhoto {
   postId?: string;
 }
 
+export interface SellerCollection {
+  id: string;
+  sellerId: string;
+  title: string;
+  description: string;
+  imageUrls: string[];
+  createdAt: string;
+}
+
 export interface ClothPost {
   id: string;
   authorId: string;

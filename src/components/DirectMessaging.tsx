@@ -133,10 +133,7 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
               <MessageSquare className="w-5 h-5 text-amber-500" />
               <h3 className="font-serif font-bold text-base">Atelier Messages</h3>
             </div>
-            <button
-              onClick={onClose}
-              className="md:hidden p-1.5 rounded-lg text-neutral-400 hover:text-white"
-            >
+            <button onClick={onClose} aria-label="Close messages" title="Close messages" className="p-2 rounded-xl text-neutral-400 hover:bg-neutral-800/50 hover:text-white transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>

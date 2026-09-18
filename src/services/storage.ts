@@ -1,4 +1,4 @@
-import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, UserRole, FabricRequest, FabricRequestStatus, DiscoveryEvent, DiscoveryEventType } from '../types';
+import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, SellerCollection, UserRole, FabricRequest, FabricRequestStatus, DiscoveryEvent, DiscoveryEventType } from '../types';
 
 const STORAGE_KEYS = {
   USERS: 'atelier_users_v2',
@@ -9,7 +9,8 @@ const STORAGE_KEYS = {
   BROADCASTS: 'atelier_broadcasts_v2',
   DARK_MODE: 'atelier_dark_mode_v2',
   SAVED_PHOTOS: 'atelier_saved_photos_v2',
-  COLLECTION_PACKAGES: 'atelier_collection_packages_v2'
+  COLLECTION_PACKAGES: 'atelier_collection_packages_v2',
+  SELLER_COLLECTIONS: 'atelier_seller_collections_v1'
   ,FABRIC_REQUESTS: 'atelier_fabric_requests_v1',
   DISCOVERY_EVENTS: 'atelier_discovery_events_v1'
 };
@@ -357,6 +358,28 @@ export const storageService = {
       unlockedSlots: Math.max(5, Math.min(50, Number(unlockedSlots) || 5)),
     };
     localStorage.setItem(STORAGE_KEYS.COLLECTION_PACKAGES, JSON.stringify(next));
+    return next;
+  },
+
+  getSellerCollections(sellerId?: string): SellerCollection[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.SELLER_COLLECTIONS);
+      const collections: SellerCollection[] = data ? JSON.parse(data) : [];
+      return sellerId ? collections.filter(collection => collection.sellerId === sellerId) : collections;
+    } catch {
+      return [];
+    }
+  },
+
+  saveSellerCollection(collection: Omit<SellerCollection, 'id' | 'createdAt'>): SellerCollection {
+    const next: SellerCollection = {
+      ...collection,
+      id: `collection-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: new Date().toISOString(),
+    };
+    const collections = this.getSellerCollections();
+    localStorage.setItem(STORAGE_KEYS.SELLER_COLLECTIONS, JSON.stringify([next, ...collections]));
+    window.dispatchEvent(new CustomEvent('atelier_collections_updated'));
     return next;
   },
 

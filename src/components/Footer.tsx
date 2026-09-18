@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Scissors, Sparkles } from 'lucide-react';
+import { MessageSquare, Sparkles } from 'lucide-react';
 
 interface FooterProps {
   isDarkMode: boolean;
@@ -16,16 +16,11 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
       }`}
     >
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-start gap-4 md:grid md:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr] md:gap-8">
+        <div className="grid grid-cols-1 items-start gap-7 md:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr] md:gap-8">
           <div className="w-full md:w-auto md:col-span-1">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-neutral-950 shadow-lg shadow-amber-500/20">
-                <Scissors className="h-5 w-5 stroke-[2.2]" />
-              </div>
-              <div>
-                <p className="font-display text-xl font-black tracking-[0.14em] text-amber-400">FABRILUX</p>
-                <p className="text-[10px] uppercase tracking-[0.25em] text-amber-500/80">Atelier</p>
-              </div>
+              <img src="/logo.png" alt="Fabrilux Atelier logo" className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-amber-500/20" />
+              <div><p className="font-display text-xl font-black tracking-[0.14em] text-amber-400">FABRILUX</p><p className="text-[10px] uppercase tracking-[0.25em] text-amber-500/80">Atelier</p></div>
             </div>
             <p className={`mt-3 max-w-sm text-sm leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
               A global network for fine tailors, fabric merchants, and clients seeking premium bespoke craftsmanship.

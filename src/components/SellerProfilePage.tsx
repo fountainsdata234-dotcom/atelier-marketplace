@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo } from 'react';
-import { ArrowLeft, MapPin, Phone, Share2, Star, Users, CheckCircle2, Grid3X3 } from 'lucide-react';
-import { ClothPost, User } from '../types';
+import { ArrowLeft, MapPin, Phone, Share2, Star, Users, CheckCircle2, Grid3X3, Layers } from 'lucide-react';
+import { ClothPost, SellerCollection, User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
+import { storageService } from '../services/storage';
 
 interface SellerProfilePageProps {
   seller: User;
@@ -16,14 +17,20 @@ interface SellerProfilePageProps {
 
 export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, posts, featuredPostId, currentUser, isDarkMode, onBack, onShare, onToggleFollow }) => {
   const sellerPosts = useMemo(() => posts.filter(post => post.authorId === seller.id), [posts, seller.id]);
+  const [sellerCollections, setSellerCollections] = React.useState<SellerCollection[]>(() => storageService.getSellerCollections(seller.id));
   const collectionTags = useMemo(() => Array.from(new Set(sellerPosts.flatMap(post => post.tags))).slice(0, 6), [sellerPosts]);
   const averageRating = sellerPosts.reduce((total, post) => total + (post.rating || 0), 0) / Math.max(1, sellerPosts.filter(post => post.rating).length);
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm';
 
   useEffect(() => {
-    if (!featuredPostId || !sellerPosts.some(post => post.id === featuredPostId)) return;
-    window.setTimeout(() => document.getElementById(`collection-post-${featuredPostId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
-  }, [featuredPostId, sellerPosts]);
+    setSellerCollections(storageService.getSellerCollections(seller.id));
+    const handleCollectionsUpdate = () => setSellerCollections(storageService.getSellerCollections(seller.id));
+    window.addEventListener('atelier_collections_updated', handleCollectionsUpdate);
+    if (featuredPostId && sellerPosts.some(post => post.id === featuredPostId)) {
+      window.setTimeout(() => document.getElementById(`collection-post-${featuredPostId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+    }
+    return () => window.removeEventListener('atelier_collections_updated', handleCollectionsUpdate);
+  }, [featuredPostId, sellerPosts, seller.id]);
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
