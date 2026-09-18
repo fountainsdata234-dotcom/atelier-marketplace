@@ -3,6 +3,10 @@
     {
       "source": "/api/(.*)",
       "destination": "https://atelier-marketplace.onrender.com/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
