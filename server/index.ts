@@ -249,10 +249,15 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
   const updates = buildProfileUpdate(req.body || {});
   const uid = req.params.uid;
   const profileRef = firestore.collection('profiles').doc(uid);
+  const existingProfile = await profileRef.get();
+  const existingRole = existingProfile.data()?.role;
+  if (existingRole === 'admin' && req.authUser?.email?.trim().toLowerCase() !== 'fountainsdata234@gmail.com') {
+    res.status(403).json({ error: 'Only the Super Admin can change administrator access.' });
+    return;
+  }
 
   if (typeof req.body?.isBlocked === 'boolean' || typeof req.body?.isWarned === 'boolean' || typeof req.body?.warningNote === 'string') {
-    const targetSnapshot = await profileRef.get();
-    const targetRole = targetSnapshot.data()?.role;
+    const targetRole = existingRole;
     if (targetRole !== 'tailor' && targetRole !== 'fabric_seller') {
       res.status(403).json({ error: 'Customer accounts cannot be blocked or warned.' });
       return;
@@ -534,6 +539,41 @@ app.post('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) =>
   res.status(201).json({ id: created.id, ...message });
 });
 
+app.post('/api/admin/broadcast', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const target = ['all', 'sellers', 'buyers'].includes(String(req.body?.target)) ? String(req.body.target) : 'all';
+  const title = String(req.body?.title || '').trim().slice(0, 160);
+  const body = String(req.body?.body || '').trim().slice(0, 3000);
+  if (!title || !body) {
+    res.status(400).json({ error: 'Broadcast title and message are required.' });
+    return;
+  }
+  const profiles = await firestore.collection('profiles').limit(500).get();
+  const recipients = profiles.docs.filter(doc => {
+    const role = doc.data().role;
+    return target === 'all' || (target === 'sellers' && (role === 'tailor' || role === 'fabric_seller')) || (target === 'buyers' && role === 'buyer');
+  });
+  const batch = firestore.batch();
+  recipients.forEach(doc => {
+    const profile = doc.data();
+    const ref = firestore.collection('messages').doc();
+    batch.set(ref, {
+      senderId: req.authUser!.uid,
+      senderName: String(req.body?.sender || 'Atelier Administration').slice(0, 120),
+      senderRole: 'admin',
+      recipientId: doc.id,
+      recipientName: String(profile.name || profile.email || 'Atelier Member').slice(0, 120),
+      postId: '',
+      postTitle: title,
+      content: body,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      type: 'general',
+    });
+  });
+  await batch.commit();
+  res.status(201).json({ id: `broadcast-${Date.now()}`, sender: String(req.body?.sender || 'Atelier Administration'), target, title, body, createdAt: new Date().toISOString() });
+});
+
 app.post('/api/posts/:postId/like', requireAuth, async (req: AuthenticatedRequest, res) => {
   const postRef = firestore.collection('posts').doc(req.params.postId);
   const likeRef = postRef.collection('likes').doc(req.authUser!.uid);
@@ -654,7 +694,12 @@ app.post('/api/admin/users/:uid/block', requireAuth, requireAdmin, async (req: A
   const profileRef = firestore.collection('profiles').doc(req.params.uid);
   const profileSnapshot = await profileRef.get();
   const targetRole = profileSnapshot.data()?.role;
-  if (targetRole !== 'tailor' && targetRole !== 'fabric_seller') {
+  const isSuperAdmin = req.authUser?.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com';
+  if (targetRole === 'admin' && !isSuperAdmin) {
+    res.status(403).json({ error: 'Only the Super Admin can block an administrator.' });
+    return;
+  }
+  if (targetRole !== 'tailor' && targetRole !== 'fabric_seller' && targetRole !== 'admin') {
     res.status(403).json({ error: 'Customer accounts cannot be blocked.' });
     return;
   }

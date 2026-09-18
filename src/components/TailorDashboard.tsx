@@ -254,21 +254,15 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
           </div>
 
           <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Invoice snapshot</p>
-            <div className="mt-3 space-y-2 text-sm text-slate-700">
-              <div className="flex items-center justify-between">
-                <span>Studio plan</span>
-                <span className="font-semibold">Starter</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Due</span>
-                <span className="font-semibold">$0.00</span>
-              </div>
-              <div className="flex items-center justify-between border-t border-slate-200 pt-2">
-                <span className="font-semibold text-slate-900">Total</span>
-                <span className="font-bold text-slate-900">$0.00</span>
-              </div>
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Studio account</p><h3 className="mt-1 text-lg font-bold text-slate-900">Starter plan</h3></div>
+              <span className="rounded-full bg-emerald-100 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-700">Active</span>
             </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-slate-50 p-3"><span className="block text-[9px] uppercase tracking-[0.14em] text-slate-500">Current balance</span><strong className="mt-1 block text-xl text-slate-900">$0.00</strong></div>
+              <div className="rounded-xl bg-slate-50 p-3"><span className="block text-[9px] uppercase tracking-[0.14em] text-slate-500">Next invoice</span><strong className="mt-1 block text-sm text-slate-900">No payment due</strong></div>
+            </div>
+            <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-[10px] text-slate-500"><span>Billing status</span><span className="font-semibold text-slate-700">Up to date</span></div>
             {currentUser.isWarned && currentUser.warningNote && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-700"><strong className="block text-[10px] uppercase tracking-wider">Urgent account alert</strong><span className="mt-1 block leading-relaxed">{currentUser.warningNote}</span><button type="button" onClick={() => void acknowledgeWarning()} className="mt-3 rounded-lg bg-red-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-red-500">OK, I have read this</button></div>}
           </div>
         </div>

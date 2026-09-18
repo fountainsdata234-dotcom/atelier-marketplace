@@ -64,14 +64,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     try {
       const added = await api.addAdmin(newAdminEmail.trim().toLowerCase());
-      storageService.upsertUser({
+      const newAdmin = {
         ...added,
         followers: added.followers || [],
         isPromoted: added.isPromoted || false,
         isBlocked: added.isBlocked || false,
         createdAt: added.createdAt || new Date().toISOString(),
         role: 'admin',
-      });
+      } as User;
+      const existingUsers = storageService.getUsers();
+      storageService.saveUsers([...existingUsers.filter(user => user.id !== newAdmin.id), newAdmin]);
+      storageService.setCurrentUser(currentUser);
       setAdminStatus(`${added.email || newAdminEmail} is now an administrator.`);
       setNewAdminEmail('');
     } catch (error) {
@@ -92,6 +95,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           setAdminStatus(res.message);
         })
         .catch(error => setAdminStatus(error instanceof Error ? error.message : 'Administrator access could not be removed.'));
+    }
+  };
+
+  const handleToggleAdminBlock = async (admin: User) => {
+    if (!isSuperAdmin || admin.isSuperAdmin) return;
+    const blocked = !admin.isBlocked;
+    try {
+      await api.setUserBlocked(admin.id, blocked);
+      storageService.updateUser(admin.id, { isBlocked: blocked });
+      setAdminStatus(`${admin.name || admin.email} has been ${blocked ? 'blocked' : 'unblocked'}.`);
+    } catch (error) {
+      setAdminStatus(error instanceof Error ? error.message : 'Administrator access could not be updated.');
     }
   };
 
@@ -140,7 +155,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Send Broadcast
-  const handleSendBroadcast = (e: React.FormEvent) => {
+  const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastTitle.trim() || !broadcastBody.trim()) return;
 
@@ -150,6 +165,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       title: broadcastTitle.trim(),
       body: broadcastBody.trim()
     });
+
+    try {
+      await api.sendBroadcast({
+        sender: isSuperAdmin ? 'Super Administrator' : `${currentUser.name} (Admin)`,
+        target: broadcastTarget,
+        title: broadcastTitle.trim(),
+        body: broadcastBody.trim(),
+      });
+    } catch (error) {
+      setBroadcastSentMsg(error instanceof Error ? error.message : 'Broadcast saved locally but could not reach recipient inboxes.');
+      return;
+    }
 
     setBroadcastSentMsg(`Broadcast sent successfully to ${broadcastTarget.toUpperCase()}!`);
     setBroadcastTitle('');
@@ -726,7 +753,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="mb-6 pb-4 border-b border-neutral-800">
             <h2 className="text-xl font-serif font-bold">Administrator Roster & Roles</h2>
             <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Firebase administrators can moderate and broadcast. Only accounts with the Firebase admin claim can revoke secondary administrators.
+              Administrators can moderate sellers, manage posts, send messages, and broadcast notices. Only the Super Admin can remove administrators or change administrator access.
             </p>
           </div>
 
@@ -786,21 +813,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
 
-                  {/* Delete Admin Button (Only enabled for Super Admin) */}
+                  {/* Administrator controls are reserved for the Super Admin. */}
                   {!isPrimary && (
-                    <button
-                      onClick={() => handleDeleteAdmin(adm.id)}
-                      disabled={!isSuperAdmin}
-                      title={isSuperAdmin ? 'Remove administrator' : 'Only Super Admin can delete admins'}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                        isSuperAdmin
-                          ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500 hover:text-white cursor-pointer'
-                          : 'opacity-40 cursor-not-allowed bg-neutral-800 text-neutral-500'
-                      }`}
-                    >
-                      <UserX className="w-3.5 h-3.5" />
-                      <span>Remove</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => void handleToggleAdminBlock(adm)} disabled={!isSuperAdmin} title={isSuperAdmin ? 'Block administrator' : 'Only Super Admin can block admins'} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${isSuperAdmin ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : 'cursor-not-allowed border-neutral-800 bg-neutral-800 text-neutral-500 opacity-40'}`}>
+                        <Ban className="mr-1 inline h-3.5 w-3.5" />{adm.isBlocked ? 'Unblock' : 'Block'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAdmin(adm.id)}
+                        disabled={!isSuperAdmin}
+                        title={isSuperAdmin ? 'Remove administrator' : 'Only Super Admin can delete admins'}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-all ${isSuperAdmin ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500 hover:text-white cursor-pointer' : 'opacity-40 cursor-not-allowed bg-neutral-800 text-neutral-500'}`}
+                      >
+                        <UserX className="w-3.5 h-3.5" />
+                        <span>Remove</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               );
