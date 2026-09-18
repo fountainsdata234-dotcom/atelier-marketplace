@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Send, MessageSquare, Phone, User as UserIcon, Scissors, ArrowLeft, Check, CheckCheck } from 'lucide-react';
+import { X, Send, MessageSquare, Phone, User as UserIcon, Scissors, ArrowLeft, Check, CheckCheck, Megaphone } from 'lucide-react';
 import { User, DirectMessage, ClothPost } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -23,6 +23,7 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [activePartner, setActivePartner] = useState<User | null>(initialRecipient || null);
   const [inputText, setInputText] = useState('');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'announcements'>('conversations');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Load all user conversations
@@ -39,12 +40,21 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
     }).catch(error => console.error('Messages unavailable', error));
   }, []);
 
-  // Build the available conversation partner list from all registered users so
-  // admins and buyers can message any seller/customer immediately, even before a
-  // conversation thread already exists.
+  const announcementMessages = allMessages.filter(message => message.recipientId === currentUser.id && (message.type === 'general' || message.senderId === 'atelier-system'));
+  const conversationPartnerIds = new Set(allMessages
+    .filter(message => message.type !== 'general' && message.senderId !== 'atelier-system')
+    .flatMap(message => [message.senderId, message.recipientId])
+    .filter(id => id !== currentUser.id));
+  const latestMessageByPartner = new Map<string, string>();
+  allMessages.forEach(message => {
+    if (message.type === 'general' || message.senderId === 'atelier-system') return;
+    const partnerId = message.senderId === currentUser.id ? message.recipientId : message.senderId;
+    const currentLatest = latestMessageByPartner.get(partnerId) || '';
+    if (message.timestamp > currentLatest) latestMessageByPartner.set(partnerId, message.timestamp);
+  });
   const conversationPartners = allUsers
-    .filter(u => u.id !== currentUser.id)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter(u => u.id !== currentUser.id && conversationPartnerIds.has(u.id))
+    .sort((a, b) => (latestMessageByPartner.get(b.id) || '').localeCompare(latestMessageByPartner.get(a.id) || ''));
 
   // If initial recipient is supplied, keep it pinned to the top of the list.
   if (initialRecipient) {
@@ -67,10 +77,10 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
 
   // Set default partner if none
   useEffect(() => {
-    if (!activePartner && conversationPartners.length > 0) {
+    if (!activePartner && conversationPartners.length > 0 && activeTab === 'conversations') {
       setActivePartner(conversationPartners[0]);
     }
-  }, [conversationPartners.length]);
+  }, [conversationPartners.length, activeTab]);
 
   // Auto scroll
   useEffect(() => {
@@ -131,10 +141,23 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
             </button>
           </div>
 
+          <div className="grid grid-cols-2 gap-1 border-b border-neutral-800/60 p-2">
+            <button type="button" onClick={() => { setActiveTab('conversations'); setActivePartner(null); }} className={`rounded-xl px-2 py-2 text-[10px] font-bold uppercase tracking-wider ${activeTab === 'conversations' ? 'bg-amber-500/15 text-amber-300' : 'text-neutral-400 hover:bg-neutral-800/40'}`}>Conversations</button>
+            <button type="button" onClick={() => { setActiveTab('announcements'); setActivePartner(null); }} className={`relative rounded-xl px-2 py-2 text-[10px] font-bold uppercase tracking-wider ${activeTab === 'announcements' ? 'bg-amber-500/15 text-amber-300' : 'text-neutral-400 hover:bg-neutral-800/40'}`}><Megaphone className="mr-1 inline h-3 w-3" />Announcements{announcementMessages.some(message => !message.isRead) && <span className="absolute right-2 top-1.5 h-2 w-2 rounded-full bg-amber-400" />}</button>
+          </div>
+
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {conversationPartners.length === 0 ? (
+            {activeTab === 'announcements' ? announcementMessages.length === 0 ? (
+              <div className="p-6 text-center text-xs text-neutral-400">No announcements yet.</div>
+            ) : announcementMessages.map(message => (
+              <article key={message.id} className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
+                <div className="flex items-center gap-2 text-amber-300"><Megaphone className="h-4 w-4" /><strong className="text-xs">{message.postTitle || 'Atelier announcement'}</strong></div>
+                <p className="mt-2 text-xs leading-relaxed text-neutral-300">{message.content}</p>
+                <p className="mt-2 text-[10px] text-neutral-500">From {message.senderName} · {new Date(message.timestamp).toLocaleDateString()}</p>
+              </article>
+            )) : conversationPartners.length === 0 ? (
               <div className="p-6 text-center text-xs text-neutral-400">
-                No active conversations yet. Inquire about any bespoke design in the marketplace to start chatting!
+                No conversations yet. Inquire about a seller’s work to start chatting.
               </div>
             ) : (
               conversationPartners.map((partner) => {
@@ -166,7 +189,7 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
         </div>
 
         {/* Right: Active Chat Area */}
-        {activePartner ? (
+        {activePartner && activeTab === 'conversations' ? (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             {/* Chat Header */}
             <div className="p-4 border-b border-neutral-800/60 flex items-center justify-between gap-3">

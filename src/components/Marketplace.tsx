@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
@@ -18,6 +19,7 @@ interface MarketplaceProps {
   onSharePost: (post: ClothPost) => void;
   onShareTailorProfile: (user: User) => void;
   onToggleFollow: (user: User) => void;
+  onSelectSeller: (user: User) => void;
   isDarkMode: boolean;
 }
 
@@ -31,6 +33,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onSharePost,
   onShareTailorProfile,
   onToggleFollow,
+  onSelectSeller,
   isDarkMode
 }) => {
   // Search & Filter States
@@ -46,6 +49,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         authorHandle: author?.handle || post.authorHandle || '@atelier_member',
         authorAvatar: author?.avatarUrl || post.authorAvatar,
         authorLocation: author?.location || post.authorLocation || { country: '', state: '', city: '' },
+        isPromoted: author?.isPromoted || post.isPromoted,
         tags: Array.isArray(post.tags) ? post.tags : [],
         likes: Array.isArray(post.likes) ? post.likes : [],
         saves: Array.isArray(post.saves) ? post.saves : [],
@@ -438,7 +442,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 <button
                   key={`${suggestion.type}-${suggestion.label}`}
                   type="button"
-                  onMouseDown={() => setSearchQuery(suggestion.label)}
+                  onMouseDown={() => {
+                    if (suggestion.user) onSelectSeller(suggestion.user);
+                    else setSearchQuery(suggestion.label);
+                  }}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs hover:bg-amber-500/10"
                 >
                   {suggestion.user?.avatarUrl ? <img src={suggestion.user.avatarUrl} alt="" className="h-9 w-9 rounded-lg object-cover" /> : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span> : suggestion.post ? <img src={suggestion.post.imageUrl} alt="" className="h-9 w-9 rounded-lg object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
@@ -848,7 +855,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   isDarkMode
                     ? 'bg-[#121316] border-neutral-800/90 hover:border-amber-500/40'
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
-                } ${post.isPromoted ? 'ring-1 ring-amber-500/50 shadow-[0_0_0_1px_rgba(251,191,36,0.18),0_20px_40px_rgba(251,191,36,0.12)]' : ''}`}
+                } ${post.isPromoted ? 'border-amber-400/70 ring-2 ring-amber-500/50 shadow-[0_0_0_1px_rgba(251,191,36,0.22),0_24px_55px_rgba(251,191,36,0.16)]' : ''}`}
               >
                 {/* Post Header: Tailor Handle, Location & Promoted Symbol */}
                 <div className="p-3 flex items-center justify-between border-b border-neutral-800/40">

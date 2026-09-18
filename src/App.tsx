@@ -517,6 +517,11 @@ export default function App() {
                 onSharePost={handleSharePost}
                 onShareTailorProfile={handleShareTailorProfile}
                 onToggleFollow={handleToggleFollow}
+                onSelectSeller={(seller) => {
+                  setSharedSeller(seller);
+                  setSharedPostId(null);
+                  setCurrentView('seller');
+                }}
                 isDarkMode={isDarkMode}
               />
             </motion.div>
