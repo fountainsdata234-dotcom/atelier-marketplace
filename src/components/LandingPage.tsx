@@ -93,7 +93,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
 
                     <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
-                      <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=900&q=85" alt="Richly textured indigo cloth folded in an atelier" className="h-full w-full object-cover transition duration-700 hover:scale-105" referrerPolicy="no-referrer" />
+                      <img src="https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=900&q=75" alt="Rows of richly textured garments and cloth in a fashion atelier" className="h-full w-full object-cover transition duration-700 hover:scale-105" referrerPolicy="no-referrer" fetchPriority="high" />
                       <div className="absolute inset-x-3 bottom-3 rounded-xl border border-white/20 bg-black/35 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm">Textiles with a point of view</div>
                     </div>
                   </div>

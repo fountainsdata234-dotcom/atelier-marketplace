@@ -16,6 +16,7 @@ import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
 import { Footer } from './components/Footer';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { ContentSkeleton } from './components/ContentSkeleton';
 import { LegalPage } from './components/LegalPage';
 import { SellerProfilePage } from './components/SellerProfilePage';
 const CollectionPage = lazy(() => import('./components/CollectionPage').then(module => ({ default: module.CollectionPage })));
@@ -28,7 +29,7 @@ import { getHandleSlug } from './utils/profile';
 export default function App() {
   const publicSellerRoute = /^\/@[^/]+(?:\/post\/[^/]+)?$/i.test(window.location.pathname) || Boolean(new URLSearchParams(window.location.search).get('seller'));
   // Intro Loading animation state
-  const [showIntro, setShowIntro] = useState<boolean>(true);
+  const [showIntro, setShowIntro] = useState<boolean>(() => sessionStorage.getItem('fabrilux_intro_seen') !== '1');
   const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -41,7 +42,8 @@ export default function App() {
   });
 
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
-  const [currentView, setCurrentView] = useState<string>('landing');
+  const [currentView, setCurrentView] = useState<string>(() => sessionStorage.getItem('fabrilux_active_view') || 'landing');
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const [sharedSeller, setSharedSeller] = useState<User | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
 
@@ -239,6 +241,7 @@ export default function App() {
   };
 
   const refreshAllData = async () => {
+    setIsDataLoading(true);
     const localUsers = storageService.getUsers();
     const localPosts = storageService.getPosts();
     setCurrentUser(storageService.getCurrentUser());
@@ -307,6 +310,8 @@ export default function App() {
       }
     } catch (error) {
       console.error('Remote marketplace data unavailable', error);
+    } finally {
+      setIsDataLoading(false);
     }
   };
 
@@ -323,6 +328,10 @@ export default function App() {
       document.body.classList.remove('bg-[#0c0d10]', 'text-[#f4f4f6]');
     }
   };
+
+  useEffect(() => {
+    sessionStorage.setItem('fabrilux_active_view', currentView);
+  }, [currentView]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -482,7 +491,7 @@ export default function App() {
 
       {/* 5. Main View Content */}
       <main className="min-w-0 flex-1 pb-24 lg:pb-8">
-        <Suspense fallback={<div className="flex min-h-[45vh] items-center justify-center text-xs uppercase tracking-[0.2em] text-amber-500">Loading Atelier...</div>}>
+        {isDataLoading ? <ContentSkeleton isDarkMode={isDarkMode} /> : <Suspense fallback={<ContentSkeleton isDarkMode={isDarkMode} />}>
           <AnimatePresence mode="wait">
           {currentView === 'landing' && (
             <motion.div
@@ -640,7 +649,7 @@ export default function App() {
             <LegalPage page={currentView} isDarkMode={isDarkMode} onBack={() => setCurrentView(currentUser ? 'marketplace' : 'landing')} />
           )}
           </AnimatePresence>
-        </Suspense>
+        </Suspense>}
       </main>
 
       <Footer isDarkMode={isDarkMode} onNavigate={setCurrentView} />

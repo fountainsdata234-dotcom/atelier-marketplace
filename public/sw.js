@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabrilux-atelier-v4';
+const CACHE_NAME = 'fabrilux-atelier-v5';
 const OFFLINE_URLS = ['/index.html', '/logo.png', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -40,9 +40,7 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      return fetch(event.request)
+      const networkRequest = fetch(event.request)
         .then((networkResponse) => {
           if (!networkResponse.ok) return networkResponse;
           const responseClone = networkResponse.clone();
@@ -50,6 +48,7 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => caches.match('/index.html'));
+      return cachedResponse || networkRequest;
     })
   );
 });
