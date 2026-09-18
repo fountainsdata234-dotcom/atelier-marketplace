@@ -61,7 +61,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
     if (cached) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cached }));
     try {
       const saved = await api.saveProfile(updates);
-      const synced = storageService.updateUser(currentUser.id, saved || updates);
+      const synced = storageService.updateUser(currentUser.id, { ...updates, ...(saved || {}) });
       if (synced) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: synced }));
       setStatus('Profile saved successfully.');
     } catch {

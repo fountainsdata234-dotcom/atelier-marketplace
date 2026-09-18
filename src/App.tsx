@@ -22,6 +22,7 @@ const ProfilePage = lazy(() => import('./components/ProfilePage').then(module =>
 const ArtisanDirectory = lazy(() => import('./components/ArtisanDirectory').then(module => ({ default: module.ArtisanDirectory })));
 import { configureFirebaseAuth, logoutFromFirebase, subscribeToFirebaseAuth, toAppUser } from './services/firebase';
 import { api } from './services/api';
+import { getHandleSlug } from './utils/profile';
 
 export default function App() {
   // Intro Loading animation state
@@ -40,6 +41,7 @@ export default function App() {
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>('landing');
   const [sharedSeller, setSharedSeller] = useState<User | null>(null);
+  const [sharedPostId, setSharedPostId] = useState<string | null>(null);
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -61,6 +63,7 @@ export default function App() {
   const [socialShareOpen, setSocialShareOpen] = useState(false);
   const [socialShareHandle, setSocialShareHandle] = useState('');
   const [socialShareName, setSocialShareName] = useState('');
+  const [socialShareUrl, setSocialShareUrl] = useState('');
 
   // Save Picture / Full-Res Modal
   const [savePictureOpen, setSavePictureOpen] = useState(false);
@@ -111,10 +114,26 @@ export default function App() {
         }
         const baseUser = await toAppUser(firebaseUser);
         const savedProfile = await api.getProfile().catch(() => undefined);
+        const cachedProfile = storageService.getUsers().find(user => user.id === firebaseUser.uid);
+        const profileValue = <T,>(key: keyof User, fallback: T): T => {
+          const remoteValue = savedProfile?.[key] as T | undefined;
+          const cachedValue = cachedProfile?.[key] as T | undefined;
+          if (remoteValue !== undefined && remoteValue !== null && remoteValue !== '') return remoteValue;
+          if (cachedValue !== undefined && cachedValue !== null && cachedValue !== '') return cachedValue;
+          return fallback;
+        };
         const savedRole = savedProfile?.role;
         const mergedUser = {
           ...baseUser,
           ...savedProfile,
+          name: profileValue('name', baseUser.name),
+          handle: profileValue('handle', baseUser.handle),
+          phone: profileValue('phone', baseUser.phone),
+          bio: profileValue('bio', baseUser.bio || ''),
+          avatarUrl: profileValue('avatarUrl', baseUser.avatarUrl),
+          shopName: profileValue('shopName', baseUser.shopName || ''),
+          location: profileValue('location', baseUser.location),
+          followers: profileValue('followers', baseUser.followers),
           id: firebaseUser.uid,
           email: firebaseUser.email || baseUser.email,
           role: baseUser.role === 'admin' ? 'admin' : (savedRole || baseUser.role),
@@ -168,11 +187,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handle = new URLSearchParams(window.location.search).get('seller')?.trim().toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    const legacyHandle = params.get('seller')?.trim().toLowerCase();
+    const pathMatch = window.location.pathname.match(/^\/@([^/]+)(?:\/post\/([^/]+))?$/i);
+    const handle = (pathMatch?.[1] || legacyHandle || '').replace(/^@/, '').toLowerCase();
+    const pathPostId = pathMatch?.[2] || params.get('post');
     if (!handle || users.length === 0) return;
     const seller = users.find(user => user.handle.replace(/^@/, '').toLowerCase() === handle);
     if (seller && (seller.role === 'tailor' || seller.role === 'fabric_seller')) {
       setSharedSeller(seller);
+      setSharedPostId(pathPostId || null);
       setCurrentView('seller');
     }
   }, [users]);
@@ -207,8 +231,25 @@ export default function App() {
       const remotePlans = results[2].status === 'fulfilled' ? results[2].value : null;
 
       if (remoteUsers) {
-        storageService.saveUsers(remoteUsers);
-        setUsers(remoteUsers);
+        const localUsers = storageService.getUsers();
+        const mergedUsers = remoteUsers.map(remoteUser => {
+          const localUser = localUsers.find(user => user.id === remoteUser.id);
+          if (!localUser) return remoteUser;
+          return {
+            ...localUser,
+            ...remoteUser,
+            name: remoteUser.name || localUser.name,
+            handle: remoteUser.handle || localUser.handle,
+            bio: remoteUser.bio || localUser.bio || '',
+            avatarUrl: remoteUser.avatarUrl || localUser.avatarUrl,
+            shopName: remoteUser.shopName || localUser.shopName,
+            phone: remoteUser.phone || localUser.phone,
+            location: remoteUser.location?.country || remoteUser.location?.city ? remoteUser.location : localUser.location,
+            followers: Array.isArray(remoteUser.followers) && remoteUser.followers.length > 0 ? remoteUser.followers : localUser.followers,
+          };
+        });
+        storageService.saveUsers(mergedUsers);
+        setUsers(mergedUsers);
       }
 
       // An empty array is a valid authoritative response: it must clear stale local posts.
@@ -319,7 +360,9 @@ export default function App() {
   // Trigger Social Share Modal
   const handleShareTailorProfile = (tailor: User) => {
     setSocialShareHandle(tailor.handle);
-    setSocialShareName(tailor.shopName || tailor.name);
+    setSocialShareName(tailor.name);
+    setSharedPostId(null);
+    setSocialShareUrl(`${window.location.origin}/@${getHandleSlug(tailor.handle)}`);
     setSocialShareOpen(true);
   };
 
@@ -343,15 +386,16 @@ export default function App() {
     }
   };
 
-  const sharedProfileUrl = socialShareHandle
-    ? `${window.location.origin}/?seller=${encodeURIComponent(socialShareHandle.replace(/^@/, ''))}`
-    : window.location.origin;
+  const sharedProfileUrl = socialShareUrl || (socialShareHandle
+    ? `${window.location.origin}/@${getHandleSlug(socialShareHandle)}`
+    : window.location.origin);
 
   const handleSharePost = (post: ClothPost) => {
     storageService.recordDiscoveryEvent(post.id, 'SHARE', currentUser?.id);
     if (currentUser) void api.recordDiscoveryEvent(post.id, 'SHARE', sessionStorage.getItem('atelier_session_id') || 'app-session');
     setSocialShareHandle(post.authorHandle);
     setSocialShareName(`${post.title} by ${post.authorName}`);
+    setSocialShareUrl(`${window.location.origin}/@${getHandleSlug(post.authorHandle)}/post/${encodeURIComponent(post.id)}`);
     setSocialShareOpen(true);
   };
 
@@ -492,7 +536,7 @@ export default function App() {
           )}
 
           {currentView === 'seller' && sharedSeller && (
-            <SellerProfilePage seller={sharedSeller} posts={posts} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => setCurrentView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} />
+            <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => setCurrentView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} />
           )}
 
           {currentView === 'dashboard' && currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') && (
@@ -510,6 +554,7 @@ export default function App() {
                 onOpenSocialShare={(handle, name) => {
                   setSocialShareHandle(handle);
                   setSocialShareName(name);
+                  setSocialShareUrl(`${window.location.origin}/@${getHandleSlug(handle)}`);
                   setSocialShareOpen(true);
                 }}
                 isDarkMode={isDarkMode}

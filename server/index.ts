@@ -311,7 +311,7 @@ app.delete('/api/admin/admins/:uid', requireAuth, requireSuperAdmin, async (req:
 });
 
 app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
-  const profile = cleanProfile(req.body || {}, req.authUser?.admin === true);
+  const profile = buildProfileUpdate(req.body || {});
   await firestore.collection('profiles').doc(req.authUser!.uid).set({
     ...profile,
     id: req.authUser!.uid,

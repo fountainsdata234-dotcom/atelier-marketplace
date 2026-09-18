@@ -13,3 +13,7 @@ export function getRoleLabel(role: UserRole): string {
   if (role === 'admin') return 'Administrator';
   return 'Buyer';
 }
+
+export function getHandleSlug(handle: string): string {
+  return handle.replace(/^@/, '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+}

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ArrowLeft, MapPin, Phone, Share2, Star, Users } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
@@ -6,6 +6,7 @@ import { getProfileInitials, getRoleLabel } from '../utils/profile';
 interface SellerProfilePageProps {
   seller: User;
   posts: ClothPost[];
+  featuredPostId?: string | null;
   currentUser: User | null;
   isDarkMode: boolean;
   onBack: () => void;
@@ -13,10 +14,15 @@ interface SellerProfilePageProps {
   onToggleFollow: (seller: User) => void;
 }
 
-export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, posts, currentUser, isDarkMode, onBack, onShare, onToggleFollow }) => {
+export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, posts, featuredPostId, currentUser, isDarkMode, onBack, onShare, onToggleFollow }) => {
   const sellerPosts = useMemo(() => posts.filter(post => post.authorId === seller.id), [posts, seller.id]);
   const averageRating = sellerPosts.reduce((total, post) => total + (post.rating || 0), 0) / Math.max(1, sellerPosts.filter(post => post.rating).length);
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm';
+
+  useEffect(() => {
+    if (!featuredPostId || !sellerPosts.some(post => post.id === featuredPostId)) return;
+    window.setTimeout(() => document.getElementById(`collection-post-${featuredPostId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+  }, [featuredPostId, sellerPosts]);
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
@@ -33,7 +39,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
           {seller.bio && <p className="relative mt-6 max-w-2xl text-sm leading-relaxed text-neutral-200">{seller.bio}</p>}
           <div className="relative mt-6 flex flex-wrap gap-3 text-xs text-neutral-200"><span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-amber-300" />{seller.location.city}, {seller.location.country}</span><span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-amber-300" />{Array.isArray(seller.followers) ? seller.followers.length : 0} followers</span><span className="inline-flex items-center gap-1.5"><Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />{averageRating ? averageRating.toFixed(1) : 'New'} rating</span>{seller.whatsappNumber && <a href={`https://wa.me/${seller.whatsappNumber.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-emerald-300"><Phone className="h-3.5 w-3.5" /> WhatsApp</a>}</div>
         </div>
-        <div className="p-5 sm:p-8"><div className="mb-6 flex flex-col gap-2 border-b border-neutral-800/70 pb-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Seller collection</p><h2 className="mt-1 text-2xl font-serif font-bold">{seller.name}'s collection</h2><p className="mt-1 max-w-xl text-xs text-neutral-400">A considered edit of garments and materials published by this {getRoleLabel(seller.role).toLowerCase()}.</p></div><span className="text-xs text-neutral-400">{sellerPosts.length} piece{sellerPosts.length === 1 ? '' : 's'} available</span></div>{sellerPosts.length === 0 ? <p className="rounded-2xl border border-dashed border-neutral-700 p-8 text-center text-xs text-neutral-400">This seller has not published a collection yet.</p> : <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{sellerPosts.map(post => <article key={post.id} className={`overflow-hidden rounded-2xl border ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}><img src={post.imageUrl} alt={post.title} className="aspect-[4/3] w-full object-cover" /><div className="p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">{post.tags[0] || getRoleLabel(seller.role)}</p><h3 className="mt-1 font-serif text-lg font-bold">{post.title}</h3><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{post.description}</p><div className="mt-3 flex items-center justify-between text-[10px] text-neutral-400"><span>{post.likes?.length || 0} likes</span><span>{post.saves?.length || 0} saves</span><span>{post.rating ? `${post.rating.toFixed(1)} rating` : 'New'}</span></div></div></article>)}</div>}</div>
+        <div className="p-5 sm:p-8"><div className="mb-6 flex flex-col gap-2 border-b border-neutral-800/70 pb-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Seller collection</p><h2 className="mt-1 text-2xl font-serif font-bold">{seller.name}'s collection</h2><p className="mt-1 max-w-xl text-xs text-neutral-400">A considered edit of garments and materials published by this {getRoleLabel(seller.role).toLowerCase()}.</p></div><span className="text-xs text-neutral-400">{sellerPosts.length} piece{sellerPosts.length === 1 ? '' : 's'} available</span></div>{sellerPosts.length === 0 ? <p className="rounded-2xl border border-dashed border-neutral-700 p-8 text-center text-xs text-neutral-400">This seller has not published a collection yet.</p> : <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{sellerPosts.map(post => <article id={`collection-post-${post.id}`} key={post.id} className={`overflow-hidden rounded-2xl border transition ${featuredPostId === post.id ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-xl shadow-amber-500/20' : isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}><img src={post.imageUrl} alt={post.title} className="aspect-[4/3] w-full object-cover" /><div className="p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">{post.tags[0] || getRoleLabel(seller.role)}</p><h3 className="mt-1 font-serif text-lg font-bold">{post.title}</h3><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{post.description}</p><div className="mt-3 flex items-center justify-between text-[10px] text-neutral-400"><span>{post.likes?.length || 0} likes</span><span>{post.saves?.length || 0} saves</span><span>{post.rating ? `${post.rating.toFixed(1)} rating` : 'New'}</span></div></div></article>)}</div>}</div>
       </section>
     </main>
   );
