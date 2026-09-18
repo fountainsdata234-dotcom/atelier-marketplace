@@ -906,7 +906,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Garment Image with High-Res Zoom / Save */}
-                <div className={`feed-card-image relative aspect-[4/4.8] w-full bg-neutral-900 overflow-hidden group/img ${post.isPromoted ? 'p-2 border-[3px] border-amber-500/60 bg-gradient-to-br from-amber-500/10 via-transparent to-amber-500/20 rounded-[1.5rem]' : ''}`}>
+                <div className={`feed-card-image relative aspect-[4/3.25] w-full bg-neutral-900 overflow-hidden group/img ${post.isPromoted ? 'p-2 border-[3px] border-amber-500/60 bg-gradient-to-br from-amber-500/10 via-transparent to-amber-500/20 rounded-[1.5rem]' : ''}`}>
                   <img
                     src={post.imageUrl}
                     alt={post.title}

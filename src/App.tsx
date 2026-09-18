@@ -239,8 +239,8 @@ export default function App() {
     if (result.outcome === 'accepted') setInstallPrompt(null);
   };
 
-  const refreshAllData = async () => {
-    setIsDataLoading(true);
+  const refreshAllData = async (showLoader = true) => {
+    if (showLoader) setIsDataLoading(true);
     const localUsers = storageService.getUsers();
     const localPosts = storageService.getPosts();
     setCurrentUser(storageService.getCurrentUser());
@@ -310,9 +310,14 @@ export default function App() {
     } catch (error) {
       console.error('Remote marketplace data unavailable', error);
     } finally {
-      setIsDataLoading(false);
+      if (showLoader) setIsDataLoading(false);
     }
   };
+
+  useEffect(() => {
+    const refreshTimer = window.setInterval(() => void refreshAllData(false), 60_000);
+    return () => window.clearInterval(refreshTimer);
+  }, []);
 
   // Toggle Theme
   const handleToggleTheme = () => {
@@ -473,6 +478,8 @@ export default function App() {
         isOnline={isOnline}
         canInstall={Boolean(installPrompt)}
         onInstall={handleInstallApp}
+        onRefresh={() => { setIsRefreshing(true); void refreshAllData(false).finally(() => setIsRefreshing(false)); }}
+        isRefreshing={isRefreshing}
         unreadCount={unreadCount}
       />
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X } from 'lucide-react';
+import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -14,6 +14,8 @@ interface NavbarProps {
   isOnline: boolean;
   canInstall: boolean;
   onInstall: () => void;
+  onRefresh: () => void;
+  isRefreshing?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -27,7 +29,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   unreadCount = 0,
   isOnline,
   canInstall,
-  onInstall
+  onInstall,
+  onRefresh,
+  isRefreshing = false
 }) => {
   const isSeller = currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -53,7 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <img
             src="/logo.png"
             alt="Fabrilux Atelier logo"
-            className="h-10 w-10 rounded-xl object-cover shadow-md shadow-amber-500/20 ring-1 ring-white/40 transition-transform duration-200 group-hover:scale-105"
+            className="h-10 w-10 rounded-xl object-cover shadow-md shadow-amber-500/20 transition-transform duration-200 group-hover:scale-105"
           />
           <div>
             <span className="brand-wordmark relative block text-base font-black leading-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-400 sm:text-xl">
@@ -197,6 +201,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Download className="h-3.5 w-3.5" /> Install
             </button>
           )}
+          <button type="button" onClick={onRefresh} disabled={isRefreshing} aria-label="Refresh marketplace" title="Refresh marketplace" className="rounded-xl border border-neutral-700/50 p-2 text-neutral-400 transition hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
           {/* Dark/Light Mode Toggle */}
           <button
             onClick={onToggleTheme}
@@ -284,6 +291,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}
             </div>
             <div className="mt-2 flex items-center gap-2 border-t border-neutral-800 pt-2">
+              <button type="button" onClick={() => { setMobileMenuOpen(false); onRefresh(); }} disabled={isRefreshing} className="mobile-nav-item flex-1"><RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />Refresh</button>
               <button type="button" onClick={onToggleTheme} className="mobile-nav-item flex-1"><span>{isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}Theme</span></button>
               {currentUser ? <button type="button" onClick={() => { setMobileMenuOpen(false); onLogout(); }} className="mobile-nav-item flex-1 text-red-300"><LogOut className="h-4 w-4" />Logout</button> : <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item flex-1 text-amber-300">Sign in</button>}
             </div>
