@@ -6,6 +6,7 @@ import { compressAndGenerateImageLink, validateImageLink, ProcessedImageResult }
 import { storageService } from '../services/storage';
 import { firebaseAuth, uploadUserImage } from '../services/firebase';
 import { api } from '../services/api';
+import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 interface TailorDashboardProps {
   currentUser: User;
@@ -232,7 +233,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   };
 
   return (
-    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+    <div className="relative z-10 flex w-full max-w-7xl flex-col mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       <div className="glass-panel overflow-hidden rounded-[28px] p-4 sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
@@ -282,8 +283,8 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-start gap-4">
             <div className="relative">
-              <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-serif text-2xl font-bold text-amber-400">
-                {currentUser.name.charAt(0)}
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 border border-amber-300/60 flex items-center justify-center font-serif text-2xl font-bold text-neutral-950 overflow-hidden">
+                {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt={currentUser.name} className="h-full w-full object-cover" /> : getProfileInitials(currentUser.name)}
               </div>
               {currentUser.isPromoted && (
                 <div
@@ -299,7 +300,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl sm:text-3xl font-serif font-bold">
-                  {currentUser.shopName || currentUser.name}
+                  {currentUser.name}
                 </h1>
                 {currentUser.isPromoted && (
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
@@ -308,6 +309,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 )}
               </div>
 
+              <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-400">{getRoleLabel(currentUser.role)}</div>
               <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-400 mt-1 font-mono">
                 <span className="text-amber-400 font-semibold">{currentUser.handle}</span>
                 <span>•</span>
@@ -397,7 +399,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       </section>
 
       {/* Promotion & Premium Plans Section (Requested 3 Admin Cards) */}
-      <section className="space-y-4">
+      <section className="order-1 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -467,7 +469,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       </section>
 
       {/* Create New Post Form */}
-      <section className={`p-6 sm:p-8 rounded-3xl border transition-colors ${
+      <section className={`order-0 p-6 sm:p-8 rounded-3xl border transition-colors ${
         isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'
       }`}>
         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-neutral-800">
@@ -701,7 +703,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       </section>
 
       {/* My Published Posts List */}
-      <section className="space-y-4">
+      <section className="order-2 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-serif font-bold">
             Published Atelier Designs ({myPosts.length})

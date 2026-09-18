@@ -227,8 +227,12 @@ export default function App() {
         setPosts(normalizedPosts);
       }
       if (remotePlans !== null && remotePlans.length > 0) {
-        storageService.savePromoPlans(remotePlans);
-        setPromoPlans(remotePlans);
+        const localPlans = storageService.getPromoPlans();
+        const completePlans = [0, 1, 2]
+          .map(index => remotePlans[index] || localPlans[index])
+          .filter((plan): plan is AdminPromoPlan => Boolean(plan));
+        storageService.savePromoPlans(completePlans);
+        setPromoPlans(completePlans);
       }
     } catch (error) {
       console.error('Remote marketplace data unavailable', error);
@@ -323,6 +327,12 @@ export default function App() {
     if (!currentUser) {
       handleOpenAuthWithRole('buyer');
       return;
+    }
+    storageService.toggleFollowUser(seller.id, currentUser.id);
+    const locallyUpdated = storageService.getUsers().find(user => user.id === seller.id);
+    if (locallyUpdated) {
+      setUsers(storageService.getUsers());
+      setSharedSeller(locallyUpdated);
     }
     const result = await api.toggleFollow(seller.id).catch(() => null);
     if (!result) return;
@@ -432,6 +442,7 @@ export default function App() {
                 onSaveImageToViewer={handleSaveImageToViewer}
                 onSharePost={handleSharePost}
                 onShareTailorProfile={handleShareTailorProfile}
+                onToggleFollow={handleToggleFollow}
                 isDarkMode={isDarkMode}
               />
             </motion.div>
@@ -449,6 +460,11 @@ export default function App() {
                 users={users}
                 posts={posts}
                 currentUser={currentUser}
+                onSelectArtisan={(artisan) => {
+                  setSharedSeller(artisan);
+                  setCurrentView('seller');
+                }}
+                onToggleFollow={handleToggleFollow}
                 isDarkMode={isDarkMode}
               />
             </motion.div>

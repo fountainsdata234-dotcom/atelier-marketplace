@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Bookmark, LogOut, Save, UserRound } from 'lucide-react';
+import { AlertTriangle, Bookmark, Camera, LogOut, Save, UserRound } from 'lucide-react';
 import { User } from '../types';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
+import { firebaseAuth, uploadUserImage } from '../services/firebase';
+import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 interface ProfilePageProps {
   currentUser: User;
@@ -19,6 +21,24 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
     bio: currentUser.bio || '',
   });
   const [status, setStatus] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !firebaseAuth.currentUser) return;
+    setIsUploadingAvatar(true);
+    setStatus(null);
+    try {
+      const uploadedUrl = await uploadUserImage(file, firebaseAuth.currentUser.uid, 'profiles', `avatar-${Date.now()}.jpg`);
+      setAvatarUrl(uploadedUrl);
+      setStatus('Profile picture ready. Save your profile to publish it.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Profile picture upload failed.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
 
   const acknowledgeWarning = async () => {
     const cleared = storageService.updateUser(currentUser.id, { isWarned: false, warningNote: '' });
@@ -32,7 +52,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
 
   const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
-    const updates = { ...form, name: form.name.trim(), handle: form.handle.trim(), phone: form.phone.trim(), bio: form.bio.trim() };
+    const updates = { ...form, avatarUrl, name: form.name.trim(), handle: form.handle.trim(), phone: form.phone.trim(), bio: form.bio.trim() };
     if (!updates.name || !updates.handle) {
       setStatus('Name and handle are required.');
       return;
@@ -40,7 +60,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
     const cached = storageService.updateUser(currentUser.id, updates);
     if (cached) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cached }));
     try {
-      await api.saveProfile(updates);
+      const saved = await api.saveProfile(updates);
+      const synced = storageService.updateUser(currentUser.id, saved || updates);
+      if (synced) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: synced }));
       setStatus('Profile saved successfully.');
     } catch {
       setStatus('Saved on this device. It will sync when you reconnect.');
@@ -54,8 +76,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
       <div className={`rounded-3xl border p-5 sm:p-8 ${surface}`}>
         <div className="flex flex-col gap-5 border-b border-neutral-800/60 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt="" className="h-16 w-16 rounded-2xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/15 text-xl font-bold text-amber-400"><UserRound /></div>}
-            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Your profile</p><h1 className="mt-1 text-2xl font-serif font-bold sm:text-3xl">{currentUser.name}</h1><p className="text-xs text-neutral-400">{currentUser.email} · {currentUser.role.replace('_', ' ')}</p></div>
+            <div className="relative">
+              {avatarUrl ? <img src={avatarUrl} alt="Profile" className="h-16 w-16 rounded-2xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-xl font-black text-neutral-950">{getProfileInitials(form.name || currentUser.name)}</div>}
+              <label className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-amber-300 bg-amber-400 text-neutral-950 shadow-lg" title="Change profile picture">
+                <Camera className="h-4 w-4" />
+                <input type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploadingAvatar} className="hidden" />
+              </label>
+            </div>
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Your profile</p><h1 className="mt-1 text-2xl font-serif font-bold sm:text-3xl">{form.name || currentUser.name}</h1><p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-500">{getRoleLabel(currentUser.role)}</p><p className="text-xs text-neutral-400">{currentUser.email}</p></div>
           </div>
           <button type="button" onClick={onLogout} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-semibold text-red-300 hover:bg-red-500/20"><LogOut className="h-4 w-4" /> Log out</button>
         </div>
@@ -84,7 +112,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <label className="text-xs font-semibold">Handle<input value={form.handle} onChange={event => setForm({ ...form, handle: event.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" /></label>
           <label className="text-xs font-semibold">Phone<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" /></label>
           <label className="text-xs font-semibold sm:col-span-2">Bio<textarea rows={4} value={form.bio} onChange={event => setForm({ ...form, bio: event.target.value })} className="mt-1.5 w-full resize-y rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" /></label>
-          <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300"><Save className="h-4 w-4" /> Save profile</button>{status && <span className="text-xs text-emerald-400">{status}</span>}</div>
+          <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={isUploadingAvatar} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300 disabled:opacity-60"><Save className="h-4 w-4" /> Save profile</button>{status && <span className="text-xs text-emerald-400">{status}</span>}</div>
         </form>
       </div>
     </div>

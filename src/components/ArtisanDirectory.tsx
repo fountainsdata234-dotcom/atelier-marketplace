@@ -1,17 +1,20 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Compass, MapPin, Navigation, Phone, ShieldCheck, Star, Sparkles } from 'lucide-react';
+import { Compass, MapPin, Navigation, Phone, ShieldCheck, Star, Sparkles, UserPlus } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm } from '../data/worldData';
+import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 interface ArtisanDirectoryProps {
   users: User[];
   posts: ClothPost[];
   currentUser: User | null;
+  onSelectArtisan: (artisan: User) => void;
+  onToggleFollow: (artisan: User) => void;
   isDarkMode: boolean;
 }
 
-export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts, currentUser, isDarkMode }) => {
+export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts, currentUser, onSelectArtisan, onToggleFollow, isDarkMode }) => {
   const artisans = useMemo(() => {
     return users.filter((user) => user.role === 'tailor' || user.role === 'fabric_seller')
       .map((user) => {
@@ -90,19 +93,19 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               className={`overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-white shadow-sm'}`}
+              onClick={() => onSelectArtisan(artisan)}
             >
               <div className="relative p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-sm font-black text-amber-400 ring-1 ring-amber-500/30">
-                      {artisan.name?.slice(0, 2).toUpperCase() || 'AT'}
-                    </div>
+                    {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt={artisan.name} className="h-12 w-12 rounded-2xl object-cover ring-1 ring-amber-500/30" /> : <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-sm font-black text-neutral-950 ring-1 ring-amber-500/30">{getProfileInitials(artisan.name)}</div>}
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-base font-semibold">{artisan.shopName || artisan.name}</h2>
+                        <h2 className="text-base font-semibold">{artisan.name}</h2>
                         {artisan.isPromoted && <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Promoted</span>}
                       </div>
-                      <p className="text-[10px] uppercase tracking-[0.15em] text-neutral-400">{artisan.role === 'tailor' ? 'Tailor' : 'Fabric Seller'}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-500">{getRoleLabel(artisan.role)}</p>
+                      {artisan.shopName && <p className="text-[10px] text-amber-400">{artisan.shopName} · {artisan.handle}</p>}
                     </div>
                   </div>
 
@@ -143,8 +146,11 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                     <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
                     Verified
                   </div>
-                  {artisan.whatsappNumber && (
+                  <div className="flex items-center gap-2">
+                    {currentUser?.id !== artisan.id && <button type="button" onClick={(event) => { event.stopPropagation(); onToggleFollow(artisan); }} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-[10px] font-bold text-amber-300"><UserPlus className="h-3 w-3" />{currentUser && artisan.followers.includes(currentUser.id) ? 'Following' : 'Follow'}</button>}
+                    {artisan.whatsappNumber && (
                     <a
+                      onClick={(event) => event.stopPropagation()}
                       href={`https://wa.me/${artisan.whatsappNumber.replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noreferrer"
@@ -153,7 +159,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                       <Phone className="h-3 w-3" />
                       WhatsApp
                     </a>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.article>

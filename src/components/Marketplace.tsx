@@ -6,6 +6,7 @@ import { WORLD_COUNTRIES, calculateDistanceKm } from '../data/worldData';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
+import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -16,6 +17,7 @@ interface MarketplaceProps {
   onSaveImageToViewer: (url: string, title: string) => void;
   onSharePost: (post: ClothPost) => void;
   onShareTailorProfile: (user: User) => void;
+  onToggleFollow: (user: User) => void;
   isDarkMode: boolean;
 }
 
@@ -28,25 +30,30 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onSaveImageToViewer,
   onSharePost,
   onShareTailorProfile,
+  onToggleFollow,
   isDarkMode
 }) => {
   // Search & Filter States
   const sellerPosts = useMemo(() => posts
     .filter(post => post.authorRole === 'tailor' || post.authorRole === 'fabric_seller')
-    .map(post => ({
-      ...post,
-      title: post.title || 'Untitled atelier post',
-      description: post.description || '',
-      authorName: post.authorName || 'Atelier Member',
-      authorHandle: post.authorHandle || '@atelier_member',
-      authorLocation: post.authorLocation || { country: '', state: '', city: '' },
-      tags: Array.isArray(post.tags) ? post.tags : [],
-      likes: Array.isArray(post.likes) ? post.likes : [],
-      saves: Array.isArray(post.saves) ? post.saves : [],
-      ratingsByUser: post.ratingsByUser || {},
-      rating: Number(post.rating) || 0,
-      ratingCount: Number(post.ratingCount) || 0,
-    })), [posts]);
+    .map(post => {
+      const author = users.find(user => user.id === post.authorId);
+      return {
+        ...post,
+        title: post.title || 'Untitled atelier post',
+        description: post.description || '',
+        authorName: author?.name || post.authorName || 'Atelier Member',
+        authorHandle: author?.handle || post.authorHandle || '@atelier_member',
+        authorAvatar: author?.avatarUrl || post.authorAvatar,
+        authorLocation: author?.location || post.authorLocation || { country: '', state: '', city: '' },
+        tags: Array.isArray(post.tags) ? post.tags : [],
+        likes: Array.isArray(post.likes) ? post.likes : [],
+        saves: Array.isArray(post.saves) ? post.saves : [],
+        ratingsByUser: post.ratingsByUser || {},
+        rating: Number(post.rating) || 0,
+        ratingCount: Number(post.ratingCount) || 0,
+      };
+    }), [posts, users]);
   const tailorPosts = sellerPosts;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
@@ -131,18 +138,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const searchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
-    const suggestions = new Map<string, string>();
+    const suggestions = new Map<string, { label: string; type: 'seller' | 'post' | 'tag'; user?: User; post?: ClothPost }>();
     tailorPosts.forEach(post => {
-      [post.title, post.authorName, ...post.tags].forEach(value => {
-        if (value.toLowerCase().includes(query)) suggestions.set(value.toLowerCase(), value);
-      });
+      if (post.title.toLowerCase().includes(query)) suggestions.set(`post-${post.id}`, { label: post.title, type: 'post', post });
+      post.tags.forEach(tag => { if (tag.toLowerCase().includes(query)) suggestions.set(`tag-${tag}`, { label: tag, type: 'tag' }); });
     });
     users.filter(user => user.role === 'tailor' || user.role === 'fabric_seller').forEach(user => {
-      [user.name, user.shopName || '', user.handle].forEach(value => {
-        if (value && value.toLowerCase().includes(query)) suggestions.set(value.toLowerCase(), value);
-      });
+      [user.name, user.shopName || '', user.handle].forEach(value => { if (value && value.toLowerCase().includes(query)) suggestions.set(`seller-${user.id}`, { label: user.name, type: 'seller', user }); });
     });
-    return Array.from(suggestions.values()).slice(0, 7);
+    return Array.from(suggestions.values()).slice(0, 8);
   }, [tailorPosts, searchQuery, users]);
 
   // Filter and sort posts
@@ -381,7 +385,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       onOpenAuth();
       return;
     }
-    storageService.toggleFollowUser(authorId, currentUser.id);
+    const author = users.find(user => user.id === authorId);
+    if (author) onToggleFollow(author);
   };
 
   // Direct WhatsApp Inquiry link
@@ -431,13 +436,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             <div className={`absolute z-30 top-full left-0 right-0 mt-2 rounded-xl border shadow-xl overflow-hidden ${isDarkMode ? 'bg-neutral-900 border-neutral-700' : 'bg-white border-neutral-200'}`}>
               {searchSuggestions.map(suggestion => (
                 <button
-                  key={suggestion}
+                  key={`${suggestion.type}-${suggestion.label}`}
                   type="button"
-                  onMouseDown={() => setSearchQuery(suggestion)}
-                  className="w-full text-left px-4 py-2.5 text-xs hover:bg-amber-500/10 flex items-center gap-2"
+                  onMouseDown={() => setSearchQuery(suggestion.label)}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs hover:bg-amber-500/10"
                 >
-                  <Search className="w-3.5 h-3.5 text-amber-500" />
-                  <span>{suggestion}</span>
+                  {suggestion.user?.avatarUrl ? <img src={suggestion.user.avatarUrl} alt="" className="h-9 w-9 rounded-lg object-cover" /> : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span> : suggestion.post ? <img src={suggestion.post.imageUrl} alt="" className="h-9 w-9 rounded-lg object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
+                  <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? 'Collection piece' : 'Category'}</small></span>
                 </button>
               ))}
             </div>
@@ -848,8 +853,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 {/* Post Header: Tailor Handle, Location & Promoted Symbol */}
                 <div className="p-3 flex items-center justify-between border-b border-neutral-800/40">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-xs flex items-center justify-center">
-                      {post.authorName.charAt(0)}
+                    <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-xs flex items-center justify-center overflow-hidden">
+                      {post.authorAvatar ? <img src={post.authorAvatar} alt="" className="h-full w-full object-cover" /> : post.authorName.charAt(0)}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
@@ -865,6 +870,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                           </span>
                         )}
                       </div>
+                      <div className="flex flex-col items-start gap-0.5 text-[10px] text-neutral-400">
+                        <span className="font-semibold uppercase tracking-[0.12em] text-amber-500">{getRoleLabel(post.authorRole)}</span>
+                        <span>{post.authorHandle}</span>
+                      </div>
                       <div className="flex items-center gap-1 text-[10px] text-neutral-400">
                         <MapPin className="w-2.5 h-2.5 text-amber-500" />
                         <span>{post.authorLocation.city}, {post.authorLocation.country}</span>
@@ -876,13 +885,20 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
 
                   {/* Share post */}
-                  <button
-                    onClick={() => onSharePost(post)}
-                    title="Share garment post"
-                    className="p-1.5 rounded-lg text-neutral-400 hover:text-amber-400 hover:bg-neutral-800/50 transition-colors"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const author = users.find(user => user.id === post.authorId);
+                      const isFollowing = Boolean(currentUser && author?.followers?.includes(currentUser.id));
+                      return author && author.id !== currentUser?.id ? (
+                        <button type="button" onClick={() => handleFollow(author.id)} className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${isFollowing ? 'border-emerald-500/40 text-emerald-300' : 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10'}`}>
+                          {isFollowing ? 'Following' : 'Follow'}
+                        </button>
+                      ) : null;
+                    })()}
+                    <button onClick={() => onSharePost(post)} title="Share garment post" className="p-1.5 rounded-lg text-neutral-400 hover:text-amber-400 hover:bg-neutral-800/50 transition-colors">
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Garment Image with High-Res Zoom / Save */}
