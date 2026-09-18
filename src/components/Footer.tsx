@@ -16,8 +16,8 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
       }`}
     >
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 items-start gap-7 md:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr] md:gap-8">
-          <div className="w-full md:w-auto md:col-span-1">
+        <div className="grid grid-cols-2 items-start gap-5 md:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr] md:gap-8">
+          <div className="col-span-2 w-full md:col-span-1 md:w-auto">
             <div className="flex items-center gap-3">
               <img src="/logo.png" alt="Fabrilux Atelier logo" className="h-11 w-11 rounded-2xl object-cover shadow-lg shadow-amber-500/20" />
               <div><p className="font-display text-xl font-black tracking-[0.14em] text-amber-400">FABRILUX</p><p className="text-[10px] uppercase tracking-[0.25em] text-amber-500/80">Atelier</p></div>
@@ -27,7 +27,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
             </p>
           </div>
 
-          <div className="min-w-[120px] flex-1 md:flex-none">
+          <div className="min-w-0 md:flex-none">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">Explore</p>
             <ul className="space-y-1.5 text-sm">
               <li><button type="button" onClick={() => onNavigate?.('marketplace')} className="transition hover:text-amber-400">Marketplace</button></li>
@@ -36,7 +36,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
             </ul>
           </div>
 
-          <div className="min-w-[120px] flex-1 md:flex-none">
+          <div className="min-w-0 md:flex-none">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">Support</p>
             <ul className="space-y-1.5 text-sm">
               <li><button type="button" onClick={() => onNavigate?.('privacy')} className="transition hover:text-amber-400">Privacy</button></li>
@@ -44,7 +44,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
             </ul>
           </div>
 
-          <div className="min-w-[140px] flex-1 md:flex-none">
+          <div className="min-w-0 md:flex-none">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">Connect</p>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2">

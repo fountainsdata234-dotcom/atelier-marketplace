@@ -509,6 +509,22 @@ app.post('/api/messages/read', requireAuth, async (req: AuthenticatedRequest, re
   res.status(204).send();
 });
 
+app.delete('/api/admin/messages/:messageId', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const messageRef = firestore.collection('messages').doc(req.params.messageId);
+  const message = await messageRef.get();
+  if (!message.exists) {
+    res.status(404).json({ error: 'Message not found.' });
+    return;
+  }
+  const data = message.data() || {};
+  if (data.senderId !== req.authUser!.uid && data.senderRole !== 'admin' && data.senderId !== 'atelier-system') {
+    res.status(403).json({ error: 'Administrators can only delete messages they sent or platform announcements.' });
+    return;
+  }
+  await messageRef.delete();
+  res.status(204).send();
+});
+
 app.post('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) => {
   const input = req.body || {};
   if (input.senderId !== req.authUser!.uid || typeof input.recipientId !== 'string' || typeof input.content !== 'string' || !input.content.trim()) {

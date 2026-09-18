@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell, X, Shield } from 'lucide-react';
 import { BroadcastMessage, User } from '../types';
@@ -14,7 +14,25 @@ export const BroadcastBanner: React.FC<BroadcastBannerProps> = ({
   currentUser,
   isDarkMode
 }) => {
-  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('atelier_dismissed_broadcasts_v1') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const markAnnouncementsRead = () => {
+      setDismissedIds(previous => Array.from(new Set([...previous, ...broadcasts.map(broadcast => broadcast.id)])));
+    };
+    window.addEventListener('atelier_messages_read', markAnnouncementsRead);
+    return () => window.removeEventListener('atelier_messages_read', markAnnouncementsRead);
+  }, [broadcasts]);
+
+  useEffect(() => {
+    localStorage.setItem('atelier_dismissed_broadcasts_v1', JSON.stringify(dismissedIds));
+  }, [dismissedIds]);
 
   // Find latest broadcast relevant to current user
   const relevantBroadcast = broadcasts.find((b) => {
@@ -52,7 +70,7 @@ export const BroadcastBanner: React.FC<BroadcastBannerProps> = ({
           </div>
 
           <button
-            onClick={() => setDismissedIds(prev => [...prev, relevantBroadcast.id])}
+            onClick={() => setDismissedIds(prev => Array.from(new Set([...prev, relevantBroadcast.id])))}
             className="p-1 rounded-md hover:bg-neutral-950/10 text-neutral-950 transition-colors shrink-0"
             title="Dismiss notice"
           >

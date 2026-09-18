@@ -65,6 +65,7 @@ export const api = {
   recordDiscoveryEvent: (itemId: string, eventType: DiscoveryEventType, sessionId: string) => request<DiscoveryEvent>('/api/discovery-events', { method: 'POST', body: JSON.stringify({ itemId, eventType, sessionId }) }),
   getDiscoveryEvents: () => request<DiscoveryEvent[]>('/api/discovery-events'),
   getMessages: () => request<DirectMessage[]>('/api/messages'),
+  deleteMessage: (messageId: string) => request<void>(`/api/admin/messages/${messageId}`, { method: 'DELETE' }),
   sendBroadcast: (broadcast: Pick<BroadcastMessage, 'sender' | 'target' | 'title' | 'body'>) => request<BroadcastMessage>('/api/admin/broadcast', { method: 'POST', body: JSON.stringify(broadcast) }),
   markMessagesRead: () => request<void>('/api/messages/read', { method: 'POST' }),
   sendMessage: (message: Omit<DirectMessage, 'id' | 'timestamp' | 'isRead'>) => request<DirectMessage>('/api/messages', { method: 'POST', body: JSON.stringify(message) }),

@@ -35,6 +35,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastBody, setBroadcastBody] = useState('');
   const [broadcastSentMsg, setBroadcastSentMsg] = useState<string | null>(null);
+  const [sentMessages, setSentMessages] = useState<import('../types').DirectMessage[]>([]);
 
   // Promotion Template Cards state
   const [editablePlans, setEditablePlans] = useState<AdminPromoPlan[]>(promoPlans);
@@ -46,6 +47,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     setEditablePlans(promoPlans);
   }, [promoPlans]);
+
+  useEffect(() => {
+    api.getMessages().then(messages => setSentMessages(messages.filter(message => message.senderId === currentUser.id))).catch(() => undefined);
+  }, [currentUser.id]);
+
+  const handleDeleteSentMessage = async (messageId: string) => {
+    if (!window.confirm('Delete this sent message for all recipients?')) return;
+    try {
+      await api.deleteMessage(messageId);
+      setSentMessages(messages => messages.filter(message => message.id !== messageId));
+      setBroadcastSentMsg('Message deleted for all recipients.');
+    } catch (error) {
+      setBroadcastSentMsg(error instanceof Error ? error.message : 'The message could not be deleted.');
+    }
+  };
 
   // Filtered lists
   const moderatableUsers = users.filter(u => u.role === 'tailor' || u.role === 'fabric_seller');
@@ -670,6 +686,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           )}
+
+          {sentMessages.length > 0 && <div className="mt-8 border-t border-neutral-800 pt-6">
+            <h3 className="mb-3 text-sm font-serif font-bold">Sent Messages & Announcements ({sentMessages.length})</h3>
+            <div className="space-y-3">{sentMessages.map(message => <div key={message.id} className="rounded-xl border border-neutral-800 bg-neutral-900/30 p-3 text-xs"><div className="flex items-center justify-between gap-3 text-[11px] text-neutral-400"><span className="font-bold uppercase text-amber-400">{message.type === 'general' ? 'Announcement' : 'Direct message'}</span><button type="button" onClick={() => handleDeleteSentMessage(message.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/10"><Trash2 className="h-3 w-3" /> Delete</button></div><p className="mt-2 text-neutral-200">{message.content}</p><p className="mt-1 text-[10px] text-neutral-500">To {message.recipientName} · {new Date(message.timestamp).toLocaleString()}</p></div>)}</div>
+          </div>}
         </section>
       )}
 
