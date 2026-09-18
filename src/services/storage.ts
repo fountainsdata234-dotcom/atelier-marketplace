@@ -448,6 +448,7 @@ export const storageService = {
     const target = users.find(u => u.id === targetUserId);
     if (!target) return { followersCount: 0, isFollowing: false };
 
+    target.followers = Array.isArray(target.followers) ? target.followers : [];
     const index = target.followers.indexOf(currentUserId);
     let isFollowing = false;
     if (index >= 0) {
@@ -580,6 +581,20 @@ export const storageService = {
       return data ? JSON.parse(data) : [];
     } catch {
       return [];
+    }
+  },
+
+  markMessagesRead(userId: string): void {
+    const messages = this.getAllMessages();
+    let changed = false;
+    const updated = messages.map(message => {
+      if (message.recipientId !== userId || message.isRead) return message;
+      changed = true;
+      return { ...message, isRead: true };
+    });
+    if (changed) {
+      localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('atelier_messages_read'));
     }
   },
 

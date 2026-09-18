@@ -50,6 +50,7 @@ export default function App() {
   const [posts, setPosts] = useState<ClothPost[]>([]);
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Modals
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -204,6 +205,31 @@ export default function App() {
     }
   }, [users]);
 
+  useEffect(() => {
+    if (!currentUser) {
+      setUnreadCount(0);
+      return;
+    }
+    const refreshUnreadCount = async () => {
+      try {
+        const messages = await api.getMessages();
+        setUnreadCount(messages.filter(message => message.recipientId === currentUser.id && !message.isRead).length);
+      } catch {
+        setUnreadCount(storageService.getMessages(currentUser.id).filter(message => message.recipientId === currentUser.id && !message.isRead).length);
+      }
+    };
+    void refreshUnreadCount();
+    const interval = window.setInterval(() => void refreshUnreadCount(), 20_000);
+    const handleMessageUpdate = () => void refreshUnreadCount();
+    window.addEventListener('atelier_message_received', handleMessageUpdate);
+    window.addEventListener('atelier_messages_read', handleMessageUpdate);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('atelier_message_received', handleMessageUpdate);
+      window.removeEventListener('atelier_messages_read', handleMessageUpdate);
+    };
+  }, [currentUser?.id]);
+
   const handleInstallApp = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
@@ -237,7 +263,7 @@ export default function App() {
         const localUsers = storageService.getUsers();
         const mergedUsers = remoteUsers.map(remoteUser => {
           const localUser = localUsers.find(user => user.id === remoteUser.id);
-          if (!localUser) return remoteUser;
+          if (!localUser) return { ...remoteUser, followers: Array.isArray(remoteUser.followers) ? remoteUser.followers : [] };
           return {
             ...localUser,
             ...remoteUser,
@@ -438,6 +464,7 @@ export default function App() {
         isOnline={isOnline}
         canInstall={Boolean(installPrompt)}
         onInstall={handleInstallApp}
+        unreadCount={unreadCount}
       />
 
       {!isOnline && (

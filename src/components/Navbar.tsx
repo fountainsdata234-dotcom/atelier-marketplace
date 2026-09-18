@@ -258,7 +258,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={() => setMobileMenuOpen(open => !open)}
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700/60 text-neutral-300 transition hover:border-amber-500/50 hover:text-amber-300 md:hidden"
         >
-          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          <span className="relative">
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {unreadCount > 0 && !mobileMenuOpen && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-[#0c0d10]" aria-label={`${unreadCount} unread messages`} />}
+          </span>
         </button>
 
         {mobileMenuOpen && (

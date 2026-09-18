@@ -43,6 +43,7 @@ export const api = {
   recordDiscoveryEvent: (itemId: string, eventType: DiscoveryEventType, sessionId: string) => request<DiscoveryEvent>('/api/discovery-events', { method: 'POST', body: JSON.stringify({ itemId, eventType, sessionId }) }),
   getDiscoveryEvents: () => request<DiscoveryEvent[]>('/api/discovery-events'),
   getMessages: () => request<DirectMessage[]>('/api/messages'),
+  markMessagesRead: () => request<void>('/api/messages/read', { method: 'POST' }),
   sendMessage: (message: Omit<DirectMessage, 'id' | 'timestamp' | 'isRead'>) => request<DirectMessage>('/api/messages', { method: 'POST', body: JSON.stringify(message) }),
   createFabricRequest: (requestData: Omit<FabricRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => request<FabricRequest>('/api/fabric-requests', { method: 'POST', body: JSON.stringify(requestData) }),
   getFabricRequests: () => request<FabricRequest[]>('/api/fabric-requests'),

@@ -33,6 +33,9 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
     Promise.all([api.getMessages(), api.getUsers()]).then(([remoteMessages, remoteUsers]) => {
       setAllMessages(remoteMessages);
       setAllUsers(remoteUsers);
+      void api.markMessagesRead().catch(() => undefined);
+      storageService.markMessagesRead(currentUser.id);
+      window.dispatchEvent(new CustomEvent('atelier_messages_read'));
     }).catch(error => console.error('Messages unavailable', error));
   }, []);
 

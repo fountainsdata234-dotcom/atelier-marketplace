@@ -317,6 +317,27 @@ app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
     id: req.authUser!.uid,
     email: req.authUser!.email || '',
   }, { merge: true });
+  const welcomeSnapshot = await firestore.collection('messages')
+    .where('recipientId', '==', req.authUser!.uid)
+    .limit(200)
+    .get();
+  const hasWelcomeMessage = welcomeSnapshot.docs.some(doc => doc.data().senderId === 'atelier-system');
+  if (!hasWelcomeMessage) {
+    const profileName = String(profile.name || req.authUser!.email?.split('@')[0] || 'Atelier Member');
+    await firestore.collection('messages').add({
+      senderId: 'atelier-system',
+      senderName: 'Atelier Team',
+      senderRole: 'admin',
+      recipientId: req.authUser!.uid,
+      recipientName: profileName,
+      postId: '',
+      postTitle: 'Welcome to Atelier',
+      content: `Welcome, ${profileName}. Welcome to Atelier Marketplace. Explore the marketplace, follow trusted studios, and message sellers directly whenever you are ready.`,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      type: 'general',
+    });
+  }
   const saved = await firestore.collection('profiles').doc(req.authUser!.uid).get();
   res.json(saved.data());
 });
@@ -467,6 +488,20 @@ app.get('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) => 
     .map<StoredMessage>(doc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }))
     .sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
   res.json(messages);
+});
+
+app.post('/api/messages/read', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const snapshot = await firestore.collection('messages')
+    .where('recipientId', '==', req.authUser!.uid)
+    .limit(200)
+    .get();
+  const unreadMessages = snapshot.docs.filter(doc => doc.data().isRead !== true);
+  if (unreadMessages.length > 0) {
+    const batch = firestore.batch();
+    unreadMessages.forEach(doc => batch.update(doc.ref, { isRead: true, readAt: FieldValue.serverTimestamp() }));
+    await batch.commit();
+  }
+  res.status(204).send();
 });
 
 app.post('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) => {

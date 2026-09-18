@@ -147,7 +147,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                     Verified
                   </div>
                   <div className="flex items-center gap-2">
-                    {currentUser?.id !== artisan.id && <button type="button" onClick={(event) => { event.stopPropagation(); onToggleFollow(artisan); }} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-[10px] font-bold text-amber-300"><UserPlus className="h-3 w-3" />{currentUser && artisan.followers.includes(currentUser.id) ? 'Following' : 'Follow'}</button>}
+                    {currentUser?.id !== artisan.id && <button type="button" onClick={(event) => { event.stopPropagation(); onToggleFollow({ ...artisan, followers: Array.isArray(artisan.followers) ? artisan.followers : [] }); }} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-[10px] font-bold text-amber-300"><UserPlus className="h-3 w-3" />{currentUser && (Array.isArray(artisan.followers) ? artisan.followers : []).includes(currentUser.id) ? 'Following' : 'Follow'}</button>}
                     {artisan.whatsappNumber && (
                     <a
                       onClick={(event) => event.stopPropagation()}
