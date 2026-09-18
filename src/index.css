@@ -56,6 +56,99 @@
     text-transform: uppercase;
   }
 
+  .navbar-sunset-rays {
+    position: absolute;
+    top: -5rem;
+    right: -2rem;
+    width: 17rem;
+    height: 14rem;
+    pointer-events: none;
+    opacity: 0.72;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 82% 12%, rgba(255, 194, 88, 0.22) 0 0.35rem, transparent 0.42rem),
+      repeating-conic-gradient(from 112deg at 92% 8%, transparent 0deg 8deg, rgba(247, 157, 64, 0.055) 9deg 11deg, transparent 12deg 22deg),
+      radial-gradient(ellipse at 92% 4%, rgba(244, 114, 42, 0.18), transparent 58%);
+    filter: blur(0.2px);
+    z-index: 0;
+  }
+
+  .navbar-sunset-rays::before,
+  .navbar-sunset-rays::after {
+    content: '';
+    position: absolute;
+    border-radius: 999px;
+    background: rgba(255, 197, 94, 0.28);
+    box-shadow: 2.8rem 2.2rem 0 rgba(247, 157, 64, 0.16), 6.5rem 4.3rem 0 rgba(255, 214, 122, 0.12), 9.2rem 1.4rem 0 rgba(244, 114, 42, 0.14);
+    animation: sunset-particle-drift 8s ease-in-out infinite alternate;
+  }
+
+  .navbar-sunset-rays::before {
+    top: 4.7rem;
+    right: 1.2rem;
+    width: 0.2rem;
+    height: 0.2rem;
+  }
+
+  .navbar-sunset-rays::after {
+    top: 7.2rem;
+    right: 4.5rem;
+    width: 0.14rem;
+    height: 0.14rem;
+    animation-delay: -3s;
+  }
+
+  .navbar-sunset-particles {
+    position: absolute;
+    top: 5.8rem;
+    right: 7.8rem;
+    width: 0.16rem;
+    height: 0.16rem;
+    border-radius: 999px;
+    background: rgba(255, 224, 154, 0.24);
+    box-shadow: 3.5rem 3.2rem 0 rgba(255, 190, 91, 0.16), 5.8rem 0.8rem 0 rgba(245, 158, 11, 0.13);
+    animation: sunset-particle-drift 6s ease-in-out -2s infinite alternate;
+  }
+
+  .brand-lockup {
+    isolation: isolate;
+  }
+
+  .brand-thread {
+    position: absolute;
+    left: -0.75rem;
+    top: -0.45rem;
+    width: calc(100% + 1.5rem);
+    height: calc(100% + 0.9rem);
+    border: 1px solid rgba(245, 158, 11, 0.32);
+    border-left-color: transparent;
+    border-radius: 48% 52% 46% 54%;
+    pointer-events: none;
+    z-index: -1;
+    animation: thread-weave 5.5s ease-in-out infinite;
+  }
+
+  .brand-thread-two {
+    left: -0.4rem;
+    top: -0.7rem;
+    width: calc(100% + 0.8rem);
+    height: calc(100% + 1.4rem);
+    border-color: rgba(251, 191, 36, 0.22);
+    border-right-color: transparent;
+    border-radius: 56% 44% 52% 48%;
+    animation-delay: -2.6s;
+  }
+
+  @keyframes thread-weave {
+    0%, 100% { transform: translateX(-0.08rem) rotate(-2deg); opacity: 0.36; }
+    48% { transform: translateX(0.2rem) rotate(3deg) scaleX(1.04); opacity: 0.78; }
+  }
+
+  @keyframes sunset-particle-drift {
+    from { transform: translate3d(0, 0, 0); opacity: 0.35; }
+    to { transform: translate3d(-0.7rem, 0.55rem, 0); opacity: 0.8; }
+  }
+
   button, input, select {
     font: inherit;
   }
@@ -168,6 +261,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .brand-thread,
+  .navbar-sunset-rays::before,
+  .navbar-sunset-rays::after,
+  .navbar-sunset-particles {
+    animation: none;
+  }
+
   .feed-card-wave:hover .feed-card-image img {
     animation: none;
   }

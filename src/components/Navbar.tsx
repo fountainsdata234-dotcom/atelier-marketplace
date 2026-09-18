@@ -42,13 +42,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header
-      className={`sticky top-0 z-40 w-full border-b backdrop-blur-md transition-colors ${
+      className={`relative sticky top-0 z-40 w-full border-b backdrop-blur-md transition-colors ${
         isDarkMode
           ? 'bg-[#0c0d10]/90 border-neutral-800/80 text-neutral-100'
           : 'bg-white/90 border-neutral-200/80 text-neutral-900 shadow-xs'
       }`}
     >
-      <div className="relative mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-3 sm:px-6 lg:px-8">
+      <div className="navbar-sunset-rays" aria-hidden="true"><span className="navbar-sunset-particles" /></div>
+      <div className="relative z-10 mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-3 sm:px-6 lg:px-8">
         {/* Brand lockup */}
         <div
           onClick={() => navigate(currentUser ? 'marketplace' : 'landing')}
@@ -59,7 +60,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             alt="Fabrilux Atelier logo"
             className="h-9 w-9 rounded-lg object-cover shadow-md shadow-amber-500/20 ring-1 ring-amber-500/30 transition-transform duration-200 group-hover:scale-105 sm:h-10 sm:w-10"
           />
-          <div className="border-l border-amber-500/30 pl-3">
+          <div className="brand-lockup relative border-l border-amber-500/30 pl-3">
+            <span className="brand-thread brand-thread-one" aria-hidden="true" />
+            <span className="brand-thread brand-thread-two" aria-hidden="true" />
             <span className="brand-wordmark block text-[15px] font-black leading-none text-amber-500 sm:text-xl">
               FABRILUX
             </span>

@@ -190,8 +190,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError('Please enter your active phone number.');
       return;
     }
-    if (password.length < 6) {
-      setError('Use a password with at least 6 characters.');
+    if (password.length < 6 || password.length > 8 || !/[A-Z]/.test(password) || !/\./.test(password)) {
+      setError('Password must be 6 to 8 characters long and contain a capital letter and a period.');
       return;
     }
     if (password !== confirmPassword) {
@@ -637,13 +637,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-neutral-400 mb-1">
-              Password {isRegistering && '(min 6 chars)'} *
+              Password {isRegistering && '(6-8 characters)'} *
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-3 text-neutral-500" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
+                maxLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -653,6 +654,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use 6-8 characters, including at least one capital letter and a period.</p>}
           </div>
 
           {isRegistering && (
@@ -663,6 +665,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
+                  maxLength={8}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat your password"
