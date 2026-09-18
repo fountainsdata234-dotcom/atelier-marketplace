@@ -25,6 +25,7 @@ import { api } from './services/api';
 import { getHandleSlug } from './utils/profile';
 
 export default function App() {
+  const publicSellerRoute = /^\/@[^/]+(?:\/post\/[^/]+)?$/i.test(window.location.pathname) || Boolean(new URLSearchParams(window.location.search).get('seller'));
   // Intro Loading animation state
   const [showIntro, setShowIntro] = useState<boolean>(true);
   const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
@@ -141,7 +142,9 @@ export default function App() {
         };
         const user = storageService.upsertUser(mergedUser);
         setCurrentUser(user);
-        if (user.role === 'admin') {
+        if (publicSellerRoute) {
+          setCurrentView('seller');
+        } else if (user.role === 'admin') {
           setCurrentView('admin');
         } else if (user.role === 'tailor' || user.role === 'fabric_seller') {
           setCurrentView('dashboard');
