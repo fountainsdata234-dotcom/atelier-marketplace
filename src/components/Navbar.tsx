@@ -49,22 +49,22 @@ export const Navbar: React.FC<NavbarProps> = ({
       }`}
     >
       <div className="relative mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-3 sm:px-6 lg:px-8">
-        {/* Brand Logo */}
+        {/* Brand lockup */}
         <div
           onClick={() => navigate(currentUser ? 'marketplace' : 'landing')}
-          className="flex items-center gap-2.5 cursor-pointer group select-none"
+          className="group flex cursor-pointer select-none items-center gap-3"
         >
           <img
             src="/logo.png"
             alt="Fabrilux Atelier logo"
-            className="h-10 w-10 rounded-xl object-cover shadow-md shadow-amber-500/20 transition-transform duration-200 group-hover:scale-105"
+            className="h-9 w-9 rounded-lg object-cover shadow-md shadow-amber-500/20 ring-1 ring-amber-500/30 transition-transform duration-200 group-hover:scale-105 sm:h-10 sm:w-10"
           />
-          <div>
-            <span className="brand-wordmark relative block text-base font-black leading-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-600 via-orange-500 to-yellow-400 sm:text-xl">
+          <div className="border-l border-amber-500/30 pl-3">
+            <span className="brand-wordmark block text-[15px] font-black leading-none text-amber-500 sm:text-xl">
               FABRILUX
             </span>
-            <span className="text-[9px] uppercase tracking-[0.28em] text-amber-600/80 font-medium block">
-              Atelier
+            <span className="mt-1 block text-[8px] font-semibold uppercase tracking-[0.3em] text-amber-600/80 sm:text-[9px]">
+              Atelier Marketplace
             </span>
           </div>
         </div>

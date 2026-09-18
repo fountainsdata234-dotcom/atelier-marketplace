@@ -852,7 +852,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   isDarkMode
                     ? 'bg-[#121316] border-neutral-800/90 hover:border-amber-500/40'
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
-                } ${post.isPromoted ? 'border-amber-400/70 ring-2 ring-amber-500/50 shadow-[0_0_0_1px_rgba(251,191,36,0.22),0_24px_55px_rgba(251,191,36,0.16)]' : ''}`}
+                } ${post.isPromoted ? 'border-amber-400/70 shadow-[0_18px_42px_rgba(251,191,36,0.14)]' : ''}`}
               >
                 {/* Post Header: Tailor Handle, Location & Promoted Symbol */}
                 <div className="p-3 flex items-center justify-between border-b border-neutral-800/40">
@@ -906,7 +906,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Garment Image with High-Res Zoom / Save */}
-                <div className={`feed-card-image relative aspect-[4/3.25] w-full bg-neutral-900 overflow-hidden group/img ${post.isPromoted ? 'p-2 border-[3px] border-amber-500/60 bg-gradient-to-br from-amber-500/10 via-transparent to-amber-500/20 rounded-[1.5rem]' : ''}`}>
+                <div className="feed-card-image relative aspect-[4/2.85] w-full overflow-hidden bg-neutral-900 group/img">
                   <img
                     src={post.imageUrl}
                     alt={post.title}
@@ -950,12 +950,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Post Body: Title, Description, Tags, Custom Pricing */}
-                <div className="p-3 space-y-2.5 flex-1">
+                <div className="flex-1 space-y-2 p-3">
                   <div>
-                    <h3 className="font-serif font-bold text-lg leading-snug">
+                    <h3 className="font-serif font-bold text-base leading-snug">
                       {post.title}
                     </h3>
-                    <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>
+                    <p className={`mt-1 line-clamp-1 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>
                       {post.description}
                     </p>
                   </div>
@@ -963,7 +963,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   {/* Tags */}
                   {post.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {post.tags.map((tag) => (
+                      {post.tags.slice(0, 3).map((tag) => (
                         <span
                           key={tag}
                           className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20"
@@ -975,16 +975,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   )}
 
                   {/* Seller price / negotiable state */}
-                  <div className="p-2 rounded-xl border border-neutral-800/80 bg-neutral-900/30 text-[11px] space-y-1">
-                    <span className="text-[9px] uppercase font-bold tracking-wider text-amber-500/80 block">
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-800/80 bg-neutral-900/30 p-2 text-[11px]">
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-amber-500/80">
                       Seller Price
                     </span>
-                    <div className="flex items-center justify-between text-neutral-400">
-                      <span>{post.pricing.basic > 0 ? `${post.pricing.currency || post.authorLocation.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable'}</span>
-                    </div>
+                    <span className="text-right text-neutral-400">{post.pricing.basic > 0 ? `${post.pricing.currency || post.authorLocation.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable'}</span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-1 font-mono">
+                  <div className="flex items-center justify-between pt-0 text-[10px] font-mono text-neutral-400">
                     <span>{new Date(post.createdAt).toLocaleDateString()}</span>
                     <span>{post.saves.length} Saves</span>
                   </div>
@@ -1001,7 +999,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Footer: Like Counter, In-App Message & WhatsApp Button */}
-                <div className="px-3 py-2.5 border-t border-neutral-800/60 bg-neutral-900/20 flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 border-t border-neutral-800/60 bg-neutral-900/20 px-3 py-2">
                   <button
                     onClick={() => handleLike(post.id)}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
