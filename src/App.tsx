@@ -53,7 +53,6 @@ export default function App() {
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [accountNoticeOpen, setAccountNoticeOpen] = useState(false);
 
   // Modals
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -122,13 +121,9 @@ export default function App() {
         try {
           savedProfile = await api.getProfile();
         } catch (error) {
-          if (error instanceof Error && error.message.includes('account no longer exists')) {
-            storageService.setCurrentUser(null);
-            setCurrentUser(null);
-            setCurrentView('landing');
-            setAccountNoticeOpen(true);
-            return;
-          }
+          // A new Firebase account can briefly exist before its profile document is saved.
+          // Keep the authenticated user active and let the profile sync below repair it.
+          console.warn('Profile not available yet; using Firebase account details.', error);
         }
         const cachedProfile = storageService.getUsers().find(user => user.id === firebaseUser.uid);
         const profileValue = <T,>(key: keyof User, fallback: T): T => {
@@ -269,8 +264,12 @@ export default function App() {
     if (showLoader) setIsDataLoading(false);
 
     try {
-      const remoteUsers = await api.getUsers().catch(() => null);
-      if (remoteUsers) {
+      const [remoteUsers, remotePosts, remotePlans] = await Promise.all([
+        api.getUsers().catch(() => null),
+        api.getPosts().catch(() => null),
+        api.getPromoPlans().catch(() => null),
+      ]);
+      if (remoteUsers !== null) {
         const localUsers = storageService.getUsers();
         const mergedUsers = remoteUsers.map(remoteUser => {
           const localUser = localUsers.find(user => user.id === remoteUser.id);
@@ -292,7 +291,6 @@ export default function App() {
         setUsers(mergedUsers);
       }
 
-      const remotePosts = await api.getPosts().catch(() => null);
       // An empty array is a valid authoritative response: it must clear stale local posts.
       if (remotePosts !== null) {
         const normalizedPosts = remotePosts.map(post => ({
@@ -313,7 +311,6 @@ export default function App() {
       // Secondary plans can finish loading without blocking the first useful view.
       if (showLoader) setIsDataLoading(false);
 
-      const remotePlans = await api.getPromoPlans().catch(() => null);
       if (remotePlans !== null && remotePlans.length > 0) {
         const localPlans = storageService.getPromoPlans();
         const completePlans = [0, 1, 2]
@@ -377,11 +374,6 @@ export default function App() {
     } else {
       setCurrentView('marketplace');
     }
-  };
-
-  const handleAccountNoticeClose = () => {
-    setAccountNoticeOpen(false);
-    void import('./services/firebase').then(({ logoutFromFirebase }) => logoutFromFirebase()).catch(() => undefined);
   };
 
   const handleLogout = () => {
@@ -716,16 +708,6 @@ export default function App() {
         isDarkMode={isDarkMode}
         onNavigate={setCurrentView}
       />
-
-      {accountNoticeOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="alertdialog" aria-modal="true" aria-labelledby="account-deleted-title">
-          <div className="w-full max-w-md rounded-3xl border border-red-500/30 bg-[#121316] p-6 text-neutral-100 shadow-2xl">
-            <h2 id="account-deleted-title" className="text-xl font-serif font-bold text-red-300">Account unavailable</h2>
-            <p className="mt-3 text-sm leading-relaxed text-neutral-300">Your seller account was removed by an administrator. Please create a new account and start fresh. Follow the marketplace rules to keep your account active.</p>
-            <button type="button" onClick={handleAccountNoticeClose} className="mt-5 w-full rounded-xl bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition hover:bg-amber-300">I understand</button>
-          </div>
-        </div>
-      )}
 
       {/* 9. Social Share Handle Modal */}
       <SocialShareModal

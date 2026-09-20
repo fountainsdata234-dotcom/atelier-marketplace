@@ -225,7 +225,9 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
 app.get('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   const snapshot = await firestore.collection('profiles').doc(req.authUser!.uid).get();
   if (!snapshot.exists) {
-    res.status(410).json({ error: 'This account no longer exists. Please create a new account to start again.' });
+    // Firebase auth can succeed before the client has written its first profile.
+    // Return a normal not-found response so the client can complete that first sync.
+    res.status(404).json({ error: 'Profile has not been created yet.' });
     return;
   }
   res.json({ id: req.authUser!.uid, ...(snapshot.exists ? snapshot.data() : {}) });

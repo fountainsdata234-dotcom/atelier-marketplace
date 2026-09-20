@@ -33,14 +33,27 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
   if (path === '/api/profile' && !token) {
     throw new Error('Authentication is not ready.');
   }
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15_000);
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('The server took too long to respond.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (response.status === 401 && token && !hasRetried) {
     return request<T>(path, options, true);
   }
