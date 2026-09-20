@@ -3,7 +3,7 @@ import { AlertTriangle, Bookmark, Camera, LogOut, Save, Trash2, UserRound } from
 import { User } from '../types';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
-import { firebaseAuth, uploadUserImage } from '../services/firebase';
+import { firebaseAuth, logoutFromFirebase, uploadUserImage } from '../services/firebase';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 interface ProfilePageProps {
@@ -71,13 +71,18 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   };
 
   const deleteAccount = async () => {
-    if (!window.confirm('Permanently delete your account, profile, posts, messages, collections, and Firebase login? This cannot be undone.')) return;
+    const confirmation = window.prompt('This permanently deletes your account and all of its data. Type DELETE to continue.');
+    if (confirmation?.trim().toUpperCase() !== 'DELETE') {
+      if (confirmation !== null) setStatus('Account deletion cancelled. The confirmation text did not match.');
+      return;
+    }
     setIsDeletingAccount(true);
     setStatus(null);
     try {
       await api.deleteMyAccount();
       storageService.deleteUser(currentUser.id);
       storageService.setCurrentUser(null);
+      await logoutFromFirebase();
       onLogout();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Your account could not be deleted. Please try again.');

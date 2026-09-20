@@ -297,6 +297,24 @@ export const storageService = {
     this.savePosts(this.getPosts().filter(post => post.authorId !== id));
     const collections = this.getSellerCollections().filter(collection => collection.sellerId !== id);
     localStorage.setItem(STORAGE_KEYS.SELLER_COLLECTIONS, JSON.stringify(collections));
+    const messages = this.getAllMessages().filter(message => message.senderId !== id && message.recipientId !== id);
+    localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
+    const requests = this.getFabricRequests().filter(request => request.buyerId !== id && request.sellerId !== id);
+    localStorage.setItem(STORAGE_KEYS.FABRIC_REQUESTS, JSON.stringify(requests));
+    const discoveryEvents = this.getDiscoveryEvents().filter(event => event.userId !== id);
+    localStorage.setItem(STORAGE_KEYS.DISCOVERY_EVENTS, JSON.stringify(discoveryEvents));
+    const searchHistory = localStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
+    if (searchHistory) {
+      try {
+        const parsed = JSON.parse(searchHistory) as Record<string, unknown>;
+        delete parsed[id];
+        localStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(parsed));
+      } catch {
+        localStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
+      }
+    }
+    localStorage.removeItem(STORAGE_KEYS.SAVED_PHOTOS);
+    localStorage.removeItem(STORAGE_KEYS.COLLECTION_PACKAGES);
     window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
     window.dispatchEvent(new CustomEvent('atelier_collections_updated'));
   },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, MessageSquare, User as UserIcon, Shield, Scissors, LogIn, Users } from 'lucide-react';
+import { Compass, MessageSquare, User as UserIcon, Shield, Scissors, LogIn, Users, Info } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -83,13 +83,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             </button>
 
             <button
-              onClick={() => handleNavigate(currentUser ? 'profile' : 'artisan')}
+              onClick={() => handleNavigate(currentUser ? 'profile' : 'about')}
               className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
-                primaryActionIsActive(currentUser ? 'profile' : 'artisan') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+                primaryActionIsActive(currentUser ? 'profile' : 'about') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
-              {currentUser ? <UserIcon className="w-5 h-5" /> : <Users className="w-5 h-5" />}
-              <span className="text-[10px] font-medium">{currentUser ? 'Profile' : 'Artisans'}</span>
+              {currentUser ? <UserIcon className="w-5 h-5" /> : <Info className="w-5 h-5" />}
+              <span className="text-[10px] font-medium">{currentUser ? 'Profile' : 'About'}</span>
             </button>
           </div>
         </div>

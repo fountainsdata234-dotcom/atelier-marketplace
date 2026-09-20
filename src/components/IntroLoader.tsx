@@ -25,12 +25,12 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
     const timer3 = setTimeout(() => {
       setProgress(100);
       setStage(3);
-    }, 720);
+    }, 220);
 
     const finishTimer = setTimeout(() => {
       sessionStorage.setItem('fabrilux_intro_seen', '1');
       onComplete();
-    }, 520);
+    }, 260);
 
     return () => {
       clearTimeout(timer1);

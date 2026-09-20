@@ -536,7 +536,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   transition={{ duration: 0.45 }}
                   className="relative aspect-[10/13] min-h-[320px] sm:aspect-[16/7] sm:min-h-[320px]"
                 >
-                  <img src={post.imageUrl} alt={post.title} className="absolute inset-0 h-full w-full object-cover" loading="eager" />
+                  <button type="button" onClick={() => onSaveImageToViewer(post.imageUrl, post.title)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-zoom-in">
+                    <img src={post.imageUrl} alt={post.title} className="h-full w-full object-cover" loading="eager" />
+                  </button>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.22),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.22),rgba(0,0,0,0.78))] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.25),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.9),rgba(0,0,0,0.55),rgba(0,0,0,0.2))]" />
 
                   <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-6">
@@ -654,8 +656,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   type="button"
                   onClick={() => {
                     recordEvent(post.id, 'VIEW');
-                    setSearchQuery(post.title);
-                    window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 0);
+                    onSaveImageToViewer(post.imageUrl, post.title);
                   }}
                   aria-label={`Explore ${post.title}`}
                   className="group relative min-w-[260px] max-w-[320px] flex-1 shrink-0 snap-center overflow-hidden rounded-[1.5rem] border bg-neutral-900/70 text-left transition-all duration-300 ease-out"
@@ -952,11 +953,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   <img
                     src={post.imageUrl}
                     alt={post.title}
-                    className="w-full h-full object-cover object-center group-hover/img:scale-102 transition-transform duration-500 rounded-[1.1rem]"
+                    className="w-full h-full cursor-zoom-in object-cover object-center group-hover/img:scale-102 transition-transform duration-500 rounded-[1.1rem]"
                     referrerPolicy="no-referrer"
                     loading="lazy"
                     draggable={false}
                     onContextMenu={(event) => event.preventDefault()}
+                    onClick={() => onSaveImageToViewer(post.imageUrl, post.title)}
                   />
 
                   {/* Top image overlay badges */}
