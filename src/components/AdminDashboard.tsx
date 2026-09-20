@@ -65,11 +65,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Filtered lists
-  const moderatableUsers = users.filter(u => (u.role === 'tailor' || u.role === 'fabric_seller') && !deletedSellerIds.includes(u.id));
-  const tailors = users.filter(u => u.role === 'tailor');
-  const fabricSellers = users.filter(u => u.role === 'fabric_seller');
-  const customers = users.filter(u => u.role === 'buyer');
-  const adminUsers = users.filter(u => u.role === 'admin');
+  const uniqueUsers = Array.from(new Map(users.map(user => [user.id, user])).values());
+  const moderatableUsers = uniqueUsers.filter(u => (u.role === 'tailor' || u.role === 'fabric_seller') && !deletedSellerIds.includes(u.id));
+  const tailors = uniqueUsers.filter(u => u.role === 'tailor');
+  const fabricSellers = uniqueUsers.filter(u => u.role === 'fabric_seller');
+  const customers = uniqueUsers.filter(u => u.role === 'buyer');
+  const adminUsers = uniqueUsers.filter(u => u.role === 'admin');
 
   // Handle Add Admin
   const handleAddAdmin = async (e: React.FormEvent) => {

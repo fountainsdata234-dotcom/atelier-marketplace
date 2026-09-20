@@ -271,7 +271,8 @@ export default function App() {
       ]);
       if (remoteUsers !== null) {
         const localUsers = storageService.getUsers();
-        const mergedUsers = remoteUsers.map(remoteUser => {
+        const uniqueRemoteUsers: User[] = Array.from(new Map<string, User>(remoteUsers.map(remoteUser => [remoteUser.id, remoteUser])).values());
+        const mergedUsers = uniqueRemoteUsers.map(remoteUser => {
           const localUser = localUsers.find(user => user.id === remoteUser.id);
           if (!localUser) return { ...remoteUser, followers: Array.isArray(remoteUser.followers) ? remoteUser.followers : [] };
           return {

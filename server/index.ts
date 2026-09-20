@@ -428,7 +428,7 @@ app.get('/api/posts', async (_req, res) => {
 });
 
 app.get('/api/users', async (_req, res) => {
-  const snapshot = await firestore.collection('profiles').limit(500).get();
+  const snapshot = await firestore.collection('profiles').get();
   res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 });
 
