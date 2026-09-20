@@ -427,9 +427,55 @@ app.get('/api/posts', async (_req, res) => {
   res.json(posts);
 });
 
+async function listAllAuthUsers() {
+  const users = [];
+  let pageToken: string | undefined;
+  do {
+    const page = await adminAuth.listUsers(1000, pageToken);
+    users.push(...page.users);
+    pageToken = page.pageToken;
+  } while (pageToken);
+  return users;
+}
+
 app.get('/api/users', async (_req, res) => {
-  const snapshot = await firestore.collection('profiles').get();
-  res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  const [profileSnapshot, authUsers] = await Promise.all([
+    firestore.collection('profiles').get(),
+    listAllAuthUsers(),
+  ]);
+  const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data() as Record<string, unknown>]));
+  res.json(authUsers.map(authUser => {
+    const profile = profiles.get(authUser.uid) || {};
+    const claims = authUser.customClaims || {};
+    const isAdmin = profile.role === 'admin'
+      || authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com'
+      || claims.admin === true
+      || claims.role === 'admin';
+    const role = isAdmin ? 'admin' : ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? profile.role : 'buyer';
+    const name = String(profile.name || authUser.displayName || authUser.email?.split('@')[0] || 'Atelier Member');
+    return {
+      id: authUser.uid,
+      email: authUser.email || '',
+      name,
+      role,
+      phone: String(profile.phone || authUser.phoneNumber || ''),
+      countryCode: String(profile.countryCode || ''),
+      location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
+      whatsappNumber: String(profile.whatsappNumber || ''),
+      shopName: String(profile.shopName || ''),
+      bio: String(profile.bio || ''),
+      handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
+      avatarUrl: String(profile.avatarUrl || authUser.photoURL || ''),
+      isPromoted: profile.isPromoted === true,
+      isBlocked: profile.isBlocked === true || authUser.disabled === true,
+      isWarned: profile.isWarned === true,
+      warningNote: String(profile.warningNote || ''),
+      followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
+      createdAt: String(profile.createdAt || authUser.metadata.creationTime || new Date().toISOString()),
+      isSuperAdmin: isAdmin && authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com',
+      addedByEmail: String(profile.addedByEmail || ''),
+    };
+  }));
 });
 
 app.post('/api/users/:uid/follow', requireAuth, async (req: AuthenticatedRequest, res) => {
