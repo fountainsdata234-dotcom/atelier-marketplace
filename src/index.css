@@ -220,6 +220,185 @@
   animation: loading-wave 1.35s ease-in-out infinite;
 }
 
+.artisan-globe-stage {
+  perspective: 900px;
+  background: radial-gradient(circle at 50% 48%, rgba(8, 145, 178, 0.16), transparent 30%), linear-gradient(140deg, rgba(15, 23, 42, 0.8), rgba(2, 6, 23, 0.96));
+}
+
+.artisan-globe-sphere {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(72vw, 27rem);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(103, 232, 249, 0.38);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgba(45, 212, 191, 0.18), transparent 26%), radial-gradient(circle at 65% 72%, rgba(8, 145, 178, 0.2), transparent 42%), #061522;
+  box-shadow: inset -2rem -1rem 3.5rem rgba(0, 0, 0, 0.62), inset 1rem 1rem 2rem rgba(103, 232, 249, 0.11), 0 0 3rem rgba(34, 211, 238, 0.14);
+  transform-style: preserve-3d;
+  transition: transform 180ms ease-out;
+}
+
+.artisan-globe-grid {
+  position: absolute;
+  inset: -12%;
+  opacity: 0.55;
+  background: repeating-linear-gradient(0deg, transparent 0 1.5rem, rgba(103, 232, 249, 0.16) 1.55rem 1.6rem), repeating-linear-gradient(90deg, transparent 0 1.5rem, rgba(103, 232, 249, 0.12) 1.55rem 1.6rem);
+  border-radius: 50%;
+  transform: rotate(-12deg) skewY(-8deg);
+  animation: artisan-grid-drift 18s linear infinite;
+}
+
+.artisan-globe-grid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-radial-gradient(ellipse at center, transparent 0 2.2rem, rgba(34, 211, 238, 0.12) 2.25rem 2.3rem, transparent 2.35rem 4.5rem);
+}
+
+.artisan-globe-orbit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(86vw, 32rem);
+  aspect-ratio: 1;
+  border: 1px solid rgba(103, 232, 249, 0.16);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotateX(66deg) rotateZ(-15deg);
+  animation: artisan-orbit 8s linear infinite;
+}
+
+.artisan-globe-orbit-two {
+  width: min(65vw, 24rem);
+  border-color: rgba(45, 212, 191, 0.2);
+  transform: translate(-50%, -50%) rotateX(66deg) rotateZ(58deg);
+  animation-duration: 11s;
+  animation-direction: reverse;
+}
+
+.artisan-signal {
+  width: 1.3rem;
+  height: 1.3rem;
+  transform: translate(-50%, -50%);
+  color: white;
+}
+
+.artisan-signal-dot,
+.artisan-signal-pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.artisan-signal-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  background: #67e8f9;
+  box-shadow: 0 0 0.7rem #22d3ee, 0 0 1.2rem rgba(45, 212, 191, 0.8);
+}
+
+.artisan-signal-pulse {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 1px solid rgba(103, 232, 249, 0.7);
+  animation: artisan-signal-pulse 2s ease-out infinite;
+}
+
+.artisan-signal-avatar {
+  position: absolute;
+  left: 0.8rem;
+  top: -0.65rem;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(165, 243, 252, 0.7);
+  border-radius: 50%;
+  background: #0e7490;
+  color: #ecfeff;
+  font-size: 0.6rem;
+  font-weight: 800;
+  box-shadow: 0 0 1rem rgba(34, 211, 238, 0.35);
+}
+
+.artisan-signal-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.artisan-signal-label,
+.artisan-signal-card {
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  display: flex;
+  min-width: max-content;
+  flex-direction: column;
+  align-items: flex-start;
+  border-left: 1px solid rgba(103, 232, 249, 0.65);
+  padding-left: 0.5rem;
+  color: #ecfeff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-align: left;
+  text-shadow: 0 1px 0 #020617;
+}
+
+.artisan-signal-label small {
+  color: rgba(165, 243, 252, 0.7);
+  font-size: 0.56rem;
+  font-weight: 500;
+}
+
+.artisan-signal-card {
+  left: 1.1rem;
+  top: 1.1rem;
+  z-index: 2;
+  width: 10.5rem;
+  min-width: 0;
+  gap: 0.25rem;
+  border: 1px solid rgba(103, 232, 249, 0.35);
+  border-radius: 0.75rem;
+  background: rgba(2, 18, 30, 0.94);
+  padding: 0.65rem;
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.35);
+  text-shadow: none;
+}
+
+.artisan-signal-card span,
+.artisan-signal-card small {
+  color: rgba(207, 250, 254, 0.72);
+  font-size: 0.58rem;
+  font-weight: 500;
+}
+
+.artisan-signal-card em {
+  margin-top: 0.25rem;
+  color: #67e8f9;
+  font-size: 0.56rem;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+@keyframes artisan-signal-pulse {
+  0% { opacity: 0.8; transform: translate(-50%, -50%) scale(0.35); }
+  75%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.8); }
+}
+
+@keyframes artisan-orbit {
+  to { transform: translate(-50%, -50%) rotateX(66deg) rotateZ(345deg); }
+}
+
+@keyframes artisan-grid-drift {
+  to { transform: rotate(-12deg) skewY(-8deg) translateX(-1.5rem); }
+}
+
 @keyframes loading-wave {
   to { transform: translateX(280%) skewX(-18deg); }
 }

@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Compass, MapPin, Navigation, Phone, ShieldCheck, Star, Sparkles, UserPlus } from 'lucide-react';
+import { Compass, Globe2, MapPin, Navigation, Phone, ShieldCheck, Star, Sparkles, UserPlus, ZoomIn, ZoomOut } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm } from '../data/geoData';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
@@ -42,7 +42,31 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   }, [currentUser, posts, users]);
 
   const [nearMeOnly, setNearMeOnly] = useState(false);
+  const [globeZoom, setGlobeZoom] = useState(1);
+  const [globeRotation, setGlobeRotation] = useState({ x: 0, y: 0 });
+  const [selectedGlobeArtisanId, setSelectedGlobeArtisanId] = useState<string | null>(null);
+  const dragStart = useRef<{ x: number; y: number; rotationX: number; rotationY: number } | null>(null);
   const filteredArtisans = nearMeOnly ? artisans.filter((artisan) => artisan.distanceKm !== null && artisan.distanceKm <= 250) : artisans;
+  const mappedArtisans = filteredArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng));
+
+  const updateGlobeZoom = (nextZoom: number) => setGlobeZoom(Math.min(2.65, Math.max(0.68, nextZoom)));
+
+  const handleGlobePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStart.current = { x: event.clientX, y: event.clientY, rotationX: globeRotation.x, rotationY: globeRotation.y };
+  };
+
+  const handleGlobePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStart.current) return;
+    setGlobeRotation({
+      x: dragStart.current.rotationX + (event.clientY - dragStart.current.y) * 0.35,
+      y: dragStart.current.rotationY + (event.clientX - dragStart.current.x) * 0.35,
+    });
+  };
+
+  const stopGlobeDrag = () => {
+    dragStart.current = null;
+  };
 
   return (
     <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -84,6 +108,69 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             <p className="mt-2 text-2xl font-black text-violet-500">{artisans.filter((artisan) => artisan.isPromoted).length}</p>
           </div>
         </div>
+
+        <section className={`relative mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-cyan-400/20 bg-[#07131b]' : 'border-cyan-700/20 bg-slate-950'} text-white`}>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.12),transparent_45%),linear-gradient(115deg,transparent_25%,rgba(34,211,238,0.05),transparent_75%)]" />
+          <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-cyan-400/15 px-4 py-3 sm:px-5">
+            <div className="flex items-center gap-2">
+              <Globe2 className="h-4 w-4 text-cyan-300" />
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-300">Live artisan signal</p>
+                <p className="text-xs text-slate-300">{mappedArtisans.length} account{mappedArtisans.length === 1 ? '' : 's'} transmitting verified coordinates</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={() => updateGlobeZoom(globeZoom - 0.2)} aria-label="Zoom out globe" className="rounded-lg border border-cyan-300/20 p-2 text-cyan-200 transition hover:bg-cyan-300/10"><ZoomOut className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => updateGlobeZoom(globeZoom + 0.2)} aria-label="Zoom in globe" className="rounded-lg border border-cyan-300/20 p-2 text-cyan-200 transition hover:bg-cyan-300/10"><ZoomIn className="h-3.5 w-3.5" /></button>
+              <span className="ml-1 min-w-12 text-right font-mono text-[10px] text-cyan-200">{Math.round(globeZoom * 100)}%</span>
+            </div>
+          </div>
+
+          <div
+            className="artisan-globe-stage relative h-[min(78vw,31rem)] min-h-[19rem] touch-none select-none overflow-hidden"
+            onPointerDown={handleGlobePointerDown}
+            onPointerMove={handleGlobePointerMove}
+            onPointerUp={stopGlobeDrag}
+            onPointerCancel={stopGlobeDrag}
+            onWheel={(event) => { event.preventDefault(); updateGlobeZoom(globeZoom + (event.deltaY > 0 ? -0.12 : 0.12)); }}
+          >
+            <div className="artisan-globe-orbit artisan-globe-orbit-one" />
+            <div className="artisan-globe-orbit artisan-globe-orbit-two" />
+            <div className="artisan-globe-sphere" style={{ transform: `translate(-50%, -50%) scale(${globeZoom}) rotateX(${globeRotation.x}deg) rotateY(${globeRotation.y}deg)` }}>
+              <div className="artisan-globe-grid" />
+              {mappedArtisans.map((artisan) => {
+                const left = `${((Number(artisan.location.lng) + 180) / 360) * 100}%`;
+                const top = `${((90 - Number(artisan.location.lat)) / 180) * 100}%`;
+                const detailLevel = globeZoom >= 2.25 ? 3 : globeZoom >= 1.7 ? 2 : globeZoom >= 1.2 ? 1 : 0;
+                const isSelected = selectedGlobeArtisanId === artisan.id;
+                return (
+                  <button
+                    key={artisan.id}
+                    type="button"
+                    className={`artisan-signal absolute ${isSelected ? 'z-30' : 'z-10'}`}
+                    style={{ left, top }}
+                    onClick={(event) => { event.stopPropagation(); setSelectedGlobeArtisanId(artisan.id); }}
+                    aria-label={`Open ${artisan.name} in ${artisan.location.city}, ${artisan.location.country}`}
+                  >
+                    <span className="artisan-signal-pulse" />
+                    <span className="artisan-signal-dot" />
+                    {detailLevel >= 1 && <span className="artisan-signal-avatar">{artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : getProfileInitials(artisan.name)}</span>}
+                    {detailLevel >= 2 && <span className="artisan-signal-label">{artisan.name}<small>{artisan.location.city}</small></span>}
+                    {detailLevel >= 3 && isSelected && (
+                      <span className="artisan-signal-card" onClick={(event) => { event.stopPropagation(); onSelectArtisan(artisan); }}>
+                        <strong>{artisan.name}</strong>
+                        <span>{getRoleLabel(artisan.role)}</span>
+                        <small><MapPin className="inline h-3 w-3" /> {artisan.location.city}, {artisan.location.state}</small>
+                        <em>View profile</em>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-cyan-300/15 bg-slate-950/70 px-3 py-1.5 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-cyan-100/70">Drag to rotate · scroll to scan</div>
+          </div>
+        </section>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredArtisans.map((artisan) => (

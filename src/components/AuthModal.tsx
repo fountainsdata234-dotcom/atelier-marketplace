@@ -190,8 +190,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError('Please enter your active phone number.');
       return;
     }
-    if (password.length < 6 || password.length > 8 || !/[A-Z]/.test(password) || !/\./.test(password)) {
-      setError('Password must be 6 to 8 characters long and contain a capital letter and a period.');
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/\./.test(password)) {
+      setError('Password must be at least 8 characters long and contain a capital letter and a period.');
+      return;
+    }
+    if (!currentStateObj || !selectedCityName || !cities.includes(selectedCityName)) {
+      setError('Please select both your state and city so nearby discovery can work correctly.');
       return;
     }
     if (password !== confirmPassword) {
@@ -529,6 +533,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       const match = states.find((state) => state.name.toLowerCase() === nextValue.trim().toLowerCase() || state.code?.toLowerCase() === nextValue.trim().toLowerCase());
                       if (match) {
                         setSelectedStateCode(match.code || '');
+                      } else {
+                        setSelectedStateCode('');
                       }
                     }}
                     onClear={() => {
@@ -538,6 +544,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     options={filteredStates.map((state) => state.name)}
                     placeholder="Search state"
                     listId="state-search-list"
+                    required
                   />
 
                   <SearchableLocationField
@@ -548,6 +555,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       const match = cities.find((city) => city.toLowerCase() === nextValue.trim().toLowerCase());
                       if (match) {
                         setSelectedCityName(match);
+                      } else {
+                        setSelectedCityName('');
                       }
                     }}
                     onClear={() => {
@@ -557,6 +566,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     options={filteredCities}
                     placeholder="Search city"
                     listId="city-search-list"
+                    required
                   />
                 </div>
                 <p className="text-[10px] text-neutral-500">
@@ -637,14 +647,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-neutral-400 mb-1">
-              Password {isRegistering && '(6-8 characters)'} *
+              Password {isRegistering && '(8+ characters)'} *
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-3 text-neutral-500" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
-                maxLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -654,7 +663,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use 6-8 characters, including at least one capital letter and a period.</p>}
+            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use at least 8 characters, including one capital letter and a period. Longer passwords are welcome.</p>}
           </div>
 
           {isRegistering && (
@@ -665,7 +674,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
-                  maxLength={8}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat your password"

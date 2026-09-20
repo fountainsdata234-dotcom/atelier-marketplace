@@ -9,6 +9,7 @@ interface SearchableLocationFieldProps {
   options: string[];
   placeholder: string;
   listId: string;
+  required?: boolean;
 }
 
 export const SearchableLocationField: React.FC<SearchableLocationFieldProps> = ({
@@ -19,6 +20,7 @@ export const SearchableLocationField: React.FC<SearchableLocationFieldProps> = (
   options,
   placeholder,
   listId,
+  required = false,
 }) => {
   const hasValue = value.trim().length > 0;
 
@@ -32,6 +34,7 @@ export const SearchableLocationField: React.FC<SearchableLocationFieldProps> = (
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
+          required={required}
           className="w-full pr-8 pl-2.5 py-2 text-xs rounded-lg bg-neutral-800/80 border border-neutral-700 text-neutral-200 placeholder:text-neutral-500 focus:border-amber-500 focus:outline-none shadow-inner shadow-black/10"
         />
         {hasValue && (
