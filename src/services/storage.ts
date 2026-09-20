@@ -528,6 +528,14 @@ export const storageService = {
     return { savesCount: post.saves.length, isSaved };
   },
 
+  reconcilePostEngagement(postId: string, updates: Partial<Pick<ClothPost, 'likes' | 'saves' | 'rating' | 'ratingCount'>>): void {
+    const posts = this.getPosts();
+    const post = posts.find(item => item.id === postId);
+    if (!post) return;
+    Object.assign(post, updates);
+    this.savePosts(posts);
+  },
+
   toggleFollowUser(targetUserId: string, currentUserId: string): { followersCount: number; isFollowing: boolean } {
     const users = this.getUsers();
     const target = users.find(u => u.id === targetUserId);

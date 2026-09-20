@@ -426,6 +426,7 @@ export default function App() {
       handleOpenAuthWithRole('buyer');
       return;
     }
+    const previousFollowers = Array.isArray(seller.followers) ? [...seller.followers] : [];
     storageService.toggleFollowUser(seller.id, currentUser.id);
     const locallyUpdated = storageService.getUsers().find(user => user.id === seller.id);
     if (locallyUpdated) {
@@ -433,7 +434,14 @@ export default function App() {
       setSharedSeller(locallyUpdated);
     }
     const result = await api.toggleFollow(seller.id).catch(() => null);
-    if (!result) return;
+    if (!result) {
+      const reverted = storageService.updateUser(seller.id, { followers: previousFollowers });
+      if (reverted) {
+        setUsers(storageService.getUsers());
+        setSharedSeller(reverted);
+      }
+      return;
+    }
     const updated = storageService.updateUser(seller.id, { followers: result.followers });
     if (updated) {
       setUsers(storageService.getUsers());

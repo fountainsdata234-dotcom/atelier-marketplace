@@ -348,11 +348,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }
 
     const updated = storageService.toggleLikePost(postId, currentUser.id);
-    if (updated.isLiked) recordEvent(postId, 'LIKE');
     window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
 
     api.toggleLike(postId)
-      .then(() => {
+      .then(result => {
+        const post = storageService.getPosts().find(item => item.id === postId);
+        if (!post) return;
+        const likes = post.likes.filter(userId => userId !== currentUser.id);
+        if (result.isLiked) likes.push(currentUser.id);
+        storageService.reconcilePostEngagement(postId, { likes });
+        if (result.isLiked) recordEvent(postId, 'LIKE');
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
       .catch(error => {
@@ -367,10 +372,21 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       onOpenAuth();
       return;
     }
+    const previousPost = storageService.getPosts().find(post => post.id === postId);
+    const previousEngagement = previousPost ? { rating: previousPost.rating || 0, ratingCount: previousPost.ratingCount || 0 } : null;
     const localResult = storageService.ratePost(postId, currentUser.id, rating);
-    recordEvent(postId, 'RATING');
     if (localResult) window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
-    api.ratePost(postId, rating).then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated'))).catch(error => setLocationStatus(error.message));
+    api.ratePost(postId, rating)
+      .then(result => {
+        storageService.reconcilePostEngagement(postId, { rating: result.rating, ratingCount: result.ratingCount });
+        recordEvent(postId, 'RATING');
+        window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      })
+      .catch(error => {
+        setLocationStatus(error.message);
+        if (previousEngagement) storageService.reconcilePostEngagement(postId, previousEngagement);
+        window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      });
   };
 
   // Handle Save Picture
@@ -380,20 +396,30 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       return;
     }
 
+    const previousSavedPhoto = storageService.getSavedPhotos().find(photo => photo.postId === post.id);
     const result = storageService.toggleSavePost(post.id, currentUser.id);
-    if (result.isSaved) recordEvent(post.id, 'SAVE');
-    storageService.addSavedPhoto({
-      url: post.imageUrl,
-      title: post.title,
-      postId: post.id,
-    });
+    if (result.isSaved) storageService.addSavedPhoto({ url: post.imageUrl, title: post.title, postId: post.id });
     window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
 
     api.toggleSave(post.id)
-      .then(() => window.dispatchEvent(new CustomEvent('atelier_posts_updated')))
+      .then(serverResult => {
+        const savedPhotos = storageService.getSavedPhotos();
+        if (!serverResult.isSaved) {
+          const saved = savedPhotos.find(photo => photo.postId === post.id);
+          if (saved) storageService.removeSavedPhoto(saved.id);
+        }
+        if (serverResult.isSaved) recordEvent(post.id, 'SAVE');
+        window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      })
       .catch(error => {
         setLocationStatus(error.message);
         storageService.toggleSavePost(post.id, currentUser.id);
+        if (result.isSaved) {
+          const saved = storageService.getSavedPhotos().find(photo => photo.postId === post.id);
+          if (saved) storageService.removeSavedPhoto(saved.id);
+        } else if (previousSavedPhoto) {
+          storageService.addSavedPhoto({ url: previousSavedPhoto.url, title: previousSavedPhoto.title, postId: previousSavedPhoto.postId });
+        }
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       });
 

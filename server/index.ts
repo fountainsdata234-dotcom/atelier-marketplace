@@ -438,6 +438,11 @@ app.post('/api/users/:uid/follow', requireAuth, async (req: AuthenticatedRequest
     return;
   }
   const targetRef = firestore.collection('profiles').doc(req.params.uid);
+  const targetSnapshot = await targetRef.get();
+  if (!targetSnapshot.exists) {
+    res.status(404).json({ error: 'That artisan account no longer exists.' });
+    return;
+  }
   const updated = await firestore.runTransaction(async transaction => {
     const snapshot = await transaction.get(targetRef);
     const data = snapshot.data() || {};
@@ -523,12 +528,19 @@ app.post('/api/posts/:postId/rating', requireAuth, async (req: AuthenticatedRequ
     return;
   }
   const postRef = firestore.collection('posts').doc(req.params.postId);
+  const postSnapshot = await postRef.get();
+  if (!postSnapshot.exists) {
+    res.status(404).json({ error: 'That marketplace item no longer exists.' });
+    return;
+  }
   const ratingRef = postRef.collection('ratings').doc(req.authUser!.uid);
   await firestore.runTransaction(async (transaction: Transaction) => {
     transaction.set(ratingRef, { rating, updatedAt: FieldValue.serverTimestamp() });
     transaction.set(postRef, { updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   });
-  res.status(204).send();
+  const ratingsSnapshot = await postRef.collection('ratings').get();
+  const ratings = ratingsSnapshot.docs.map(doc => Number(doc.data().rating)).filter(value => value >= 1 && value <= 5);
+  res.json({ rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : 0, ratingCount: ratings.length });
 });
 
 app.get('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -644,6 +656,10 @@ app.post('/api/admin/broadcast', requireAuth, requireAdmin, async (req: Authenti
 
 app.post('/api/posts/:postId/like', requireAuth, async (req: AuthenticatedRequest, res) => {
   const postRef = firestore.collection('posts').doc(req.params.postId);
+  if (!(await postRef.get()).exists) {
+    res.status(404).json({ error: 'That marketplace item no longer exists.' });
+    return;
+  }
   const likeRef = postRef.collection('likes').doc(req.authUser!.uid);
   const result = await firestore.runTransaction(async transaction => {
     const like = await transaction.get(likeRef);
@@ -651,15 +667,25 @@ app.post('/api/posts/:postId/like', requireAuth, async (req: AuthenticatedReques
     else transaction.set(likeRef, { createdAt: FieldValue.serverTimestamp() });
     return !like.exists;
   });
-  res.json({ isLiked: result });
+  const likesSnapshot = await postRef.collection('likes').get();
+  res.json({ isLiked: result, likesCount: likesSnapshot.size });
 });
 
 app.post('/api/posts/:postId/save', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const saveRef = firestore.collection('posts').doc(req.params.postId).collection('saves').doc(req.authUser!.uid);
-  const existing = await saveRef.get();
-  if (existing.exists) await saveRef.delete();
-  else await saveRef.set({ createdAt: FieldValue.serverTimestamp() });
-  res.json({ isSaved: !existing.exists });
+  const postRef = firestore.collection('posts').doc(req.params.postId);
+  if (!(await postRef.get()).exists) {
+    res.status(404).json({ error: 'That marketplace item no longer exists.' });
+    return;
+  }
+  const saveRef = postRef.collection('saves').doc(req.authUser!.uid);
+  const isSaved = await firestore.runTransaction(async transaction => {
+    const existing = await transaction.get(saveRef);
+    if (existing.exists) transaction.delete(saveRef);
+    else transaction.set(saveRef, { createdAt: FieldValue.serverTimestamp() });
+    return !existing.exists;
+  });
+  const savesSnapshot = await postRef.collection('saves').get();
+  res.json({ isSaved, savesCount: savesSnapshot.size });
 });
 
 app.delete('/api/posts/:postId', requireAuth, async (req: AuthenticatedRequest, res) => {
