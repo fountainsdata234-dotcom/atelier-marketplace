@@ -137,6 +137,9 @@ const ArtisanMarker: React.FC<{
     const worldPosition = new THREE.Vector3();
     markerRef.current.getWorldPosition(worldPosition);
     const distance = camera.position.distanceTo(worldPosition);
+    const cameraDirection = camera.position.clone().normalize();
+    const markerDirection = worldPosition.clone().normalize();
+    markerRef.current.visible = markerDirection.dot(cameraDirection) > 0.04;
     const zoomAmount = THREE.MathUtils.clamp((8 - distance) / 4.75, 0, 1);
     const markerScale = THREE.MathUtils.lerp(0.62, 1.5, zoomAmount);
     markerRef.current.scale.setScalar(markerScale);
@@ -155,43 +158,43 @@ const ArtisanMarker: React.FC<{
         <ringGeometry args={[0.075, 0.084, 20]} />
         <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>
-      <Html distanceFactor={7} position={[0, 0.1, 0]} center>
-        <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onClick={() => onSelect(artisan)} aria-label={`Select ${artisan.name}`}>
+      <Html distanceFactor={7} position={[0, 0, 0]} center pointerEvents="auto">
+        <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`Select ${artisan.name}`}>
           {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
         </button>
       </Html>
       {artisan.isPromoted && (
-        <Html distanceFactor={6} position={[0, 0.13, 0]} center>
-          <button type="button" className="artisan-3d-crown" onClick={() => onSelect(artisan)} aria-label={`${artisan.name} promoted artisan`}>
+        <Html distanceFactor={6} position={[0, 0.13, 0]} center pointerEvents="auto">
+          <button type="button" className="artisan-3d-crown" onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${artisan.name} promoted artisan`}>
             <Crown aria-hidden="true" />
           </button>
         </Html>
       )}
       {revealLevel >= 1 && artisan.avatarUrl && (
-        <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center>
-          <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
+        <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center pointerEvents="auto">
+          <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
             <img src={artisan.avatarUrl} alt="" />
           </button>
         </Html>
       )}
       {revealLevel >= 1 && !artisan.avatarUrl && (
-        <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center>
-          <button type="button" className={`artisan-3d-avatar artisan-3d-initials ${selected ? 'is-selected' : ''}`} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
+        <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center pointerEvents="auto">
+          <button type="button" className={`artisan-3d-avatar artisan-3d-initials ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
             {getProfileInitials(artisan.name)}
           </button>
         </Html>
       )}
       {revealLevel >= 2 && !selected && (
-        <Html distanceFactor={7} position={[0.11, 0.16, 0]} center>
-          <button type="button" className="artisan-3d-label" onClick={() => onSelect(artisan)}>
+        <Html distanceFactor={7} position={[0.11, 0.16, 0]} center pointerEvents="auto">
+          <button type="button" className="artisan-3d-label" onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)}>
             <strong>{artisan.name}</strong>
             <small>{artisan.location.city}</small>
           </button>
         </Html>
       )}
       {selected && (
-        <Html distanceFactor={7} position={[0.11, 0.16, 0]} center>
-          <div className="artisan-3d-detail-card">
+        <Html distanceFactor={7} position={[0.11, 0.16, 0]} center pointerEvents="auto">
+          <div className="artisan-3d-detail-card" onPointerDown={(event) => event.stopPropagation()}>
             <button type="button" className="artisan-3d-detail-close" onClick={(event) => { event.stopPropagation(); onClose(); }} aria-label="Close seller details">
               <X aria-hidden="true" />
             </button>
