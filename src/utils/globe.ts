@@ -12,37 +12,92 @@ export type GlobeSearchCandidate = {
   };
 };
 
-export const getMarkerScatterOffset = (
-  latitude: number,
-  longitude: number,
-  index: number,
-  total: number,
-) => {
+const getTangentBasis = (latitude: number, longitude: number) => {
   const lat = (latitude * Math.PI) / 180;
   const lon = (longitude * Math.PI) / 180;
 
   const baseX = Math.cos(lat) * Math.sin(lon);
   const baseY = Math.sin(lat);
   const baseZ = Math.cos(lat) * Math.cos(lon);
-
   const tangentX = -Math.sin(lon);
   const tangentY = 0;
   const tangentZ = Math.cos(lon);
-
   const binormalX = -Math.sin(lat) * Math.cos(lon);
   const binormalY = Math.cos(lat);
   const binormalZ = -Math.sin(lat) * Math.sin(lon);
 
+  return { x: baseX, y: baseY, z: baseZ, tangentX, tangentY, tangentZ, binormalX, binormalY, binormalZ };
+};
+
+export const getMarkerScatterOffset = (
+  latitude: number,
+  longitude: number,
+  index: number,
+  total: number,
+) => {
+  const basis = getTangentBasis(latitude, longitude);
   const safeTotal = Math.max(total, 1);
-  const spread = 0.12 + Math.min(0.28, safeTotal * 0.024);
+  const spread = 0.14 + Math.min(0.28, safeTotal * 0.024);
   const angle = (index / safeTotal) * Math.PI * 2 + (index * 1.61803398875);
-  const radius = spread * (0.78 + ((index % 4) * 0.18));
+  const radius = spread * (0.8 + ((index % 4) * 0.18));
 
-  const x = baseX * 0.035 + tangentX * Math.cos(angle) * radius + binormalX * Math.sin(angle) * radius;
-  const y = baseY * 0.035 + tangentY * Math.cos(angle) * radius + binormalY * Math.sin(angle) * radius;
-  const z = baseZ * 0.035 + tangentZ * Math.cos(angle) * radius + binormalZ * Math.sin(angle) * radius;
+  return {
+    x: basis.x * 0.035 + basis.tangentX * Math.cos(angle) * radius + basis.binormalX * Math.sin(angle) * radius,
+    y: basis.y * 0.035 + basis.tangentY * Math.cos(angle) * radius + basis.binormalY * Math.sin(angle) * radius,
+    z: basis.z * 0.035 + basis.tangentZ * Math.cos(angle) * radius + basis.binormalZ * Math.sin(angle) * radius,
+  };
+};
 
-  return { x, y, z };
+export const getScatterOffsetsForLocations = (
+  locations: Array<{ lat: number; lng: number }>,
+  minimumDistance = 0.18,
+) => {
+  const offsets: Array<{ x: number; y: number; z: number }> = [];
+
+  locations.forEach((location, index) => {
+    const basis = getTangentBasis(location.lat, location.lng);
+    let chosen = { x: 0, y: 0, z: 0 };
+    let found = false;
+
+    for (let ring = 0; ring < 18; ring += 1) {
+      const radius = minimumDistance * (1 + ring * 0.45);
+      const steps = Math.max(8, Math.round((Math.PI * 2 * radius) / 0.18));
+
+      for (let step = 0; step < steps; step += 1) {
+        const angle = (step / steps) * Math.PI * 2 + index * 1.61803398875;
+        const candidate = {
+          x: basis.x * 0.035 + basis.tangentX * Math.cos(angle) * radius + basis.binormalX * Math.sin(angle) * radius,
+          y: basis.y * 0.035 + basis.tangentY * Math.cos(angle) * radius + basis.binormalY * Math.sin(angle) * radius,
+          z: basis.z * 0.035 + basis.tangentZ * Math.cos(angle) * radius + basis.binormalZ * Math.sin(angle) * radius,
+        };
+
+        const overlaps = offsets.some((previous) => {
+          const dx = previous.x - candidate.x;
+          const dy = previous.y - candidate.y;
+          const dz = previous.z - candidate.z;
+          return Math.hypot(dx, dy, dz) < minimumDistance;
+        });
+
+        if (!overlaps) {
+          chosen = candidate;
+          found = true;
+          break;
+        }
+      }
+
+      if (found) {
+        break;
+      }
+    }
+
+    if (!found) {
+      chosen = getMarkerScatterOffset(location.lat, location.lng, index, Math.max(locations.length, 1));
+    }
+
+    offsets.push(chosen);
+  });
+
+  return offsets;
 };
 
 export const getSearchSuggestions = <T extends GlobeSearchCandidate>(

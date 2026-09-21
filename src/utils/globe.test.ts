@@ -1,13 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { getMarkerScatterOffset, getSearchSuggestions } from './globe';
+import { getScatterOffsetsForLocations, getSearchSuggestions } from './globe';
 
 describe('globe helpers', () => {
-  it('keeps nearby seller markers slightly apart', () => {
-    const offsets = Array.from({ length: 5 }, (_, index) => getMarkerScatterOffset(6.5244, 3.3792, index, 5));
-    const distances = offsets.map((offset) => Math.hypot(offset.x, offset.y, offset.z));
-    const minDistance = Math.min(...distances);
+  it('keeps nearby seller markers from overlapping one another', () => {
+    const points = Array.from({ length: 5 }, () => ({ lat: 6.5244, lng: 3.3792 }));
+    const offsets = getScatterOffsetsForLocations(points, 0.18);
+    const pairDistances = [] as number[];
 
-    expect(minDistance).toBeGreaterThan(0.06);
+    for (let index = 0; index < offsets.length; index += 1) {
+      for (let compareIndex = index + 1; compareIndex < offsets.length; compareIndex += 1) {
+        pairDistances.push(Math.hypot(
+          offsets[index].x - offsets[compareIndex].x,
+          offsets[index].y - offsets[compareIndex].y,
+          offsets[index].z - offsets[compareIndex].z,
+        ));
+      }
+    }
+
+    expect(pairDistances.length).toBeGreaterThan(0);
+    expect(Math.min(...pairDistances)).toBeGreaterThan(0.18);
     expect(offsets.every((offset) => Math.abs(offset.x) + Math.abs(offset.y) + Math.abs(offset.z) > 0)).toBe(true);
   });
 

@@ -4,7 +4,7 @@ import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
 import { Crown, Scissors, SwatchBook } from 'lucide-react';
 import * as THREE from 'three';
 import type { User } from '../types';
-import { getMarkerScatterOffset } from '../utils/globe';
+import { getScatterOffsetsForLocations } from '../utils/globe';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 export interface GlobeArtisan extends User {
@@ -218,6 +218,13 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
   const globeRef = useRef<THREE.Group>(null);
   const controlsRef = useRef<any>(null);
   const texture = useMemo(() => createMapTexture(), []);
+  const scatterOffsets = useMemo(() => {
+    const validLocations = artisans
+      .filter((item) => Number.isFinite(Number(item.location.lat)) && Number.isFinite(Number(item.location.lng)))
+      .map((item) => ({ lat: Number(item.location.lat), lng: Number(item.location.lng) }));
+
+    return getScatterOffsetsForLocations(validLocations, 0.2);
+  }, [artisans]);
   const gridLines = useMemo(() => {
     return Array.from({ length: 7 }, (_, index) => {
       const latitude = -75 + index * 25;
@@ -266,7 +273,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
         {artisans.map((artisan, index) => {
           const lat = Number(artisan.location.lat);
           const lng = Number(artisan.location.lng);
-          const offset = getMarkerScatterOffset(lat, lng, index, artisans.length || 1);
+          const offset = scatterOffsets[index] ?? { x: 0, y: 0, z: 0 };
           const position = toGlobePosition(lat, lng, 2.08).add(new THREE.Vector3(offset.x, offset.y, offset.z));
           const selected = selectedArtisanId === artisan.id;
           const markerSize = Math.max(0.62, 1.24 - Math.min(0.72, artisans.length * 0.014));
