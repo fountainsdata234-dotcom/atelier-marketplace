@@ -99,6 +99,59 @@ const CurrentBands: React.FC = () => {
   );
 };
 
+const ArtisanMarker: React.FC<{
+  artisan: GlobeArtisan;
+  selected: boolean;
+  onSelect: (artisan: GlobeArtisan) => void;
+}> = ({ artisan, selected, onSelect }) => {
+  const markerRef = useRef<THREE.Group>(null);
+  const pulseRef = useRef<THREE.Mesh>(null);
+  const pulsePhase = useRef(Math.random() * Math.PI * 2);
+
+  useFrame(({ camera, clock }) => {
+    if (!markerRef.current || !pulseRef.current) return;
+    const worldPosition = new THREE.Vector3();
+    markerRef.current.getWorldPosition(worldPosition);
+    const distance = camera.position.distanceTo(worldPosition);
+    const zoomAmount = THREE.MathUtils.clamp((8 - distance) / 4.75, 0, 1);
+    const markerScale = THREE.MathUtils.lerp(0.62, 1.5, zoomAmount);
+    markerRef.current.scale.setScalar(markerScale);
+
+    const pulse = (Math.sin(clock.elapsedTime * 1.25 + pulsePhase.current) + 1) / 2;
+    pulseRef.current.scale.setScalar(1 + pulse * 0.42);
+    const material = pulseRef.current.material as THREE.MeshBasicMaterial;
+    material.opacity = 0.08 + pulse * 0.16;
+  });
+
+  return (
+    <group ref={markerRef}>
+      <mesh onClick={(event) => { event.stopPropagation(); onSelect(artisan); }}>
+        <sphereGeometry args={[selected ? 0.07 : 0.045, 12, 12]} />
+        <meshBasicMaterial color={selected ? '#fbbf24' : '#d9ffff'} toneMapped={false} />
+      </mesh>
+      <mesh ref={pulseRef}>
+        <ringGeometry args={[0.075, 0.084, 20]} />
+        <meshBasicMaterial color={selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
+      {artisan.avatarUrl && (
+        <Html distanceFactor={5.5} position={[0.085, 0.085, 0]} center>
+          <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
+            <img src={artisan.avatarUrl} alt="" />
+          </button>
+        </Html>
+      )}
+      {selected && (
+        <Html distanceFactor={7} position={[0.11, 0.16, 0]} center>
+          <button type="button" className="artisan-3d-label" onClick={() => onSelect(artisan)}>
+            {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : <span>{getProfileInitials(artisan.name)}</span>}
+            <strong>{artisan.name}</strong>
+          </button>
+        </Html>
+      )}
+    </group>
+  );
+};
+
 const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan }) => {
   const globeRef = useRef<THREE.Group>(null);
   const texture = useMemo(() => createMapTexture(), []);
@@ -142,27 +195,12 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           const selected = selectedArtisanId === artisan.id;
           return (
             <group key={artisan.id} position={position}>
-              <mesh onClick={(event) => { event.stopPropagation(); onSelectArtisan(artisan); }}>
-                <sphereGeometry args={[selected ? 0.105 : 0.07, 16, 16]} />
-                <meshBasicMaterial color={selected ? '#fbbf24' : '#f0fdfa'} toneMapped={false} />
-              </mesh>
-              <mesh scale={selected ? 2.2 : 1.7}>
-                <sphereGeometry args={[0.07, 12, 12]} />
-                <meshBasicMaterial color={selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.2} blending={THREE.AdditiveBlending} />
-              </mesh>
-              {selected && (
-                <Html distanceFactor={7} position={[0.1, 0.12, 0]} center>
-                  <button type="button" className="artisan-3d-label" onClick={() => onSelectArtisan(artisan)}>
-                    {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : <span>{getProfileInitials(artisan.name)}</span>}
-                    <strong>{artisan.name}</strong>
-                  </button>
-                </Html>
-              )}
+              <ArtisanMarker artisan={artisan} selected={selected} onSelect={onSelectArtisan} />
             </group>
           );
         })}
       </group>
-      <OrbitControls enablePan={false} enableDamping dampingFactor={0.08} minDistance={3.25} maxDistance={8} autoRotate={false} rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
+      <OrbitControls enablePan={false} enableDamping dampingFactor={0.08} minDistance={3.25} maxDistance={8} autoRotate autoRotateSpeed={0.18} zoomToCursor rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
     </>
   );
 };
