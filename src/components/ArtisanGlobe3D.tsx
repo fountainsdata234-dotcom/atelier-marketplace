@@ -169,11 +169,11 @@ const ArtisanMarker: React.FC<{
 
   return (
     <group ref={markerRef}>
-      {isFrontFacing && <mesh ref={pulseRef} position={[0.18, 0.18, 0]}>
+      {isFrontFacing && revealLevel < 1 && <mesh ref={pulseRef} position={[0.18, 0.18, 0]}>
         <ringGeometry args={[0.075, 0.084, 20]} />
         <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>}
-      {isFrontFacing && <Html distanceFactor={7} position={[0.18, 0.18, 0]} center pointerEvents="auto">
+      {isFrontFacing && revealLevel < 1 && <Html distanceFactor={7} position={[0.18, 0.18, 0]} center pointerEvents="auto">
         <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${getRoleLabel(artisan.role)} marker for ${artisan.name}`}>
           {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
         </button>
@@ -185,22 +185,20 @@ const ArtisanMarker: React.FC<{
           </button>
         </Html>
       )}
-      {isFrontFacing && revealLevel >= 1 && artisan.avatarUrl && (
+      {isFrontFacing && revealLevel >= 1 && (
         <Html distanceFactor={3.9} position={[0, 0, 0]} center pointerEvents="auto">
-          <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
-            <img src={artisan.avatarUrl} alt="" />
-          </button>
-        </Html>
-      )}
-      {isFrontFacing && revealLevel >= 1 && !artisan.avatarUrl && (
-        <Html distanceFactor={3.9} position={[0, 0, 0]} center pointerEvents="auto">
-          <button type="button" className={`artisan-3d-avatar artisan-3d-initials ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
-            {getProfileInitials(artisan.name)}
-          </button>
+          <span className="artisan-3d-avatar-wrap">
+            <button type="button" className={`artisan-3d-avatar ${!artisan.avatarUrl ? 'artisan-3d-initials' : ''} ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
+              {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : getProfileInitials(artisan.name)}
+            </button>
+            <button type="button" className={`artisan-role-signal artisan-role-signal-attached ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${getRoleLabel(artisan.role)} marker for ${artisan.name}`}>
+              {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
+            </button>
+          </span>
         </Html>
       )}
       {isFrontFacing && revealLevel >= 2 && (
-        <Html distanceFactor={7} position={[0.11, 0.16, 0]} center pointerEvents="auto">
+        <Html distanceFactor={5.5} position={[0.08, 0.12, 0]} center pointerEvents="auto">
           <button type="button" className="artisan-3d-label" onPointerDown={(event) => event.stopPropagation()} onClick={() => onOpen(artisan)} aria-label={`Open profile for ${displayHandle}`}>
             <strong>{displayHandle}</strong>
           </button>
