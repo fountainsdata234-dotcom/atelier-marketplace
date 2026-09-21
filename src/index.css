@@ -309,6 +309,27 @@
   object-fit: cover;
 }
 
+.artisan-3d-crown {
+  display: grid;
+  width: 1rem;
+  height: 0.9rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(253, 230, 138, 0.8);
+  border-radius: 0.28rem 0.28rem 0.45rem 0.45rem;
+  background: rgba(120, 53, 15, 0.92);
+  color: #fcd34d;
+  box-shadow: 0 0 0.55rem rgba(251, 191, 36, 0.55);
+  transform: translateY(-0.1rem);
+  transition: width 160ms ease, height 160ms ease, box-shadow 160ms ease;
+}
+
+.artisan-3d-crown svg {
+  width: 0.7rem;
+  height: 0.7rem;
+  stroke-width: 2.5;
+}
+
 .artisan-selected-board {
   display: flex;
   align-items: center;

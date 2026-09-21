@@ -1,6 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
+import { Crown } from 'lucide-react';
 import * as THREE from 'three';
 import type { User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
@@ -127,12 +128,19 @@ const ArtisanMarker: React.FC<{
     <group ref={markerRef}>
       <mesh onClick={(event) => { event.stopPropagation(); onSelect(artisan); }}>
         <sphereGeometry args={[selected ? 0.07 : 0.045, 12, 12]} />
-        <meshBasicMaterial color={selected ? '#fbbf24' : '#d9ffff'} toneMapped={false} />
+        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#d9ffff'} toneMapped={false} />
       </mesh>
       <mesh ref={pulseRef}>
         <ringGeometry args={[0.075, 0.084, 20]} />
-        <meshBasicMaterial color={selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>
+      {artisan.isPromoted && (
+        <Html distanceFactor={6} position={[0, 0.13, 0]} center>
+          <button type="button" className="artisan-3d-crown" onClick={() => onSelect(artisan)} aria-label={`${artisan.name} promoted artisan`}>
+            <Crown aria-hidden="true" />
+          </button>
+        </Html>
+      )}
       {artisan.avatarUrl && (
         <Html distanceFactor={5.5} position={[0.085, 0.085, 0]} center>
           <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
