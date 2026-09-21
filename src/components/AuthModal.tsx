@@ -709,24 +709,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </span>
           </button>
 
-          <div className="flex items-center gap-3 py-1 text-[10px] uppercase tracking-widest text-neutral-500">
-            <span className="h-px flex-1 bg-neutral-800" />
-            <span>or</span>
-            <span className="h-px flex-1 bg-neutral-800" />
-          </div>
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isSubmitting}
-            className="w-full py-3 rounded-xl border border-neutral-700 bg-white text-neutral-900 text-xs font-semibold hover:bg-neutral-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? (
-              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-900/30 border-t-neutral-900" />
-            ) : (
-              <Chrome className="w-4 h-4" />
-            )}
-            Continue with Google
-          </button>
+          {!isRegistering && (
+            <>
+              <div className="flex items-center gap-3 py-1 text-[10px] uppercase tracking-widest text-neutral-500">
+                <span className="h-px flex-1 bg-neutral-800" />
+                <span>or</span>
+                <span className="h-px flex-1 bg-neutral-800" />
+              </div>
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isSubmitting}
+                className="w-full py-3 rounded-xl border border-neutral-700 bg-white text-neutral-900 text-xs font-semibold hover:bg-neutral-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-900/30 border-t-neutral-900" />
+                ) : (
+                  <Chrome className="w-4 h-4" />
+                )}
+                Continue with Google
+              </button>
+            </>
+          )}
         </form>
 
       </motion.div>

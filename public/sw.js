@@ -23,7 +23,25 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const requestUrl = new URL(event.request.url);
-  if (requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith('/api/')) return;
+  if (requestUrl.origin !== self.location.origin) return;
+
+  const isPublicDataRequest = ['/api/users', '/api/posts', '/api/promo-plans'].includes(requestUrl.pathname);
+  if (isPublicDataRequest) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cachedResponse) => cachedResponse || new Response('[]', { headers: { 'Content-Type': 'application/json' } })))
+    );
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith('/api/')) return;
 
   if (event.request.mode === 'navigate') {
     event.respondWith(

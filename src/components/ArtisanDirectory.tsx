@@ -1,9 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { motion } from 'motion/react';
-import { Compass, Globe2, MapPin, Navigation, Phone, ShieldCheck, Star, UserPlus } from 'lucide-react';
+import { Globe2, Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
-import { calculateDistanceKm } from '../data/geoData';
-import { getProfileInitials, getRoleLabel } from '../utils/profile';
+import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
 import { ArtisanBoard, ArtisanGlobe3D } from './ArtisanGlobe3D';
 
 interface ArtisanDirectoryProps {
@@ -43,8 +41,22 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   }, [currentUser, posts, users]);
 
   const [nearMeOnly, setNearMeOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCountry, setFilterCountry] = useState('all');
+  const [filterState, setFilterState] = useState('all');
+  const [filterCity, setFilterCity] = useState('all');
   const [selectedGlobeArtisanId, setSelectedGlobeArtisanId] = useState<string | null>(null);
-  const filteredArtisans = nearMeOnly ? artisans.filter((artisan) => artisan.distanceKm !== null && artisan.distanceKm <= 250) : artisans;
+  const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry);
+  const selectedState = selectedCountry?.states.find((state) => state.code === filterState);
+  const filteredArtisans = artisans.filter((artisan) => {
+    const term = searchQuery.trim().toLowerCase();
+    const matchesSearch = !term || artisan.name.toLowerCase().includes(term) || artisan.handle.toLowerCase().includes(term);
+    const matchesCountry = filterCountry === 'all' || artisan.location.countryCode === filterCountry || artisan.location.country === selectedCountry?.name;
+    const matchesState = filterState === 'all' || artisan.location.state === selectedState?.name;
+    const matchesCity = filterCity === 'all' || artisan.location.city === filterCity;
+    const matchesRadius = !nearMeOnly || (artisan.distanceKm !== null && artisan.distanceKm <= 250);
+    return matchesSearch && matchesCountry && matchesState && matchesCity && matchesRadius;
+  });
   const mappedArtisans = filteredArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng));
   const selectedGlobeArtisan = mappedArtisans.find((artisan) => artisan.id === selectedGlobeArtisanId) || null;
 
@@ -58,6 +70,10 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
 
           <div className="flex items-center gap-2">
+            <div className={`flex min-w-0 items-center gap-2 rounded-xl border px-3 py-2 ${isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
+              <Search className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search name or @handle" className="min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500" aria-label="Search artisans by name or handle" />
+            </div>
             <button
               onClick={() => setNearMeOnly((prev) => !prev)}
               className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
@@ -72,6 +88,21 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
               {nearMeOnly ? 'Showing 250km radius' : 'Filter near me'}
             </button>
           </div>
+        </div>
+
+        <div className={`mb-6 grid gap-2 rounded-2xl border p-3 sm:grid-cols-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
+          <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedGlobeArtisanId(null); }} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
+            <option value="all">All countries</option>
+            {WORLD_COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
+          </select>
+          <select value={filterState} onChange={(event) => { setFilterState(event.target.value); setFilterCity('all'); setSelectedGlobeArtisanId(null); }} disabled={!selectedCountry} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
+            <option value="all">All states / provinces</option>
+            {selectedCountry?.states.map((state) => <option key={state.code} value={state.code}>{state.name}</option>)}
+          </select>
+          <select value={filterCity} onChange={(event) => { setFilterCity(event.target.value); setSelectedGlobeArtisanId(null); }} disabled={!selectedState} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
+            <option value="all">All cities</option>
+            {selectedState?.cities.map((city) => <option key={city} value={city}>{city}</option>)}
+          </select>
         </div>
 
         <div className="mb-6 grid gap-3 md:grid-cols-3">
@@ -106,88 +137,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
           {selectedGlobeArtisan && <ArtisanBoard artisan={selectedGlobeArtisan} isDarkMode={isDarkMode} onOpen={onSelectArtisan} />}
         </section>
-
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredArtisans.map((artisan) => (
-            <motion.article
-              key={artisan.id}
-              layout
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-white shadow-sm'}`}
-              onClick={() => onSelectArtisan(artisan)}
-            >
-              <div className="relative p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt={artisan.name} className="h-12 w-12 rounded-2xl object-cover ring-1 ring-amber-500/30" /> : <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-sm font-black text-neutral-950 ring-1 ring-amber-500/30">{getProfileInitials(artisan.name)}</div>}
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base font-semibold">{artisan.name}</h2>
-                        {artisan.isPromoted && <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Promoted</span>}
-                      </div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-500">{getRoleLabel(artisan.role)}</p>
-                      {artisan.shopName && <p className="text-[10px] text-amber-400">{artisan.shopName} · {artisan.handle}</p>}
-                    </div>
-                  </div>
-
-                  <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-wider text-emerald-400">
-                    {artisan.distanceKm !== null ? `${Math.round(artisan.distanceKm)} km` : 'Global'}
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2 text-xs">
-                  <div className="flex items-center gap-2 text-neutral-400">
-                    <MapPin className="h-3.5 w-3.5 text-amber-400" />
-                    <span>{artisan.location.city}, {artisan.location.state}, {artisan.location.country}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-neutral-400">
-                    <Compass className="h-3.5 w-3.5 text-amber-400" />
-                    <span>{artisan.postCount} live post{artisan.postCount === 1 ? '' : 's'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-neutral-400">
-                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                    <span>{artisan.rating ? artisan.rating.toFixed(1) : 'New profile'}</span>
-                  </div>
-                </div>
-
-                {artisan.latestPost && (
-                  <div className="mt-4 overflow-hidden rounded-2xl border border-amber-500/20 bg-amber-500/5">
-                    <img src={artisan.latestPost.imageUrl} alt={artisan.latestPost.title} className="h-32 w-full object-cover" />
-                    <div className="p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-semibold">{artisan.latestPost.title}</p>
-                        <span className="text-[10px] text-amber-400">{artisan.latestPost.tags[0] || 'Featured'}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-4 flex items-center justify-between gap-2 border-t border-neutral-800/60 pt-3">
-                  <div className="flex items-center gap-2 text-[10px] text-neutral-400">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                    Verified
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {currentUser?.id !== artisan.id && <button type="button" onClick={(event) => { event.stopPropagation(); onToggleFollow({ ...artisan, followers: Array.isArray(artisan.followers) ? artisan.followers : [] }); }} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-2.5 py-1.5 text-[10px] font-bold text-amber-300"><UserPlus className="h-3 w-3" />{currentUser && (Array.isArray(artisan.followers) ? artisan.followers : []).includes(currentUser.id) ? 'Following' : 'Follow'}</button>}
-                    {artisan.whatsappNumber && (
-                    <a
-                      onClick={(event) => event.stopPropagation()}
-                      href={`https://wa.me/${artisan.whatsappNumber.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[10px] font-bold text-white"
-                    >
-                      <Phone className="h-3 w-3" />
-                      WhatsApp
-                    </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </motion.article>
-          ))}
-        </div>
 
         {filteredArtisans.length === 0 && (
           <div className={`mt-4 rounded-2xl border border-dashed p-6 text-center ${isDarkMode ? 'border-neutral-700 text-neutral-400' : 'border-neutral-300 text-neutral-500'}`}>

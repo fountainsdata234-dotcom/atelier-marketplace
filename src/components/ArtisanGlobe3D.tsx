@@ -227,7 +227,8 @@ export const ArtisanBoard: React.FC<{ artisan: GlobeArtisan; isDarkMode: boolean
     {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt={artisan.name} className="h-14 w-14 rounded-xl object-cover" /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-cyan-700 text-sm font-bold text-white">{getProfileInitials(artisan.name)}</div>}
     <span className="min-w-0 flex-1">
       <strong className="block truncate">{artisan.name}</strong>
-      <span className="block text-xs opacity-70">{getRoleLabel(artisan.role)} · {artisan.location.city}, {artisan.location.country}</span>
+      <span className="block text-xs opacity-70">{getRoleLabel(artisan.role)} · {artisan.handle}</span>
+      <span className="block text-xs opacity-70">{artisan.location.city}, {artisan.location.state}, {artisan.location.country}</span>
       <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-cyan-500">Open artisan board · {artisan.postCount} live post{artisan.postCount === 1 ? '' : 's'}</span>
     </span>
   </button>

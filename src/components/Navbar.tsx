@@ -191,7 +191,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="hidden items-center gap-3 lg:flex">
           {!isOnline && (
             <span className="hidden items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold text-amber-300 sm:flex" role="status">
-              <WifiOff className="h-3 w-3" /> Offline cache
+              <WifiOff className="h-3 w-3" /> Offline mode
             </span>
           )}
           {canInstall && (
