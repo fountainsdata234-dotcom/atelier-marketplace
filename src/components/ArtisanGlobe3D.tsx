@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
-import { Crown, Scissors, SwatchBook, X } from 'lucide-react';
+import { Crown, Scissors, SwatchBook } from 'lucide-react';
 import * as THREE from 'three';
 import type { User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
@@ -127,8 +127,7 @@ const ArtisanMarker: React.FC<{
   selected: boolean;
   onSelect: (artisan: GlobeArtisan) => void;
   onOpen: (artisan: GlobeArtisan) => void;
-  onClose: () => void;
-}> = ({ artisan, selected, onSelect, onOpen, onClose }) => {
+}> = ({ artisan, selected, onSelect, onOpen }) => {
   const markerRef = useRef<THREE.Group>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
   const pulsePhase = useRef(Math.random() * Math.PI * 2);
@@ -138,6 +137,7 @@ const ArtisanMarker: React.FC<{
   const revealLevelRef = useRef(0);
   const [revealLevel, setRevealLevel] = React.useState(0);
   const [isFrontFacing, setIsFrontFacing] = React.useState(true);
+  const displayHandle = artisan.handle.trim() ? `@${artisan.handle.replace(/^@/, '')}` : artisan.name;
 
   useFrame(({ camera, clock }) => {
     if (!markerRef.current) return;
@@ -169,12 +169,12 @@ const ArtisanMarker: React.FC<{
 
   return (
     <group ref={markerRef}>
-      {isFrontFacing && <mesh ref={pulseRef}>
+      {isFrontFacing && <mesh ref={pulseRef} position={[0.18, 0.18, 0]}>
         <ringGeometry args={[0.075, 0.084, 20]} />
         <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>}
-      {isFrontFacing && <Html distanceFactor={7} position={[0.16, 0.16, 0]} center pointerEvents="auto">
-        <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`Select ${artisan.name}`}>
+      {isFrontFacing && <Html distanceFactor={7} position={[0.18, 0.18, 0]} center pointerEvents="auto">
+        <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${getRoleLabel(artisan.role)} marker for ${artisan.name}`}>
           {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
         </button>
       </Html>}
@@ -199,28 +199,11 @@ const ArtisanMarker: React.FC<{
           </button>
         </Html>
       )}
-      {isFrontFacing && revealLevel >= 2 && !selected && (
+      {isFrontFacing && revealLevel >= 2 && (
         <Html distanceFactor={7} position={[0.11, 0.16, 0]} center pointerEvents="auto">
-          <button type="button" className="artisan-3d-label" onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)}>
-            <strong>{artisan.handle}</strong>
-            <small>{artisan.location.city}</small>
+          <button type="button" className="artisan-3d-label" onPointerDown={(event) => event.stopPropagation()} onClick={() => onOpen(artisan)} aria-label={`Open profile for ${displayHandle}`}>
+            <strong>{displayHandle}</strong>
           </button>
-        </Html>
-      )}
-      {isFrontFacing && selected && (
-        <Html distanceFactor={7} position={[0.11, 0.16, 0]} center pointerEvents="auto">
-          <div className="artisan-3d-detail-card" onPointerDown={(event) => event.stopPropagation()}>
-            <button type="button" className="artisan-3d-detail-close" onClick={(event) => { event.stopPropagation(); onClose(); }} aria-label="Close seller details">
-              <X aria-hidden="true" />
-            </button>
-            <span className="artisan-3d-detail-heading">
-              {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : <span>{getProfileInitials(artisan.name)}</span>}
-              <strong>{artisan.handle}</strong>
-            </span>
-            <small>{getRoleLabel(artisan.role)} · {artisan.handle}</small>
-            <small>{artisan.location.city}, {artisan.location.state}, {artisan.location.country} · {artisan.postCount} live post{artisan.postCount === 1 ? '' : 's'}</small>
-            <button type="button" className="artisan-3d-profile-link" onClick={(event) => { event.stopPropagation(); onOpen(artisan); }}>Open seller profile</button>
-          </div>
         </Html>
       )}
     </group>
@@ -270,7 +253,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           const selected = selectedArtisanId === artisan.id;
           return (
             <group key={artisan.id} position={position}>
-              <ArtisanMarker artisan={artisan} selected={selected} onSelect={onSelectArtisan} onOpen={onOpenArtisan} onClose={onCloseArtisan} />
+              <ArtisanMarker artisan={artisan} selected={selected} onSelect={onSelectArtisan} onOpen={onOpenArtisan} />
             </group>
           );
         })}
