@@ -52,6 +52,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [countrySearch, setCountrySearch] = useState('Nigeria');
   const [stateSearch, setStateSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
+  const [detectedCountryCode, setDetectedCountryCode] = useState('NG');
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -109,6 +110,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (!term) return true;
     return city.toLowerCase().includes(term);
   });
+
+  const restoreAutoCountry = (overrideCode?: string) => {
+    const nextCountryCode = overrideCode || detectedCountryCode || 'NG';
+    const fallbackCountry = WORLD_COUNTRIES.find((country) => country.code === nextCountryCode) || WORLD_COUNTRIES[0];
+    setSelectedCountryCode(fallbackCountry.code);
+    setCountrySearch(fallbackCountry.name);
+    const firstState = fallbackCountry.states[0];
+    setSelectedStateCode(firstState?.code || '');
+    setStateSearch(firstState?.name || '');
+    setSelectedCityName(firstState?.cities[0] || '');
+    setCitySearch(firstState?.cities[0] || '');
+  };
 
   useEffect(() => {
     if (selectedCountry) {
@@ -183,6 +196,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           if (!matchedCountry) return;
 
+          setDetectedCountryCode(matchedCountry.code);
           setSelectedCountryCode(matchedCountry.code);
           setCountrySearch(matchedCountry.name);
 
@@ -583,7 +597,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     }}
                     onClear={() => {
                       setCountrySearch('');
-                      setSelectedCountryCode('NG');
+                      restoreAutoCountry();
                     }}
                     options={filteredCountries.map((country) => country.name)}
                     placeholder="Search country"
@@ -603,8 +617,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }
                     }}
                     onClear={() => {
-                      setStateSearch('');
-                      setSelectedStateCode('');
+                      const fallbackCountry = WORLD_COUNTRIES.find((country) => country.code === selectedCountryCode) || WORLD_COUNTRIES[0];
+                      const firstState = fallbackCountry.states[0];
+                      setStateSearch(firstState?.name || '');
+                      setSelectedStateCode(firstState?.code || '');
+                      setSelectedCityName(firstState?.cities[0] || '');
+                      setCitySearch(firstState?.cities[0] || '');
                     }}
                     options={filteredStates.map((state) => state.name)}
                     placeholder="Search state"
@@ -625,8 +643,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }
                     }}
                     onClear={() => {
-                      setCitySearch('');
-                      setSelectedCityName('');
+                      const fallbackCountry = WORLD_COUNTRIES.find((country) => country.code === selectedCountryCode) || WORLD_COUNTRIES[0];
+                      const fallbackState = fallbackCountry.states.find((state) => state.code === selectedStateCode) || fallbackCountry.states[0];
+                      const fallbackCity = fallbackState?.cities[0] || '';
+                      setCitySearch(fallbackCity);
+                      setSelectedCityName(fallbackCity);
                     }}
                     options={filteredCities}
                     placeholder="Search city"

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Globe2, Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
+import { getSearchSuggestions } from '../utils/globe';
 import { ArtisanGlobe3D } from './ArtisanGlobe3D';
 
 interface ArtisanDirectoryProps {
@@ -42,6 +43,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
 
   const [nearMeOnly, setNearMeOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
   const [filterCountry, setFilterCountry] = useState('all');
   const [filterState, setFilterState] = useState('all');
   const [filterCity, setFilterCity] = useState('all');
@@ -58,6 +60,14 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     return matchesSearch && matchesCountry && matchesState && matchesCity && matchesRadius;
   });
   const mappedArtisans = filteredArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng));
+  const searchSuggestions = useMemo(() => getSearchSuggestions(filteredArtisans, searchQuery, 7), [filteredArtisans, searchQuery]);
+
+  const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
+    const normalizedHandle = artisan.handle.startsWith('@') ? artisan.handle : `@${artisan.handle}`;
+    setSearchQuery(normalizedHandle);
+    setSelectedGlobeArtisanId(artisan.id);
+    setSearchSuggestionsOpen(false);
+  };
 
   return (
     <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -69,9 +79,41 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
 
           <div className="flex items-center gap-2">
-            <div className={`flex min-w-0 items-center gap-2 rounded-xl border px-3 py-2 ${isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
+            <div className={`relative flex min-w-0 items-center gap-2 rounded-xl border px-3 py-2 ${isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
               <Search className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search name or @handle" className="min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500" aria-label="Search artisans by name or handle" />
+              <input
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setSearchSuggestionsOpen(true);
+                }}
+                onFocus={() => setSearchSuggestionsOpen(true)}
+                onBlur={() => window.setTimeout(() => setSearchSuggestionsOpen(false), 120)}
+                placeholder="Search name or @handle"
+                className="min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500"
+                aria-label="Search artisans by name or handle"
+              />
+              {searchSuggestionsOpen && searchQuery.trim().length > 0 && searchSuggestions.length > 0 && (
+                <div className={`absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-xl border shadow-2xl ${isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
+                  {searchSuggestions.map((artisan) => (
+                    <button
+                      key={artisan.id}
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        handleSuggestionPick(artisan);
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition ${isDarkMode ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'}`}
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="font-semibold text-amber-400">{artisan.name}</span>
+                        <span className="ml-1 text-neutral-400">{artisan.handle.startsWith('@') ? artisan.handle : `@${artisan.handle}`}</span>
+                      </span>
+                      <span className="shrink-0 text-[10px] uppercase tracking-[0.16em] text-neutral-500">{artisan.location.country}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               onClick={() => setNearMeOnly((prev) => !prev)}

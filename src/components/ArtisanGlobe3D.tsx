@@ -4,6 +4,7 @@ import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
 import { Crown, Scissors, SwatchBook } from 'lucide-react';
 import * as THREE from 'three';
 import type { User } from '../types';
+import { getMarkerScatterOffset } from '../utils/globe';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 export interface GlobeArtisan extends User {
@@ -104,19 +105,19 @@ const CurrentBands: React.FC = () => {
     <>
       <mesh ref={firstBand} rotation={[Math.PI / 2.6, 0.15, 0]}>
         <torusGeometry args={[2.15, 0.012, 8, 160]} />
-        <meshBasicMaterial color="#67e8f9" transparent opacity={0.8} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color="#fbbf24" transparent opacity={0.8} blending={THREE.AdditiveBlending} />
       </mesh>
       <mesh ref={secondBand} rotation={[0.55, Math.PI / 2.4, 0.2]}>
         <torusGeometry args={[2.2, 0.009, 8, 160]} />
-        <meshBasicMaterial color="#34d399" transparent opacity={0.82} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color="#fb7185" transparent opacity={0.82} blending={THREE.AdditiveBlending} />
       </mesh>
       <mesh ref={firstCharge}>
         <sphereGeometry args={[0.035, 8, 8]} />
-        <meshBasicMaterial color="#f0fdfa" toneMapped={false} />
+        <meshBasicMaterial color="#fff7ed" toneMapped={false} />
       </mesh>
       <mesh ref={secondCharge}>
         <sphereGeometry args={[0.028, 8, 8]} />
-        <meshBasicMaterial color="#fbbf24" toneMapped={false} />
+        <meshBasicMaterial color="#fdba74" toneMapped={false} />
       </mesh>
     </>
   );
@@ -125,9 +126,10 @@ const CurrentBands: React.FC = () => {
 const ArtisanMarker: React.FC<{
   artisan: GlobeArtisan;
   selected: boolean;
+  markerSize: number;
   onSelect: (artisan: GlobeArtisan) => void;
   onOpen: (artisan: GlobeArtisan) => void;
-}> = ({ artisan, selected, onSelect, onOpen }) => {
+}> = ({ artisan, selected, markerSize, onSelect, onOpen }) => {
   const markerRef = useRef<THREE.Group>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
   const pulsePhase = useRef(Math.random() * Math.PI * 2);
@@ -151,7 +153,7 @@ const ArtisanMarker: React.FC<{
       setIsFrontFacing(frontFacing);
     }
     const zoomAmount = THREE.MathUtils.clamp((12 - distance) / 8.5, 0, 1);
-    const markerScale = THREE.MathUtils.lerp(0.38, 1.7, zoomAmount);
+    const markerScale = THREE.MathUtils.lerp(0.38, 1.7, zoomAmount) * markerSize;
     markerRef.current.scale.setScalar(markerScale);
     const nextRevealLevel = zoomAmount >= 0.22 ? 2 : zoomAmount >= 0.12 ? 1 : 0;
     if (revealLevelRef.current !== nextRevealLevel) {
@@ -171,7 +173,7 @@ const ArtisanMarker: React.FC<{
     <group ref={markerRef}>
       {isFrontFacing && revealLevel < 1 && <mesh ref={pulseRef} position={[0.18, 0.18, 0]}>
         <ringGeometry args={[0.075, 0.084, 20]} />
-        <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#fb7185'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>}
       {isFrontFacing && revealLevel < 1 && <Html distanceFactor={7} position={[0.18, 0.18, 0]} center pointerEvents="auto">
         <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${getRoleLabel(artisan.role)} marker for ${artisan.name}`}>
@@ -184,6 +186,12 @@ const ArtisanMarker: React.FC<{
             <Crown aria-hidden="true" />
           </button>
         </Html>
+      )}
+      {selected && (
+        <mesh position={[0, 0, 0]}>
+          <sphereGeometry args={[0.13, 16, 16]} />
+          <meshBasicMaterial color="#fbbf24" transparent opacity={0.52} blending={THREE.AdditiveBlending} />
+        </mesh>
       )}
       {isFrontFacing && revealLevel >= 1 && (
         <Html distanceFactor={3.9} position={[0, 0, 0]} center pointerEvents="auto">
@@ -208,6 +216,7 @@ const ArtisanMarker: React.FC<{
 
 const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan, onOpenArtisan, onCloseArtisan }) => {
   const globeRef = useRef<THREE.Group>(null);
+  const controlsRef = useRef<any>(null);
   const texture = useMemo(() => createMapTexture(), []);
   const gridLines = useMemo(() => {
     return Array.from({ length: 7 }, (_, index) => {
@@ -221,40 +230,54 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
     }));
   }, []);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (globeRef.current) globeRef.current.rotation.y += delta * 0.035;
+
+    if (!controlsRef.current || !selectedArtisanId) return;
+
+    const activeArtisan = artisans.find((artisan) => artisan.id === selectedArtisanId);
+    if (!activeArtisan || !Number.isFinite(activeArtisan.location.lat) || !Number.isFinite(activeArtisan.location.lng)) return;
+
+    const targetPosition = toGlobePosition(Number(activeArtisan.location.lat), Number(activeArtisan.location.lng), 0.12);
+    const desiredCamera = targetPosition.clone().normalize().multiplyScalar(6.7);
+    const camera = state.camera;
+    controlsRef.current.target.lerp(targetPosition, 0.08);
+    camera.position.lerp(desiredCamera, 0.09);
+    controlsRef.current.update();
   });
 
   return (
     <>
-      <ambientLight intensity={1.4} color="#b7f7ff" />
-      <directionalLight position={[4, 3, 5]} intensity={3} color="#d9fbff" />
-      <pointLight position={[-4, -2, 3]} intensity={9} distance={12} color="#22d3ee" />
+      <ambientLight intensity={1.2} color="#ffe7cf" />
+      <directionalLight position={[4, 3, 5]} intensity={2.7} color="#fde68a" />
+      <pointLight position={[-4, -2, 3]} intensity={8} distance={12} color="#fb7185" />
       <Stars radius={16} depth={8} count={700} factor={2.1} saturation={0.4} fade speed={0.6} />
       <group ref={globeRef}>
         <mesh>
           <sphereGeometry args={[2, 64, 64]} />
-          <meshPhongMaterial map={texture || undefined} color="#b9f7ff" emissive="#062b38" emissiveIntensity={0.45} shininess={28} />
+          <meshPhongMaterial map={texture || undefined} color="#f6d4b5" emissive="#4c1d2d" emissiveIntensity={0.48} shininess={24} />
         </mesh>
         <mesh scale={1.012}>
           <sphereGeometry args={[2, 48, 48]} />
-          <meshBasicMaterial color="#67e8f9" transparent opacity={0.08} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
+          <meshBasicMaterial color="#fbbf24" transparent opacity={0.12} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
         </mesh>
-        {gridLines.map((line) => <Line key={line.key} points={line.points} color="#9aeaf2" transparent opacity={0.18} lineWidth={0.5} />)}
+        {gridLines.map((line) => <Line key={line.key} points={line.points} color="#fbbf24" transparent opacity={0.26} lineWidth={0.5} />)}
         <CurrentBands />
-        {artisans.map((artisan) => {
+        {artisans.map((artisan, index) => {
           const lat = Number(artisan.location.lat);
           const lng = Number(artisan.location.lng);
-          const position = toGlobePosition(lat, lng, 2.08);
+          const offset = getMarkerScatterOffset(lat, lng, index, artisans.length || 1);
+          const position = toGlobePosition(lat, lng, 2.08).add(new THREE.Vector3(offset.x, offset.y, offset.z));
           const selected = selectedArtisanId === artisan.id;
+          const markerSize = Math.max(0.62, 1.24 - Math.min(0.72, artisans.length * 0.014));
           return (
             <group key={artisan.id} position={position}>
-              <ArtisanMarker artisan={artisan} selected={selected} onSelect={onSelectArtisan} onOpen={onOpenArtisan} />
+              <ArtisanMarker artisan={artisan} selected={selected} markerSize={markerSize} onSelect={onSelectArtisan} onOpen={onOpenArtisan} />
             </group>
           );
         })}
       </group>
-      <OrbitControls enablePan={false} enableDamping dampingFactor={0.08} minDistance={11} maxDistance={20} autoRotate autoRotateSpeed={0.18} zoomToCursor rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
+      <OrbitControls ref={controlsRef} enablePan={false} enableDamping dampingFactor={0.07} minDistance={5.8} maxDistance={14} autoRotate autoRotateSpeed={0.18} zoomToCursor rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
     </>
   );
 };
