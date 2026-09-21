@@ -225,6 +225,94 @@
   background: radial-gradient(circle at 50% 48%, rgba(8, 145, 178, 0.16), transparent 30%), linear-gradient(140deg, rgba(15, 23, 42, 0.8), rgba(2, 6, 23, 0.96));
 }
 
+.artisan-globe-3d {
+  position: relative;
+  width: 100%;
+  height: clamp(19rem, 68vw, 35rem);
+  min-height: 19rem;
+  touch-action: none;
+}
+
+.artisan-globe-3d canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  cursor: grab;
+}
+
+.artisan-globe-3d canvas:active {
+  cursor: grabbing;
+}
+
+.artisan-globe-3d-hint {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.85rem;
+  left: 1rem;
+  pointer-events: none;
+  color: rgba(207, 250, 254, 0.68);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.artisan-3d-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: max-content;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(103, 232, 249, 0.45);
+  border-radius: 0.6rem;
+  background: rgba(2, 18, 30, 0.92);
+  color: #ecfeff;
+  font-size: 0.65rem;
+  box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.3);
+}
+
+.artisan-3d-label img,
+.artisan-3d-label > span {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 50%;
+  background: #0e7490;
+  object-fit: cover;
+  font-size: 0.55rem;
+}
+
+.artisan-selected-board {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0 1rem 1rem;
+  padding: 0.8rem;
+  border: 1px solid;
+  border-radius: 0.9rem;
+  color: inherit;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.artisan-selected-board:hover {
+  border-color: rgba(34, 211, 238, 0.65);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+  .artisan-globe-3d {
+    height: min(88vw, 27rem);
+    min-height: 17rem;
+  }
+
+  .artisan-selected-board {
+    margin-right: 0.65rem;
+    margin-left: 0.65rem;
+  }
+}
+
 .artisan-globe-sphere {
   position: absolute;
   left: 50%;
