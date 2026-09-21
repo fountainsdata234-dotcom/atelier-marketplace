@@ -15,6 +15,7 @@ interface ArtisanGlobe3DProps {
   artisans: GlobeArtisan[];
   selectedArtisanId: string | null;
   onSelectArtisan: (artisan: GlobeArtisan) => void;
+  onOpenArtisan: (artisan: GlobeArtisan) => void;
   onCloseArtisan: () => void;
   isDarkMode: boolean;
 }
@@ -125,66 +126,80 @@ const ArtisanMarker: React.FC<{
   artisan: GlobeArtisan;
   selected: boolean;
   onSelect: (artisan: GlobeArtisan) => void;
+  onOpen: (artisan: GlobeArtisan) => void;
   onClose: () => void;
-}> = ({ artisan, selected, onSelect, onClose }) => {
+}> = ({ artisan, selected, onSelect, onOpen, onClose }) => {
   const markerRef = useRef<THREE.Group>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
   const pulsePhase = useRef(Math.random() * Math.PI * 2);
+  const worldPosition = useRef(new THREE.Vector3());
+  const cameraDirection = useRef(new THREE.Vector3());
+  const frontFacingRef = useRef(true);
+  const revealLevelRef = useRef(0);
   const [revealLevel, setRevealLevel] = React.useState(0);
+  const [isFrontFacing, setIsFrontFacing] = React.useState(true);
 
   useFrame(({ camera, clock }) => {
-    if (!markerRef.current || !pulseRef.current) return;
-    const worldPosition = new THREE.Vector3();
-    markerRef.current.getWorldPosition(worldPosition);
-    const distance = camera.position.distanceTo(worldPosition);
-    const cameraDirection = camera.position.clone().normalize();
-    const markerDirection = worldPosition.clone().normalize();
-    markerRef.current.visible = markerDirection.dot(cameraDirection) > 0.04;
+    if (!markerRef.current) return;
+    markerRef.current.getWorldPosition(worldPosition.current);
+    const distance = camera.position.distanceTo(worldPosition.current);
+    cameraDirection.current.copy(camera.position).normalize();
+    const frontFacing = worldPosition.current.normalize().dot(cameraDirection.current) > 0.08;
+    markerRef.current.visible = frontFacing;
+    if (frontFacingRef.current !== frontFacing) {
+      frontFacingRef.current = frontFacing;
+      setIsFrontFacing(frontFacing);
+    }
     const zoomAmount = THREE.MathUtils.clamp((8 - distance) / 4.75, 0, 1);
     const markerScale = THREE.MathUtils.lerp(0.62, 1.5, zoomAmount);
     markerRef.current.scale.setScalar(markerScale);
     const nextRevealLevel = zoomAmount >= 0.82 ? 2 : zoomAmount >= 0.62 ? 1 : 0;
-    setRevealLevel((currentLevel) => currentLevel === nextRevealLevel ? currentLevel : nextRevealLevel);
+    if (revealLevelRef.current !== nextRevealLevel) {
+      revealLevelRef.current = nextRevealLevel;
+      setRevealLevel(nextRevealLevel);
+    }
 
-    const pulse = (Math.sin(clock.elapsedTime * 1.25 + pulsePhase.current) + 1) / 2;
-    pulseRef.current.scale.setScalar(1 + pulse * 0.42);
-    const material = pulseRef.current.material as THREE.MeshBasicMaterial;
-    material.opacity = 0.08 + pulse * 0.16;
+    if (pulseRef.current) {
+      const pulse = (Math.sin(clock.elapsedTime * 1.25 + pulsePhase.current) + 1) / 2;
+      pulseRef.current.scale.setScalar(1 + pulse * 0.42);
+      const material = pulseRef.current.material as THREE.MeshBasicMaterial;
+      material.opacity = 0.08 + pulse * 0.16;
+    }
   });
 
   return (
     <group ref={markerRef}>
-      <mesh ref={pulseRef}>
+      {isFrontFacing && <mesh ref={pulseRef}>
         <ringGeometry args={[0.075, 0.084, 20]} />
         <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
-      </mesh>
-      <Html distanceFactor={7} position={[0, 0, 0]} center pointerEvents="auto">
+      </mesh>}
+      {isFrontFacing && <Html distanceFactor={7} position={[0, 0, 0]} center pointerEvents="auto">
         <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`Select ${artisan.name}`}>
           {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
         </button>
-      </Html>
-      {artisan.isPromoted && (
+      </Html>}
+      {isFrontFacing && artisan.isPromoted && (
         <Html distanceFactor={6} position={[0, 0.13, 0]} center pointerEvents="auto">
           <button type="button" className="artisan-3d-crown" onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${artisan.name} promoted artisan`}>
             <Crown aria-hidden="true" />
           </button>
         </Html>
       )}
-      {revealLevel >= 1 && artisan.avatarUrl && (
+      {isFrontFacing && revealLevel >= 1 && artisan.avatarUrl && (
         <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center pointerEvents="auto">
           <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
             <img src={artisan.avatarUrl} alt="" />
           </button>
         </Html>
       )}
-      {revealLevel >= 1 && !artisan.avatarUrl && (
+      {isFrontFacing && revealLevel >= 1 && !artisan.avatarUrl && (
         <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center pointerEvents="auto">
           <button type="button" className={`artisan-3d-avatar artisan-3d-initials ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
             {getProfileInitials(artisan.name)}
           </button>
         </Html>
       )}
-      {revealLevel >= 2 && !selected && (
+      {isFrontFacing && revealLevel >= 2 && !selected && (
         <Html distanceFactor={7} position={[0.11, 0.16, 0]} center pointerEvents="auto">
           <button type="button" className="artisan-3d-label" onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)}>
             <strong>{artisan.name}</strong>
@@ -192,7 +207,7 @@ const ArtisanMarker: React.FC<{
           </button>
         </Html>
       )}
-      {selected && (
+      {isFrontFacing && selected && (
         <Html distanceFactor={7} position={[0.11, 0.16, 0]} center pointerEvents="auto">
           <div className="artisan-3d-detail-card" onPointerDown={(event) => event.stopPropagation()}>
             <button type="button" className="artisan-3d-detail-close" onClick={(event) => { event.stopPropagation(); onClose(); }} aria-label="Close seller details">
@@ -204,7 +219,7 @@ const ArtisanMarker: React.FC<{
             </span>
             <small>{getRoleLabel(artisan.role)} · {artisan.handle}</small>
             <small>{artisan.location.city}, {artisan.location.state}, {artisan.location.country} · {artisan.postCount} live post{artisan.postCount === 1 ? '' : 's'}</small>
-            <button type="button" className="artisan-3d-profile-link" onClick={(event) => { event.stopPropagation(); onSelect(artisan); }}>Open seller profile</button>
+            <button type="button" className="artisan-3d-profile-link" onClick={(event) => { event.stopPropagation(); onOpen(artisan); }}>Open seller profile</button>
           </div>
         </Html>
       )}
@@ -212,7 +227,7 @@ const ArtisanMarker: React.FC<{
   );
 };
 
-const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan, onCloseArtisan }) => {
+const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan, onOpenArtisan, onCloseArtisan }) => {
   const globeRef = useRef<THREE.Group>(null);
   const texture = useMemo(() => createMapTexture(), []);
   const gridLines = useMemo(() => {
@@ -255,7 +270,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           const selected = selectedArtisanId === artisan.id;
           return (
             <group key={artisan.id} position={position}>
-              <ArtisanMarker artisan={artisan} selected={selected} onSelect={onSelectArtisan} onClose={onCloseArtisan} />
+              <ArtisanMarker artisan={artisan} selected={selected} onSelect={onSelectArtisan} onOpen={onOpenArtisan} onClose={onCloseArtisan} />
             </group>
           );
         })}

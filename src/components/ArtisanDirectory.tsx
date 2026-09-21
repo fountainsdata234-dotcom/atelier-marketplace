@@ -132,7 +132,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
 
           <div className="artisan-globe-stage relative min-h-[19rem] overflow-hidden">
-            <ArtisanGlobe3D artisans={mappedArtisans} selectedArtisanId={selectedGlobeArtisanId} onSelectArtisan={(artisan) => setSelectedGlobeArtisanId(artisan.id)} onCloseArtisan={() => setSelectedGlobeArtisanId(null)} isDarkMode={isDarkMode} />
+            <ArtisanGlobe3D artisans={mappedArtisans} selectedArtisanId={selectedGlobeArtisanId} onSelectArtisan={(artisan) => setSelectedGlobeArtisanId(artisan.id)} onOpenArtisan={onSelectArtisan} onCloseArtisan={() => setSelectedGlobeArtisanId(null)} isDarkMode={isDarkMode} />
           </div>
         </section>
 
