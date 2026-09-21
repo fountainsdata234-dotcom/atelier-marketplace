@@ -155,6 +155,71 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setRole(defaultRole);
   }, [defaultRole]);
 
+  useEffect(() => {
+    if (!isOpen || !('geolocation' in navigator)) return;
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
+            {
+              headers: {
+                'Accept-Language': 'en',
+              },
+            },
+          );
+
+          if (!response.ok) return;
+          const payload = await response.json();
+          const countryName = String(payload?.address?.country || '').trim();
+          const stateName = String(payload?.address?.state || payload?.address?.province || payload?.address?.county || '').trim();
+          const cityName = String(payload?.address?.city || payload?.address?.town || payload?.address?.village || payload?.address?.municipality || '').trim();
+
+          if (!countryName && !stateName) return;
+
+          const matchedCountry = WORLD_COUNTRIES.find((country) => country.name.toLowerCase() === countryName.toLowerCase() || country.code.toLowerCase() === countryName.toLowerCase())
+            || selectedCountry;
+
+          if (!matchedCountry) return;
+
+          setSelectedCountryCode(matchedCountry.code);
+          setCountrySearch(matchedCountry.name);
+
+          if (stateName) {
+            const matchedState = matchedCountry.states.find((state) => state.name.toLowerCase() === stateName.toLowerCase());
+            if (matchedState) {
+              setSelectedStateCode(matchedState.code || '');
+              setStateSearch(matchedState.name);
+
+              if (cityName) {
+                const matchedCity = matchedState.cities.find((city) => city.toLowerCase() === cityName.toLowerCase());
+                if (matchedCity) {
+                  setSelectedCityName(matchedCity);
+                  setCitySearch(matchedCity);
+                  return;
+                }
+              }
+
+              setSelectedCityName('');
+              setCitySearch('');
+              return;
+            }
+
+            setSelectedStateCode('');
+            setStateSearch(stateName);
+            setSelectedCityName('');
+            setCitySearch('');
+          }
+        } catch {
+          // Ignore reverse-geocode failures and keep the normal manual selection flow active.
+        }
+      },
+      () => undefined,
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 600000 },
+    );
+  }, [isOpen, selectedCountry]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
