@@ -38,6 +38,21 @@ export const firebaseStorage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+const normalizeAvatarUrl = (url?: string | null): string | undefined => {
+  if (typeof url !== 'string') return undefined;
+  const trimmed = url.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsedUrl = new URL(trimmed);
+    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+      return trimmed;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
+
 export async function configureFirebaseAuth() {
   await setPersistence(firebaseAuth, browserLocalPersistence);
 }
@@ -110,17 +125,20 @@ export async function isFirebaseAdmin(user: FirebaseUser) {
 
 export async function toAppUser(firebaseUser: FirebaseUser, role: UserRole = 'buyer'): Promise<User> {
   const admin = await isFirebaseAdmin(firebaseUser);
-  const name = firebaseUser.displayName?.trim() || firebaseUser.email?.split('@')[0] || 'Atelier Member';
+  const safeName = firebaseUser.displayName?.trim() || firebaseUser.email?.split('@')[0] || 'Atelier Member';
+  const providerPhoto = (firebaseUser as FirebaseUser & { reloadUserInfo?: { photoUrl?: string | null } }).reloadUserInfo?.photoUrl;
+  const avatarUrl = normalizeAvatarUrl(firebaseUser.photoURL) || normalizeAvatarUrl(providerPhoto);
+  const handleBase = safeName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member';
   return {
     id: firebaseUser.uid,
     email: firebaseUser.email || '',
-    name,
+    name: safeName,
     role: admin ? 'admin' : role,
     phone: firebaseUser.phoneNumber || '',
     countryCode: '',
     location: { country: '', state: '', city: '' },
-    handle: `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`,
-    avatarUrl: firebaseUser.photoURL || undefined,
+    handle: `@${handleBase}`,
+    avatarUrl,
     isPromoted: false,
     isBlocked: false,
     followers: [],
