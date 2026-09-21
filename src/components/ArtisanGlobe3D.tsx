@@ -150,10 +150,10 @@ const ArtisanMarker: React.FC<{
       frontFacingRef.current = frontFacing;
       setIsFrontFacing(frontFacing);
     }
-    const zoomAmount = THREE.MathUtils.clamp((8 - distance) / 4.75, 0, 1);
-    const markerScale = THREE.MathUtils.lerp(0.62, 1.5, zoomAmount);
+    const zoomAmount = THREE.MathUtils.clamp((12 - distance) / 8.5, 0, 1);
+    const markerScale = THREE.MathUtils.lerp(0.38, 1.7, zoomAmount);
     markerRef.current.scale.setScalar(markerScale);
-    const nextRevealLevel = zoomAmount >= 0.82 ? 2 : zoomAmount >= 0.62 ? 1 : 0;
+    const nextRevealLevel = zoomAmount >= 0.22 ? 2 : zoomAmount >= 0.12 ? 1 : 0;
     if (revealLevelRef.current !== nextRevealLevel) {
       revealLevelRef.current = nextRevealLevel;
       setRevealLevel(nextRevealLevel);
@@ -185,25 +185,16 @@ const ArtisanMarker: React.FC<{
           </button>
         </Html>
       )}
-      {isFrontFacing && revealLevel >= 1 && artisan.avatarUrl && (
+      {isFrontFacing && revealLevel >= 1 && (
         <Html distanceFactor={3.9} position={[0, 0, 0]} center pointerEvents="auto">
           <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
-            <img src={artisan.avatarUrl} alt="" />
+            {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : <span className="artisan-3d-avatar-text">{getProfileInitials(artisan.name)}</span>}
+            <span className={`artisan-role-signal artisan-role-signal-attached ${artisan.isPromoted ? 'is-promoted' : ''}`} aria-hidden="true">
+              {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
+            </span>
           </button>
         </Html>
       )}
-      {isFrontFacing && revealLevel >= 1 && !artisan.avatarUrl && (
-        <Html distanceFactor={3.9} position={[0, 0, 0]} center pointerEvents="auto">
-          <button type="button" className={`artisan-3d-avatar artisan-3d-initials ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
-            {getProfileInitials(artisan.name)}
-          </button>
-        </Html>
-      )}
-      {isFrontFacing && revealLevel >= 1 && <Html distanceFactor={3.9} position={[0.18, 0.18, 0]} center pointerEvents="auto">
-        <button type="button" className={`artisan-role-signal artisan-role-signal-attached ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${getRoleLabel(artisan.role)} marker for ${artisan.name}`}>
-          {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
-        </button>
-      </Html>}
       {isFrontFacing && revealLevel >= 2 && (
         <Html distanceFactor={3.9} position={[0.16, 0.04, 0]} center pointerEvents="auto">
           <button type="button" className="artisan-3d-label" onPointerDown={(event) => event.stopPropagation()} onClick={() => onOpen(artisan)} aria-label={`Open profile for ${displayHandle}`}>
@@ -263,14 +254,14 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           );
         })}
       </group>
-      <OrbitControls enablePan={false} enableDamping dampingFactor={0.08} minDistance={6.5} maxDistance={12} autoRotate autoRotateSpeed={0.18} zoomToCursor rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
+      <OrbitControls enablePan={false} enableDamping dampingFactor={0.08} minDistance={9} maxDistance={18} autoRotate autoRotateSpeed={0.18} zoomToCursor rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
     </>
   );
 };
 
 export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = (props) => (
   <div className="artisan-globe-3d" aria-label="Interactive 3D artisan globe">
-    <Canvas camera={{ position: [0, 0, 7.5], fov: 32 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+    <Canvas camera={{ position: [0, 0, 10], fov: 28 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
       <GlobeScene {...props} />
     </Canvas>
     <div className="artisan-globe-3d-hint">Drag to rotate · pinch or wheel to zoom</div>
