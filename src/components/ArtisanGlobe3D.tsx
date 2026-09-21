@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
-import { Crown, Scissors, SwatchBook } from 'lucide-react';
+import { Crown, Scissors, SwatchBook, X } from 'lucide-react';
 import * as THREE from 'three';
 import type { User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
@@ -15,6 +15,7 @@ interface ArtisanGlobe3DProps {
   artisans: GlobeArtisan[];
   selectedArtisanId: string | null;
   onSelectArtisan: (artisan: GlobeArtisan) => void;
+  onCloseArtisan: () => void;
   isDarkMode: boolean;
 }
 
@@ -81,7 +82,6 @@ const createMapTexture = () => {
 const CurrentBands: React.FC = () => {
   const firstBand = useRef<THREE.Mesh>(null);
   const secondBand = useRef<THREE.Mesh>(null);
-  const thirdBand = useRef<THREE.Mesh>(null);
   const firstCharge = useRef<THREE.Mesh>(null);
   const secondCharge = useRef<THREE.Mesh>(null);
   const elapsed = useRef(0);
@@ -89,7 +89,6 @@ const CurrentBands: React.FC = () => {
     elapsed.current += delta;
     if (firstBand.current) firstBand.current.rotation.y += delta * 0.22;
     if (secondBand.current) secondBand.current.rotation.x -= delta * 0.17;
-    if (thirdBand.current) thirdBand.current.rotation.z += delta * 0.13;
     if (firstCharge.current) {
       const angle = elapsed.current * 1.15;
       firstCharge.current.position.set(Math.cos(angle) * 2.15, 0, Math.sin(angle) * 2.15);
@@ -110,10 +109,6 @@ const CurrentBands: React.FC = () => {
         <torusGeometry args={[2.2, 0.009, 8, 160]} />
         <meshBasicMaterial color="#34d399" transparent opacity={0.82} blending={THREE.AdditiveBlending} />
       </mesh>
-      <mesh ref={thirdBand} rotation={[1.1, 0.3, 0.8]}>
-        <torusGeometry args={[2.12, 0.006, 6, 128]} />
-        <meshBasicMaterial color="#fbbf24" transparent opacity={0.55} blending={THREE.AdditiveBlending} />
-      </mesh>
       <mesh ref={firstCharge}>
         <sphereGeometry args={[0.035, 8, 8]} />
         <meshBasicMaterial color="#f0fdfa" toneMapped={false} />
@@ -130,7 +125,8 @@ const ArtisanMarker: React.FC<{
   artisan: GlobeArtisan;
   selected: boolean;
   onSelect: (artisan: GlobeArtisan) => void;
-}> = ({ artisan, selected, onSelect }) => {
+  onClose: () => void;
+}> = ({ artisan, selected, onSelect, onClose }) => {
   const markerRef = useRef<THREE.Group>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
   const pulsePhase = useRef(Math.random() * Math.PI * 2);
@@ -155,10 +151,6 @@ const ArtisanMarker: React.FC<{
 
   return (
     <group ref={markerRef}>
-      <mesh onClick={(event) => { event.stopPropagation(); onSelect(artisan); }}>
-        <sphereGeometry args={[selected ? 0.07 : 0.045, 12, 12]} />
-        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#d9ffff'} toneMapped={false} />
-      </mesh>
       <mesh ref={pulseRef}>
         <ringGeometry args={[0.075, 0.084, 20]} />
         <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
@@ -199,22 +191,25 @@ const ArtisanMarker: React.FC<{
       )}
       {selected && (
         <Html distanceFactor={7} position={[0.11, 0.16, 0]} center>
-          <button type="button" className="artisan-3d-detail-card" onClick={() => onSelect(artisan)}>
+          <div className="artisan-3d-detail-card">
+            <button type="button" className="artisan-3d-detail-close" onClick={(event) => { event.stopPropagation(); onClose(); }} aria-label="Close seller details">
+              <X aria-hidden="true" />
+            </button>
             <span className="artisan-3d-detail-heading">
               {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : <span>{getProfileInitials(artisan.name)}</span>}
               <strong>{artisan.name}</strong>
             </span>
             <small>{getRoleLabel(artisan.role)} · {artisan.handle}</small>
             <small>{artisan.location.city}, {artisan.location.state}, {artisan.location.country} · {artisan.postCount} live post{artisan.postCount === 1 ? '' : 's'}</small>
-            <em>Open seller profile</em>
-          </button>
+            <button type="button" className="artisan-3d-profile-link" onClick={(event) => { event.stopPropagation(); onSelect(artisan); }}>Open seller profile</button>
+          </div>
         </Html>
       )}
     </group>
   );
 };
 
-const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan }) => {
+const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan, onCloseArtisan }) => {
   const globeRef = useRef<THREE.Group>(null);
   const texture = useMemo(() => createMapTexture(), []);
   const gridLines = useMemo(() => {
@@ -257,7 +252,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           const selected = selectedArtisanId === artisan.id;
           return (
             <group key={artisan.id} position={position}>
-              <ArtisanMarker artisan={artisan} selected={selected} onSelect={onSelectArtisan} />
+              <ArtisanMarker artisan={artisan} selected={selected} onSelect={onSelectArtisan} onClose={onCloseArtisan} />
             </group>
           );
         })}

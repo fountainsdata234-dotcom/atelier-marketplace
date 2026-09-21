@@ -58,7 +58,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     return matchesSearch && matchesCountry && matchesState && matchesCity && matchesRadius;
   });
   const mappedArtisans = filteredArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng));
-  const selectedGlobeArtisan = mappedArtisans.find((artisan) => artisan.id === selectedGlobeArtisanId) || null;
 
   return (
     <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -133,7 +132,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
 
           <div className="artisan-globe-stage relative min-h-[19rem] overflow-hidden">
-            <ArtisanGlobe3D artisans={mappedArtisans} selectedArtisanId={selectedGlobeArtisanId} onSelectArtisan={(artisan) => setSelectedGlobeArtisanId(artisan.id)} isDarkMode={isDarkMode} />
+            <ArtisanGlobe3D artisans={mappedArtisans} selectedArtisanId={selectedGlobeArtisanId} onSelectArtisan={(artisan) => setSelectedGlobeArtisanId(artisan.id)} onCloseArtisan={() => setSelectedGlobeArtisanId(null)} isDarkMode={isDarkMode} />
           </div>
         </section>
 
