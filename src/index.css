@@ -262,14 +262,15 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  min-width: max-content;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid rgba(103, 232, 249, 0.45);
-  border-radius: 0.6rem;
-  background: rgba(2, 18, 30, 0.92);
+  max-width: min(8.5rem, 30vw);
+  padding: 0.25rem 0.38rem;
+  border: 1px solid rgba(103, 232, 249, 0.3);
+  border-radius: 0.45rem;
+  background: rgba(2, 18, 30, 0.82);
   color: #ecfeff;
-  font-size: 0.65rem;
-  box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.3);
+  font-size: 0.58rem;
+  font-weight: 500;
+  box-shadow: 0 0.35rem 0.8rem rgba(0, 0, 0, 0.22);
 }
 
 .artisan-3d-label img,
@@ -286,22 +287,32 @@
 
 .artisan-3d-label small {
   display: block;
+  overflow: hidden;
   color: rgba(165, 243, 252, 0.7);
   font-size: 0.55rem;
   font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artisan-3d-label strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .artisan-role-signal {
   display: grid;
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 0.68rem;
+  height: 0.68rem;
   place-items: center;
   padding: 0;
   border: 1px solid rgba(103, 232, 249, 0.55);
   border-radius: 50%;
   background: rgba(2, 18, 30, 0.86);
   color: #67e8f9;
-  box-shadow: 0 0 0.4rem rgba(34, 211, 238, 0.32);
+  box-shadow: 0 0 0.3rem rgba(34, 211, 238, 0.28);
 }
 
 .artisan-role-signal.is-promoted {
@@ -311,9 +322,9 @@
 }
 
 .artisan-role-signal svg {
-  width: 0.55rem;
-  height: 0.55rem;
-  stroke-width: 2.5;
+  width: 0.42rem;
+  height: 0.42rem;
+  stroke-width: 2.2;
 }
 
 .artisan-3d-detail-card {
@@ -359,6 +370,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.7rem;
+  font-weight: 500;
 }
 
 .artisan-3d-detail-card small {
@@ -413,14 +425,14 @@
 
 .artisan-3d-avatar {
   display: block;
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 1.65rem;
+  height: 1.65rem;
   padding: 0;
   overflow: hidden;
   border: 1px solid rgba(165, 243, 252, 0.75);
   border-radius: 50%;
   background: #0e7490;
-  box-shadow: 0 0 0.55rem rgba(34, 211, 238, 0.32);
+  box-shadow: 0 0 0.7rem rgba(34, 211, 238, 0.38);
   opacity: 0.82;
   transition: width 160ms ease, height 160ms ease, opacity 160ms ease, border-color 160ms ease;
 }

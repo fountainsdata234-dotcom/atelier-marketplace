@@ -173,7 +173,7 @@ const ArtisanMarker: React.FC<{
         <ringGeometry args={[0.075, 0.084, 20]} />
         <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>}
-      {isFrontFacing && <Html distanceFactor={7} position={[0, 0, 0]} center pointerEvents="auto">
+      {isFrontFacing && <Html distanceFactor={7} position={[0.16, 0.16, 0]} center pointerEvents="auto">
         <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`Select ${artisan.name}`}>
           {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
         </button>
@@ -186,14 +186,14 @@ const ArtisanMarker: React.FC<{
         </Html>
       )}
       {isFrontFacing && revealLevel >= 1 && artisan.avatarUrl && (
-        <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center pointerEvents="auto">
+        <Html distanceFactor={3.9} position={[0, 0, 0]} center pointerEvents="auto">
           <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
             <img src={artisan.avatarUrl} alt="" />
           </button>
         </Html>
       )}
       {isFrontFacing && revealLevel >= 1 && !artisan.avatarUrl && (
-        <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center pointerEvents="auto">
+        <Html distanceFactor={3.9} position={[0, 0, 0]} center pointerEvents="auto">
           <button type="button" className={`artisan-3d-avatar artisan-3d-initials ${selected ? 'is-selected' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
             {getProfileInitials(artisan.name)}
           </button>
@@ -202,7 +202,7 @@ const ArtisanMarker: React.FC<{
       {isFrontFacing && revealLevel >= 2 && !selected && (
         <Html distanceFactor={7} position={[0.11, 0.16, 0]} center pointerEvents="auto">
           <button type="button" className="artisan-3d-label" onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)}>
-            <strong>{artisan.name}</strong>
+            <strong>{artisan.handle}</strong>
             <small>{artisan.location.city}</small>
           </button>
         </Html>
@@ -215,7 +215,7 @@ const ArtisanMarker: React.FC<{
             </button>
             <span className="artisan-3d-detail-heading">
               {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : <span>{getProfileInitials(artisan.name)}</span>}
-              <strong>{artisan.name}</strong>
+              <strong>{artisan.handle}</strong>
             </span>
             <small>{getRoleLabel(artisan.role)} · {artisan.handle}</small>
             <small>{artisan.location.city}, {artisan.location.state}, {artisan.location.country} · {artisan.postCount} live post{artisan.postCount === 1 ? '' : 's'}</small>
@@ -282,7 +282,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
 
 export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = (props) => (
   <div className="artisan-globe-3d" aria-label="Interactive 3D artisan globe">
-    <Canvas camera={{ position: [0, 0, 5.3], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+    <Canvas camera={{ position: [0, 0, 4.35], fov: 42 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
       <GlobeScene {...props} />
     </Canvas>
     <div className="artisan-globe-3d-hint">Drag to rotate · pinch or wheel to zoom</div>
