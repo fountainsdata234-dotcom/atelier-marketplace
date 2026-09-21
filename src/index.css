@@ -284,6 +284,99 @@
   font-size: 0.55rem;
 }
 
+.artisan-3d-label small {
+  display: block;
+  color: rgba(165, 243, 252, 0.7);
+  font-size: 0.55rem;
+  font-weight: 500;
+}
+
+.artisan-role-signal {
+  display: grid;
+  width: 0.9rem;
+  height: 0.9rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(103, 232, 249, 0.55);
+  border-radius: 50%;
+  background: rgba(2, 18, 30, 0.86);
+  color: #67e8f9;
+  box-shadow: 0 0 0.4rem rgba(34, 211, 238, 0.32);
+}
+
+.artisan-role-signal.is-promoted {
+  border-color: rgba(253, 230, 138, 0.75);
+  color: #fcd34d;
+  box-shadow: 0 0 0.5rem rgba(251, 191, 36, 0.48);
+}
+
+.artisan-role-signal svg {
+  width: 0.55rem;
+  height: 0.55rem;
+  stroke-width: 2.5;
+}
+
+.artisan-3d-detail-card {
+  display: flex;
+  width: min(15rem, 68vw);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.22rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid rgba(103, 232, 249, 0.42);
+  border-radius: 0.7rem;
+  background: rgba(2, 18, 30, 0.94);
+  color: #ecfeff;
+  text-align: left;
+  box-shadow: 0 0.75rem 1.8rem rgba(0, 0, 0, 0.34), 0 0 1rem rgba(34, 211, 238, 0.12);
+}
+
+.artisan-3d-detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.artisan-3d-detail-heading img,
+.artisan-3d-detail-heading > span {
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #0e7490;
+  object-fit: cover;
+  font-size: 0.55rem;
+}
+
+.artisan-3d-detail-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.7rem;
+}
+
+.artisan-3d-detail-card small {
+  overflow: hidden;
+  max-width: 100%;
+  color: rgba(207, 250, 254, 0.7);
+  font-size: 0.55rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artisan-3d-detail-card em {
+  color: #67e8f9;
+  font-size: 0.52rem;
+  font-style: normal;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .artisan-3d-avatar {
   display: block;
   width: 1.2rem;
@@ -296,6 +389,12 @@
   box-shadow: 0 0 0.55rem rgba(34, 211, 238, 0.32);
   opacity: 0.82;
   transition: width 160ms ease, height 160ms ease, opacity 160ms ease, border-color 160ms ease;
+}
+
+.artisan-3d-initials {
+  color: #ecfeff;
+  font-size: 0.55rem;
+  font-weight: 800;
 }
 
 .artisan-3d-avatar.is-selected {

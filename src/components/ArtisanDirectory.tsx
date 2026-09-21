@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Globe2, Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
-import { ArtisanBoard, ArtisanGlobe3D } from './ArtisanGlobe3D';
+import { ArtisanGlobe3D } from './ArtisanGlobe3D';
 
 interface ArtisanDirectoryProps {
   users: User[];
@@ -135,7 +135,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           <div className="artisan-globe-stage relative min-h-[19rem] overflow-hidden">
             <ArtisanGlobe3D artisans={mappedArtisans} selectedArtisanId={selectedGlobeArtisanId} onSelectArtisan={(artisan) => setSelectedGlobeArtisanId(artisan.id)} isDarkMode={isDarkMode} />
           </div>
-          {selectedGlobeArtisan && <ArtisanBoard artisan={selectedGlobeArtisan} isDarkMode={isDarkMode} onOpen={onSelectArtisan} />}
         </section>
 
         {filteredArtisans.length === 0 && (

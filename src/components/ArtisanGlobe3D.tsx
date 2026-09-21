@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
-import { Crown } from 'lucide-react';
+import { Crown, Scissors, SwatchBook } from 'lucide-react';
 import * as THREE from 'three';
 import type { User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
@@ -81,9 +81,23 @@ const createMapTexture = () => {
 const CurrentBands: React.FC = () => {
   const firstBand = useRef<THREE.Mesh>(null);
   const secondBand = useRef<THREE.Mesh>(null);
+  const thirdBand = useRef<THREE.Mesh>(null);
+  const firstCharge = useRef<THREE.Mesh>(null);
+  const secondCharge = useRef<THREE.Mesh>(null);
+  const elapsed = useRef(0);
   useFrame((_, delta) => {
+    elapsed.current += delta;
     if (firstBand.current) firstBand.current.rotation.y += delta * 0.22;
     if (secondBand.current) secondBand.current.rotation.x -= delta * 0.17;
+    if (thirdBand.current) thirdBand.current.rotation.z += delta * 0.13;
+    if (firstCharge.current) {
+      const angle = elapsed.current * 1.15;
+      firstCharge.current.position.set(Math.cos(angle) * 2.15, 0, Math.sin(angle) * 2.15);
+    }
+    if (secondCharge.current) {
+      const angle = elapsed.current * -0.9;
+      secondCharge.current.position.set(0, Math.sin(angle) * 2.2, Math.cos(angle) * 2.2);
+    }
   });
 
   return (
@@ -94,7 +108,19 @@ const CurrentBands: React.FC = () => {
       </mesh>
       <mesh ref={secondBand} rotation={[0.55, Math.PI / 2.4, 0.2]}>
         <torusGeometry args={[2.2, 0.009, 8, 160]} />
-        <meshBasicMaterial color="#34d399" transparent opacity={0.62} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color="#34d399" transparent opacity={0.82} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh ref={thirdBand} rotation={[1.1, 0.3, 0.8]}>
+        <torusGeometry args={[2.12, 0.006, 6, 128]} />
+        <meshBasicMaterial color="#fbbf24" transparent opacity={0.55} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh ref={firstCharge}>
+        <sphereGeometry args={[0.035, 8, 8]} />
+        <meshBasicMaterial color="#f0fdfa" toneMapped={false} />
+      </mesh>
+      <mesh ref={secondCharge}>
+        <sphereGeometry args={[0.028, 8, 8]} />
+        <meshBasicMaterial color="#fbbf24" toneMapped={false} />
       </mesh>
     </>
   );
@@ -108,6 +134,7 @@ const ArtisanMarker: React.FC<{
   const markerRef = useRef<THREE.Group>(null);
   const pulseRef = useRef<THREE.Mesh>(null);
   const pulsePhase = useRef(Math.random() * Math.PI * 2);
+  const [revealLevel, setRevealLevel] = React.useState(0);
 
   useFrame(({ camera, clock }) => {
     if (!markerRef.current || !pulseRef.current) return;
@@ -117,6 +144,8 @@ const ArtisanMarker: React.FC<{
     const zoomAmount = THREE.MathUtils.clamp((8 - distance) / 4.75, 0, 1);
     const markerScale = THREE.MathUtils.lerp(0.62, 1.5, zoomAmount);
     markerRef.current.scale.setScalar(markerScale);
+    const nextRevealLevel = zoomAmount >= 0.82 ? 2 : zoomAmount >= 0.62 ? 1 : 0;
+    setRevealLevel((currentLevel) => currentLevel === nextRevealLevel ? currentLevel : nextRevealLevel);
 
     const pulse = (Math.sin(clock.elapsedTime * 1.25 + pulsePhase.current) + 1) / 2;
     pulseRef.current.scale.setScalar(1 + pulse * 0.42);
@@ -134,6 +163,11 @@ const ArtisanMarker: React.FC<{
         <ringGeometry args={[0.075, 0.084, 20]} />
         <meshBasicMaterial color={artisan.isPromoted || selected ? '#f59e0b' : '#22d3ee'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>
+      <Html distanceFactor={7} position={[0, 0.1, 0]} center>
+        <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onClick={() => onSelect(artisan)} aria-label={`Select ${artisan.name}`}>
+          {artisan.role === 'tailor' ? <Scissors aria-hidden="true" /> : <SwatchBook aria-hidden="true" />}
+        </button>
+      </Html>
       {artisan.isPromoted && (
         <Html distanceFactor={6} position={[0, 0.13, 0]} center>
           <button type="button" className="artisan-3d-crown" onClick={() => onSelect(artisan)} aria-label={`${artisan.name} promoted artisan`}>
@@ -141,18 +175,38 @@ const ArtisanMarker: React.FC<{
           </button>
         </Html>
       )}
-      {artisan.avatarUrl && (
-        <Html distanceFactor={5.5} position={[0.085, 0.085, 0]} center>
+      {revealLevel >= 1 && artisan.avatarUrl && (
+        <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center>
           <button type="button" className={`artisan-3d-avatar ${selected ? 'is-selected' : ''}`} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
             <img src={artisan.avatarUrl} alt="" />
           </button>
         </Html>
       )}
-      {selected && (
+      {revealLevel >= 1 && !artisan.avatarUrl && (
+        <Html distanceFactor={3.9} position={[0.085, 0.085, 0]} center>
+          <button type="button" className={`artisan-3d-avatar artisan-3d-initials ${selected ? 'is-selected' : ''}`} onClick={() => onSelect(artisan)} aria-label={`View ${artisan.name}`}>
+            {getProfileInitials(artisan.name)}
+          </button>
+        </Html>
+      )}
+      {revealLevel >= 2 && !selected && (
         <Html distanceFactor={7} position={[0.11, 0.16, 0]} center>
           <button type="button" className="artisan-3d-label" onClick={() => onSelect(artisan)}>
-            {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : <span>{getProfileInitials(artisan.name)}</span>}
             <strong>{artisan.name}</strong>
+            <small>{artisan.location.city}</small>
+          </button>
+        </Html>
+      )}
+      {selected && (
+        <Html distanceFactor={7} position={[0.11, 0.16, 0]} center>
+          <button type="button" className="artisan-3d-detail-card" onClick={() => onSelect(artisan)}>
+            <span className="artisan-3d-detail-heading">
+              {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" /> : <span>{getProfileInitials(artisan.name)}</span>}
+              <strong>{artisan.name}</strong>
+            </span>
+            <small>{getRoleLabel(artisan.role)} · {artisan.handle}</small>
+            <small>{artisan.location.city}, {artisan.location.state}, {artisan.location.country} · {artisan.postCount} live post{artisan.postCount === 1 ? '' : 's'}</small>
+            <em>Open seller profile</em>
           </button>
         </Html>
       )}
