@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole } from './types';
+import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole, AppNotification } from './types';
 import { storageService } from './services/storage';
 import { NeedleThreadBackground } from './components/NeedleThreadBackground';
 import { IntroLoader } from './components/IntroLoader';
@@ -31,8 +31,10 @@ export default function App() {
   const [showIntro, setShowIntro] = useState<boolean>(() => sessionStorage.getItem('fabrilux_intro_seen') !== '1');
   const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pullStartY = useRef<number | null>(null);
+  const LAST_INSTALLED_EMAIL_KEY = 'atelier_last_installed_email';
 
   // Theme state: default to sophisticated dark luxury aesthetic with full light toggle
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -84,7 +86,12 @@ export default function App() {
     const handleInstallPrompt = (event: Event) => {
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
-    const handleInstalled = () => setInstallPrompt(null);
+    const handleInstalled = () => {
+      setInstallPrompt(null);
+      if (currentUser?.email) {
+        localStorage.setItem(LAST_INSTALLED_EMAIL_KEY, currentUser.email);
+      }
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('beforeinstallprompt', handleInstallPrompt);
@@ -172,6 +179,13 @@ export default function App() {
     const handleAuthChange = (e: any) => setCurrentUser(e.detail);
     const handleBroadcastsUpdate = () => setBroadcasts(storageService.getBroadcasts());
     const handleNavigateTab = (e: any) => setCurrentView(e.detail);
+    const handleNotificationsUpdate = () => {
+      if (!currentUser) {
+        setNotifications([]);
+        return;
+      }
+      setNotifications(storageService.getNotifications(currentUser.id).slice(0, 4));
+    };
 
     window.addEventListener('atelier_users_updated', handleUsersUpdate);
     window.addEventListener('atelier_posts_updated', handlePostsUpdate);
@@ -179,6 +193,7 @@ export default function App() {
     window.addEventListener('atelier_auth_changed', handleAuthChange);
     window.addEventListener('atelier_broadcast_received', handleBroadcastsUpdate);
     window.addEventListener('navigate_to_tab', handleNavigateTab);
+    window.addEventListener('atelier_notifications_updated', handleNotificationsUpdate);
 
     return () => {
       unsubscribeFirebase?.();
@@ -195,8 +210,9 @@ export default function App() {
       window.removeEventListener('atelier_auth_changed', handleAuthChange);
       window.removeEventListener('atelier_broadcast_received', handleBroadcastsUpdate);
       window.removeEventListener('navigate_to_tab', handleNavigateTab);
+      window.removeEventListener('atelier_notifications_updated', handleNotificationsUpdate);
     };
-  }, []);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -242,8 +258,14 @@ export default function App() {
     if (!installPrompt) return;
     await installPrompt.prompt();
     const result = await installPrompt.userChoice;
-    if (result.outcome === 'accepted') setInstallPrompt(null);
+    if (result.outcome === 'accepted') {
+      const email = currentUser?.email || 'guest';
+      localStorage.setItem(LAST_INSTALLED_EMAIL_KEY, email);
+      setInstallPrompt(null);
+    }
   };
+
+  const canShowInstallPrompt = Boolean(installPrompt) && (!currentUser || localStorage.getItem(LAST_INSTALLED_EMAIL_KEY) !== currentUser.email);
 
   const refreshAllData = async (showLoader = true) => {
     if (showLoader) setIsDataLoading(true);
@@ -353,6 +375,25 @@ export default function App() {
       document.body.classList.remove('bg-[#0c0d10]', 'text-[#f4f4f6]');
     }
   };
+
+  useEffect(() => {
+    if (!currentUser) {
+      setNotifications([]);
+      return;
+    }
+    setNotifications(storageService.getNotifications(currentUser.id).slice(0, 4));
+    const markAsRead = () => storageService.markNotificationsRead(currentUser.id);
+    markAsRead();
+    const timer = window.setTimeout(markAsRead, 1500);
+    return () => window.clearTimeout(timer);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser || !('Notification' in window) || Notification.permission === 'granted') return;
+    if (Notification.permission === 'default') {
+      void Notification.requestPermission().catch(() => undefined);
+    }
+  }, [currentUser?.id]);
 
   useEffect(() => {
     sessionStorage.setItem('fabrilux_active_view', currentView);
@@ -495,6 +536,29 @@ export default function App() {
         isDarkMode={isDarkMode}
       />
 
+      <AnimatePresence>
+        {notifications.filter(item => !item.isRead).slice(0, 3).map(item => (
+          <motion.div
+            key={item.id}
+            initial={{ opacity: 0, y: -20, x: 30 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: -10, x: 18 }}
+            className="fixed right-3 top-20 z-[60] w-[min(90vw,320px)] rounded-2xl border border-amber-500/30 bg-[#111317]/95 p-3 shadow-2xl backdrop-blur-xl"
+          >
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15 text-amber-300">
+                {item.type === 'follow' ? '☆' : item.type === 'like' ? '♥' : item.type === 'message' ? '✉' : '•'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-300/80">{item.type}</p>
+                <p className="mt-1 text-sm font-semibold text-white">{item.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-300">{item.body}</p>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
       {/* 4. Top Navigation Bar */}
       <Navbar
         currentUser={currentUser}
@@ -505,7 +569,7 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleTheme={handleToggleTheme}
         isOnline={isOnline}
-        canInstall={Boolean(installPrompt)}
+        canInstall={canShowInstallPrompt}
         onInstall={handleInstallApp}
         onRefresh={() => { setIsRefreshing(true); void refreshAllData(true).finally(() => setIsRefreshing(false)); }}
         isRefreshing={isRefreshing}
@@ -697,7 +761,7 @@ export default function App() {
         onLogout={handleLogout}
         isDarkMode={isDarkMode}
         unreadCount={unreadCount}
-        canInstall={Boolean(installPrompt)}
+        canInstall={canShowInstallPrompt}
         onInstall={handleInstallApp}
       />
 

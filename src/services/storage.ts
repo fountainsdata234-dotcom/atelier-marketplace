@@ -1,4 +1,4 @@
-import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, SellerCollection, UserRole, FabricRequest, FabricRequestStatus, DiscoveryEvent, DiscoveryEventType } from '../types';
+import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, SellerCollection, UserRole, FabricRequest, FabricRequestStatus, DiscoveryEvent, DiscoveryEventType, AppNotification } from '../types';
 
 const STORAGE_KEYS = {
   USERS: 'atelier_users_v2',
@@ -10,10 +10,11 @@ const STORAGE_KEYS = {
   DARK_MODE: 'atelier_dark_mode_v2',
   SAVED_PHOTOS: 'atelier_saved_photos_v2',
   COLLECTION_PACKAGES: 'atelier_collection_packages_v2',
-  SELLER_COLLECTIONS: 'atelier_seller_collections_v1'
-  ,FABRIC_REQUESTS: 'atelier_fabric_requests_v1',
+  SELLER_COLLECTIONS: 'atelier_seller_collections_v1',
+  FABRIC_REQUESTS: 'atelier_fabric_requests_v1',
   DISCOVERY_EVENTS: 'atelier_discovery_events_v1',
-  SEARCH_HISTORY: 'atelier_search_history_v1'
+  SEARCH_HISTORY: 'atelier_search_history_v1',
+  NOTIFICATIONS: 'atelier_notifications_v1',
 };
 
 const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
@@ -80,7 +81,65 @@ export const storageService = {
     if (!localStorage.getItem(STORAGE_KEYS.DISCOVERY_EVENTS)) {
       localStorage.setItem(STORAGE_KEYS.DISCOVERY_EVENTS, JSON.stringify([]));
     }
-    
+    if (!localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS)) {
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
+    }
+  },
+
+  getNotifications(userId?: string): AppNotification[] {
+    try {
+      const items: AppNotification[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS) || '[]');
+      const sorted = [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return userId ? sorted.filter(item => item.userId === userId) : sorted;
+    } catch {
+      return [];
+    }
+  },
+
+  addNotification(userId: string, title: string, body: string, type: AppNotification['type'], actionUrl?: string): AppNotification | null {
+    try {
+      const all = this.getNotifications();
+      const notification: AppNotification = {
+        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        userId,
+        title: title.trim() || 'Atelier update',
+        body: body.trim() || 'You have a new update.',
+        type,
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        actionUrl,
+      };
+      const next = [notification, ...all.filter(item => item.userId !== userId)].slice(0, 200);
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('atelier_notifications_updated', { detail: notification }));
+
+      if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+        try {
+          new Notification(notification.title, {
+            body: notification.body,
+            icon: '/logo.png',
+            tag: `atelier-${notification.type}-${notification.id}`,
+          });
+        } catch {
+          // Browser notifications are optional and must never interrupt the app flow.
+        }
+      }
+
+      return notification;
+    } catch {
+      return null;
+    }
+  },
+
+  markNotificationsRead(userId: string): void {
+    try {
+      const all = this.getNotifications();
+      const updated = all.map(item => item.userId === userId ? { ...item, isRead: true } : item);
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent('atelier_notifications_updated'));
+    } catch {
+      // Notifications are best-effort state only.
+    }
   },
 
   recordDiscoveryEvent(itemId: string, eventType: DiscoveryEventType, userId?: string): void {
@@ -491,6 +550,11 @@ export const storageService = {
     } else {
       post.likes.push(userId);
       isLiked = true;
+      const liker = this.getUsers().find(user => user.id === userId);
+      if (userId !== post.authorId && liker) {
+        const handle = liker.handle || liker.name;
+        this.addNotification(post.authorId, 'New like', `@${handle.replace(/^@/, '')} liked your ${post.title || 'post'}.`, 'like', `/@${encodeURIComponent(handle.replace(/^@/, ''))}/post/${encodeURIComponent(post.id)}`);
+      }
     }
     this.savePosts(posts);
     return { likesCount: post.likes.length, isLiked };
@@ -550,6 +614,9 @@ export const storageService = {
     } else {
       target.followers.push(currentUserId);
       isFollowing = true;
+      const follower = users.find(u => u.id === currentUserId);
+      const handle = follower?.handle || follower?.name || 'Someone';
+      this.addNotification(targetUserId, 'New follower', `@${handle.replace(/^@/, '')} is now following you.`, 'follow');
     }
     this.saveUsers(users);
     return { followersCount: target.followers.length, isFollowing };
@@ -643,6 +710,17 @@ export const storageService = {
     all.push(newMsg);
     localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(all));
     window.dispatchEvent(new CustomEvent('atelier_message_received', { detail: newMsg }));
+
+    if (newMsg.recipientId !== newMsg.senderId) {
+      const preview = newMsg.content.trim();
+      this.addNotification(
+        newMsg.recipientId,
+        `${newMsg.senderName} sent a message`,
+        preview.length > 110 ? `${preview.slice(0, 107)}...` : preview,
+        'message',
+      );
+    }
+
     return newMsg;
   },
 

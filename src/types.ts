@@ -155,6 +155,17 @@ export interface BroadcastMessage {
   createdAt: string;
 }
 
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  type: 'follow' | 'like' | 'message' | 'system';
+  createdAt: string;
+  isRead: boolean;
+  actionUrl?: string;
+}
+
 export interface CountryGeo {
   name: string;
   code: string;

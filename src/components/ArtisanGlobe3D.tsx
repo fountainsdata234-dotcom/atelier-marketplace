@@ -254,14 +254,14 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           );
         })}
       </group>
-      <OrbitControls enablePan={false} enableDamping dampingFactor={0.08} minDistance={9} maxDistance={18} autoRotate autoRotateSpeed={0.18} zoomToCursor rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
+      <OrbitControls enablePan={false} enableDamping dampingFactor={0.08} minDistance={11} maxDistance={20} autoRotate autoRotateSpeed={0.18} zoomToCursor rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
     </>
   );
 };
 
 export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = (props) => (
   <div className="artisan-globe-3d" aria-label="Interactive 3D artisan globe">
-    <Canvas camera={{ position: [0, 0, 10], fov: 28 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+    <Canvas camera={{ position: [0, 0, 12.5], fov: 24 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
       <GlobeScene {...props} />
     </Canvas>
     <div className="artisan-globe-3d-hint">Drag to rotate · pinch or wheel to zoom</div>

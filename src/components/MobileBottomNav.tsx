@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, MessageSquare, User as UserIcon, Shield, Scissors, LogIn, Users, Info } from 'lucide-react';
+import { Compass, MessageSquare, User as UserIcon, Shield, Scissors, LogIn, Users, Info, Download } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -41,6 +41,16 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         }`}
       >
         <div className="mx-auto max-w-md">
+          {canInstall && (
+            <button
+              type="button"
+              onClick={onInstall}
+              className="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-300"
+            >
+              <Download className="h-4 w-4" />
+              Install app
+            </button>
+          )}
           <div className="grid grid-cols-4 gap-1.5">
             <button
               onClick={() => handleNavigate(currentUser ? 'marketplace' : 'landing')}
