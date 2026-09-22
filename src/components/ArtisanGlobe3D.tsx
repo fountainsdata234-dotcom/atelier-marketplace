@@ -171,9 +171,9 @@ const ArtisanMarker: React.FC<{
 
   return (
     <group ref={markerRef}>
-      {(selected || isFrontFacing && revealLevel < 1) && <mesh ref={pulseRef} position={[0.18, 0.18, 0]}>
-        <ringGeometry args={[0.075, 0.084, 20]} />
-        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#fb7185'} transparent opacity={selected ? 0.26 : 0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      {(selected || isFrontFacing && revealLevel < 1) && <mesh ref={pulseRef} position={[0, 0, 0]}>
+        <ringGeometry args={[0.12, 0.16, 36]} />
+        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#fb7185'} transparent opacity={selected ? 0.4 : 0.14} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>}
       {isFrontFacing && revealLevel < 1 && <Html distanceFactor={7} position={[0.18, 0.18, 0]} center pointerEvents="auto">
         <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${getRoleLabel(artisan.role)} marker for ${artisan.name}`}>
@@ -189,8 +189,8 @@ const ArtisanMarker: React.FC<{
       )}
       {selected && (
         <mesh position={[0, 0, 0]}>
-          <sphereGeometry args={[0.13, 16, 16]} />
-          <meshBasicMaterial color="#fbbf24" transparent opacity={0.52} blending={THREE.AdditiveBlending} />
+          <sphereGeometry args={[0.18, 22, 22]} />
+          <meshBasicMaterial color="#fbbf24" transparent opacity={0.72} blending={THREE.AdditiveBlending} />
         </mesh>
       )}
       {isFrontFacing && revealLevel >= 1 && (
@@ -247,11 +247,13 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
 
     const camera = controlsRef.current.object;
     const desiredTarget = selectedPosition.clone();
-    const viewDirection = desiredTarget.clone().normalize();
-    const desiredCameraPosition = viewDirection.multiplyScalar(6.4);
+    const currentDistance = camera.position.distanceTo(desiredTarget);
+    const stabilizedDistance = THREE.MathUtils.clamp(currentDistance, 7.8, 12.5);
+    const focusDirection = desiredTarget.clone().sub(camera.position).normalize();
+    const keepDistancePosition = desiredTarget.clone().sub(focusDirection.clone().multiplyScalar(stabilizedDistance));
 
     controlsRef.current.target.lerp(desiredTarget, 0.12);
-    camera.position.lerp(desiredCameraPosition, 0.12);
+    camera.position.lerp(keepDistancePosition, 0.12);
     camera.lookAt(desiredTarget);
     controlsRef.current.update();
   }, [artisans, scatterOffsets, selectedArtisan]);

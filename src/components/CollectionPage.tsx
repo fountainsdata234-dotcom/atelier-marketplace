@@ -1,7 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Bookmark, Download, Image as ImageIcon, Trash2, Sparkles, ShieldAlert, Plus, X, Layers } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Bookmark, Download, Image as ImageIcon, Trash2, Sparkles, ShieldAlert, Plus, X, Layers, Upload, CheckCircle2 } from 'lucide-react';
 import { SavedPhoto, SellerCollection, User } from '../types';
 import { storageService } from '../services/storage';
+import { uploadUserImage } from '../services/firebase';
+
+interface CollectionUploadItem {
+  id: string;
+  name: string;
+  preview: string;
+  status: 'queued' | 'uploading' | 'done' | 'error';
+  url?: string;
+  error?: string;
+}
 
 interface CollectionPageProps {
   currentUser: User | null;
@@ -16,6 +26,10 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
   const [collectionDescription, setCollectionDescription] = useState('');
   const [collectionImages, setCollectionImages] = useState<string[]>(['']);
   const [collectionStatus, setCollectionStatus] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<CollectionUploadItem[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setSavedPhotos(storageService.getSavedPhotos());
@@ -64,11 +78,71 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
   const addCollectionImage = () => setCollectionImages(images => images.length >= 12 ? images : [...images, '']);
   const updateCollectionImage = (index: number, value: string) => setCollectionImages(images => images.map((image, imageIndex) => imageIndex === index ? value : image));
   const removeCollectionImage = (index: number) => setCollectionImages(images => images.filter((_, imageIndex) => imageIndex !== index));
+
+  const handleQueuedUploads = async (incomingFiles: File[]) => {
+    if (!currentUser) {
+      setCollectionStatus('Sign in to upload collection photos.');
+      return;
+    }
+
+    const validFiles = incomingFiles.filter((file) => file.type.startsWith('image/'));
+    if (!validFiles.length) {
+      setCollectionStatus('Choose valid image files for your collection.');
+      return;
+    }
+
+    const activeImages = new Set(collectionImages.filter(Boolean));
+    const existingUploads = uploadQueue.filter((item) => item.status === 'done' && item.url).map((item) => item.url as string);
+    const totalUsed = activeImages.size + existingUploads.length;
+    const remainingSlots = Math.max(0, 12 - totalUsed);
+    if (remainingSlots <= 0) {
+      setCollectionStatus('This collection is already full. Remove an image or start a new one.');
+      return;
+    }
+
+    const selectedFiles = validFiles.slice(0, remainingSlots);
+    const nextQueue: CollectionUploadItem[] = selectedFiles.map((file) => ({
+      id: `${file.name}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name: file.name,
+      preview: URL.createObjectURL(file),
+      status: 'queued',
+    }));
+
+    setUploadQueue((previous) => [...previous, ...nextQueue]);
+    setIsUploading(true);
+    setCollectionStatus('Uploading your collection photos...');
+
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      const file = selectedFiles[index];
+      const item = nextQueue[index];
+      if (!file || !item) continue;
+
+      setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'uploading' } : entry));
+
+      try {
+        const uploadedUrl = await uploadUserImage(file, currentUser.id, 'atelier', `collection-${Date.now()}-${item.name.replace(/\s+/g, '-').toLowerCase()}`);
+        setCollectionImages((images) => {
+          const nextImages = [...images.filter(Boolean), uploadedUrl];
+          return Array.from(new Set(nextImages)).slice(0, 12);
+        });
+        setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'done', url: uploadedUrl } : entry));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Upload failed.';
+        setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'error', error: message } : entry));
+        setCollectionStatus(message);
+      }
+    }
+
+    setIsUploading(false);
+    setCollectionStatus((current) => current || 'Collection photos are ready to publish.');
+  };
+
   const createSellerCollection = (event: React.FormEvent) => {
     event.preventDefault();
-    const imageUrls = collectionImages.map(image => image.trim()).filter(Boolean);
+    const uploadedUrls = uploadQueue.filter((item) => item.status === 'done' && item.url).map((item) => item.url as string);
+    const imageUrls = Array.from(new Set([...collectionImages.map((image) => image.trim()).filter(Boolean), ...uploadedUrls]));
     if (!currentUser || !collectionTitle.trim() || imageUrls.length === 0) {
-      setCollectionStatus('Add a collection name and at least one image link.');
+      setCollectionStatus('Add a collection name and at least one image.');
       return;
     }
     if (sellerCollections.length >= sellerCollectionLimit) {
@@ -80,7 +154,23 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
     setCollectionTitle('');
     setCollectionDescription('');
     setCollectionImages(['']);
+    setUploadQueue([]);
     setCollectionStatus('Collection published to your storefront.');
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+    if (event.dataTransfer.files?.length) {
+      void handleQueuedUploads(Array.from(event.dataTransfer.files));
+    }
+  };
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files?.length) {
+      void handleQueuedUploads(Array.from(event.target.files));
+      event.target.value = '';
+    }
   };
 
   return (
@@ -101,19 +191,61 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
               <input value={collectionTitle} onChange={event => setCollectionTitle(event.target.value)} placeholder="Collection name, e.g. The Indigo Edit" className="w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3.5 py-3 text-xs focus:border-amber-500 focus:outline-none" />
               <textarea value={collectionDescription} onChange={event => setCollectionDescription(event.target.value)} rows={4} placeholder="Describe the story, fabric, or occasion behind this edit." className="w-full rounded-xl border border-neutral-700 bg-neutral-900/40 p-3 text-xs focus:border-amber-500 focus:outline-none" />
               {collectionStatus && <p className="text-xs text-amber-400">{collectionStatus}</p>}
-              <button type="submit" disabled={sellerCollections.length >= sellerCollectionLimit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> Publish collection</button>
+              <button type="submit" disabled={sellerCollections.length >= sellerCollectionLimit || isUploading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> {isUploading ? 'Uploading...' : 'Publish collection'}</button>
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between"><p className="text-xs font-semibold text-neutral-300">Gallery image links</p><span className="text-[10px] text-neutral-500">{collectionImages.filter(Boolean).length}/12 images</span></div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {collectionImages.map((image, index) => (
-                  <div key={`${index}-${image}`} className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/30 p-2">
-                    <input type="url" value={image} onChange={event => updateCollectionImage(index, event.target.value)} placeholder={`Image ${index + 1} URL`} className="min-w-0 flex-1 bg-transparent px-1 text-xs focus:outline-none" />
-                    {collectionImages.length > 1 && <button type="button" onClick={() => removeCollectionImage(index)} aria-label={`Remove image ${index + 1}`} className="rounded-lg p-1.5 text-neutral-500 hover:bg-red-500/10 hover:text-red-400"><X className="h-3.5 w-3.5" /></button>}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between"><p className="text-xs font-semibold text-neutral-300">Collection gallery</p><span className="text-[10px] text-neutral-500">{Array.from(new Set([...collectionImages.filter(Boolean), ...uploadQueue.filter((item) => item.status === 'done' && item.url).map((item) => item.url as string)])).length}/12 images</span></div>
+
+              <div
+                onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={handleDrop}
+                className={`group relative overflow-hidden rounded-2xl border border-dashed p-4 transition ${dragActive ? 'border-amber-400 bg-amber-400/5' : 'border-neutral-700 bg-neutral-900/30'}`}>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleInputChange} className="hidden" />
+                <div className="flex flex-col items-center justify-center gap-3 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                    <Upload className="h-5 w-5" />
                   </div>
-                ))}
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-100">Drag & drop collection photos</p>
+                    <p className="mt-1 text-[11px] text-neutral-400">PNG, JPG, WEBP, GIF — optimized automatically with Cloudinary.</p>
+                  </div>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-300">
+                    <ImageIcon className="h-3.5 w-3.5" /> Select files
+                  </button>
+                </div>
               </div>
-              {collectionImages.length < 12 && <button type="button" onClick={addCollectionImage} className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300"><Plus className="h-3.5 w-3.5" /> Add another image</button>}
+
+              {uploadQueue.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {uploadQueue.map((item) => (
+                    <div key={item.id} className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/30">
+                      <img src={item.preview} alt={item.name} className="h-20 w-full object-cover" />
+                      <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-[10px]">
+                        <span className="truncate text-neutral-300">{item.name}</span>
+                        {item.status === 'done' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
+                        {item.status === 'uploading' && <span className="text-amber-400">Uploading</span>}
+                        {item.status === 'error' && <span className="text-red-400">Failed</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-neutral-300">Optional direct image links</p>
+                  <button type="button" onClick={addCollectionImage} className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-amber-400 hover:text-amber-300"><Plus className="h-3.5 w-3.5" /> Add URL slot</button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {collectionImages.map((image, index) => (
+                    <div key={`${index}-${image || 'empty'}`} className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900/30 p-2">
+                      <input type="url" value={image} onChange={event => updateCollectionImage(index, event.target.value)} placeholder={`Image ${index + 1} URL`} className="min-w-0 flex-1 bg-transparent px-1 text-xs focus:outline-none" />
+                      {collectionImages.length > 1 && <button type="button" onClick={() => removeCollectionImage(index)} aria-label={`Remove image ${index + 1}`} className="rounded-lg p-1.5 text-neutral-500 hover:bg-red-500/10 hover:text-red-400"><X className="h-3.5 w-3.5" /></button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </form>
         </section>

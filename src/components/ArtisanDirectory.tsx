@@ -3,7 +3,7 @@ import { Globe2, Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
 import { getSearchSuggestions } from '../utils/globe';
-import { matchesLocationFilter } from '../utils/artisanFilters';
+import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
 import { ArtisanGlobe3D } from './ArtisanGlobe3D';
 
 interface ArtisanDirectoryProps {
@@ -45,9 +45,13 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const [nearMeOnly, setNearMeOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
-  const [filterCountry, setFilterCountry] = useState('all');
+  const [filterCountry, setFilterCountry] = useState(() => getDefaultLocationFilter(currentUser?.location));
   const [filterState, setFilterState] = useState('all');
   const [filterCity, setFilterCity] = useState('all');
+
+  React.useEffect(() => {
+    setFilterCountry(getDefaultLocationFilter(currentUser?.location));
+  }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode]);
   const [selectedGlobeArtisanId, setSelectedGlobeArtisanId] = useState<string | null>(null);
   const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry);
   const selectedState = selectedCountry?.states.find((state) => state.code === filterState);

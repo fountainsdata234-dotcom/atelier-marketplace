@@ -90,7 +90,7 @@ export async function logoutFromFirebase() {
   await signOut(firebaseAuth);
 }
 
-export async function uploadUserImage(file: Blob, userId: string, folder: 'profiles' | 'posts', fileName: string) {
+export async function uploadUserImage(file: Blob, userId: string, folder: 'profiles' | 'posts' | 'atelier' | string, fileName: string) {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8787';
   const token = firebaseAuth.currentUser ? await firebaseAuth.currentUser.getIdToken() : null;
   const formData = new FormData();

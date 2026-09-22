@@ -1,4 +1,4 @@
-type LocationLike = {
+export type LocationLike = {
   country?: string;
   countryCode?: string;
   state?: string;
@@ -7,6 +7,18 @@ type LocationLike = {
 };
 
 const normalizeValue = (value?: string) => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+export const getDefaultLocationFilter = (location?: LocationLike | null) => {
+  if (!location) return 'all';
+  const normalizedLocation = location && 'location' in location && location.location ? location.location : location;
+  if (normalizedLocation.countryCode && normalizeValue(normalizedLocation.countryCode) !== 'all') {
+    return normalizedLocation.countryCode;
+  }
+  if (normalizedLocation.country && normalizeValue(normalizedLocation.country) !== 'all') {
+    return normalizedLocation.country;
+  }
+  return 'all';
+};
 
 export const matchesLocationFilter = (
   input: LocationLike | null | undefined,

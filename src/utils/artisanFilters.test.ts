@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchesLocationFilter } from './artisanFilters';
+import { getDefaultLocationFilter, matchesLocationFilter } from './artisanFilters';
 
 describe('artisan location filtering', () => {
   it('hides sellers outside the selected country even when their name matches the search', () => {
@@ -41,5 +41,11 @@ describe('artisan location filtering', () => {
     expect(matchesLocationFilter(artisan as any, 'GH', 'all', 'all')).toBe(true);
     expect(matchesLocationFilter(artisan as any, 'GH', 'GH-01', 'all')).toBe(false);
     expect(matchesLocationFilter(artisan as any, 'GH', 'GH-01', 'Accra')).toBe(false);
+  });
+
+  it('defaults the globe country filter to the current user\'s country when available', () => {
+    expect(getDefaultLocationFilter({ country: 'Nigeria', countryCode: 'NG', state: 'Lagos', city: 'Lagos' })).toBe('NG');
+    expect(getDefaultLocationFilter({ country: 'United States', state: 'California', city: 'Los Angeles' })).toBe('United States');
+    expect(getDefaultLocationFilter(null)).toBe('all');
   });
 });
