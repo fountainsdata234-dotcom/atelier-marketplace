@@ -37,20 +37,21 @@ export const getMarkerScatterOffset = (
 ) => {
   const basis = getTangentBasis(latitude, longitude);
   const safeTotal = Math.max(total, 1);
-  const spread = 0.14 + Math.min(0.28, safeTotal * 0.024);
+  const anchorRadius = 0.025;
+  const spread = Math.min(0.09, 0.04 + safeTotal * 0.005);
   const angle = (index / safeTotal) * Math.PI * 2 + (index * 1.61803398875);
-  const radius = spread * (0.8 + ((index % 4) * 0.18));
+  const radius = spread * (0.52 + ((index % 4) * 0.12));
 
   return {
-    x: basis.x * 0.035 + basis.tangentX * Math.cos(angle) * radius + basis.binormalX * Math.sin(angle) * radius,
-    y: basis.y * 0.035 + basis.tangentY * Math.cos(angle) * radius + basis.binormalY * Math.sin(angle) * radius,
-    z: basis.z * 0.035 + basis.tangentZ * Math.cos(angle) * radius + basis.binormalZ * Math.sin(angle) * radius,
+    x: basis.x * anchorRadius + basis.tangentX * Math.cos(angle) * radius + basis.binormalX * Math.sin(angle) * radius,
+    y: basis.y * anchorRadius + basis.tangentY * Math.cos(angle) * radius + basis.binormalY * Math.sin(angle) * radius,
+    z: basis.z * anchorRadius + basis.tangentZ * Math.cos(angle) * radius + basis.binormalZ * Math.sin(angle) * radius,
   };
 };
 
 export const getScatterOffsetsForLocations = (
   locations: Array<{ lat: number; lng: number }>,
-  minimumDistance = 0.18,
+  minimumDistance = 0.08,
 ) => {
   const orderedLocations = locations
     .map((location, originalIndex) => ({ ...location, originalIndex }))
@@ -61,49 +62,77 @@ export const getScatterOffsetsForLocations = (
     });
 
   const offsets: Array<{ x: number; y: number; z: number }> = Array(locations.length).fill({ x: 0, y: 0, z: 0 });
+  const safeMinimumDistance = Math.max(0.04, Math.min(0.12, minimumDistance));
+  const baseOffset = Math.min(0.028, safeMinimumDistance * 0.38);
+  const maxOffsetLength = Math.min(0.09, safeMinimumDistance * 0.9);
 
   orderedLocations.forEach((location, index) => {
     const basis = getTangentBasis(location.lat, location.lng);
-    let chosen = { x: 0, y: 0, z: 0 };
-    let found = false;
+    let bestCandidate: { x: number; y: number; z: number } | null = null;
+    let bestSeparation = -Infinity;
 
-    for (let ring = 0; ring < 18; ring += 1) {
-      const radius = minimumDistance * (1 + ring * 0.45);
-      const steps = Math.max(8, Math.round((Math.PI * 2 * radius) / 0.18));
+    for (let ring = 0; ring < 20; ring += 1) {
+      const radius = safeMinimumDistance * (0.4 + ring * 0.22);
+      const steps = Math.max(8, Math.round((Math.PI * 2 * radius) / (safeMinimumDistance * 0.75)));
 
       for (let step = 0; step < steps; step += 1) {
-        const angle = (step / steps) * Math.PI * 2 + index * 1.61803398875;
+        const angle = ((index + 1) * 1.61803398875 + (step / steps) * Math.PI * 2) % (Math.PI * 2);
         const candidate = {
-          x: basis.x * 0.035 + basis.tangentX * Math.cos(angle) * radius + basis.binormalX * Math.sin(angle) * radius,
-          y: basis.y * 0.035 + basis.tangentY * Math.cos(angle) * radius + basis.binormalY * Math.sin(angle) * radius,
-          z: basis.z * 0.035 + basis.tangentZ * Math.cos(angle) * radius + basis.binormalZ * Math.sin(angle) * radius,
+          x: basis.x * baseOffset + basis.tangentX * Math.cos(angle) * radius + basis.binormalX * Math.sin(angle) * radius * 0.7,
+          y: basis.y * baseOffset + basis.tangentY * Math.cos(angle) * radius + basis.binormalY * Math.sin(angle) * radius * 0.7,
+          z: basis.z * baseOffset + basis.tangentZ * Math.cos(angle) * radius + basis.binormalZ * Math.sin(angle) * radius * 0.7,
         };
 
-        const overlaps = offsets.some((previous) => {
-          if (!previous || !previous.x && !previous.y && !previous.z) return false;
-          const dx = previous.x - candidate.x;
-          const dy = previous.y - candidate.y;
-          const dz = previous.z - candidate.z;
-          return Math.hypot(dx, dy, dz) < minimumDistance;
-        });
+        const candidateLength = Math.hypot(candidate.x, candidate.y, candidate.z);
+        if (candidateLength > maxOffsetLength + 0.0001) {
+          continue;
+        }
 
-        if (!overlaps) {
-          chosen = candidate;
-          found = true;
-          break;
+        const distancesToPrevious = offsets
+          .filter((previous) => previous && (previous.x || previous.y || previous.z))
+          .map((previous) => Math.hypot(
+            previous.x - candidate.x,
+            previous.y - candidate.y,
+            previous.z - candidate.z,
+          ));
+
+        const minDistanceToPrevious = distancesToPrevious.length > 0 ? Math.min(...distancesToPrevious) : Infinity;
+        if (minDistanceToPrevious < safeMinimumDistance) {
+          continue;
+        }
+
+        const separationScore = minDistanceToPrevious - candidateLength * 0.4;
+        if (separationScore > bestSeparation || (Math.abs(separationScore - bestSeparation) < 1e-6 && (!bestCandidate || candidateLength < Math.hypot(bestCandidate.x, bestCandidate.y, bestCandidate.z)))) {
+          bestCandidate = candidate;
+          bestSeparation = separationScore;
         }
       }
 
-      if (found) {
+      if (bestCandidate) {
         break;
       }
     }
 
-    if (!found) {
-      chosen = getMarkerScatterOffset(location.lat, location.lng, index, Math.max(locations.length, 1));
+    if (!bestCandidate) {
+      const fallbackAngle = ((index + 1) * Math.PI * 2) / Math.max(orderedLocations.length, 1);
+      bestCandidate = {
+        x: basis.x * baseOffset + basis.tangentX * Math.cos(fallbackAngle) * safeMinimumDistance * 0.7 + basis.binormalX * Math.sin(fallbackAngle) * safeMinimumDistance * 0.5,
+        y: basis.y * baseOffset + basis.tangentY * Math.cos(fallbackAngle) * safeMinimumDistance * 0.7 + basis.binormalY * Math.sin(fallbackAngle) * safeMinimumDistance * 0.5,
+        z: basis.z * baseOffset + basis.tangentZ * Math.cos(fallbackAngle) * safeMinimumDistance * 0.7 + basis.binormalZ * Math.sin(fallbackAngle) * safeMinimumDistance * 0.5,
+      };
     }
 
-    offsets[location.originalIndex] = chosen;
+    const finalLength = Math.hypot(bestCandidate.x, bestCandidate.y, bestCandidate.z);
+    if (finalLength > maxOffsetLength) {
+      const scale = maxOffsetLength / finalLength;
+      bestCandidate = {
+        x: bestCandidate.x * scale,
+        y: bestCandidate.y * scale,
+        z: bestCandidate.z * scale,
+      };
+    }
+
+    offsets[location.originalIndex] = bestCandidate;
   });
 
   return offsets;

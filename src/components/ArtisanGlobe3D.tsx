@@ -225,7 +225,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
       .filter((item) => Number.isFinite(Number(item.location.lat)) && Number.isFinite(Number(item.location.lng)))
       .sort((left, right) => left.id.localeCompare(right.id));
     const validLocations = validItems.map((item) => ({ lat: Number(item.location.lat), lng: Number(item.location.lng) }));
-    const offsets = getScatterOffsetsForLocations(validLocations, 0.36);
+    const offsets = getScatterOffsetsForLocations(validLocations, 0.08);
 
     return new Map(validItems.map((item, index) => [item.id, offsets[index] ?? { x: 0, y: 0, z: 0 }]));
   }, [artisans]);

@@ -18,8 +18,24 @@ describe('globe helpers', () => {
     }
 
     expect(pairDistances.length).toBeGreaterThan(0);
-    expect(Math.min(...pairDistances)).toBeGreaterThan(0.18);
+    expect(Math.min(...pairDistances)).toBeGreaterThan(0.03);
     expect(offsets.every((offset) => Math.abs(offset.x) + Math.abs(offset.y) + Math.abs(offset.z) > 0)).toBe(true);
+  });
+
+  it('anchors seller markers tightly to the globe while preserving spacing', () => {
+    const locations = [
+      { lat: 6.5244, lng: 3.3792 },
+      { lat: 12.5681, lng: 10.1211 },
+      { lat: 18.9509, lng: 17.2339 },
+      { lat: 25.0324, lng: 24.0448 },
+      { lat: 31.2346, lng: 29.9983 },
+    ];
+
+    const offsets = getScatterOffsetsForLocations(locations, 0.12);
+    const maxOffsetLength = Math.max(...offsets.map((offset) => Math.hypot(offset.x, offset.y, offset.z)));
+
+    expect(maxOffsetLength).toBeLessThanOrEqual(0.09);
+    expect(offsets.every((offset) => Math.hypot(offset.x, offset.y, offset.z) > 0.01)).toBe(true);
   });
 
   it('keeps marker offsets stable when artisan order changes', () => {
@@ -37,6 +53,30 @@ describe('globe helpers', () => {
     expect(firstOffsets[0]).toEqual(secondOffsets[2]);
     expect(firstOffsets[1]).toEqual(secondOffsets[1]);
     expect(firstOffsets[2]).toEqual(secondOffsets[0]);
+  });
+
+  it('separates sellers who share the same coordinates', () => {
+    const locations = [
+      { lat: 6.5244, lng: 3.3792 },
+      { lat: 6.5244, lng: 3.3792 },
+      { lat: 6.5244, lng: 3.3792 },
+    ];
+
+    const offsets = getScatterOffsetsForLocations(locations, 0.18);
+    const distances: number[] = [];
+
+    for (let index = 0; index < offsets.length; index += 1) {
+      for (let compareIndex = index + 1; compareIndex < offsets.length; compareIndex += 1) {
+        distances.push(Math.hypot(
+          offsets[index].x - offsets[compareIndex].x,
+          offsets[index].y - offsets[compareIndex].y,
+          offsets[index].z - offsets[compareIndex].z,
+        ));
+      }
+    }
+
+    expect(distances.length).toBeGreaterThan(0);
+    expect(Math.min(...distances)).toBeGreaterThan(0.03);
   });
 
   it('surfaces handle and name matches while typing', () => {
