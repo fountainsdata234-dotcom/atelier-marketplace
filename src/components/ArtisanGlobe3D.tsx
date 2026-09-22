@@ -236,7 +236,14 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
   );
 
   useEffect(() => {
-    if (!selectedArtisan || !controlsRef.current) return;
+    if (!controlsRef.current) return;
+
+    const currentTarget = controlsRef.current.target;
+    currentTarget.set(0, 0, 0);
+    controlsRef.current.autoRotate = !selectedArtisan;
+    controlsRef.current.update();
+
+    if (!selectedArtisan || !globeRef.current) return;
 
     const selectedOffset = scatterOffsets.get(selectedArtisan.id) ?? { x: 0, y: 0, z: 0 };
     const selectedPosition = toGlobePosition(
@@ -249,14 +256,10 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
       selectedOffset.z,
     ));
 
-    const currentTarget = controlsRef.current.target;
-    currentTarget.set(0, 0, 0);
-    controlsRef.current.update();
-
-    if (globeRef.current) {
-      const focusAngle = Math.atan2(selectedPosition.x, selectedPosition.z);
-      globeRef.current.rotation.y = THREE.MathUtils.lerp(globeRef.current.rotation.y, -focusAngle, 0.08);
-    }
+    const focusAngle = Math.atan2(selectedPosition.x, selectedPosition.z);
+    const focusPitch = Math.atan2(selectedPosition.y, Math.hypot(selectedPosition.x, selectedPosition.z));
+    globeRef.current.rotation.y = THREE.MathUtils.lerp(globeRef.current.rotation.y, -focusAngle, 0.08);
+    globeRef.current.rotation.x = THREE.MathUtils.lerp(globeRef.current.rotation.x, -focusPitch * 0.9, 0.08);
   }, [artisans, scatterOffsets, selectedArtisan]);
   const gridLines = useMemo(() => {
     return Array.from({ length: 7 }, (_, index) => {
@@ -285,10 +288,13 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
         selectedOffset.z,
       ));
       const focusAngle = Math.atan2(selectedPosition.x, selectedPosition.z);
-      globeRef.current.rotation.y = THREE.MathUtils.damp(globeRef.current.rotation.y, -focusAngle, 4.5, delta);
+      const focusPitch = Math.atan2(selectedPosition.y, Math.hypot(selectedPosition.x, selectedPosition.z));
+      globeRef.current.rotation.y = THREE.MathUtils.damp(globeRef.current.rotation.y, -focusAngle, 5.4, delta);
+      globeRef.current.rotation.x = THREE.MathUtils.damp(globeRef.current.rotation.x, -focusPitch * 0.9, 5.4, delta);
       return;
     }
 
+    globeRef.current.rotation.x = THREE.MathUtils.damp(globeRef.current.rotation.x, 0, 2.8, delta);
     globeRef.current.rotation.y += delta * 0.035;
   });
 
@@ -332,7 +338,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
         minDistance={5.8}
         maxDistance={14}
         enableZoom
-        autoRotate
+        autoRotate={!selectedArtisan}
         autoRotateSpeed={0.18}
         zoomToCursor
         rotateSpeed={0.55}
