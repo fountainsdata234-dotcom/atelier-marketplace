@@ -71,6 +71,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [postStatus, setPostStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [fabricRequests, setFabricRequests] = useState<FabricRequest[]>([]);
   const [requestStatus, setRequestStatus] = useState<string | null>(null);
+  const [warningModalOpen, setWarningModalOpen] = useState(Boolean(currentUser.isWarned && currentUser.warningNote));
 
   // Filter posts belonging to this tailor/seller
   const myPosts = posts.filter(p => p.authorId === currentUser.id).map(post => ({
@@ -86,8 +87,13 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const acknowledgeWarning = async () => {
     const cleared = storageService.updateUser(currentUser.id, { isWarned: false, warningNote: '' });
     if (cleared) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cleared }));
+    setWarningModalOpen(false);
     await api.saveProfile({ isWarned: false, warningNote: '' }).catch(() => undefined);
   };
+
+  React.useEffect(() => {
+    setWarningModalOpen(Boolean(currentUser.isWarned && currentUser.warningNote));
+  }, [currentUser.isWarned, currentUser.warningNote]);
 
   React.useEffect(() => {
     const loadRequests = async () => {
@@ -234,39 +240,43 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
   return (
     <div className="relative z-10 flex w-full max-w-7xl flex-col mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-      <div className="glass-panel overflow-hidden rounded-[28px] p-4 sm:p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-600">Welcome message</p>
-            <h2 className="mt-1 text-xl font-bold text-slate-900 md:text-2xl">Welcome to Fabrilux Atelier</h2>
-          </div>
-          <div className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 ring-1 ring-amber-500/30">
-            Premium studio
-          </div>
-        </div>
+      <AnimatePresence>
+        {warningModalOpen && currentUser.isWarned && currentUser.warningNote && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0, y: 14 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.96, opacity: 0, y: 10 }}
+              className="w-full max-w-lg rounded-[28px] border border-red-500/30 bg-[#121316] p-5 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-300">Studio notice</p>
+                  <h2 className="mt-2 text-2xl font-serif font-bold text-white">Important account message</h2>
+                </div>
+                <button type="button" onClick={() => setWarningModalOpen(false)} className="rounded-full border border-white/10 p-2 text-neutral-400 transition hover:text-white" aria-label="Close notice">
+                  <AlertTriangle className="h-4 w-4" />
+                </button>
+              </div>
 
-        <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-[22px] bg-gradient-to-r from-amber-600 to-orange-500 p-4 text-white shadow-lg shadow-orange-500/20">
-            <p className="text-xs uppercase tracking-[0.18em] text-orange-100">General greeting</p>
-            <p className="mt-2 text-sm leading-relaxed text-orange-50">
-              Hello {currentUser.name || 'there'}, welcome to your premium fashion studio. Start by publishing your first garment or fabric, connect with buyers globally, and let your brand look polished on mobile and desktop.
-            </p>
-          </div>
+              <div className="mt-5 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm leading-7 text-red-100">
+                {currentUser.warningNote}
+              </div>
 
-          <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Studio account</p><h3 className="mt-1 text-lg font-bold text-slate-900">Starter plan</h3></div>
-              <span className="rounded-full bg-emerald-100 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-700">Active</span>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-slate-50 p-3"><span className="block text-[9px] uppercase tracking-[0.14em] text-slate-500">Current balance</span><strong className="mt-1 block text-xl text-slate-900">$0.00</strong></div>
-              <div className="rounded-xl bg-slate-50 p-3"><span className="block text-[9px] uppercase tracking-[0.14em] text-slate-500">Next invoice</span><strong className="mt-1 block text-sm text-slate-900">No payment due</strong></div>
-            </div>
-            <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-[10px] text-slate-500"><span>Billing status</span><span className="font-semibold text-slate-700">Up to date</span></div>
-            {currentUser.isWarned && currentUser.warningNote && <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-700"><strong className="block text-[10px] uppercase tracking-wider">Urgent account alert</strong><span className="mt-1 block leading-relaxed">{currentUser.warningNote}</span><button type="button" onClick={() => void acknowledgeWarning()} className="mt-3 rounded-lg bg-red-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-red-500">OK, I have read this</button></div>}
-          </div>
-        </div>
-      </div>
+              <div className="mt-5 flex justify-end">
+                <button type="button" onClick={() => void acknowledgeWarning()} className="rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-400">
+                  I have read this
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Studio Header & Stats Banner */}
       <div className={`p-6 rounded-3xl border transition-all ${

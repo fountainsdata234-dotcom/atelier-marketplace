@@ -261,17 +261,6 @@ export const storageService = {
     if (index >= 0) users[index] = { ...users[index], ...user };
     else {
       users.push(user);
-      const hour = new Date().getHours();
-      const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-      this.sendGeneralMessage({
-        recipientId: user.id,
-        recipientName: user.name,
-        senderId: 'atelier-system',
-        senderName: 'Atelier Team',
-        senderRole: 'admin',
-        title: 'Welcome to Atelier',
-        content: `${greeting}, ${user.name}. Welcome to Atelier Marketplace. This is your first inbox message from the platform. Explore the marketplace, follow trusted studios, and message sellers directly whenever you are ready.`,
-      });
     }
     this.saveUsers(users);
     this.setCurrentUser(index >= 0 ? users[index] : user);

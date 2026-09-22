@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
 import { Crown, Scissors, SwatchBook } from 'lucide-react';
@@ -171,9 +171,9 @@ const ArtisanMarker: React.FC<{
 
   return (
     <group ref={markerRef}>
-      {isFrontFacing && revealLevel < 1 && <mesh ref={pulseRef} position={[0.18, 0.18, 0]}>
+      {(selected || isFrontFacing && revealLevel < 1) && <mesh ref={pulseRef} position={[0.18, 0.18, 0]}>
         <ringGeometry args={[0.075, 0.084, 20]} />
-        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#fb7185'} transparent opacity={0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#fb7185'} transparent opacity={selected ? 0.26 : 0.12} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>}
       {isFrontFacing && revealLevel < 1 && <Html distanceFactor={7} position={[0.18, 0.18, 0]} center pointerEvents="auto">
         <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${getRoleLabel(artisan.role)} marker for ${artisan.name}`}>
@@ -223,8 +223,38 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
       .filter((item) => Number.isFinite(Number(item.location.lat)) && Number.isFinite(Number(item.location.lng)))
       .map((item) => ({ lat: Number(item.location.lat), lng: Number(item.location.lng) }));
 
-    return getScatterOffsetsForLocations(validLocations, 0.2);
+    return getScatterOffsetsForLocations(validLocations, 0.36);
   }, [artisans]);
+
+  const selectedArtisan = useMemo(
+    () => artisans.find((artisan) => artisan.id === selectedArtisanId) ?? null,
+    [artisans, selectedArtisanId],
+  );
+
+  useEffect(() => {
+    if (!selectedArtisan || !controlsRef.current) return;
+
+    const selectedIndex = artisans.findIndex((artisan) => artisan.id === selectedArtisan.id);
+    const selectedPosition = toGlobePosition(
+      Number(selectedArtisan.location.lat),
+      Number(selectedArtisan.location.lng),
+      2.08,
+    ).add(new THREE.Vector3(
+      scatterOffsets[selectedIndex]?.x ?? 0,
+      scatterOffsets[selectedIndex]?.y ?? 0,
+      scatterOffsets[selectedIndex]?.z ?? 0,
+    ));
+
+    const camera = controlsRef.current.object;
+    const desiredTarget = selectedPosition.clone();
+    const viewDirection = desiredTarget.clone().normalize();
+    const desiredCameraPosition = viewDirection.multiplyScalar(6.4);
+
+    controlsRef.current.target.lerp(desiredTarget, 0.12);
+    camera.position.lerp(desiredCameraPosition, 0.12);
+    camera.lookAt(desiredTarget);
+    controlsRef.current.update();
+  }, [artisans, scatterOffsets, selectedArtisan]);
   const gridLines = useMemo(() => {
     return Array.from({ length: 7 }, (_, index) => {
       const latitude = -75 + index * 25;
