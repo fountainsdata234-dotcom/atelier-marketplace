@@ -8,6 +8,7 @@ import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
+import { matchesLocationFilter } from '../utils/artisanFilters';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -59,6 +60,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       };
     }), [posts, users]);
   const tailorPosts = sellerPosts;
+  const formatLocation = (location?: Partial<UserLocation>) => [location?.city, location?.state, location?.country].filter(Boolean).join(', ');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
@@ -197,13 +199,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       }
 
       // Location filters
-      if (filterCountry !== 'all' && post.authorLocation.country !== filterCountry) {
-        return false;
-      }
-      if (filterState !== 'all' && post.authorLocation.state !== filterState) {
-        return false;
-      }
-      if (filterCity !== 'all' && post.authorLocation.city !== filterCity) {
+      if (!matchesLocationFilter(post.authorLocation, filterCountry, filterState, filterCity)) {
         return false;
       }
 
@@ -594,7 +590,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   <div className="absolute inset-x-0 bottom-0 p-3 sm:p-6 lg:p-8">
                     <div className="max-w-3xl rounded-[1.2rem] border border-white/10 bg-black/25 p-3 backdrop-blur-md sm:rounded-[1.5rem] sm:p-5">
                       <div className="flex flex-wrap items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] text-amber-300 font-semibold sm:gap-2 sm:text-[10px] sm:tracking-[0.22em]">
-                        <span>{post.authorLocation.city}, {post.authorLocation.country}</span>
+                        <span>{formatLocation(post.authorLocation)}</span>
                         <span className="text-neutral-400">•</span>
                         <span>{post.pricing.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable price'}</span>
                       </div>
@@ -949,7 +945,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       </div>
                       <div className="flex items-center gap-1 text-[10px] text-neutral-400">
                         <MapPin className="w-2.5 h-2.5 text-amber-500" />
-                        <span>{post.authorLocation.city}, {post.authorLocation.country}</span>
+                        <span>{formatLocation(post.authorLocation)}</span>
                         {distanceKm !== null && (
                           <span className="text-amber-400 font-mono">({distanceKm} km away)</span>
                         )}

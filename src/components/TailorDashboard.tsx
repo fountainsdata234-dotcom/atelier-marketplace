@@ -307,7 +307,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
               <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-400 mt-1 font-mono">
                 <span className="text-amber-400 font-semibold">{currentUser.handle}</span>
                 <span>•</span>
-                <span>{currentUser.location.city}, {currentUser.location.country}</span>
+                <span>{[currentUser.location.city, currentUser.location.state, currentUser.location.country].filter(Boolean).join(', ')}</span>
                 <span>•</span>
                 <span>{currentUser.role === 'fabric_seller' ? 'Fabric Merchant' : 'Master Tailor'}</span>
               </div>

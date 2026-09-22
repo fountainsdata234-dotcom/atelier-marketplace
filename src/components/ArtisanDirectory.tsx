@@ -3,6 +3,7 @@ import { Globe2, Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
 import { getSearchSuggestions } from '../utils/globe';
+import { matchesLocationFilter } from '../utils/artisanFilters';
 import { ArtisanGlobe3D } from './ArtisanGlobe3D';
 
 interface ArtisanDirectoryProps {
@@ -52,12 +53,16 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const selectedState = selectedCountry?.states.find((state) => state.code === filterState);
   const filteredArtisans = artisans.filter((artisan) => {
     const term = searchQuery.trim().toLowerCase();
-    const matchesSearch = !term || artisan.name.toLowerCase().includes(term) || artisan.handle.toLowerCase().includes(term);
-    const matchesCountry = filterCountry === 'all' || artisan.location.countryCode === filterCountry || artisan.location.country === selectedCountry?.name;
-    const matchesState = filterState === 'all' || artisan.location.state === selectedState?.name;
-    const matchesCity = filterCity === 'all' || artisan.location.city === filterCity;
+    const normalizedHandle = artisan.handle.trim().toLowerCase();
+    const matchesSearch = !term || artisan.name.toLowerCase().includes(term) || artisan.handle.toLowerCase().includes(term) || normalizedHandle.includes(term);
+    const matchesLocation = matchesLocationFilter(
+      artisan.location,
+      filterCountry === 'all' ? 'all' : (selectedCountry?.name || artisan.location.countryCode || filterCountry),
+      filterState === 'all' ? 'all' : (selectedState?.name || artisan.location.state || filterState),
+      filterCity,
+    );
     const matchesRadius = !nearMeOnly || (artisan.distanceKm !== null && artisan.distanceKm <= 250);
-    return matchesSearch && matchesCountry && matchesState && matchesCity && matchesRadius;
+    return matchesSearch && matchesLocation && matchesRadius;
   });
   const mappedArtisans = filteredArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng));
   const searchSuggestions = useMemo(() => getSearchSuggestions(filteredArtisans, searchQuery, 7), [filteredArtisans, searchQuery]);
@@ -87,7 +92,10 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                   setSearchQuery(event.target.value);
                   setSearchSuggestionsOpen(true);
                 }}
-                onFocus={() => setSearchSuggestionsOpen(true)}
+                onFocus={() => {
+                  setSearchSuggestionsOpen(true);
+                  setSelectedGlobeArtisanId(null);
+                }}
                 onBlur={() => window.setTimeout(() => setSearchSuggestionsOpen(false), 120)}
                 placeholder="Search name or @handle"
                 className="min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500"
@@ -148,8 +156,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
 
         <div className="mb-6 grid gap-3 md:grid-cols-3">
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Verified artisans</p>
-            <p className="mt-2 text-2xl font-black text-amber-500">{artisans.length}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Verified tailors & fabric sellers</p>
+            <p className="mt-2 text-2xl font-black text-amber-500">{artisans.filter((artisan) => artisan.role === 'tailor' || artisan.role === 'fabric_seller').length}</p>
           </div>
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
             <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Within reach</p>

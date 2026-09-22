@@ -217,7 +217,7 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
                     )}
                   </div>
                   <span className="text-[11px] text-neutral-400 font-mono">
-                    {activePartner.handle} • {activePartner.location.city}, {activePartner.location.country}
+                    {activePartner.handle} • {[activePartner.location.city, activePartner.location.state, activePartner.location.country].filter(Boolean).join(', ')}
                   </span>
                 </div>
               </div>

@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowLeft, FileText, LockKeyhole, Sparkles } from 'lucide-react';
+import { ArrowLeft, FileText, LockKeyhole, Mail, MessageSquare, Sparkles } from 'lucide-react';
 
 interface LegalPageProps {
-  page: 'about' | 'privacy' | 'terms';
+  page: 'about' | 'privacy' | 'terms' | 'contact';
   isDarkMode: boolean;
   onBack: () => void;
 }
@@ -35,6 +35,15 @@ const content = {
       'Fabrilux may remove harmful, fraudulent, or misleading content and may restrict seller accounts that repeatedly violate these standards.',
     ],
   },
+  contact: {
+    label: 'Contact us',
+    title: 'Let us know how we can help.',
+    icon: MessageSquare,
+    paragraphs: [
+      'Reach the Fabrilux team for account help, seller questions, partnership requests, or any marketplace support you need.',
+      'Response times are fastest by email or WhatsApp, and our team can help with profile issues, listing questions, and platform updates.',
+    ],
+  },
 };
 
 export const LegalPage: React.FC<LegalPageProps> = ({ page, isDarkMode, onBack }) => {
@@ -51,6 +60,29 @@ export const LegalPage: React.FC<LegalPageProps> = ({ page, isDarkMode, onBack }
         <div className={`mt-6 space-y-4 text-sm leading-7 ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>
           {item.paragraphs.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
         </div>
+
+        {page === 'contact' && (
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <a
+              href="mailto:fabrilux234@gmail.com?subject=Fabrilux%20Support&body=Hello%20Fabrilux%2C%0A%0AI%20need%20help%20with%20the%20marketplace.%0A"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20"
+            >
+              <Mail className="h-4 w-4" />
+              Email us
+            </a>
+            <a
+              href="https://wa.me/2348029772375?text=Hello%20Fabrilux%2C%20I%20need%20help%20with%20the%20marketplace."
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Message Fabrilux on WhatsApp"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+            >
+              <MessageSquare className="h-4 w-4" />
+              WhatsApp us
+            </a>
+          </div>
+        )}
+
         <p className="mt-8 border-t border-neutral-800/60 pt-4 text-[11px] text-neutral-500">Last updated September 2026. These pages are provided in plain language so you can make an informed choice before joining.</p>
       </section>
     </main>

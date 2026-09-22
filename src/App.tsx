@@ -267,6 +267,13 @@ export default function App() {
 
   const canShowInstallPrompt = Boolean(installPrompt) && (!currentUser || localStorage.getItem(LAST_INSTALLED_EMAIL_KEY) !== currentUser.email);
 
+  const handlePageRefresh = () => {
+    setIsRefreshing(true);
+    void refreshAllData(true).finally(() => {
+      window.location.reload();
+    });
+  };
+
   const refreshAllData = async (showLoader = true) => {
     if (showLoader) setIsDataLoading(true);
     const localUsers = storageService.getUsers();
@@ -571,7 +578,7 @@ export default function App() {
         isOnline={isOnline}
         canInstall={canShowInstallPrompt}
         onInstall={handleInstallApp}
-        onRefresh={() => { setIsRefreshing(true); void refreshAllData(true).finally(() => setIsRefreshing(false)); }}
+        onRefresh={handlePageRefresh}
         isRefreshing={isRefreshing}
         unreadCount={unreadCount}
       />
@@ -744,8 +751,8 @@ export default function App() {
               />
             </motion.div>
           )}
-          {(currentView === 'about' || currentView === 'privacy' || currentView === 'terms') && (
-            <LegalPage page={currentView} isDarkMode={isDarkMode} onBack={() => setCurrentView(currentUser ? 'marketplace' : 'landing')} />
+          {(currentView === 'about' || currentView === 'privacy' || currentView === 'terms' || currentView === 'contact') && (
+            <LegalPage page={currentView === 'contact' ? 'contact' : currentView} isDarkMode={isDarkMode} onBack={() => setCurrentView(currentUser ? 'marketplace' : 'landing')} />
           )}
           </AnimatePresence>
         </Suspense>}

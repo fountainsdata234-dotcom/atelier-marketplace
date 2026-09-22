@@ -39,6 +39,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
           <div className="min-w-0 md:flex-none">
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-400 md:mb-2 md:text-xs md:tracking-[0.2em]">Support</p>
             <ul className="space-y-1 text-[11px] md:space-y-1.5 md:text-sm">
+              <li><button type="button" onClick={() => onNavigate?.('contact')} className="transition hover:text-amber-400">Contact us</button></li>
               <li><button type="button" onClick={() => onNavigate?.('privacy')} className="transition hover:text-amber-400">Privacy</button></li>
               <li><button type="button" onClick={() => onNavigate?.('terms')} className="transition hover:text-amber-400">Terms</button></li>
             </ul>

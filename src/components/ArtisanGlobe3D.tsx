@@ -237,20 +237,8 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
     }));
   }, []);
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (globeRef.current) globeRef.current.rotation.y += delta * 0.035;
-
-    if (!controlsRef.current || !selectedArtisanId) return;
-
-    const activeArtisan = artisans.find((artisan) => artisan.id === selectedArtisanId);
-    if (!activeArtisan || !Number.isFinite(activeArtisan.location.lat) || !Number.isFinite(activeArtisan.location.lng)) return;
-
-    const targetPosition = toGlobePosition(Number(activeArtisan.location.lat), Number(activeArtisan.location.lng), 0.12);
-    const desiredCamera = targetPosition.clone().normalize().multiplyScalar(6.7);
-    const camera = state.camera;
-    controlsRef.current.target.lerp(targetPosition, 0.08);
-    camera.position.lerp(desiredCamera, 0.09);
-    controlsRef.current.update();
   });
 
   return (
@@ -284,7 +272,21 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           );
         })}
       </group>
-      <OrbitControls ref={controlsRef} enablePan={false} enableDamping dampingFactor={0.07} minDistance={5.8} maxDistance={14} autoRotate autoRotateSpeed={0.18} zoomToCursor rotateSpeed={0.55} zoomSpeed={0.8} touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }} />
+      <OrbitControls
+        ref={controlsRef}
+        enablePan={false}
+        enableDamping
+        dampingFactor={0.07}
+        minDistance={5.8}
+        maxDistance={14}
+        enableZoom
+        autoRotate
+        autoRotateSpeed={0.18}
+        zoomToCursor
+        rotateSpeed={0.55}
+        zoomSpeed={0.8}
+        touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+      />
     </>
   );
 };

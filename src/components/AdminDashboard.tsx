@@ -413,7 +413,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                     <div>
                       <span className="text-neutral-400 block text-[10px] uppercase tracking-wide">Location</span>
-                      <span>{tailor.location.city}, {tailor.location.country}</span>
+                      <span>{[tailor.location.city, tailor.location.state, tailor.location.country].filter(Boolean).join(', ')}</span>
                     </div>
                     <div className="sm:col-span-2">
                       <span className="text-neutral-400 block text-[10px] uppercase tracking-wide">Phone</span>
