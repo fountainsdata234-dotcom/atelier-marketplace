@@ -145,11 +145,6 @@ const ArtisanMarker: React.FC<{
   useFrame(({ camera, clock }) => {
     if (!markerRef.current) return;
 
-    if (focusMode && !selected) {
-      markerRef.current.visible = false;
-      return;
-    }
-
     markerRef.current.getWorldPosition(worldPosition.current);
     const distance = camera.position.distanceTo(worldPosition.current);
     cameraDirection.current.copy(camera.position).normalize();
@@ -290,7 +285,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
         selectedOffset.z,
       ));
       const focusAngle = Math.atan2(selectedPosition.x, selectedPosition.z);
-      globeRef.current.rotation.y = THREE.MathUtils.lerp(globeRef.current.rotation.y, -focusAngle, 0.045);
+      globeRef.current.rotation.y = THREE.MathUtils.damp(globeRef.current.rotation.y, -focusAngle, 4.5, delta);
       return;
     }
 
@@ -321,15 +316,10 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           const position = toGlobePosition(lat, lng, 2.08).add(new THREE.Vector3(offset.x, offset.y, offset.z));
           const selected = selectedArtisanId === artisan.id;
           const markerSize = Math.max(0.62, 1.24 - Math.min(0.72, artisans.length * 0.014));
-          const focusMode = Boolean(selectedArtisanId);
-
-          if (focusMode && !selected) {
-            return null;
-          }
 
           return (
             <group key={artisan.id} position={position}>
-              <ArtisanMarker artisan={artisan} selected={selected} focusMode={focusMode} markerSize={markerSize} onSelect={onSelectArtisan} onOpen={onOpenArtisan} />
+              <ArtisanMarker artisan={artisan} selected={selected} focusMode={false} markerSize={markerSize} onSelect={onSelectArtisan} onOpen={onOpenArtisan} />
             </group>
           );
         })}
