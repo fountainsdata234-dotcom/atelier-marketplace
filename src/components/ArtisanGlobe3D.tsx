@@ -245,17 +245,14 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
       scatterOffsets[selectedIndex]?.z ?? 0,
     ));
 
-    const camera = controlsRef.current.object;
-    const desiredTarget = selectedPosition.clone();
-    const currentDistance = camera.position.distanceTo(desiredTarget);
-    const stabilizedDistance = THREE.MathUtils.clamp(currentDistance, 7.8, 12.5);
-    const focusDirection = desiredTarget.clone().sub(camera.position).normalize();
-    const keepDistancePosition = desiredTarget.clone().sub(focusDirection.clone().multiplyScalar(stabilizedDistance));
-
-    controlsRef.current.target.lerp(desiredTarget, 0.12);
-    camera.position.lerp(keepDistancePosition, 0.12);
-    camera.lookAt(desiredTarget);
+    const currentTarget = controlsRef.current.target;
+    currentTarget.set(0, 0, 0);
     controlsRef.current.update();
+
+    if (globeRef.current) {
+      const focusAngle = Math.atan2(selectedPosition.x, selectedPosition.z);
+      globeRef.current.rotation.y = THREE.MathUtils.lerp(globeRef.current.rotation.y, -focusAngle, 0.08);
+    }
   }, [artisans, scatterOffsets, selectedArtisan]);
   const gridLines = useMemo(() => {
     return Array.from({ length: 7 }, (_, index) => {
@@ -270,7 +267,25 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
   }, []);
 
   useFrame((_, delta) => {
-    if (globeRef.current) globeRef.current.rotation.y += delta * 0.035;
+    if (!globeRef.current) return;
+
+    if (selectedArtisan) {
+      const selectedIndex = artisans.findIndex((artisan) => artisan.id === selectedArtisan.id);
+      const selectedPosition = toGlobePosition(
+        Number(selectedArtisan.location.lat),
+        Number(selectedArtisan.location.lng),
+        2.08,
+      ).add(new THREE.Vector3(
+        scatterOffsets[selectedIndex]?.x ?? 0,
+        scatterOffsets[selectedIndex]?.y ?? 0,
+        scatterOffsets[selectedIndex]?.z ?? 0,
+      ));
+      const focusAngle = Math.atan2(selectedPosition.x, selectedPosition.z);
+      globeRef.current.rotation.y = THREE.MathUtils.lerp(globeRef.current.rotation.y, -focusAngle, 0.045);
+      return;
+    }
+
+    globeRef.current.rotation.y += delta * 0.035;
   });
 
   return (
