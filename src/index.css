@@ -222,7 +222,7 @@
 
 .artisan-globe-stage {
   perspective: 900px;
-  background: radial-gradient(circle at 22% 18%, rgba(253, 186, 116, 0.42), transparent 18%), radial-gradient(circle at 78% 22%, rgba(254, 215, 170, 0.2), transparent 20%), linear-gradient(135deg, #fff1d6 0%, #fdba74 18%, #f97316 36%, #7c2d12 60%, #1f2937 100%);
+  background: radial-gradient(circle at 22% 18%, rgba(253, 186, 116, 0.42), transparent 18%), radial-gradient(circle at 78% 22%, rgba(254, 215, 170, 0.18), transparent 20%), linear-gradient(135deg, #f6d8b2 0%, #f3a562 15%, #d76a2b 30%, #532611 55%, #120f16 100%);
 }
 
 .artisan-globe-sun {
