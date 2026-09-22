@@ -322,6 +322,11 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
           const selected = selectedArtisanId === artisan.id;
           const markerSize = Math.max(0.62, 1.24 - Math.min(0.72, artisans.length * 0.014));
           const focusMode = Boolean(selectedArtisanId);
+
+          if (focusMode && !selected) {
+            return null;
+          }
+
           return (
             <group key={artisan.id} position={position}>
               <ArtisanMarker artisan={artisan} selected={selected} focusMode={focusMode} markerSize={markerSize} onSelect={onSelectArtisan} onOpen={onOpenArtisan} />
