@@ -222,7 +222,30 @@
 
 .artisan-globe-stage {
   perspective: 900px;
-  background: radial-gradient(circle at 50% 48%, rgba(8, 145, 178, 0.16), transparent 30%), linear-gradient(140deg, rgba(15, 23, 42, 0.8), rgba(2, 6, 23, 0.96));
+  background: radial-gradient(circle at 22% 18%, rgba(253, 186, 116, 0.42), transparent 18%), radial-gradient(circle at 78% 22%, rgba(254, 215, 170, 0.2), transparent 20%), linear-gradient(135deg, #fff1d6 0%, #fdba74 18%, #f97316 36%, #7c2d12 60%, #1f2937 100%);
+}
+
+.artisan-globe-sun {
+  position: absolute;
+  right: 1.25rem;
+  top: 1rem;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 251, 235, 1) 0%, rgba(253, 186, 116, 1) 20%, rgba(251, 146, 60, 0.8) 38%, rgba(251, 146, 60, 0.15) 64%, transparent 100%);
+  box-shadow: 0 0 30px rgba(251, 146, 60, 0.8), 0 0 80px rgba(251, 146, 60, 0.26);
+  animation: sunsetPulse 5s ease-in-out infinite alternate;
+}
+
+@keyframes sunsetPulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
 }
 
 .artisan-globe-3d {
@@ -250,7 +273,7 @@
   bottom: 0.85rem;
   left: 1rem;
   pointer-events: none;
-  color: rgba(207, 250, 254, 0.68);
+  color: rgba(255, 237, 213, 0.78);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.58rem;
   letter-spacing: 0.12em;

@@ -52,9 +52,17 @@ export const getScatterOffsetsForLocations = (
   locations: Array<{ lat: number; lng: number }>,
   minimumDistance = 0.18,
 ) => {
-  const offsets: Array<{ x: number; y: number; z: number }> = [];
+  const orderedLocations = locations
+    .map((location, originalIndex) => ({ ...location, originalIndex }))
+    .sort((left, right) => {
+      const leftKey = `${left.lat.toFixed(5)}:${left.lng.toFixed(5)}`;
+      const rightKey = `${right.lat.toFixed(5)}:${right.lng.toFixed(5)}`;
+      return leftKey.localeCompare(rightKey) || left.originalIndex - right.originalIndex;
+    });
 
-  locations.forEach((location, index) => {
+  const offsets: Array<{ x: number; y: number; z: number }> = Array(locations.length).fill({ x: 0, y: 0, z: 0 });
+
+  orderedLocations.forEach((location, index) => {
     const basis = getTangentBasis(location.lat, location.lng);
     let chosen = { x: 0, y: 0, z: 0 };
     let found = false;
@@ -72,6 +80,7 @@ export const getScatterOffsetsForLocations = (
         };
 
         const overlaps = offsets.some((previous) => {
+          if (!previous || !previous.x && !previous.y && !previous.z) return false;
           const dx = previous.x - candidate.x;
           const dy = previous.y - candidate.y;
           const dz = previous.z - candidate.z;
@@ -94,7 +103,7 @@ export const getScatterOffsetsForLocations = (
       chosen = getMarkerScatterOffset(location.lat, location.lng, index, Math.max(locations.length, 1));
     }
 
-    offsets.push(chosen);
+    offsets[location.originalIndex] = chosen;
   });
 
   return offsets;

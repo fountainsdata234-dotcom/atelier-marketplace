@@ -38,9 +38,9 @@ const createMapTexture = () => {
   const context = canvas.getContext('2d');
   if (!context) return null;
 
-  context.fillStyle = '#082b3a';
+  context.fillStyle = '#1c0f1a';
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.strokeStyle = 'rgba(103, 232, 249, 0.16)';
+  context.strokeStyle = 'rgba(251, 146, 60, 0.16)';
   context.lineWidth = 2;
   for (let latitude = 0; latitude <= 8; latitude += 1) {
     const y = (latitude / 8) * canvas.height;
@@ -65,8 +65,8 @@ const createMapTexture = () => {
     [[700, 118], [770, 100], [840, 140], [900, 190], [850, 230], [780, 214], [720, 180]],
     [[830, 270], [900, 250], [950, 300], [925, 390], [860, 420], [815, 350]],
   ];
-  context.fillStyle = '#1b665e';
-  context.strokeStyle = '#58c9a9';
+  context.fillStyle = '#ffb066';
+  context.strokeStyle = '#f97316';
   context.lineWidth = 3;
   landMasses.forEach((points) => {
     context.beginPath();
@@ -105,11 +105,11 @@ const CurrentBands: React.FC = () => {
     <>
       <mesh ref={firstBand} rotation={[Math.PI / 2.6, 0.15, 0]}>
         <torusGeometry args={[2.15, 0.012, 8, 160]} />
-        <meshBasicMaterial color="#fbbf24" transparent opacity={0.8} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color="#fbbf24" transparent opacity={0.9} blending={THREE.AdditiveBlending} />
       </mesh>
       <mesh ref={secondBand} rotation={[0.55, Math.PI / 2.4, 0.2]}>
         <torusGeometry args={[2.2, 0.009, 8, 160]} />
-        <meshBasicMaterial color="#fb7185" transparent opacity={0.82} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color="#fb923c" transparent opacity={0.9} blending={THREE.AdditiveBlending} />
       </mesh>
       <mesh ref={firstCharge}>
         <sphereGeometry args={[0.035, 8, 8]} />
@@ -173,7 +173,7 @@ const ArtisanMarker: React.FC<{
     <group ref={markerRef}>
       {(selected || isFrontFacing && revealLevel < 1) && <mesh ref={pulseRef} position={[0, 0, 0]}>
         <ringGeometry args={[0.12, 0.16, 36]} />
-        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#fb7185'} transparent opacity={selected ? 0.4 : 0.14} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial color={artisan.isPromoted || selected ? '#fbbf24' : '#fb923c'} transparent opacity={selected ? 0.42 : 0.16} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
       </mesh>}
       {isFrontFacing && revealLevel < 1 && <Html distanceFactor={7} position={[0.18, 0.18, 0]} center pointerEvents="auto">
         <button type="button" className={`artisan-role-signal ${artisan.isPromoted ? 'is-promoted' : ''}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => onSelect(artisan)} aria-label={`${getRoleLabel(artisan.role)} marker for ${artisan.name}`}>
@@ -219,11 +219,13 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
   const controlsRef = useRef<any>(null);
   const texture = useMemo(() => createMapTexture(), []);
   const scatterOffsets = useMemo(() => {
-    const validLocations = artisans
+    const validItems = artisans
       .filter((item) => Number.isFinite(Number(item.location.lat)) && Number.isFinite(Number(item.location.lng)))
-      .map((item) => ({ lat: Number(item.location.lat), lng: Number(item.location.lng) }));
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const validLocations = validItems.map((item) => ({ lat: Number(item.location.lat), lng: Number(item.location.lng) }));
+    const offsets = getScatterOffsetsForLocations(validLocations, 0.36);
 
-    return getScatterOffsetsForLocations(validLocations, 0.36);
+    return new Map(validItems.map((item, index) => [item.id, offsets[index] ?? { x: 0, y: 0, z: 0 }]));
   }, [artisans]);
 
   const selectedArtisan = useMemo(
@@ -234,15 +236,15 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
   useEffect(() => {
     if (!selectedArtisan || !controlsRef.current) return;
 
-    const selectedIndex = artisans.findIndex((artisan) => artisan.id === selectedArtisan.id);
+    const selectedOffset = scatterOffsets.get(selectedArtisan.id) ?? { x: 0, y: 0, z: 0 };
     const selectedPosition = toGlobePosition(
       Number(selectedArtisan.location.lat),
       Number(selectedArtisan.location.lng),
       2.08,
     ).add(new THREE.Vector3(
-      scatterOffsets[selectedIndex]?.x ?? 0,
-      scatterOffsets[selectedIndex]?.y ?? 0,
-      scatterOffsets[selectedIndex]?.z ?? 0,
+      selectedOffset.x,
+      selectedOffset.y,
+      selectedOffset.z,
     ));
 
     const currentTarget = controlsRef.current.target;
@@ -270,15 +272,15 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
     if (!globeRef.current) return;
 
     if (selectedArtisan) {
-      const selectedIndex = artisans.findIndex((artisan) => artisan.id === selectedArtisan.id);
+      const selectedOffset = scatterOffsets.get(selectedArtisan.id) ?? { x: 0, y: 0, z: 0 };
       const selectedPosition = toGlobePosition(
         Number(selectedArtisan.location.lat),
         Number(selectedArtisan.location.lng),
         2.08,
       ).add(new THREE.Vector3(
-        scatterOffsets[selectedIndex]?.x ?? 0,
-        scatterOffsets[selectedIndex]?.y ?? 0,
-        scatterOffsets[selectedIndex]?.z ?? 0,
+        selectedOffset.x,
+        selectedOffset.y,
+        selectedOffset.z,
       ));
       const focusAngle = Math.atan2(selectedPosition.x, selectedPosition.z);
       globeRef.current.rotation.y = THREE.MathUtils.lerp(globeRef.current.rotation.y, -focusAngle, 0.045);
@@ -290,25 +292,25 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
 
   return (
     <>
-      <ambientLight intensity={1.2} color="#ffe7cf" />
-      <directionalLight position={[4, 3, 5]} intensity={2.7} color="#fde68a" />
-      <pointLight position={[-4, -2, 3]} intensity={8} distance={12} color="#fb7185" />
+      <ambientLight intensity={1.35} color="#ffe8d6" />
+      <directionalLight position={[4, 3, 5]} intensity={2.9} color="#fef3c7" />
+      <pointLight position={[-4, -2, 3]} intensity={8} distance={12} color="#f97316" />
       <Stars radius={16} depth={8} count={700} factor={2.1} saturation={0.4} fade speed={0.6} />
       <group ref={globeRef}>
         <mesh>
           <sphereGeometry args={[2, 64, 64]} />
-          <meshPhongMaterial map={texture || undefined} color="#f6d4b5" emissive="#4c1d2d" emissiveIntensity={0.48} shininess={24} />
+          <meshPhongMaterial map={texture || undefined} color="#fbd9aa" emissive="#7c2d12" emissiveIntensity={0.68} shininess={30} />
         </mesh>
         <mesh scale={1.012}>
           <sphereGeometry args={[2, 48, 48]} />
-          <meshBasicMaterial color="#fbbf24" transparent opacity={0.12} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
+          <meshBasicMaterial color="#f59e0b" transparent opacity={0.16} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
         </mesh>
-        {gridLines.map((line) => <Line key={line.key} points={line.points} color="#fbbf24" transparent opacity={0.26} lineWidth={0.5} />)}
+        {gridLines.map((line) => <Line key={line.key} points={line.points} color="#fbbf24" transparent opacity={0.32} lineWidth={0.8} />)}
         <CurrentBands />
-        {artisans.map((artisan, index) => {
+        {artisans.map((artisan) => {
           const lat = Number(artisan.location.lat);
           const lng = Number(artisan.location.lng);
-          const offset = scatterOffsets[index] ?? { x: 0, y: 0, z: 0 };
+          const offset = scatterOffsets.get(artisan.id) ?? { x: 0, y: 0, z: 0 };
           const position = toGlobePosition(lat, lng, 2.08).add(new THREE.Vector3(offset.x, offset.y, offset.z));
           const selected = selectedArtisanId === artisan.id;
           const markerSize = Math.max(0.62, 1.24 - Math.min(0.72, artisans.length * 0.014));

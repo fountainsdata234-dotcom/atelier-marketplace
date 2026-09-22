@@ -173,19 +173,20 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
         </div>
 
-        <section className={`relative mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-cyan-400/20 bg-[#07131b]' : 'border-cyan-700/20 bg-slate-950'} text-white`}>
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.12),transparent_45%),linear-gradient(115deg,transparent_25%,rgba(34,211,238,0.05),transparent_75%)]" />
-          <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-cyan-400/15 px-4 py-3 sm:px-5">
+        <section className={`relative mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,146,60,0.28),transparent_20%),radial-gradient(circle_at_15%_18%,rgba(253,186,116,0.18),transparent_20%),linear-gradient(135deg,rgba(120,53,15,0.74),rgba(30,41,59,0.8),rgba(17,24,39,0.94))]" />
+          <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-orange-200/15 px-4 py-3 sm:px-5">
             <div className="flex items-center gap-2">
-              <Globe2 className="h-4 w-4 text-cyan-300" />
+              <Globe2 className="h-4 w-4 text-orange-200" />
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-300">Live artisan signal</p>
-                <p className="text-xs text-slate-300">{mappedArtisans.length} account{mappedArtisans.length === 1 ? '' : 's'} transmitting verified coordinates</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Live artisan signal</p>
+                <p className="text-xs text-orange-50/80">{mappedArtisans.length} account{mappedArtisans.length === 1 ? '' : 's'} transmitting verified coordinates</p>
               </div>
             </div>
           </div>
 
           <div className="artisan-globe-stage relative min-h-[19rem] overflow-hidden">
+            <div className="artisan-globe-sun" aria-hidden="true" />
             <ArtisanGlobe3D artisans={mappedArtisans} selectedArtisanId={selectedGlobeArtisanId} onSelectArtisan={(artisan) => setSelectedGlobeArtisanId(artisan.id)} onOpenArtisan={onSelectArtisan} onCloseArtisan={() => setSelectedGlobeArtisanId(null)} isDarkMode={isDarkMode} />
           </div>
         </section>
