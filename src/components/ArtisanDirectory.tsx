@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Globe2, Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
-import { getSearchSuggestions } from '../utils/globe';
+import { findExactArtisanMatch, getSearchSuggestions } from '../utils/globe';
 import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
 import { ArtisanGlobe3D } from './ArtisanGlobe3D';
 
@@ -77,20 +77,20 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   });
   const mappedArtisans = filteredArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng));
   const searchSuggestions = useMemo(() => getSearchSuggestions(filteredArtisans, searchQuery, 7), [filteredArtisans, searchQuery]);
-  const exactFocusArtisan = useMemo(() => {
-    const term = searchQuery.trim().toLowerCase();
-    if (!term) return null;
-    return filteredArtisans.find((artisan) => {
-      const handle = artisan.handle.replace(/^@/, '').toLowerCase();
-      return artisan.name.toLowerCase() === term || handle === term || artisan.handle.toLowerCase() === term || `@${handle}` === term;
-    }) ?? null;
-  }, [filteredArtisans, searchQuery]);
+  const exactFocusArtisan = useMemo(() => findExactArtisanMatch(filteredArtisans, searchQuery), [filteredArtisans, searchQuery]);
 
   React.useEffect(() => {
-    if (exactFocusArtisan && selectedGlobeArtisanId !== exactFocusArtisan.id) {
-      setSelectedGlobeArtisanId(exactFocusArtisan.id);
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      setSelectedGlobeArtisanId(null);
+      return;
     }
-  }, [exactFocusArtisan, selectedGlobeArtisanId]);
+
+    const focusArtisanCandidate = exactFocusArtisan ?? searchSuggestions[0] ?? null;
+    if (focusArtisanCandidate && selectedGlobeArtisanId !== focusArtisanCandidate.id) {
+      setSelectedGlobeArtisanId(focusArtisanCandidate.id);
+    }
+  }, [exactFocusArtisan, searchQuery, searchSuggestions, selectedGlobeArtisanId]);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
     focusArtisan(artisan);

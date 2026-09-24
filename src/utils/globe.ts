@@ -29,6 +29,22 @@ const getTangentBasis = (latitude: number, longitude: number) => {
   return { x: baseX, y: baseY, z: baseZ, tangentX, tangentY, tangentZ, binormalX, binormalY, binormalZ };
 };
 
+export const findExactArtisanMatch = <T extends GlobeSearchCandidate>(
+  artisans: T[],
+  query: string,
+) => {
+  const term = query.trim().toLowerCase();
+  if (!term) return null;
+
+  return artisans.find((artisan) => {
+    const handle = artisan.handle.replace(/^@/, '').toLowerCase();
+    return artisan.name.toLowerCase() === term
+      || handle === term
+      || artisan.handle.toLowerCase() === term
+      || `@${handle}` === term;
+  }) ?? null;
+};
+
 export const getMarkerScatterOffset = (
   latitude: number,
   longitude: number,
@@ -62,9 +78,10 @@ export const getScatterOffsetsForLocations = (
     });
 
   const offsets: Array<{ x: number; y: number; z: number }> = Array(locations.length).fill({ x: 0, y: 0, z: 0 });
-  const safeMinimumDistance = Math.max(0.04, Math.min(0.12, minimumDistance));
-  const baseOffset = Math.min(0.028, safeMinimumDistance * 0.38);
-  const maxOffsetLength = Math.min(0.09, safeMinimumDistance * 0.9);
+  const clusterFactor = locations.length <= 3 ? 1.55 : locations.length <= 6 ? 1.28 : locations.length <= 12 ? 1.08 : 1;
+  const safeMinimumDistance = Math.max(0.055, Math.min(0.18, minimumDistance * clusterFactor));
+  const baseOffset = Math.min(0.032, safeMinimumDistance * 0.38);
+  const maxOffsetLength = Math.min(0.1, safeMinimumDistance * 0.9);
 
   orderedLocations.forEach((location, index) => {
     const basis = getTangentBasis(location.lat, location.lng);

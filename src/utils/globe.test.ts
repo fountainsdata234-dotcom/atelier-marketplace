@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getScatterOffsetsForLocations, getSearchSuggestions } from './globe';
+import { findExactArtisanMatch, getScatterOffsetsForLocations, getSearchSuggestions } from './globe';
 
 describe('globe helpers', () => {
   it('keeps nearby seller markers from overlapping one another', () => {
@@ -91,5 +91,16 @@ describe('globe helpers', () => {
 
     const names = getSearchSuggestions(artisans, 'ade');
     expect(names[0].name).toBe('Adewale Atelier');
+  });
+
+  it('keeps the globe focused on the exact search match and clears it when the query is empty', () => {
+    const artisans = [
+      { id: 'a1', name: 'Adewale Atelier', handle: '@adewale', location: { city: 'Lagos', state: 'Lagos', country: 'Nigeria', countryCode: 'NG', lat: 6.5244, lng: 3.3792 } },
+      { id: 'a2', name: 'Dana Silk Co', handle: '@dana', location: { city: 'Cairo', state: 'Cairo', country: 'Egypt', countryCode: 'EG', lat: 30.0444, lng: 31.2357 } },
+    ] as any[];
+
+    expect(findExactArtisanMatch(artisans, 'dana')?.id).toBe('a2');
+    expect(findExactArtisanMatch(artisans, '@adewale')?.id).toBe('a1');
+    expect(findExactArtisanMatch(artisans, '   ') ?? null).toBeNull();
   });
 });
