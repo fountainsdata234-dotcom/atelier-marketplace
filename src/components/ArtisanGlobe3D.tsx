@@ -98,13 +98,14 @@ const MarkerIcon: React.FC<{ role: User['role'] }> = ({ role }) => role === 'tai
 interface MarkerProps {
   artisan: GlobeArtisan;
   position: THREE.Vector3;
+  anchor: THREE.Vector3;
   selected: boolean;
   zoomDistance: number;
   delay: number;
   onSelect: (artisan: GlobeArtisan) => void;
 }
 
-const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, zoomDistance, delay, onSelect }) => {
+const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selected, zoomDistance, delay, onSelect }) => {
   const groupRef = useRef<THREE.Group>(null);
   const [entered, setEntered] = useState(false);
   const showAvatar = zoomDistance < 5.8;
@@ -132,7 +133,19 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, zoomD
 
   return (
     <group ref={groupRef} renderOrder={selected ? 20 : 2}>
-      <Html center transform sprite distanceFactor={6.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
+      <Line
+        points={[anchor, position]}
+        color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'}
+        transparent
+        opacity={0.82}
+        lineWidth={1}
+        renderOrder={selected ? 19 : 1}
+      />
+      <mesh position={anchor.clone().normalize().multiplyScalar(0.008)} renderOrder={selected ? 19 : 1}>
+        <ringGeometry args={[0.035, 0.052, 24]} />
+        <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest={false} />
+      </mesh>
+      <Html center transform sprite distanceFactor={6.2} zIndexRange={selected ? [30, 40] : [10, 20]}>
         <button
           type="button"
           className={`globe-marker ${selected ? 'is-selected' : ''} ${showAvatar ? 'show-avatar' : 'show-icon'}`}
@@ -172,8 +185,10 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
     return artisans.map((artisan, index) => {
       const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
       const offset = offsets[index] ?? { x: 0, y: 0, z: 0 };
-      const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z).multiplyScalar(0.9);
-      return base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
+      const anchor = base.clone().normalize().multiplyScalar(EARTH_RADIUS + 0.012);
+      const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z).multiplyScalar(0.26);
+      const position = base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
+      return { anchor, position };
     });
   }, [artisans]);
 
@@ -183,7 +198,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       focusVectorRef.current = null;
       return;
     }
-    focusVectorRef.current = positions[selectedIndex].clone().normalize().multiplyScalar(Math.min(camera.position.length(), 5.6));
+    focusVectorRef.current = positions[selectedIndex].position.clone().normalize().multiplyScalar(Math.min(camera.position.length(), 5.6));
   }, [artisans, camera.position, positions, selectedArtisanId]);
 
   useFrame((_, delta) => {
@@ -214,7 +229,8 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
           <GlobeMarker
             key={artisan.id}
             artisan={artisan}
-            position={positions[index]}
+            position={positions[index].position}
+            anchor={positions[index].anchor}
             selected={artisan.id === selectedArtisanId}
             zoomDistance={camera.position.length()}
             delay={Math.min(index * 24, 720)}
