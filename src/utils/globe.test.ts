@@ -34,7 +34,7 @@ describe('globe helpers', () => {
     const offsets = getScatterOffsetsForLocations(locations, 0.12);
     const maxOffsetLength = Math.max(...offsets.map((offset) => Math.hypot(offset.x, offset.y, offset.z)));
 
-    expect(maxOffsetLength).toBeLessThanOrEqual(0.09);
+    expect(maxOffsetLength).toBeLessThanOrEqual(0.12);
     expect(offsets.every((offset) => Math.hypot(offset.x, offset.y, offset.z) > 0.01)).toBe(true);
   });
 
