@@ -291,17 +291,19 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
         selectedOffset.y,
         selectedOffset.z,
       ));
-      const focusAngle = Math.atan2(selectedPosition.x, selectedPosition.z);
-      const focusPitch = Math.atan2(selectedPosition.y, Math.hypot(selectedPosition.x, selectedPosition.z));
-      globeRef.current.rotation.y = THREE.MathUtils.damp(globeRef.current.rotation.y, -focusAngle, 5.2, delta);
-      globeRef.current.rotation.x = THREE.MathUtils.damp(globeRef.current.rotation.x, -focusPitch * 0.85, 5.2, delta);
 
       const target = controlsRef.current.target;
       target.x = THREE.MathUtils.damp(target.x, selectedPosition.x * 0.28, 4.2, delta);
       target.y = THREE.MathUtils.damp(target.y, selectedPosition.y * 0.28, 4.2, delta);
       target.z = THREE.MathUtils.damp(target.z, selectedPosition.z * 0.28, 4.2, delta);
+
+      const desiredCameraPosition = selectedPosition.clone().normalize().multiplyScalar(6.1);
+      state.camera.position.lerp(desiredCameraPosition, 0.08);
       controlsRef.current.minDistance = 3.6;
       controlsRef.current.maxDistance = 9.2;
+      controlsRef.current.enableRotate = true;
+      controlsRef.current.enableZoom = true;
+      controlsRef.current.enablePan = false;
       controlsRef.current.update();
       return;
     }
@@ -310,6 +312,9 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
     globeRef.current.rotation.y += delta * 0.035;
     controlsRef.current.minDistance = 5.8;
     controlsRef.current.maxDistance = 14;
+    controlsRef.current.enableRotate = true;
+    controlsRef.current.enableZoom = true;
+    controlsRef.current.enablePan = false;
   });
 
   return (

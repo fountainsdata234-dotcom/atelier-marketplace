@@ -82,6 +82,13 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     focusArtisan(artisan);
   };
 
+  const dismissSearch = () => {
+    setSearchSuggestionsOpen(false);
+    if (!searchQuery.trim()) {
+      setSelectedGlobeArtisanId(null);
+    }
+  };
+
   return (
     <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <div className={`rounded-[2rem] border p-5 sm:p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white/90 shadow-sm'}`}>
@@ -112,7 +119,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                     focusArtisan(firstMatch);
                   }
                 }}
-                onBlur={() => window.setTimeout(() => setSearchSuggestionsOpen(false), 120)}
+                onBlur={() => window.setTimeout(() => dismissSearch(), 120)}
                 placeholder="Search name or @handle"
                 className="min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500"
                 aria-label="Search artisans by name or handle"

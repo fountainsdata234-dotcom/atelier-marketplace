@@ -103,4 +103,17 @@ describe('globe helpers', () => {
     expect(findExactArtisanMatch(artisans, '@adewale')?.id).toBe('a1');
     expect(findExactArtisanMatch(artisans, '   ') ?? null).toBeNull();
   });
+
+  it('prioritizes exact name matches before looser handle matches when both match the same query', () => {
+    const artisans = [
+      { id: 'handle-match', name: 'Tailor Studio', handle: '@ada', location: { city: 'Abuja', state: 'FCT', country: 'Nigeria', countryCode: 'NG', lat: 9.0765, lng: 7.3986 } },
+      { id: 'name-match', name: 'Ada Fashion', handle: '@studio', location: { city: 'Lagos', state: 'Lagos', country: 'Nigeria', countryCode: 'NG', lat: 6.5244, lng: 3.3792 } },
+      { id: 'city-match', name: 'Bespoke Atelier', handle: '@bespoke', location: { city: 'Ada City', state: 'Kaduna', country: 'Nigeria', countryCode: 'NG', lat: 10.5222, lng: 7.4333 } },
+    ] as any[];
+
+    const matches = getSearchSuggestions(artisans, 'ada', 5);
+    expect(matches[0].id).toBe('name-match');
+    expect(matches.map((artisan) => artisan.id)).toContain('handle-match');
+    expect(matches.map((artisan) => artisan.id)).toContain('city-match');
+  });
 });

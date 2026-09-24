@@ -29,19 +29,71 @@ const getTangentBasis = (latitude: number, longitude: number) => {
   return { x: baseX, y: baseY, z: baseZ, tangentX, tangentY, tangentZ, binormalX, binormalY, binormalZ };
 };
 
+const normalizeSearchTerm = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const getArtisanSearchScore = <T extends GlobeSearchCandidate>(artisan: T, query: string) => {
+  const term = normalizeSearchTerm(query);
+  if (!term) return 0;
+
+  const name = artisan.name.trim();
+  const normalizedName = name.toLowerCase();
+  const handle = artisan.handle.trim();
+  const normalizedHandle = handle.toLowerCase();
+  const handleWithoutAt = normalizedHandle.replace(/^@/, '');
+  const hasAtQuery = term.startsWith('@');
+  const queryWithoutAt = hasAtQuery ? term.slice(1) : term;
+  const city = (artisan.location?.city ?? '').trim().toLowerCase();
+  const state = (artisan.location?.state ?? '').trim().toLowerCase();
+  const country = (artisan.location?.country ?? '').trim().toLowerCase();
+
+  let score = 0;
+
+  if (normalizedName === term) score += 120;
+  else if (normalizedName.startsWith(term)) score += 90;
+  else if (normalizedName.includes(term)) score += 70;
+
+  if (normalizedHandle === term) score += 120;
+  else if (normalizedHandle.startsWith(term)) score += 85;
+  else if (normalizedHandle.includes(term)) score += 60;
+
+  if (handleWithoutAt === queryWithoutAt) score += 15;
+  else if (handleWithoutAt.startsWith(queryWithoutAt)) score += 10;
+  else if (handleWithoutAt.includes(queryWithoutAt)) score += 6;
+
+  if (city === term || city.startsWith(term) || city.includes(term)) score += 18;
+  if (state === term || state.startsWith(term) || state.includes(term)) score += 16;
+  if (country === term || country.startsWith(term) || country.includes(term)) score += 14;
+
+  if (score === 0 && queryWithoutAt.length > 0) {
+    // Fuzzy prefix match on the cleaned search term keeps suggestion ranking useful without over-suggesting unrelated artisans.
+    const seededName = normalizedName.replace(/[^a-z0-9]/g, '');
+    const seededHandle = handleWithoutAt.replace(/[^a-z0-9]/g, '');
+    const querySeed = queryWithoutAt.replace(/[^a-z0-9]/g, '');
+    if (seededName.startsWith(querySeed) || seededHandle.startsWith(querySeed)) score += 12;
+    if (seededName.includes(querySeed) || seededHandle.includes(querySeed)) score += 8;
+  }
+
+  return score;
+};
+
 export const findExactArtisanMatch = <T extends GlobeSearchCandidate>(
   artisans: T[],
   query: string,
 ) => {
-  const term = query.trim().toLowerCase();
+  const term = normalizeSearchTerm(query);
   if (!term) return null;
 
   return artisans.find((artisan) => {
-    const handle = artisan.handle.replace(/^@/, '').toLowerCase();
-    return artisan.name.toLowerCase() === term
+    const handle = artisan.handle.trim().toLowerCase();
+    const normalizedHandle = handle.replace(/^@/, '');
+    const name = artisan.name.trim().toLowerCase();
+    const queryWithAt = term.startsWith('@') ? term : `@${term}`;
+    return name === term
+      || name === queryWithAt.replace(/^@/, '')
       || handle === term
-      || artisan.handle.toLowerCase() === term
-      || `@${handle}` === term;
+      || handle === queryWithAt
+      || normalizedHandle === term
+      || `@${normalizedHandle}` === term;
   }) ?? null;
 };
 
@@ -160,7 +212,7 @@ export const getSearchSuggestions = <T extends GlobeSearchCandidate>(
   query: string,
   limit = 7,
 ) => {
-  const term = query.trim().toLowerCase();
+  const term = normalizeSearchTerm(query);
 
   if (!term) {
     return artisans.slice(0, limit);
@@ -168,18 +220,19 @@ export const getSearchSuggestions = <T extends GlobeSearchCandidate>(
 
   return artisans
     .filter((artisan) => {
-      const name = artisan.name.toLowerCase();
-      const handle = artisan.handle.toLowerCase().replace(/^@/, '');
-      const normalizedHandle = artisan.handle.toLowerCase();
-      const city = artisan.location?.city?.toLowerCase() ?? '';
-      const state = artisan.location?.state?.toLowerCase() ?? '';
-      const country = artisan.location?.country?.toLowerCase() ?? '';
+      const name = artisan.name.trim().toLowerCase();
+      const handle = artisan.handle.trim().toLowerCase();
+      const handleWithoutAt = handle.replace(/^@/, '');
+      const city = artisan.location?.city?.trim().toLowerCase() ?? '';
+      const state = artisan.location?.state?.trim().toLowerCase() ?? '';
+      const country = artisan.location?.country?.trim().toLowerCase() ?? '';
       return name.includes(term)
         || handle.includes(term)
-        || normalizedHandle.includes(term)
+        || handleWithoutAt.includes(term)
         || city.includes(term)
         || state.includes(term)
         || country.includes(term);
     })
+    .sort((left, right) => getArtisanSearchScore(right, term) - getArtisanSearchScore(left, term))
     .slice(0, limit);
 };
