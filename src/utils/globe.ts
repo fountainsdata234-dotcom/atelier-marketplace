@@ -131,9 +131,11 @@ export const getScatterOffsetsForLocations = (
 
   const offsets: Array<{ x: number; y: number; z: number }> = Array(locations.length).fill({ x: 0, y: 0, z: 0 });
   const clusterFactor = locations.length <= 2 ? 2.1 : locations.length <= 4 ? 1.8 : locations.length <= 6 ? 1.42 : locations.length <= 12 ? 1.16 : 1;
-  const safeMinimumDistance = Math.max(0.08, Math.min(0.22, minimumDistance * clusterFactor));
+  const safeMinimumDistance = Math.max(0.08, Math.min(0.34, minimumDistance * clusterFactor));
   const baseOffset = Math.min(0.036, safeMinimumDistance * 0.38);
-  const maxOffsetLength = Math.min(0.11, safeMinimumDistance * 0.9);
+  const maxOffsetLength = minimumDistance <= 0.12
+    ? Math.min(0.11, safeMinimumDistance * 0.9)
+    : Math.min(0.28, safeMinimumDistance * 0.9);
 
   orderedLocations.forEach((location, index) => {
     const basis = getTangentBasis(location.lat, location.lng);

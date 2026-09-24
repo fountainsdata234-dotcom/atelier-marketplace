@@ -22,7 +22,7 @@ interface ArtisanGlobe3DProps {
 }
 
 const EARTH_RADIUS = 2;
-const MARKER_RADIUS = 2.08;
+const MARKER_RADIUS = 2.18;
 
 const toGlobePosition = (latitude: number, longitude: number, radius = EARTH_RADIUS) => {
   const lat = THREE.MathUtils.degToRad(latitude);
@@ -59,12 +59,12 @@ const Earth: React.FC = () => (
     </mesh>
     <mesh scale={1.015}>
       <sphereGeometry args={[EARTH_RADIUS, 48, 48]} />
-      <meshBasicMaterial color="#f1a35a" transparent opacity={0.055} side={THREE.BackSide} blending={THREE.AdditiveBlending} />
+      <meshBasicMaterial color="#f1a35a" transparent opacity={0.055} side={THREE.BackSide} depthWrite={false} blending={THREE.AdditiveBlending} />
     </mesh>
     <GlobeGrid />
     <mesh rotation={[0.6, -0.8, 0.2]} scale={1.025}>
       <sphereGeometry args={[EARTH_RADIUS, 32, 32]} />
-      <meshBasicMaterial color="#4d9c75" wireframe transparent opacity={0.13} />
+      <meshBasicMaterial color="#4d9c75" wireframe transparent opacity={0.13} depthWrite={false} />
     </mesh>
   </group>
 );
@@ -100,7 +100,7 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, zoomD
 
   return (
     <group ref={groupRef} position={position} renderOrder={selected ? 20 : 2}>
-      <Html center distanceFactor={6.2} zIndexRange={selected ? [30, 40] : [10, 20]}>
+      <Html center distanceFactor={6.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
         <button
           type="button"
           className={`globe-marker ${selected ? 'is-selected' : ''} ${showAvatar ? 'show-avatar' : 'show-icon'}`}
@@ -132,7 +132,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
   const { camera } = useThree();
 
   const positions = useMemo(() => {
-    const offsets = getScatterOffsetsForLocations(artisans.map((artisan) => ({ lat: artisan.location.lat ?? 0, lng: artisan.location.lng ?? 0 })), 0.115);
+    const offsets = getScatterOffsetsForLocations(artisans.map((artisan) => ({ lat: artisan.location.lat ?? 0, lng: artisan.location.lng ?? 0 })), 0.24);
     return artisans.map((artisan, index) => {
       const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, MARKER_RADIUS);
       const offset = offsets[index];
@@ -146,7 +146,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       focusVectorRef.current = null;
       return;
     }
-    focusVectorRef.current = positions[selectedIndex].clone().normalize().multiplyScalar(camera.position.length());
+    focusVectorRef.current = positions[selectedIndex].clone().normalize().multiplyScalar(Math.min(camera.position.length(), 5.6));
   }, [artisans, camera.position, positions, selectedArtisanId]);
 
   useFrame((_, delta) => {
@@ -190,8 +190,8 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
         enableDamping
         dampingFactor={0.075}
         enablePan={false}
-        minDistance={3.2}
-        maxDistance={8.2}
+        minDistance={4.2}
+        maxDistance={10.5}
         rotateSpeed={0.55}
         zoomSpeed={0.65}
         onStart={() => {
@@ -208,12 +208,12 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
 };
 
 export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan, onOpenArtisan, onCloseArtisan, isDarkMode }) => {
-  const [zoomDistance, setZoomDistance] = useState(6.6);
+  const [zoomDistance, setZoomDistance] = useState(8.2);
   const selectedArtisan = artisans.find((artisan) => artisan.id === selectedArtisanId) ?? null;
 
   return (
     <div className={`artisan-globe-3d ${isDarkMode ? 'is-dark' : 'is-light'}`} aria-label="Interactive 3D artisan globe">
-      <Canvas camera={{ position: [0, 0, 6.6], fov: 34 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+      <Canvas camera={{ position: [0, 0, 8.2], fov: 34 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
         <GlobeScene
           artisans={artisans}
           selectedArtisanId={selectedArtisanId}
