@@ -143,9 +143,9 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
       />
       <mesh position={anchor.clone().normalize().multiplyScalar(0.008)} renderOrder={selected ? 19 : 1}>
         <ringGeometry args={[0.035, 0.052, 24]} />
-        <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest={false} />
+        <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest />
       </mesh>
-      <Html center transform sprite distanceFactor={6.2} zIndexRange={selected ? [30, 40] : [10, 20]}>
+      <Html center transform sprite distanceFactor={7.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
         <button
           type="button"
           className={`globe-marker ${selected ? 'is-selected' : ''} ${showAvatar ? 'show-avatar' : 'show-icon'}`}
@@ -185,9 +185,9 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
     return artisans.map((artisan, index) => {
       const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
       const offset = offsets[index] ?? { x: 0, y: 0, z: 0 };
-      const anchor = base.clone().normalize().multiplyScalar(EARTH_RADIUS + 0.012);
+      const anchor = base.clone().normalize().multiplyScalar(EARTH_RADIUS + 0.006);
       const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z).multiplyScalar(0.26);
-      const position = base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
+      const position = base.add(markerOffset).normalize().multiplyScalar(EARTH_RADIUS + 0.026);
       return { anchor, position };
     });
   }, [artisans]);
