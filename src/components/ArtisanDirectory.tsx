@@ -53,6 +53,13 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     setFilterCountry(getDefaultLocationFilter(currentUser?.location));
   }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode]);
   const [selectedGlobeArtisanId, setSelectedGlobeArtisanId] = useState<string | null>(null);
+
+  const focusArtisan = (artisan: typeof filteredArtisans[number] | null) => {
+    if (!artisan) return;
+    setSelectedGlobeArtisanId(artisan.id);
+    setSearchQuery(artisan.handle.startsWith('@') ? artisan.handle : `@${artisan.handle}`);
+    setSearchSuggestionsOpen(false);
+  };
   const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry);
   const selectedState = selectedCountry?.states.find((state) => state.code === filterState);
   const filteredArtisans = artisans.filter((artisan) => {
@@ -70,12 +77,23 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   });
   const mappedArtisans = filteredArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng));
   const searchSuggestions = useMemo(() => getSearchSuggestions(filteredArtisans, searchQuery, 7), [filteredArtisans, searchQuery]);
+  const exactFocusArtisan = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    if (!term) return null;
+    return filteredArtisans.find((artisan) => {
+      const handle = artisan.handle.replace(/^@/, '').toLowerCase();
+      return artisan.name.toLowerCase() === term || handle === term || artisan.handle.toLowerCase() === term || `@${handle}` === term;
+    }) ?? null;
+  }, [filteredArtisans, searchQuery]);
+
+  React.useEffect(() => {
+    if (exactFocusArtisan && selectedGlobeArtisanId !== exactFocusArtisan.id) {
+      setSelectedGlobeArtisanId(exactFocusArtisan.id);
+    }
+  }, [exactFocusArtisan, selectedGlobeArtisanId]);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
-    const normalizedHandle = artisan.handle.startsWith('@') ? artisan.handle : `@${artisan.handle}`;
-    setSearchQuery(normalizedHandle);
-    setSelectedGlobeArtisanId(artisan.id);
-    setSearchSuggestionsOpen(false);
+    focusArtisan(artisan);
   };
 
   return (
@@ -98,7 +116,14 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                 }}
                 onFocus={() => {
                   setSearchSuggestionsOpen(true);
-                  setSelectedGlobeArtisanId(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter') return;
+                  event.preventDefault();
+                  const firstMatch = searchSuggestions[0] ?? null;
+                  if (firstMatch) {
+                    focusArtisan(firstMatch);
+                  }
                 }}
                 onBlur={() => window.setTimeout(() => setSearchSuggestionsOpen(false), 120)}
                 placeholder="Search name or @handle"

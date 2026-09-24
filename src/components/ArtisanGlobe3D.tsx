@@ -234,6 +234,10 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
     () => artisans.find((artisan) => artisan.id === selectedArtisanId) ?? null,
     [artisans, selectedArtisanId],
   );
+  const orderedArtisans = useMemo(
+    () => [...artisans].sort((left, right) => Number(right.id === selectedArtisanId) - Number(left.id === selectedArtisanId)),
+    [artisans, selectedArtisanId],
+  );
 
   useEffect(() => {
     if (!controlsRef.current) return;
@@ -273,7 +277,7 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
     }));
   }, []);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!globeRef.current) return;
 
     if (selectedArtisan) {
@@ -291,11 +295,21 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
       const focusPitch = Math.atan2(selectedPosition.y, Math.hypot(selectedPosition.x, selectedPosition.z));
       globeRef.current.rotation.y = THREE.MathUtils.damp(globeRef.current.rotation.y, -focusAngle, 5.4, delta);
       globeRef.current.rotation.x = THREE.MathUtils.damp(globeRef.current.rotation.x, -focusPitch * 0.9, 5.4, delta);
+
+      const cameraTarget = selectedPosition.clone().multiplyScalar(0.28);
+      const desiredCameraPosition = selectedPosition.clone().normalize().multiplyScalar(6.0);
+      state.camera.position.lerp(desiredCameraPosition, 0.08);
+      controlsRef.current.target.lerp(cameraTarget, 0.09);
+      controlsRef.current.minDistance = 4.2;
+      controlsRef.current.maxDistance = 6.8;
+      controlsRef.current.update();
       return;
     }
 
     globeRef.current.rotation.x = THREE.MathUtils.damp(globeRef.current.rotation.x, 0, 2.8, delta);
     globeRef.current.rotation.y += delta * 0.035;
+    controlsRef.current.minDistance = 5.8;
+    controlsRef.current.maxDistance = 14;
   });
 
   return (
@@ -315,13 +329,15 @@ const GlobeScene: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId
         </mesh>
         {gridLines.map((line) => <Line key={line.key} points={line.points} color="#fbbf24" transparent opacity={0.32} lineWidth={0.8} />)}
         <CurrentBands />
-        {artisans.map((artisan) => {
+        {orderedArtisans.map((artisan) => {
           const lat = Number(artisan.location.lat);
           const lng = Number(artisan.location.lng);
           const offset = scatterOffsets.get(artisan.id) ?? { x: 0, y: 0, z: 0 };
           const position = toGlobePosition(lat, lng, 2.08).add(new THREE.Vector3(offset.x, offset.y, offset.z));
           const selected = selectedArtisanId === artisan.id;
-          const markerSize = Math.max(0.62, 1.24 - Math.min(0.72, artisans.length * 0.014));
+          const markerSize = selected
+            ? 1.7
+            : Math.max(0.62, 1.24 - Math.min(0.72, artisans.length * 0.014));
 
           return (
             <group key={artisan.id} position={position}>
