@@ -22,7 +22,7 @@ interface ArtisanGlobe3DProps {
 }
 
 const EARTH_RADIUS = 2;
-const MARKER_RADIUS = 2.105;
+const MARKER_RADIUS = 2.16;
 
 const toGlobePosition = (latitude: number, longitude: number, radius = EARTH_RADIUS) => {
   const lat = THREE.MathUtils.degToRad(latitude);
@@ -117,20 +117,13 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
     if (!groupRef.current) return;
 
     const targetScale = entered ? (selected ? 1.18 : 1) : 0.01;
-    const targetNormal = position.clone().normalize();
-    const axis = new THREE.Vector3(0, 1, 0).cross(targetNormal).normalize();
-    const angle = Math.acos(THREE.MathUtils.clamp(new THREE.Vector3(0, 1, 0).dot(targetNormal), -1, 1));
-    const targetQuaternion = axis.lengthSq() > 0.0001
-      ? new THREE.Quaternion().setFromAxisAngle(axis, angle)
-      : new THREE.Quaternion();
 
     groupRef.current.position.lerp(position, 1 - Math.exp(-delta * 7.5));
-    groupRef.current.quaternion.slerp(targetQuaternion, 1 - Math.exp(-delta * 7.5));
     groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 1 - Math.exp(-delta * 8));
   });
 
   return (
-    <group ref={groupRef} renderOrder={selected ? 20 : 2}>
+    <>
       <Line
         points={[anchor, position]}
         color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'}
@@ -143,18 +136,20 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
         <ringGeometry args={[0.035, 0.052, 24]} />
         <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest />
       </mesh>
-      <Html position={[0, -0.08, 0]} center transform sprite distanceFactor={7.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
-        <button
-          type="button"
-          className={`globe-marker ${artisan.role === 'tailor' ? 'is-tailor' : 'is-fabric-seller'} ${selected ? 'is-selected' : ''}`}
-          onClick={() => onSelect(artisan)}
-          aria-label={`Select ${artisan.name}`}
-        >
-          <span className="globe-marker-icon-wrap"><MarkerIcon role={artisan.role} /></span>
-          {selected && <span className="globe-marker-pulse" aria-hidden="true" />}
-        </button>
-      </Html>
-    </group>
+      <group ref={groupRef} renderOrder={selected ? 20 : 2}>
+        <Html position={[0, 0.04, 0]} center transform sprite distanceFactor={7.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
+          <button
+            type="button"
+            className={`globe-marker ${artisan.role === 'tailor' ? 'is-tailor' : 'is-fabric-seller'} ${selected ? 'is-selected' : ''}`}
+            onClick={() => onSelect(artisan)}
+            aria-label={`Select ${artisan.name}`}
+          >
+            <span className="globe-marker-icon-wrap"><MarkerIcon role={artisan.role} /></span>
+            {selected && <span className="globe-marker-pulse" aria-hidden="true" />}
+          </button>
+        </Html>
+      </group>
+    </>
   );
 };
 
