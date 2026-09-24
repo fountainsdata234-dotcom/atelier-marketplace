@@ -22,7 +22,7 @@ interface ArtisanGlobe3DProps {
 }
 
 const EARTH_RADIUS = 2;
-const MARKER_RADIUS = 2.18;
+const MARKER_RADIUS = 2.055;
 
 const toGlobePosition = (latitude: number, longitude: number, radius = EARTH_RADIUS) => {
   const lat = THREE.MathUtils.degToRad(latitude);
@@ -100,7 +100,7 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, zoomD
 
   return (
     <group ref={groupRef} position={position} renderOrder={selected ? 20 : 2}>
-      <Html center distanceFactor={6.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
+      <Html center transform sprite distanceFactor={6.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
         <button
           type="button"
           className={`globe-marker ${selected ? 'is-selected' : ''} ${showAvatar ? 'show-avatar' : 'show-icon'}`}
@@ -134,9 +134,9 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
   const positions = useMemo(() => {
     const offsets = getScatterOffsetsForLocations(artisans.map((artisan) => ({ lat: artisan.location.lat ?? 0, lng: artisan.location.lng ?? 0 })), 0.24);
     return artisans.map((artisan, index) => {
-      const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, MARKER_RADIUS);
+      const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
       const offset = offsets[index];
-      return base.add(new THREE.Vector3(offset.x, offset.y, offset.z));
+      return base.add(new THREE.Vector3(offset.x, offset.y, offset.z)).normalize().multiplyScalar(MARKER_RADIUS);
     });
   }, [artisans]);
 
