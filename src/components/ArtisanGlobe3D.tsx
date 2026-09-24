@@ -60,7 +60,7 @@ const Earth: React.FC = () => {
   ]);
 
   [surfaceMap, normalMap, specularMap, lightsMap].forEach((texture) => {
-    texture.anisotropy = 8;
+    texture.anisotropy = 4;
   });
   surfaceMap.colorSpace = THREE.SRGBColorSpace;
   lightsMap.colorSpace = THREE.SRGBColorSpace;
@@ -68,7 +68,7 @@ const Earth: React.FC = () => {
   return (
     <group>
       <mesh>
-        <sphereGeometry args={[EARTH_RADIUS, 96, 96]} />
+        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
         <meshStandardMaterial
           map={surfaceMap}
           normalMap={normalMap}
@@ -79,7 +79,7 @@ const Earth: React.FC = () => {
         />
       </mesh>
       <mesh scale={1.002}>
-        <sphereGeometry args={[EARTH_RADIUS, 96, 96]} />
+        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
         <meshBasicMaterial map={lightsMap} transparent opacity={0.72} blending={THREE.AdditiveBlending} depthWrite={false} />
       </mesh>
       <mesh scale={1.018}>
@@ -261,7 +261,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
 
   return (
     <div className={`artisan-globe-3d ${isDarkMode ? 'is-dark' : 'is-light'}`} aria-label="Interactive 3D artisan globe">
-      <Canvas camera={{ position: [0, 0, 8.2], fov: 34 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
+      <Canvas camera={{ position: [0, 0, 8.2], fov: 34 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}>
         <GlobeScene
           artisans={artisans}
           selectedArtisanId={selectedArtisanId}
