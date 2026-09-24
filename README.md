@@ -1,84 +1,78 @@
-# Atelier Tailor & Fabric Marketplace
+# Fabrilux Atelier
 
-A production-minded marketplace app for tailors, fabric sellers, and buyers, built with React, Vite, Firebase Auth, Firestore, and Firebase Storage.
+Fabrilux Atelier is a fashion and textile marketplace built to help shoppers discover real tailors, fabric sellers, and makers in their area. The app is designed around a practical problem: people often struggle to find reliable local artisans, compare services, and buy custom clothing or fabric without dealing with fragmented WhatsApp-only chains.
 
-## What this project already includes
-- Secure Firebase Authentication flows for login, registration, Google sign-in, and password reset
-- Firebase Admin backend with authenticated API routes for profiles, posts, messages, likes, saves, ratings, and admin actions
-- Firestore and Storage rules for a safer real-world deployment baseline
-- Client-side image compression before upload to Firebase Storage
-- Shared data loading from the backend instead of relying only on browser local storage
+This project combines a premium storefront experience with a functional directory, location-aware discovery, and direct seller communication. Whether someone is searching for a tailor for a wedding outfit, a fabric merchant for a new collection, or a maker with a strong local presence, the platform is meant to make that discovery easier and more trustworthy.
+
+## What the app does
+
+- Lets buyers browse verified tailors and fabric sellers
+- Shows seller locations on an interactive globe and directory view
+- Supports search by name, handle, city, state, and country
+- Displays seller profiles, portfolios, and live posts
+- Allows direct messaging and buyer-to-seller contact
+- Gives admins moderation tools for marketplace quality control
+- Works as a modern, mobile-friendly fashion marketplace experience
+
+## Real project stack
+
+This project is built with:
+
+- React + Vite for the frontend experience
+- TypeScript for safer production code
+- Firebase Auth and Firestore for user and marketplace data
+- Firebase Storage for media handling
+- Express backend routes for admin and API operations
+- Three.js / React Three Fiber for the interactive globe view
+
+## Why this exists
+
+This is not a fake startup pitch. It is a real practical marketplace for the kind of everyday fashion work that happens around tailoring houses, fabric stalls, and custom clothing studios. The goal is simple: bring buyers and sellers into one visible, searchable network where trust, locality, and direct access matter.
+
+It is especially useful for communities where shoppers want to:
+
+- find nearby tailors and dressmakers
+- compare fabric sellers by location and product range
+- find verified artisans instead of random social media listings
+- communicate directly with sellers before ordering
 
 ## Local setup
 
 1. Install dependencies:
    `npm install`
-2. Copy [.env.example](.env.example) to `.env.local` and fill in your Firebase values.
-3. Put your Firebase Admin SDK JSON file in `server/firebase-service-account.json`, or set `FIREBASE_SERVICE_ACCOUNT_JSON` in your environment.
+2. Copy [.env.example](.env.example) to `.env.local` and add your Firebase settings.
+3. If needed, place your Firebase Admin service account JSON in `server/firebase-service-account.json`.
 4. Start the backend:
    `npm run server`
 5. Start the frontend:
    `npm run dev`
-6. Run type checks:
+6. Run checks:
    `npm run lint`
    `npm run server:check`
 
-## Production deployment notes
+## Scripts
 
-### Firebase Storage capacity
-This app uploads image files to Firebase Storage and stores only the generated download URLs in Firestore. That is the correct pattern for a real app because it keeps documents small and avoids storing large image blobs inside database records.
-
-For a startup, Firebase Storage is a good option, but it is not unlimited free storage. Firebase generally gives a free storage allowance and then charges for additional usage. In practice, a few thousand images can fit comfortably within the free tier only if you keep each file small, but once you grow beyond the free allotment you should expect a paid plan.
-
-If you need very high-volume media hosting from day one, a dedicated media platform like Cloudinary or a separate CDN/media bucket can be a better fit. The app architecture is already ready for that, because it stores URLs and never depends on raw binary data in Firestore.
-
-### Security checklist
-- Keep `server/firebase-service-account.json` private and never commit it.
-- Add your real Firebase web config to `.env.local`.
-- Deploy the rules with Firebase once your project is ready:
-  `firebase deploy --only firestore:rules,storage`
-- Keep the backend behind a real deployment host instead of exposing the local Node API publicly.
-
-### Recommended first launch setup
-- Use Firebase Storage for image hosting
-- Keep Firestore for structured app records
-- Keep local browser storage only for lightweight UI preferences like theme mode
-- Use the backend API as the source of truth for marketplace data
-
-## Useful scripts
 - `npm run dev` — start the frontend
-- `npm run build` — production build
-- `npm run server` — start the Express + Firebase backend
-- `npm run lint` — run the frontend TypeScript check
-- `npm run server:check` — run the backend TypeScript check
+- `npm run build` — create a production build
+- `npm run server` — run the backend API server
+- `npm run lint` — type-check the app
+- `npm run server:check` — type-check the server code
 
-## Marketplace rules and moderation
+## Security and deployment notes
 
-### Posting standards
-- Only registered tailors and fabric sellers may publish garment or fabric listings.
-- Buyers may browse, save, like, and message sellers, but they do not create product listings.
-- Listed items must be real marketplace content. Demo, placeholder, or duplicate product entries are not allowed.
+- Keep Firebase service account files private and never commit them.
+- Use real Firebase web config values in your environment.
+- Deploy with proper hosting and backend settings before exposing the app publicly.
+- Treat storage and Firestore with the right privacy and moderation rules for production usage.
 
-### Deletion standards
-- The creator of a post may delete their own listing at any time.
-- Administrators may delete any single post without exception when the content is invalid, misleading, abusive, or against marketplace rules.
-- Deleted posts must disappear instantly from the live marketplace feed everywhere.
+## Marketplace model
 
-### Warning and block actions
-- Administrators may warn a user with a formal in-app notice when rules are broken.
-- Repeated violations may result in a temporary or permanent marketplace restriction.
-- A blocked user cannot publish new posts until the block is removed by an administrator.
+The app is designed for a real-world marketplace workflow:
 
-### Messaging standards
-- Messaging is business-focused and respectful.
-- A message sent by one user should appear immediately in the recipient's conversation thread.
-- Only approved marketplace conversations should be used for real vendor and buyer communication.
+- buyers discover sellers
+- sellers publish their work and stock
+- admins oversee content quality and trust
+- messaging supports direct business conversations
+- profiles and posts build a clear digital presence for artisans
 
-### Empty-state behavior
-- Tailors see: "No cloth posts yet — publish your first collection"
-- Fabric sellers see: "No fabric posts yet — list your first material stock"
-- Customers see: "No cloths are available right now"
-
-### Admin responsibility
-- Admins are expected to maintain trust, remove harmful content, and keep the marketplace organized and accurate.
-- The app is designed so admin delete actions are enforced in both the frontend and the backend to prevent stale or unauthorized content from remaining visible.
+This is a useful foundation for a local or regional fashion commerce platform, especially in markets where artisans are highly distributed and buyers want a respectful, searchable way to find them.

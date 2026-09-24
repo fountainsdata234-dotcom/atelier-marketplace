@@ -1,6 +1,21 @@
 {
-  "name": "Atelier - Tailor & Fabric Marketplace",
-  "description": "A high-fidelity fashion marketplace for bespoke tailors, fabric sellers, and customers with location monitoring, direct WhatsApp ordering, and admin management.",
+  "name": "Fabrilux Atelier",
+  "shortName": "Fabrilux",
+  "description": "Fabrilux Atelier is a fashion marketplace that helps buyers discover verified tailors, fabric sellers, and custom clothing professionals near them.",
+  "siteUrl": "https://atelier-marketplace.onrender.com/",
+  "keywords": [
+    "tailor marketplace",
+    "fabric seller marketplace",
+    "custom clothing",
+    "bespoke fashion",
+    "artisan directory",
+    "fabric shop online",
+    "tailor near me",
+    "African fashion marketplace"
+  ],
+  "language": "en",
+  "region": "NG",
+  "category": "Marketplace",
   "requestFramePermissions": ["geolocation", "camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
