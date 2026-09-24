@@ -79,6 +79,19 @@ describe('globe helpers', () => {
     expect(Math.min(...distances)).toBeGreaterThan(0.03);
   });
 
+  it('keeps the full spacing available for duplicate seller locations', () => {
+    const locations = Array.from({ length: 5 }, () => ({ lat: 6.5244, lng: 3.3792 }));
+    const offsets = getScatterOffsetsForLocations(locations, 0.18);
+    const pairDistances = offsets.flatMap((offset, index) => offsets.slice(index + 1).map((other) => Math.hypot(
+      offset.x - other.x,
+      offset.y - other.y,
+      offset.z - other.z,
+    )));
+
+    expect(Math.min(...pairDistances)).toBeGreaterThan(0.03);
+    expect(Math.max(...offsets.map((offset) => Math.hypot(offset.x, offset.y, offset.z)))).toBeLessThanOrEqual(0.28);
+  });
+
   it('surfaces handle and name matches while typing', () => {
     const artisans = [
       { id: 'a1', name: 'Adewale Atelier', handle: '@adewale', location: { city: 'Lagos', state: 'Lagos', country: 'Nigeria', countryCode: 'NG', lat: 6.5244, lng: 3.3792 } },

@@ -173,14 +173,14 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
   const positions = useMemo(() => {
     const offsets = getScatterOffsetsForLocations(
       artisans.map((artisan) => ({ lat: artisan.location.lat ?? 0, lng: artisan.location.lng ?? 0 })),
-      0.22,
+      0.18,
     );
 
     return artisans.map((artisan, index) => {
       const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
       const offset = offsets[index] ?? { x: 0, y: 0, z: 0 };
       const anchor = base.clone().normalize().multiplyScalar(EARTH_RADIUS + 0.006);
-      const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z).multiplyScalar(0.26);
+      const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z);
       const position = base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
       return { anchor, position };
     });
