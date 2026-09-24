@@ -319,9 +319,10 @@
   width: 1.05rem;
   height: 1.05rem;
   place-items: center;
-  border: 1px solid rgba(255, 246, 229, 0.84);
+  border: 1px solid currentColor;
   border-radius: 50% 50% 50% 0;
-  background: rgba(8, 35, 59, 0.78);
+  background: rgba(8, 35, 59, 0.94);
+  color: #fff7ed;
   box-shadow: 0 0 0.3rem rgba(255, 255, 255, 0.32), 0 0.12rem 0.3rem rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transform: rotate(-45deg);
@@ -336,8 +337,8 @@
 
 .globe-marker-icon-wrap { display: grid; width: 0.56rem; height: 0.56rem; place-items: center; transform: rotate(45deg); }
 .globe-marker-icon { width: 0.5rem; height: 0.5rem; stroke-width: 2.5; }
-.globe-marker.is-tailor { color: #ff8b4a; }
-.globe-marker.is-fabric-seller { color: #69b9ff; }
+.globe-marker.is-tailor { border-color: #ff8b4a; }
+.globe-marker.is-fabric-seller { border-color: #69b9ff; }
 .globe-marker-pulse { position: absolute; inset: -0.16rem; border: 1px solid rgba(255, 213, 146, 0.7); border-radius: 50%; animation: globe-marker-pulse 2.2s ease-out infinite; pointer-events: none; transform: rotate(45deg); }
 
 @keyframes globe-marker-pulse {

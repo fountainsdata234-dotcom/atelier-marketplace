@@ -22,7 +22,7 @@ interface ArtisanGlobe3DProps {
 }
 
 const EARTH_RADIUS = 2;
-const MARKER_RADIUS = 2.055;
+const MARKER_RADIUS = 2.105;
 
 const toGlobePosition = (latitude: number, longitude: number, radius = EARTH_RADIUS) => {
   const lat = THREE.MathUtils.degToRad(latitude);
@@ -181,7 +181,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       const offset = offsets[index] ?? { x: 0, y: 0, z: 0 };
       const anchor = base.clone().normalize().multiplyScalar(EARTH_RADIUS + 0.006);
       const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z).multiplyScalar(0.26);
-      const position = base.add(markerOffset).normalize().multiplyScalar(EARTH_RADIUS + 0.026);
+      const position = base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
       return { anchor, position };
     });
   }, [artisans]);
