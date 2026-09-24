@@ -143,7 +143,7 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
         <ringGeometry args={[0.035, 0.052, 24]} />
         <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest />
       </mesh>
-      <Html center transform sprite distanceFactor={7.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
+      <Html position={[0, -0.08, 0]} center transform sprite distanceFactor={7.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
         <button
           type="button"
           className={`globe-marker ${artisan.role === 'tailor' ? 'is-tailor' : 'is-fabric-seller'} ${selected ? 'is-selected' : ''}`}
@@ -192,14 +192,16 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       focusVectorRef.current = null;
       return;
     }
-    focusVectorRef.current = positions[selectedIndex].position.clone().normalize().multiplyScalar(Math.min(camera.position.length(), 5.6));
+    const selectedPosition = positions[selectedIndex].position.clone();
+    selectedPosition.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotatingGroupRef.current?.rotation.y ?? 0);
+    focusVectorRef.current = selectedPosition.normalize().multiplyScalar(Math.min(camera.position.length(), 5.6));
   }, [artisans, camera.position, positions, selectedArtisanId]);
 
   useFrame((_, delta) => {
     const controls = controlsRef.current;
     const now = performance.now();
     if (controls) {
-      controls.autoRotate = !interactingRef.current && now - lastInteractionRef.current > 1400;
+      controls.autoRotate = !selectedArtisanId && !interactingRef.current && now - lastInteractionRef.current > 1400;
       controls.autoRotateSpeed = 0.28;
     }
     if (focusVectorRef.current && !interactingRef.current) {
@@ -208,7 +210,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       if (camera.position.distanceTo(focusVectorRef.current) < 0.03) focusVectorRef.current = null;
     }
     onZoomDistance(camera.position.length());
-    if (rotatingGroupRef.current) rotatingGroupRef.current.rotation.y += delta * 0.004;
+    if (rotatingGroupRef.current && !selectedArtisanId) rotatingGroupRef.current.rotation.y += delta * 0.004;
   });
 
   return (

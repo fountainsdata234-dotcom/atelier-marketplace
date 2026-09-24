@@ -331,7 +331,7 @@
 
 .globe-marker:hover,
 .globe-marker.is-selected {
-  transform: rotate(-45deg) scale(1.18);
+  transform: rotate(-45deg) scale(1.22);
   box-shadow: 0 0 0 0.16rem rgba(255, 213, 146, 0.16), 0 0 0.7rem rgba(255, 213, 146, 0.72);
 }
 
