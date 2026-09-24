@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
 import { Scissors, Shirt, X } from 'lucide-react';
 import * as THREE from 'three';
@@ -51,23 +51,45 @@ const GlobeGrid: React.FC = () => {
   return <group rotation={[0, Math.PI / 2, 0]}>{lines.map((points, index) => <Line key={index} points={points} color="#83d8d0" transparent opacity={0.13} lineWidth={0.45} />)}</group>;
 };
 
-const Earth: React.FC = () => (
-  <group>
-    <mesh>
-      <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
-      <meshStandardMaterial color="#123c52" roughness={0.86} metalness={0.08} emissive="#06131b" emissiveIntensity={0.45} />
-    </mesh>
-    <mesh scale={1.015}>
-      <sphereGeometry args={[EARTH_RADIUS, 48, 48]} />
-      <meshBasicMaterial color="#f1a35a" transparent opacity={0.055} side={THREE.BackSide} depthWrite={false} blending={THREE.AdditiveBlending} />
-    </mesh>
-    <GlobeGrid />
-    <mesh rotation={[0.6, -0.8, 0.2]} scale={1.025}>
-      <sphereGeometry args={[EARTH_RADIUS, 32, 32]} />
-      <meshBasicMaterial color="#4d9c75" wireframe transparent opacity={0.13} depthWrite={false} />
-    </mesh>
-  </group>
-);
+const Earth: React.FC = () => {
+  const [surfaceMap, normalMap, specularMap, lightsMap] = useLoader(THREE.TextureLoader, [
+    '/textures/earth/earth_atmos_2048.jpg',
+    '/textures/earth/earth_normal_2048.jpg',
+    '/textures/earth/earth_specular_2048.jpg',
+    '/textures/earth/earth_lights_2048.png',
+  ]);
+
+  [surfaceMap, normalMap, specularMap, lightsMap].forEach((texture) => {
+    texture.anisotropy = 8;
+  });
+  surfaceMap.colorSpace = THREE.SRGBColorSpace;
+  lightsMap.colorSpace = THREE.SRGBColorSpace;
+
+  return (
+    <group>
+      <mesh>
+        <sphereGeometry args={[EARTH_RADIUS, 96, 96]} />
+        <meshStandardMaterial
+          map={surfaceMap}
+          normalMap={normalMap}
+          normalScale={new THREE.Vector2(0.72, 0.72)}
+          roughnessMap={specularMap}
+          roughness={0.82}
+          metalness={0.02}
+        />
+      </mesh>
+      <mesh scale={1.002}>
+        <sphereGeometry args={[EARTH_RADIUS, 96, 96]} />
+        <meshBasicMaterial map={lightsMap} transparent opacity={0.72} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+      <mesh scale={1.018}>
+        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
+        <meshBasicMaterial color="#52b8ff" transparent opacity={0.09} side={THREE.BackSide} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <GlobeGrid />
+    </group>
+  );
+};
 
 const MarkerIcon: React.FC<{ role: User['role'] }> = ({ role }) => role === 'tailor'
   ? <Scissors className="globe-marker-icon" aria-hidden="true" />
@@ -92,14 +114,24 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, zoomD
     return () => window.clearTimeout(timer);
   }, [delay]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!groupRef.current) return;
+
     const targetScale = entered ? (selected ? 1.18 : 1) : 0.01;
-    groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.14);
+    const targetNormal = position.clone().normalize();
+    const axis = new THREE.Vector3(0, 1, 0).cross(targetNormal).normalize();
+    const angle = Math.acos(THREE.MathUtils.clamp(new THREE.Vector3(0, 1, 0).dot(targetNormal), -1, 1));
+    const targetQuaternion = axis.lengthSq() > 0.0001
+      ? new THREE.Quaternion().setFromAxisAngle(axis, angle)
+      : new THREE.Quaternion();
+
+    groupRef.current.position.lerp(position, 1 - Math.exp(-delta * 7.5));
+    groupRef.current.quaternion.slerp(targetQuaternion, 1 - Math.exp(-delta * 7.5));
+    groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 1 - Math.exp(-delta * 8));
   });
 
   return (
-    <group ref={groupRef} position={position} renderOrder={selected ? 20 : 2}>
+    <group ref={groupRef} renderOrder={selected ? 20 : 2}>
       <Html center transform sprite distanceFactor={6.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
         <button
           type="button"
@@ -132,11 +164,16 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
   const { camera } = useThree();
 
   const positions = useMemo(() => {
-    const offsets = getScatterOffsetsForLocations(artisans.map((artisan) => ({ lat: artisan.location.lat ?? 0, lng: artisan.location.lng ?? 0 })), 0.24);
+    const offsets = getScatterOffsetsForLocations(
+      artisans.map((artisan) => ({ lat: artisan.location.lat ?? 0, lng: artisan.location.lng ?? 0 })),
+      0.22,
+    );
+
     return artisans.map((artisan, index) => {
       const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
-      const offset = offsets[index];
-      return base.add(new THREE.Vector3(offset.x, offset.y, offset.z)).normalize().multiplyScalar(MARKER_RADIUS);
+      const offset = offsets[index] ?? { x: 0, y: 0, z: 0 };
+      const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z).multiplyScalar(0.9);
+      return base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
     });
   }, [artisans]);
 

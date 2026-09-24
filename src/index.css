@@ -299,7 +299,7 @@
   min-height: 19rem;
   touch-action: none;
   isolation: isolate;
-  background: radial-gradient(circle at 50% 48%, rgba(70, 174, 158, 0.18), transparent 30%), radial-gradient(circle at 72% 16%, rgba(251, 146, 60, 0.2), transparent 24%);
+  background: radial-gradient(circle at 50% 48%, rgba(38, 117, 181, 0.2), transparent 32%), radial-gradient(circle at 72% 16%, rgba(251, 146, 60, 0.12), transparent 24%);
 }
 
 .artisan-globe-3d canvas {
@@ -316,14 +316,14 @@
 .globe-marker {
   position: relative;
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 1.9rem;
+  height: 1.9rem;
   place-items: center;
-  border: 1px solid rgba(255, 231, 201, 0.8);
+  border: 1.5px solid rgba(255, 246, 229, 0.92);
   border-radius: 50%;
-  background: linear-gradient(145deg, #f5ad64, #b84d2c);
+  background: linear-gradient(145deg, #ff8a3d, #d53622);
   color: #fff7ed;
-  box-shadow: 0 0 0.85rem rgba(251, 146, 60, 0.5), 0 0.35rem 0.7rem rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0.85rem rgba(255, 91, 42, 0.68), 0 0.35rem 0.7rem rgba(0, 0, 0, 0.38);
   cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
@@ -350,7 +350,7 @@
 .globe-marker-avatar-layer img { width: 100%; height: 100%; object-fit: cover; }
 .globe-marker-avatar-layer span { font-size: 0.72rem; font-weight: 800; }
 .globe-marker-icon { width: 1rem; height: 1rem; stroke-width: 2.4; }
-.globe-marker-badge { position: absolute; right: -0.23rem; top: -0.23rem; display: grid; width: 0.86rem; height: 0.86rem; place-items: center; border: 1px solid #123c52; border-radius: 50%; background: #f4c27a; color: #4c2418; }
+.globe-marker-badge { position: absolute; right: -0.23rem; top: -0.23rem; display: grid; width: 0.86rem; height: 0.86rem; place-items: center; border: 1px solid #08233b; border-radius: 50%; background: #4268e8; color: #fff; }
 .globe-marker-badge .globe-marker-icon { width: 0.48rem; height: 0.48rem; stroke-width: 2.8; }
 .globe-marker-pulse { position: absolute; inset: -0.28rem; border: 1px solid rgba(255, 213, 146, 0.7); border-radius: 50%; animation: globe-marker-pulse 2.2s ease-out infinite; pointer-events: none; }
 
