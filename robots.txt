@@ -1,4 +1,16 @@
 User-agent: *
 Allow: /
+Allow: /marketplace
+Allow: /artisan
+Allow: /collections
+Allow: /about
+Allow: /privacy
+Allow: /terms
+Allow: /contact
+Disallow: /api/
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /profile/
+Disallow: /messages/
 
 Sitemap: https://atelier-marketplace.onrender.com/sitemap.xml
