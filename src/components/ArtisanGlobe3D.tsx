@@ -100,15 +100,13 @@ interface MarkerProps {
   position: THREE.Vector3;
   anchor: THREE.Vector3;
   selected: boolean;
-  zoomDistance: number;
   delay: number;
   onSelect: (artisan: GlobeArtisan) => void;
 }
 
-const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selected, zoomDistance, delay, onSelect }) => {
+const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selected, delay, onSelect }) => {
   const groupRef = useRef<THREE.Group>(null);
   const [entered, setEntered] = useState(false);
-  const showAvatar = zoomDistance < 5.8;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setEntered(true), delay);
@@ -148,15 +146,11 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
       <Html center transform sprite distanceFactor={7.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
         <button
           type="button"
-          className={`globe-marker ${selected ? 'is-selected' : ''} ${showAvatar ? 'show-avatar' : 'show-icon'}`}
+          className={`globe-marker ${artisan.role === 'tailor' ? 'is-tailor' : 'is-fabric-seller'} ${selected ? 'is-selected' : ''}`}
           onClick={() => onSelect(artisan)}
           aria-label={`Select ${artisan.name}`}
         >
-          <span className="globe-marker-icon-layer"><MarkerIcon role={artisan.role} /></span>
-          <span className="globe-marker-avatar-layer">
-            {artisan.avatarUrl ? <img src={artisan.avatarUrl} alt="" loading="lazy" /> : <span>{artisan.name.slice(0, 1).toUpperCase()}</span>}
-          </span>
-          <span className="globe-marker-badge"><MarkerIcon role={artisan.role} /></span>
+          <span className="globe-marker-icon-wrap"><MarkerIcon role={artisan.role} /></span>
           {selected && <span className="globe-marker-pulse" aria-hidden="true" />}
         </button>
       </Html>
@@ -232,7 +226,6 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
             position={positions[index].position}
             anchor={positions[index].anchor}
             selected={artisan.id === selectedArtisanId}
-            zoomDistance={camera.position.length()}
             delay={Math.min(index * 24, 720)}
             onSelect={onSelectArtisan}
           />

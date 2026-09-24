@@ -316,43 +316,29 @@
 .globe-marker {
   position: relative;
   display: grid;
-  width: 1.45rem;
-  height: 1.45rem;
+  width: 1.05rem;
+  height: 1.05rem;
   place-items: center;
-  border: 1.5px solid rgba(255, 246, 229, 0.92);
-  border-radius: 50%;
-  background: linear-gradient(145deg, #ff8a3d, #d53622);
-  color: #fff7ed;
-  box-shadow: 0 0 0.85rem rgba(255, 91, 42, 0.68), 0 0.35rem 0.7rem rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 246, 229, 0.84);
+  border-radius: 50% 50% 50% 0;
+  background: rgba(8, 35, 59, 0.78);
+  box-shadow: 0 0 0.3rem rgba(255, 255, 255, 0.32), 0 0.12rem 0.3rem rgba(0, 0, 0, 0.35);
   cursor: pointer;
+  transform: rotate(-45deg);
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .globe-marker:hover,
 .globe-marker.is-selected {
-  transform: scale(1.14);
-  box-shadow: 0 0 0 0.25rem rgba(251, 191, 36, 0.16), 0 0 1.35rem rgba(251, 191, 36, 0.72), 0 0.45rem 0.8rem rgba(0, 0, 0, 0.35);
+  transform: rotate(-45deg) scale(1.18);
+  box-shadow: 0 0 0 0.16rem rgba(255, 213, 146, 0.16), 0 0 0.7rem rgba(255, 213, 146, 0.72);
 }
 
-.globe-marker-icon-layer,
-.globe-marker-avatar-layer {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  place-items: center;
-  transition: opacity 260ms ease, transform 260ms ease;
-}
-
-.globe-marker-icon-layer { opacity: 1; transform: scale(1); }
-.globe-marker-avatar-layer { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; opacity: 0; transform: scale(0.72); }
-.globe-marker.show-avatar .globe-marker-icon-layer { opacity: 0; transform: scale(0.72); }
-.globe-marker.show-avatar .globe-marker-avatar-layer { opacity: 1; transform: scale(1); }
-.globe-marker-avatar-layer img { width: 100%; height: 100%; object-fit: cover; }
-.globe-marker-avatar-layer span { font-size: 0.72rem; font-weight: 800; }
-.globe-marker-icon { width: 0.78rem; height: 0.78rem; stroke-width: 2.4; }
-.globe-marker-badge { position: absolute; right: -0.18rem; top: -0.18rem; display: grid; width: 0.64rem; height: 0.64rem; place-items: center; border: 1px solid #08233b; border-radius: 50%; background: #4268e8; color: #fff; }
-.globe-marker-badge .globe-marker-icon { width: 0.36rem; height: 0.36rem; stroke-width: 2.8; }
-.globe-marker-pulse { position: absolute; inset: -0.2rem; border: 1px solid rgba(255, 213, 146, 0.7); border-radius: 50%; animation: globe-marker-pulse 2.2s ease-out infinite; pointer-events: none; }
+.globe-marker-icon-wrap { display: grid; width: 0.56rem; height: 0.56rem; place-items: center; transform: rotate(45deg); }
+.globe-marker-icon { width: 0.5rem; height: 0.5rem; stroke-width: 2.5; }
+.globe-marker.is-tailor { color: #ff8b4a; }
+.globe-marker.is-fabric-seller { color: #69b9ff; }
+.globe-marker-pulse { position: absolute; inset: -0.16rem; border: 1px solid rgba(255, 213, 146, 0.7); border-radius: 50%; animation: globe-marker-pulse 2.2s ease-out infinite; pointer-events: none; transform: rotate(45deg); }
 
 @keyframes globe-marker-pulse {
   0% { opacity: 0.75; transform: scale(0.72); }
