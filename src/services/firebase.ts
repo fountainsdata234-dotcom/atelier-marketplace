@@ -53,6 +53,19 @@ const normalizeAvatarUrl = (url?: string | null): string | undefined => {
   return undefined;
 };
 
+const resolveAuthPhotoUrl = (firebaseUser: FirebaseUser): string | undefined => {
+  const providerPhotos = firebaseUser.providerData
+    .map((provider) => provider.photoURL)
+    .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+
+  const fallbackPhoto = (firebaseUser as FirebaseUser & {
+    reloadUserInfo?: { photoUrl?: string | null };
+  }).reloadUserInfo?.photoUrl;
+
+  const candidate = [firebaseUser.photoURL, fallbackPhoto, ...providerPhotos].find((value): value is string => Boolean(value && normalizeAvatarUrl(value)));
+  return candidate ? normalizeAvatarUrl(candidate) : undefined;
+};
+
 export async function configureFirebaseAuth() {
   await setPersistence(firebaseAuth, browserLocalPersistence);
 }
@@ -126,8 +139,7 @@ export async function isFirebaseAdmin(user: FirebaseUser) {
 export async function toAppUser(firebaseUser: FirebaseUser, role: UserRole = 'buyer'): Promise<User> {
   const admin = await isFirebaseAdmin(firebaseUser);
   const safeName = firebaseUser.displayName?.trim() || firebaseUser.email?.split('@')[0] || 'Atelier Member';
-  const providerPhoto = (firebaseUser as FirebaseUser & { reloadUserInfo?: { photoUrl?: string | null } }).reloadUserInfo?.photoUrl;
-  const avatarUrl = normalizeAvatarUrl(firebaseUser.photoURL) || normalizeAvatarUrl(providerPhoto);
+  const avatarUrl = resolveAuthPhotoUrl(firebaseUser);
   const handleBase = safeName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member';
   return {
     id: firebaseUser.uid,

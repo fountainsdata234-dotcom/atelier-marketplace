@@ -335,7 +335,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsSubmitting(true);
     try {
       const firebaseUser = await loginWithGoogle();
-      const user = storageService.upsertUser(await toAppUser(firebaseUser, defaultRole as UserRole));
+      const baseUser = await toAppUser(firebaseUser, defaultRole as UserRole);
+      const user = storageService.upsertUser({
+        ...baseUser,
+        avatarUrl: baseUser.avatarUrl || firebaseUser.providerData.find(provider => provider.providerId === 'google.com')?.photoURL || undefined,
+      });
       await api.saveProfile(user);
       onSuccess(user);
       onClose();

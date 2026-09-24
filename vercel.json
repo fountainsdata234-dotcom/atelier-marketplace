@@ -1,6 +1,26 @@
 {
   "rewrites": [
     {
+      "source": "/assets/(.*)",
+      "destination": "/assets/$1"
+    },
+    {
+      "source": "/textures/(.*)",
+      "destination": "/textures/$1"
+    },
+    {
+      "source": "/3d/(.*)",
+      "destination": "/3d/$1"
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "destination": "/manifest.webmanifest"
+    },
+    {
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://atelier-marketplace.onrender.com/api/$1"
     },
