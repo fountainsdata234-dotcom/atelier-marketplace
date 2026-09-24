@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Globe2, Navigation, Search } from 'lucide-react';
+import { Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
 import { getSearchSuggestions } from '../utils/globe';
@@ -48,24 +48,26 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const [filterCountry, setFilterCountry] = useState(() => getDefaultLocationFilter(currentUser?.location));
   const [filterState, setFilterState] = useState('all');
   const [filterCity, setFilterCity] = useState('all');
+  const [selectedArtisanId, setSelectedArtisanId] = useState<string | null>(null);
 
   React.useEffect(() => {
-    setFilterCountry(getDefaultLocationFilter(currentUser?.location));
-  }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode]);
-  const [selectedGlobeArtisanId, setSelectedGlobeArtisanId] = useState<string | null>(null);
-
+    const nextCountry = getDefaultLocationFilter(currentUser?.location);
+    const nextCountryData = WORLD_COUNTRIES.find((country) => country.code === nextCountry || country.name === nextCountry);
+    const nextState = nextCountryData?.states.find((state) => state.name.toLowerCase() === currentUser?.location.state?.toLowerCase());
+    setFilterCountry(nextCountry);
+    setFilterState(nextState?.code || 'all');
+    setFilterCity(nextState?.cities.some((city) => city.toLowerCase() === currentUser?.location.city?.toLowerCase()) ? currentUser?.location.city || 'all' : 'all');
+    setSelectedArtisanId(null);
+  }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode, currentUser?.location?.state, currentUser?.location?.city]);
   const focusArtisan = (artisan: typeof filteredArtisans[number] | null) => {
     if (!artisan) return;
-    setSelectedGlobeArtisanId(artisan.id);
+    setSelectedArtisanId(artisan.id);
     setSearchQuery(artisan.handle.startsWith('@') ? artisan.handle : `@${artisan.handle}`);
     setSearchSuggestionsOpen(false);
   };
   const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry);
   const selectedState = selectedCountry?.states.find((state) => state.code === filterState);
-  const filteredArtisans = artisans.filter((artisan) => {
-    const term = searchQuery.trim().toLowerCase();
-    const normalizedHandle = artisan.handle.trim().toLowerCase();
-    const matchesSearch = !term || artisan.name.toLowerCase().includes(term) || artisan.handle.toLowerCase().includes(term) || normalizedHandle.includes(term);
+  const locationArtisans = artisans.filter((artisan) => {
     const matchesLocation = matchesLocationFilter(
       artisan.location,
       filterCountry === 'all' ? 'all' : (selectedCountry?.name || artisan.location.countryCode || filterCountry),
@@ -73,10 +75,15 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
       filterCity,
     );
     const matchesRadius = !nearMeOnly || (artisan.distanceKm !== null && artisan.distanceKm <= 250);
-    return matchesSearch && matchesLocation && matchesRadius;
+    return matchesLocation && matchesRadius;
   });
-  const mappedArtisans = filteredArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng));
-  const searchSuggestions = useMemo(() => getSearchSuggestions(filteredArtisans, searchQuery, 7), [filteredArtisans, searchQuery]);
+  const filteredArtisans = locationArtisans.filter((artisan) => {
+    const term = searchQuery.trim().toLowerCase();
+    const normalizedHandle = artisan.handle.trim().toLowerCase();
+    const matchesSearch = !term || artisan.name.toLowerCase().includes(term) || artisan.handle.toLowerCase().includes(term) || normalizedHandle.includes(term);
+    return matchesSearch;
+  });
+  const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
     focusArtisan(artisan);
@@ -84,9 +91,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
 
   const dismissSearch = () => {
     setSearchSuggestionsOpen(false);
-    if (!searchQuery.trim()) {
-      setSelectedGlobeArtisanId(null);
-    }
+    if (!searchQuery.trim()) setSelectedArtisanId(null);
   };
 
   return (
@@ -105,7 +110,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                 value={searchQuery}
                 onChange={(event) => {
                   setSearchQuery(event.target.value);
-                  setSelectedGlobeArtisanId(null);
+                  setSelectedArtisanId(null);
                   setSearchSuggestionsOpen(true);
                 }}
                 onFocus={() => {
@@ -163,15 +168,15 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         </div>
 
         <div className={`mb-6 grid gap-2 rounded-2xl border p-3 sm:grid-cols-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-          <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedGlobeArtisanId(null); }} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
+          <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedArtisanId(null); }} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
             <option value="all">All countries</option>
             {WORLD_COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
           </select>
-          <select value={filterState} onChange={(event) => { setFilterState(event.target.value); setFilterCity('all'); setSelectedGlobeArtisanId(null); }} disabled={!selectedCountry} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
+          <select value={filterState} onChange={(event) => { setFilterState(event.target.value); setFilterCity('all'); setSelectedArtisanId(null); }} disabled={!selectedCountry} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
             <option value="all">All states / provinces</option>
             {selectedCountry?.states.map((state) => <option key={state.code} value={state.code}>{state.name}</option>)}
           </select>
-          <select value={filterCity} onChange={(event) => { setFilterCity(event.target.value); setSelectedGlobeArtisanId(null); }} disabled={!selectedState} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
+          <select value={filterCity} onChange={(event) => { setFilterCity(event.target.value); setSelectedArtisanId(null); }} disabled={!selectedState} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
             <option value="all">All cities</option>
             {selectedState?.cities.map((city) => <option key={city} value={city}>{city}</option>)}
           </select>
@@ -192,22 +197,22 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
         </div>
 
-        <section className={`relative mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,146,60,0.28),transparent_20%),radial-gradient(circle_at_15%_18%,rgba(253,186,116,0.18),transparent_20%),linear-gradient(135deg,rgba(120,53,15,0.74),rgba(30,41,59,0.8),rgba(17,24,39,0.94))]" />
-          <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-orange-200/15 px-4 py-3 sm:px-5">
-            <div className="flex items-center gap-2">
-              <Globe2 className="h-4 w-4 text-orange-200" />
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Live artisan signal</p>
-                <p className="text-xs text-orange-50/80">{mappedArtisans.length} account{mappedArtisans.length === 1 ? '' : 's'} transmitting verified coordinates</p>
-              </div>
+        <section className={`artisan-globe-panel mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
+          <div className="artisan-globe-panel-header">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Live artisan signal</p>
+              <p className="mt-1 text-xs text-orange-50/75">Exploring {locationArtisans.length} seller{locationArtisans.length === 1 ? '' : 's'} in the selected region</p>
             </div>
+            <span className="artisan-globe-status"><i /> Live network</span>
           </div>
-
-          <div className="artisan-globe-stage relative min-h-[19rem] overflow-hidden">
-            <div className="artisan-globe-sun" aria-hidden="true" />
-            <ArtisanGlobe3D artisans={mappedArtisans} selectedArtisanId={selectedGlobeArtisanId} onSelectArtisan={(artisan) => setSelectedGlobeArtisanId(artisan.id)} onOpenArtisan={onSelectArtisan} onCloseArtisan={() => setSelectedGlobeArtisanId(null)} isDarkMode={isDarkMode} />
-          </div>
+          <ArtisanGlobe3D
+            artisans={locationArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng))}
+            selectedArtisanId={selectedArtisanId}
+            onSelectArtisan={(artisan) => setSelectedArtisanId(artisan.id)}
+            onOpenArtisan={onSelectArtisan}
+            onCloseArtisan={() => setSelectedArtisanId(null)}
+            isDarkMode={isDarkMode}
+          />
         </section>
 
         {filteredArtisans.length === 0 && (

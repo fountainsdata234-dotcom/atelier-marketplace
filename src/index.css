@@ -225,6 +225,50 @@
   background: radial-gradient(circle at 22% 18%, rgba(253, 186, 116, 0.42), transparent 18%), radial-gradient(circle at 78% 22%, rgba(254, 215, 170, 0.18), transparent 20%), linear-gradient(135deg, #f6d8b2 0%, #f3a562 15%, #d76a2b 30%, #532611 55%, #120f16 100%);
 }
 
+.artisan-globe-panel {
+  position: relative;
+  background: linear-gradient(135deg, rgba(92, 38, 22, 0.95), rgba(17, 36, 48, 0.98) 55%, rgba(8, 22, 30, 0.99));
+  box-shadow: inset 0 1px 0 rgba(255, 232, 205, 0.1), 0 1.5rem 4rem rgba(30, 12, 9, 0.22);
+}
+
+.artisan-globe-panel-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(255, 237, 213, 0.12);
+  padding: 0.85rem 1.1rem;
+}
+
+.artisan-globe-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(110, 231, 183, 0.25);
+  border-radius: 999px;
+  padding: 0.34rem 0.58rem;
+  color: rgba(167, 243, 208, 0.85);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.artisan-globe-status i {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: #6ee7b7;
+  box-shadow: 0 0 0.65rem rgba(110, 231, 183, 0.9);
+  animation: globe-live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes globe-live-pulse {
+  50% { opacity: 0.45; transform: scale(0.72); }
+}
+
 .artisan-globe-sun {
   position: absolute;
   right: 1.25rem;
@@ -254,6 +298,8 @@
   height: clamp(19rem, 68vw, 35rem);
   min-height: 19rem;
   touch-action: none;
+  isolation: isolate;
+  background: radial-gradient(circle at 50% 48%, rgba(70, 174, 158, 0.18), transparent 30%), radial-gradient(circle at 72% 16%, rgba(251, 146, 60, 0.2), transparent 24%);
 }
 
 .artisan-globe-3d canvas {
@@ -266,6 +312,69 @@
 .artisan-globe-3d canvas:active {
   cursor: grabbing;
 }
+
+.globe-marker {
+  position: relative;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid rgba(255, 231, 201, 0.8);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #f5ad64, #b84d2c);
+  color: #fff7ed;
+  box-shadow: 0 0 0.85rem rgba(251, 146, 60, 0.5), 0 0.35rem 0.7rem rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.globe-marker:hover,
+.globe-marker.is-selected {
+  transform: scale(1.14);
+  box-shadow: 0 0 0 0.25rem rgba(251, 191, 36, 0.16), 0 0 1.35rem rgba(251, 191, 36, 0.72), 0 0.45rem 0.8rem rgba(0, 0, 0, 0.35);
+}
+
+.globe-marker-icon-layer,
+.globe-marker-avatar-layer {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+
+.globe-marker-icon-layer { opacity: 1; transform: scale(1); }
+.globe-marker-avatar-layer { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; opacity: 0; transform: scale(0.72); }
+.globe-marker.show-avatar .globe-marker-icon-layer { opacity: 0; transform: scale(0.72); }
+.globe-marker.show-avatar .globe-marker-avatar-layer { opacity: 1; transform: scale(1); }
+.globe-marker-avatar-layer img { width: 100%; height: 100%; object-fit: cover; }
+.globe-marker-avatar-layer span { font-size: 0.72rem; font-weight: 800; }
+.globe-marker-icon { width: 1rem; height: 1rem; stroke-width: 2.4; }
+.globe-marker-badge { position: absolute; right: -0.23rem; top: -0.23rem; display: grid; width: 0.86rem; height: 0.86rem; place-items: center; border: 1px solid #123c52; border-radius: 50%; background: #f4c27a; color: #4c2418; }
+.globe-marker-badge .globe-marker-icon { width: 0.48rem; height: 0.48rem; stroke-width: 2.8; }
+.globe-marker-pulse { position: absolute; inset: -0.28rem; border: 1px solid rgba(255, 213, 146, 0.7); border-radius: 50%; animation: globe-marker-pulse 2.2s ease-out infinite; pointer-events: none; }
+
+@keyframes globe-marker-pulse {
+  0% { opacity: 0.75; transform: scale(0.72); }
+  75%, 100% { opacity: 0; transform: scale(1.8); }
+}
+
+.globe-legend { position: absolute; bottom: 0.9rem; left: 1rem; display: flex; flex-wrap: wrap; gap: 0.7rem; color: rgba(255, 237, 213, 0.72); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.55rem; letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
+.globe-legend span { display: inline-flex; align-items: center; gap: 0.28rem; }
+.globe-legend svg { width: 0.72rem; height: 0.72rem; color: #f6bd78; }
+.globe-legend-zoom { color: rgba(165, 243, 252, 0.62); }
+
+.globe-selected-card { position: absolute; right: 1rem; bottom: 1rem; display: flex; align-items: center; gap: 0.55rem; width: min(19rem, calc(100% - 2rem)); border: 1px solid rgba(255, 219, 177, 0.28); border-radius: 0.85rem; background: rgba(8, 22, 30, 0.9); padding: 0.6rem; box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.28); backdrop-filter: blur(14px); }
+.globe-selected-close { position: absolute; right: 0.4rem; top: 0.4rem; display: grid; width: 1.15rem; height: 1.15rem; place-items: center; border: 0; border-radius: 50%; background: transparent; color: rgba(255, 237, 213, 0.65); cursor: pointer; }
+.globe-selected-close svg { width: 0.72rem; height: 0.72rem; }
+.globe-selected-avatar { display: grid; width: 2.4rem; height: 2.4rem; flex: 0 0 auto; place-items: center; overflow: hidden; border: 1px solid rgba(251, 191, 36, 0.7); border-radius: 50%; background: #a94e2f; color: #fff7ed; font-weight: 800; }
+.globe-selected-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.globe-selected-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 0.12rem; }
+.globe-selected-copy span { color: #f6bd78; font-size: 0.52rem; letter-spacing: 0.13em; text-transform: uppercase; }
+.globe-selected-copy strong, .globe-selected-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.globe-selected-copy strong { color: #fff7ed; font-size: 0.76rem; }
+.globe-selected-copy small { color: rgba(255, 237, 213, 0.62); font-size: 0.58rem; }
+.globe-selected-open { flex: 0 0 auto; border: 1px solid rgba(246, 189, 120, 0.35); border-radius: 0.55rem; background: rgba(246, 189, 120, 0.12); padding: 0.38rem 0.48rem; color: #ffd9ad; font-size: 0.57rem; cursor: pointer; }
 
 .artisan-globe-3d-hint {
   position: absolute;
