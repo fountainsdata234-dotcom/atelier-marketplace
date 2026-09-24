@@ -12,6 +12,10 @@ const app = express();
 const port = Number(process.env.PORT || 8787);
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,http://192.168.186.15:3001').split(',').map((origin) => origin.trim()).filter(Boolean);
 
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled API promise rejection; server kept alive.', reason);
+});
+
 function isLocalNetworkOrigin(origin: string) {
   try {
     const hostname = new URL(origin).hostname.toLowerCase();
@@ -394,9 +398,10 @@ app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) =
 });
 
 app.get('/api/posts', async (_req, res) => {
-  const snapshot = await firestore.collection('posts').limit(100).get();
-  const profileSnapshot = await firestore.collection('profiles').get();
-  const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data()]));
+  try {
+    const snapshot = await firestore.collection('posts').limit(100).get();
+    const profileSnapshot = await firestore.collection('profiles').get();
+    const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data()]));
     const posts: Array<Record<string, unknown> & { id: string; isBlocked?: boolean }> = (await Promise.all(snapshot.docs.map(async doc => {
     const data = doc.data() as Record<string, unknown>;
     const author = profiles.get(String(data.authorId)) || {};
@@ -424,7 +429,11 @@ app.get('/api/posts', async (_req, res) => {
     };
     }))).filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
   posts.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  res.json(posts);
+    res.json(posts);
+  } catch (error) {
+    console.error('Unable to load marketplace posts', error);
+    res.status(503).json({ error: 'Marketplace data is temporarily unavailable. Please try again shortly.' });
+  }
 });
 
 async function listAllAuthUsers() {
@@ -439,43 +448,61 @@ async function listAllAuthUsers() {
 }
 
 app.get('/api/users', async (_req, res) => {
-  const [profileSnapshot, authUsers] = await Promise.all([
-    firestore.collection('profiles').get(),
-    listAllAuthUsers(),
-  ]);
-  const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data() as Record<string, unknown>]));
-  res.json(authUsers.map(authUser => {
-    const profile = profiles.get(authUser.uid) || {};
-    const claims = authUser.customClaims || {};
-    const isAdmin = profile.role === 'admin'
-      || authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com'
-      || claims.admin === true
-      || claims.role === 'admin';
-    const role = isAdmin ? 'admin' : ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? profile.role : 'buyer';
-    const name = String(profile.name || authUser.displayName || authUser.email?.split('@')[0] || 'Atelier Member');
-    return {
-      id: authUser.uid,
-      email: authUser.email || '',
-      name,
-      role,
-      phone: String(profile.phone || authUser.phoneNumber || ''),
-      countryCode: String(profile.countryCode || ''),
-      location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
-      whatsappNumber: String(profile.whatsappNumber || ''),
-      shopName: String(profile.shopName || ''),
-      bio: String(profile.bio || ''),
-      handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
-      avatarUrl: String(profile.avatarUrl || authUser.photoURL || ''),
-      isPromoted: profile.isPromoted === true,
-      isBlocked: profile.isBlocked === true || authUser.disabled === true,
-      isWarned: profile.isWarned === true,
-      warningNote: String(profile.warningNote || ''),
-      followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
-      createdAt: String(profile.createdAt || authUser.metadata.creationTime || new Date().toISOString()),
-      isSuperAdmin: isAdmin && authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com',
-      addedByEmail: String(profile.addedByEmail || ''),
-    };
-  }));
+  try {
+    const profileSnapshot = await firestore.collection('profiles').get();
+    let authUsers: Awaited<ReturnType<typeof listAllAuthUsers>> = [];
+    try {
+      authUsers = await listAllAuthUsers();
+    } catch (error) {
+      console.warn('Firebase Auth unavailable; serving profile-backed users.', error);
+    }
+    const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data() as Record<string, unknown>]));
+    const userRecords = authUsers.length > 0 ? authUsers : profileSnapshot.docs.map(doc => ({
+      uid: doc.id,
+      email: '',
+      displayName: '',
+      phoneNumber: '',
+      photoURL: '',
+      disabled: false,
+      customClaims: {},
+      metadata: { creationTime: undefined },
+    }));
+    res.json(userRecords.map(authUser => {
+      const profile = profiles.get(authUser.uid) || {};
+      const claims = (authUser.customClaims || {}) as Record<string, unknown>;
+      const isAdmin = profile.role === 'admin'
+        || authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com'
+        || claims.admin === true
+        || claims.role === 'admin';
+      const role = isAdmin ? 'admin' : ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? profile.role : 'buyer';
+      const name = String(profile.name || authUser.displayName || authUser.email?.split('@')[0] || 'Atelier Member');
+      return {
+        id: authUser.uid,
+        email: authUser.email || '',
+        name,
+        role,
+        phone: String(profile.phone || authUser.phoneNumber || ''),
+        countryCode: String(profile.countryCode || ''),
+        location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
+        whatsappNumber: String(profile.whatsappNumber || ''),
+        shopName: String(profile.shopName || ''),
+        bio: String(profile.bio || ''),
+        handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
+        avatarUrl: String(profile.avatarUrl || authUser.photoURL || ''),
+        isPromoted: profile.isPromoted === true,
+        isBlocked: profile.isBlocked === true || authUser.disabled === true,
+        isWarned: profile.isWarned === true,
+        warningNote: String(profile.warningNote || ''),
+        followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
+        createdAt: String(profile.createdAt || authUser.metadata.creationTime || new Date().toISOString()),
+        isSuperAdmin: isAdmin && authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com',
+        addedByEmail: String(profile.addedByEmail || ''),
+      };
+    }));
+  } catch (error) {
+    console.error('Unable to load registered users', error);
+    res.status(503).json({ error: 'Registered-user data is temporarily unavailable. Please try again shortly.' });
+  }
 });
 
 app.post('/api/users/:uid/follow', requireAuth, async (req: AuthenticatedRequest, res) => {
