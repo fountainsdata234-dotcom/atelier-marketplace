@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
-import { Html, Line, OrbitControls, Stars } from '@react-three/drei';
+import { Line, OrbitControls, Stars } from '@react-three/drei';
 import { Scissors, Shirt, X } from 'lucide-react';
 import * as THREE from 'three';
 import { User } from '../types';
@@ -91,10 +91,6 @@ const Earth: React.FC = () => {
   );
 };
 
-const MarkerIcon: React.FC<{ role: User['role'] }> = ({ role }) => role === 'tailor'
-  ? <Scissors className="globe-marker-icon" aria-hidden="true" />
-  : <Shirt className="globe-marker-icon" aria-hidden="true" />;
-
 interface MarkerProps {
   artisan: GlobeArtisan;
   position: THREE.Vector3;
@@ -117,8 +113,11 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
     if (!groupRef.current) return;
 
     const targetScale = entered ? (selected ? 1.18 : 1) : 0.01;
+    const targetNormal = position.clone().normalize();
+    const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), targetNormal);
 
     groupRef.current.position.lerp(position, 1 - Math.exp(-delta * 7.5));
+    groupRef.current.quaternion.slerp(targetQuaternion, 1 - Math.exp(-delta * 7.5));
     groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 1 - Math.exp(-delta * 8));
   });
 
@@ -136,18 +135,24 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
         <ringGeometry args={[0.035, 0.052, 24]} />
         <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest />
       </mesh>
-      <group ref={groupRef} renderOrder={selected ? 20 : 2}>
-        <Html position={[0, 0.04, 0]} center transform sprite distanceFactor={7.2} occlude="blending" zIndexRange={selected ? [30, 40] : [10, 20]}>
-          <button
-            type="button"
-            className={`globe-marker ${artisan.role === 'tailor' ? 'is-tailor' : 'is-fabric-seller'} ${selected ? 'is-selected' : ''}`}
-            onClick={() => onSelect(artisan)}
-            aria-label={`Select ${artisan.name}`}
-          >
-            <span className="globe-marker-icon-wrap"><MarkerIcon role={artisan.role} /></span>
-            {selected && <span className="globe-marker-pulse" aria-hidden="true" />}
-          </button>
-        </Html>
+      <group
+        ref={groupRef}
+        renderOrder={selected ? 20 : 2}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(artisan);
+        }}
+        onPointerOver={(event) => event.stopPropagation()}
+        onPointerOut={(event) => event.stopPropagation()}
+      >
+        <mesh position={[0, 0.1, 0]} rotation={[0, 0, Math.PI]} castShadow>
+          <coneGeometry args={[0.07, 0.18, 8]} />
+          <meshStandardMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} roughness={0.42} metalness={0.28} />
+        </mesh>
+        <mesh position={[0, 0.21, 0]} castShadow>
+          <sphereGeometry args={[0.052, 12, 8]} />
+          <meshStandardMaterial color={selected ? '#fff1c2' : '#f8fafc'} emissive={selected ? '#ffb347' : '#18334a'} emissiveIntensity={selected ? 1.4 : 0.3} roughness={0.3} metalness={0.2} />
+        </mesh>
       </group>
     </>
   );
