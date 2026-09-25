@@ -300,10 +300,7 @@ export default function App() {
       const remoteUsers = usersResult.status === 'fulfilled' ? usersResult.value : null;
       const remotePosts = postsResult.status === 'fulfilled' ? postsResult.value : null;
       const remotePlans = plansResult.status === 'fulfilled' ? plansResult.value : null;
-      if (usersResult.status === 'rejected' && navigator.onLine) {
-        storageService.saveUsers([]);
-        setUsers([]);
-      } else if (remoteUsers !== null) {
+      if (remoteUsers !== null) {
         const localUsers = storageService.getUsers();
         const uniqueRemoteUsers: User[] = Array.from(new Map<string, User>(remoteUsers.map(remoteUser => [remoteUser.id, remoteUser])).values());
         const mergedUsers = uniqueRemoteUsers.map(remoteUser => {
@@ -326,11 +323,9 @@ export default function App() {
         setUsers(mergedUsers);
       }
 
-      // An empty array is a valid authoritative response: it must clear stale local posts.
-      if (postsResult.status === 'rejected' && navigator.onLine) {
-        storageService.savePosts([]);
-        setPosts([]);
-      } else if (remotePosts !== null) {
+      // Only a successful response may replace the local cache. An empty array is
+      // still authoritative, but a failed request must preserve existing data.
+      if (remotePosts !== null) {
         const normalizedPosts = remotePosts.map(post => ({
           ...post,
           likes: Array.isArray(post.likes) ? post.likes : [],
