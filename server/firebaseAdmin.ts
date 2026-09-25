@@ -5,8 +5,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 function loadServiceAccount() {
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (json) return JSON.parse(json);
+  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64?.trim();
+  if (json) {
+    try {
+      return JSON.parse(json);
+    } catch {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON must contain valid Firebase service-account JSON.');
+    }
+  }
+  if (encoded) {
+    try {
+      return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+    } catch {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_BASE64 must contain valid base64-encoded Firebase service-account JSON.');
+    }
+  }
 
   const filePath = process.env.GOOGLE_APPLICATION_CREDENTIALS
     ? path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS)
@@ -20,7 +34,10 @@ function loadServiceAccount() {
 
 const firebaseAdmin = getApps().length > 0
   ? getApps()[0]
-  : initializeApp({ credential: cert(loadServiceAccount()) });
+  : initializeApp({
+      credential: cert(loadServiceAccount()),
+      projectId: process.env.FIREBASE_PROJECT_ID || undefined,
+    });
 
 export const adminAuth = getAuth(firebaseAdmin);
 export const firestore = getFirestore(firebaseAdmin);

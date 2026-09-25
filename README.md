@@ -50,7 +50,7 @@ It is especially useful for communities where shoppers want to:
    `npm run lint`
    `npm run server:check`
 
-For the Render API deployment, add `FIREBASE_SERVICE_ACCOUNT_JSON` as a secret environment variable containing the complete Firebase Admin service-account JSON. The local `server/firebase-service-account.json` file is intentionally ignored and is not included in deployments. Without this variable, `/api/users` and `/api/posts` return `503` because the API cannot connect to Firestore.
+For the Render API deployment, set `FIREBASE_PROJECT_ID=atelier-bespoke-marketplace` and provide either `FIREBASE_SERVICE_ACCOUNT_JSON` (the complete service-account JSON) or `FIREBASE_SERVICE_ACCOUNT_BASE64` (that JSON encoded as base64). The credential must come from the same Firebase project. The local `server/firebase-service-account.json` file is intentionally ignored and is not included in deployments. A missing or mismatched credential causes signup/profile saves to return `401` and public `/api/users` and `/api/posts` reads to return `503`.
 
 ## Scripts
 
