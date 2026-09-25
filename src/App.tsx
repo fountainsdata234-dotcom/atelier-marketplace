@@ -47,6 +47,7 @@ export default function App() {
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [sharedSeller, setSharedSeller] = useState<User | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
+  const lastDataRefreshStartedAt = useRef(0);
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -275,6 +276,10 @@ export default function App() {
   };
 
   const refreshAllData = async (showLoader = true) => {
+    const now = Date.now();
+    if (now - lastDataRefreshStartedAt.current < 2_000) return;
+    lastDataRefreshStartedAt.current = now;
+
     if (showLoader) setIsDataLoading(true);
     const localUsers = storageService.getUsers();
     const localPosts = storageService.getPosts();
