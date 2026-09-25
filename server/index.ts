@@ -78,15 +78,23 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
     return;
   }
 
+  let token: Awaited<ReturnType<typeof adminAuth.verifyIdToken>>;
   try {
-    const token = await adminAuth.verifyIdToken(header.slice(7));
+    token = await adminAuth.verifyIdToken(header.slice(7));
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired authentication token.' });
+    return;
+  }
+
+  try {
     const profile = await firestore.collection('profiles').doc(token.uid).get();
     const profileData = profile.exists ? profile.data() as Record<string, unknown> : {};
     const isAdminFromProfile = profileData.role === 'admin' || token.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com' || token.admin === true || token.role === 'admin';
     req.authUser = { uid: token.uid, email: token.email, admin: Boolean(isAdminFromProfile), blocked: profileData.isBlocked === true };
     next();
-  } catch {
-    res.status(401).json({ error: 'Invalid or expired authentication token.' });
+  } catch (error) {
+    console.error('Unable to load authenticated Firebase profile.', error);
+    res.status(503).json({ error: 'Authentication service is temporarily unavailable. Please try again shortly.' });
   }
 }
 

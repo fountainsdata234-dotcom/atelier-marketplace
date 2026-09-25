@@ -32,11 +32,28 @@ function loadServiceAccount() {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+const rawServiceAccount = loadServiceAccount() as {
+  project_id?: string;
+  client_email?: string;
+  private_key?: string;
+};
+const configuredProjectId = process.env.FIREBASE_PROJECT_ID?.trim();
+
+if (configuredProjectId && rawServiceAccount.project_id && configuredProjectId !== rawServiceAccount.project_id) {
+  throw new Error(`Firebase project mismatch: FIREBASE_PROJECT_ID is ${configuredProjectId}, but the service account belongs to ${rawServiceAccount.project_id}.`);
+}
+
+const serviceAccount = {
+  projectId: rawServiceAccount.project_id,
+  clientEmail: rawServiceAccount.client_email,
+  privateKey: rawServiceAccount.private_key,
+};
+
 const firebaseAdmin = getApps().length > 0
   ? getApps()[0]
   : initializeApp({
-      credential: cert(loadServiceAccount()),
-      projectId: process.env.FIREBASE_PROJECT_ID || undefined,
+      credential: cert(serviceAccount),
+      projectId: configuredProjectId || rawServiceAccount.project_id,
     });
 
 export const adminAuth = getAuth(firebaseAdmin);
