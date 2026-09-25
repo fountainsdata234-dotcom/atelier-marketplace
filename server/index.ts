@@ -399,7 +399,7 @@ app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) =
 
 app.get('/api/posts', async (_req, res) => {
   try {
-    const snapshot = await firestore.collection('posts').get();
+    const snapshot = await firestore.collection('posts').limit(100).get();
     const profileSnapshot = await firestore.collection('profiles').get();
     const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data()]));
     const posts: Array<Record<string, unknown> & { id: string; isBlocked?: boolean }> = (await Promise.all(snapshot.docs.map(async doc => {
