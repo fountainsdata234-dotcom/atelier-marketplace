@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
-import { getSearchSuggestions } from '../utils/globe';
+import { findExactArtisanMatch, getSearchSuggestions } from '../utils/globe';
 import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
 import { ArtisanGlobe3D } from './ArtisanGlobe3D';
 
@@ -28,6 +28,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
 
         return {
           ...user,
+          location: baseLocation,
           distanceKm,
           postCount: userPosts.length,
           latestPost,
@@ -109,8 +110,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
               <input
                 value={searchQuery}
                 onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setSelectedArtisanId(null);
+                  const nextQuery = event.target.value;
+                  setSearchQuery(nextQuery);
+                  setSelectedArtisanId(findExactArtisanMatch(locationArtisans, nextQuery)?.id ?? null);
                   setSearchSuggestionsOpen(true);
                 }}
                 onFocus={() => {

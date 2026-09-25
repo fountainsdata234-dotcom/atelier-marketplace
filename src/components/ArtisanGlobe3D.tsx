@@ -36,6 +36,8 @@ const toGlobePosition = (latitude: number, longitude: number, radius = EARTH_RAD
 
 const formatLocation = (artisan: GlobeArtisan) => [artisan.location.city, artisan.location.country].filter(Boolean).join(', ');
 
+const shortestAngleDelta = (from: number, to: number) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
+
 const GlobeGrid: React.FC = () => {
   const lines = useMemo(() => {
     const values: THREE.Vector3[][] = [];
@@ -102,6 +104,8 @@ interface MarkerProps {
 
 const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selected, delay, onSelect }) => {
   const groupRef = useRef<THREE.Group>(null);
+  const pulseRef = useRef<THREE.Mesh>(null);
+  const pulseMaterialRef = useRef<THREE.MeshBasicMaterial>(null);
   const [entered, setEntered] = useState(false);
 
   useEffect(() => {
@@ -119,6 +123,12 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
     groupRef.current.position.lerp(position, 1 - Math.exp(-delta * 7.5));
     groupRef.current.quaternion.slerp(targetQuaternion, 1 - Math.exp(-delta * 7.5));
     groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 1 - Math.exp(-delta * 8));
+
+    if (pulseRef.current && pulseMaterialRef.current) {
+      const phase = selected ? (performance.now() * 0.0008 + delay * 0.001) % 1 : 0;
+      pulseRef.current.scale.setScalar(selected ? 0.9 + phase * 2.6 : 0.01);
+      pulseMaterialRef.current.opacity = selected ? (1 - phase) * 0.72 : 0;
+    }
   });
 
   return (
@@ -145,6 +155,10 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
         onPointerOver={(event) => event.stopPropagation()}
         onPointerOut={(event) => event.stopPropagation()}
       >
+        <mesh ref={pulseRef} rotation={[Math.PI / 2, 0, 0]} renderOrder={selected ? 21 : 1}>
+          <torusGeometry args={[0.14, 0.012, 8, 32]} />
+          <meshBasicMaterial ref={pulseMaterialRef} color={artisan.role === 'tailor' ? '#ffb347' : '#8ea2ff'} transparent opacity={0} depthWrite={false} />
+        </mesh>
         <mesh position={[0, 0.1, 0]} rotation={[0, 0, Math.PI]} castShadow>
           <coneGeometry args={[0.07, 0.18, 8]} />
           <meshStandardMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} roughness={0.42} metalness={0.28} />
@@ -168,6 +182,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
   const interactingRef = useRef(false);
   const lastInteractionRef = useRef(0);
   const focusVectorRef = useRef<THREE.Vector3 | null>(null);
+  const focusRotationRef = useRef<number | null>(null);
   const { camera } = useThree();
 
   const positions = useMemo(() => {
@@ -179,8 +194,8 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
     return artisans.map((artisan, index) => {
       const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
       const offset = offsets[index] ?? { x: 0, y: 0, z: 0 };
-      const anchor = base.clone().normalize().multiplyScalar(EARTH_RADIUS + 0.006);
       const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z);
+      const anchor = base.clone().add(markerOffset.clone().multiplyScalar(0.24)).normalize().multiplyScalar(EARTH_RADIUS + 0.006);
       const position = base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
       return { anchor, position };
     });
@@ -190,12 +205,16 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
     const selectedIndex = artisans.findIndex((artisan) => artisan.id === selectedArtisanId);
     if (selectedIndex < 0) {
       focusVectorRef.current = null;
+      focusRotationRef.current = null;
       return;
     }
     const selectedPosition = positions[selectedIndex].position.clone();
-    selectedPosition.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotatingGroupRef.current?.rotation.y ?? 0);
-    focusVectorRef.current = selectedPosition.normalize().multiplyScalar(Math.min(camera.position.length(), 5.6));
-  }, [artisans, camera.position, positions, selectedArtisanId]);
+    const currentRotation = rotatingGroupRef.current?.rotation.y ?? 0;
+    const targetRotation = currentRotation + shortestAngleDelta(currentRotation, Math.atan2(-selectedPosition.x, selectedPosition.z));
+    selectedPosition.applyAxisAngle(new THREE.Vector3(0, 1, 0), targetRotation);
+    focusRotationRef.current = targetRotation;
+    focusVectorRef.current = selectedPosition.normalize().multiplyScalar(5.2);
+  }, [artisans, camera, positions, selectedArtisanId]);
 
   useFrame((_, delta) => {
     const controls = controlsRef.current;
@@ -204,10 +223,16 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       controls.autoRotate = !selectedArtisanId && !interactingRef.current && now - lastInteractionRef.current > 1400;
       controls.autoRotateSpeed = 0.28;
     }
-    if (focusVectorRef.current && !interactingRef.current) {
+    if (focusVectorRef.current && focusRotationRef.current !== null && !interactingRef.current) {
+      if (rotatingGroupRef.current) {
+        rotatingGroupRef.current.rotation.y += shortestAngleDelta(rotatingGroupRef.current.rotation.y, focusRotationRef.current) * (1 - Math.exp(-delta * 2.6));
+      }
       camera.position.lerp(focusVectorRef.current, 1 - Math.exp(-delta * 2.4));
       controls?.update();
-      if (camera.position.distanceTo(focusVectorRef.current) < 0.03) focusVectorRef.current = null;
+      if (camera.position.distanceTo(focusVectorRef.current) < 0.03 && Math.abs(shortestAngleDelta(rotatingGroupRef.current?.rotation.y ?? 0, focusRotationRef.current)) < 0.01) {
+        focusVectorRef.current = null;
+        focusRotationRef.current = null;
+      }
     }
     onZoomDistance(camera.position.length());
     if (rotatingGroupRef.current && !selectedArtisanId) rotatingGroupRef.current.rotation.y += delta * 0.004;
@@ -245,6 +270,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
         onStart={() => {
           interactingRef.current = true;
           focusVectorRef.current = null;
+          focusRotationRef.current = null;
         }}
         onEnd={() => {
           interactingRef.current = false;
