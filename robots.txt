@@ -14,4 +14,4 @@ Disallow: /profile/
 Disallow: /messages/
 Disallow: /collections
 
-Sitemap: https://atelier-marketplace.vercel.app/sitemap.xml
+Sitemap: https://atelier-marketplace-git-main-fountains-data234.vercel.app/sitemap.xml
