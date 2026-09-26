@@ -231,7 +231,7 @@ export default function App() {
   }, [users]);
 
   useEffect(() => {
-    if (!currentUser) {
+    if (!currentUser || (currentView !== 'messages' && !directMessageOpen)) {
       setUnreadCount(0);
       return;
     }
@@ -244,7 +244,9 @@ export default function App() {
       }
     };
     void refreshUnreadCount();
-    const interval = window.setInterval(() => void refreshUnreadCount(), 20_000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshUnreadCount();
+    }, 120_000);
     const handleMessageUpdate = () => void refreshUnreadCount();
     window.addEventListener('atelier_message_received', handleMessageUpdate);
     window.addEventListener('atelier_messages_read', handleMessageUpdate);
@@ -253,7 +255,7 @@ export default function App() {
       window.removeEventListener('atelier_message_received', handleMessageUpdate);
       window.removeEventListener('atelier_messages_read', handleMessageUpdate);
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentView, directMessageOpen]);
 
   const handleInstallApp = async () => {
     if (!installPrompt) return;

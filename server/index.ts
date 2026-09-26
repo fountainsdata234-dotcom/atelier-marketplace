@@ -70,6 +70,14 @@ interface StoredMessage {
 }
 
 const DISCOVERY_EVENT_TYPES = new Set(['VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'ADD_TO_CART', 'PURCHASE', 'RATING']);
+const PUBLIC_CACHE_TTL_MS = 60_000;
+let postsCache: { expiresAt: number; value: unknown } | null = null;
+let usersCache: { expiresAt: number; value: unknown } | null = null;
+
+function invalidatePublicCaches() {
+  postsCache = null;
+  usersCache = null;
+}
 
 async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
@@ -407,9 +415,16 @@ app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) =
 
 app.get('/api/posts', async (_req, res) => {
   try {
-    const snapshot = await firestore.collection('posts').limit(100).get();
-    const profileSnapshot = await firestore.collection('profiles').get();
-    const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data()]));
+    if (postsCache && postsCache.expiresAt > Date.now()) {
+      res.json(postsCache.value);
+      return;
+    }
+
+    const snapshot = await firestore.collection('posts').orderBy('createdAt', 'desc').limit(24).get();
+    const authorIds = [...new Set(snapshot.docs.map(doc => String(doc.data().authorId || '')).filter(Boolean))];
+    const authorRefs = authorIds.map(uid => firestore.collection('profiles').doc(uid));
+    const authorSnapshots = authorRefs.length > 0 ? await firestore.getAll(...authorRefs) : [];
+    const profiles = new Map(authorSnapshots.map(doc => [doc.id, doc.data()]));
     const posts: Array<Record<string, unknown> & { id: string; isBlocked?: boolean }> = (await Promise.all(snapshot.docs.map(async doc => {
     const data = doc.data() as Record<string, unknown>;
     const author = profiles.get(String(data.authorId)) || {};
@@ -436,7 +451,7 @@ app.get('/api/posts', async (_req, res) => {
       ratingCount: ratings.length,
     };
     }))).filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
-  posts.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    postsCache = { expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS, value: posts };
     res.json(posts);
   } catch (error) {
     console.error('Unable to load marketplace posts', error);
@@ -457,6 +472,11 @@ async function listAllAuthUsers() {
 
 app.get('/api/users', async (_req, res) => {
   try {
+    if (usersCache && usersCache.expiresAt > Date.now()) {
+      res.json(usersCache.value);
+      return;
+    }
+
     const profileSnapshot = await firestore.collection('profiles').get();
     let authUsers: Awaited<ReturnType<typeof listAllAuthUsers>> = [];
     try {
@@ -475,7 +495,7 @@ app.get('/api/users', async (_req, res) => {
       customClaims: {},
       metadata: { creationTime: undefined },
     }));
-    res.json(userRecords.map(authUser => {
+    const users = userRecords.map(authUser => {
       const profile = profiles.get(authUser.uid) || {};
       const claims = (authUser.customClaims || {}) as Record<string, unknown>;
       const isAdmin = profile.role === 'admin'
@@ -506,7 +526,9 @@ app.get('/api/users', async (_req, res) => {
         isSuperAdmin: isAdmin && authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com',
         addedByEmail: String(profile.addedByEmail || ''),
       };
-    }));
+    });
+    usersCache = { expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS, value: users };
+    res.json(users);
   } catch (error) {
     console.error('Unable to load registered users', error);
     res.status(503).json({ error: 'Registered-user data is temporarily unavailable. Please try again shortly.' });
@@ -599,6 +621,7 @@ app.post('/api/posts', requireAuth, requireActiveAccount, async (req: Authentica
     saves: [],
   };
   const created = await firestore.collection('posts').add(post);
+  invalidatePublicCaches();
   res.status(201).json({ id: created.id, ...post });
 });
 
@@ -787,6 +810,7 @@ app.delete('/api/posts/:postId', requireAuth, async (req: AuthenticatedRequest, 
   }
 
   await postRef.delete();
+  invalidatePublicCaches();
   res.status(204).send();
 });
 
