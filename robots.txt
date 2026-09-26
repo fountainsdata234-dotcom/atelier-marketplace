@@ -12,5 +12,6 @@ Disallow: /admin/
 Disallow: /dashboard/
 Disallow: /profile/
 Disallow: /messages/
+Disallow: /collections
 
-Sitemap: https://atelier-marketplace.onrender.com/sitemap.xml
+Sitemap: https://atelier-marketplace.vercel.app/sitemap.xml

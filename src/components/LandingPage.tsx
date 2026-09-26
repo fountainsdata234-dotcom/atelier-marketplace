@@ -29,6 +29,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   promoPlans,
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
+  const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
+  const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
   const featuredPost = React.useMemo(() => {
     const availablePosts = posts.filter(post => post.imageUrl && post.description?.trim());
@@ -46,6 +48,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       const userPosts = posts.filter(post => post.authorId === user.id);
       return { ...user, distanceKm: null, postCount: userPosts.length, rating: userPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / Math.max(userPosts.length, 1) };
     }), [posts, users]);
+
+  React.useEffect(() => {
+    const section = globeSectionRef.current;
+    if (!section) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setShouldLoadGlobe(true);
+      observer.disconnect();
+    }, { rootMargin: '320px' });
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-16">
@@ -154,10 +168,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="grid items-end gap-5 md:grid-cols-[1.45fr_0.55fr]"><figure className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 p-2"><img src={RESPONSIVE_LANDSCAPE_IMAGE} alt="Fabrilux Atelier on a landscape screen" loading="lazy" decoding="async" className="h-auto w-full rounded-xl object-cover" /></figure><figure className="mx-auto w-full max-w-[19rem] overflow-hidden rounded-[2rem] border border-neutral-800 bg-neutral-950 p-2"><img src={RESPONSIVE_PORTRAIT_IMAGE} alt="Fabrilux Atelier on a portrait screen" loading="lazy" decoding="async" className="h-auto w-full rounded-[1.5rem] object-cover" /></figure></div>
       </motion.section>
 
-      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
+      <motion.section ref={globeSectionRef} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Live network preview</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">See where the craft lives.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Open artisan directory <ArrowRight className="h-4 w-4" /></button></div>
         <div className="landing-globe overflow-hidden">
-          {previewArtisans.length > 0 ? <React.Suspense fallback={<div className="flex h-[22rem] items-center justify-center text-xs text-amber-200/70">Loading the live artisan globe...</div>}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreArtisans} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="flex h-[22rem] items-center justify-center px-6 text-center text-xs text-amber-100/60">The live globe will populate as artisans join the network.</div>}
+          {previewArtisans.length > 0 ? shouldLoadGlobe ? <React.Suspense fallback={<div className="h-[22rem] animate-pulse rounded-xl bg-neutral-900/70" aria-label="Loading artisan globe" />}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreArtisans} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="h-[22rem] rounded-xl bg-neutral-900/40" aria-hidden="true" /> : <div className="flex h-[22rem] items-center justify-center px-6 text-center text-xs text-amber-100/60">The live globe will populate as artisans join the network.</div>}
         </div>
       </motion.section>
 

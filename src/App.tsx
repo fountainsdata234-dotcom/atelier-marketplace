@@ -26,6 +26,22 @@ const ArtisanDirectory = lazy(() => import('./components/ArtisanDirectory').then
 import { api } from './services/api';
 import { getHandleSlug } from './utils/profile';
 
+const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
+  '/': 'landing',
+  '/marketplace': 'marketplace',
+  '/artisan': 'artisan',
+  '/about': 'about',
+  '/privacy': 'privacy',
+  '/terms': 'terms',
+  '/contact': 'contact',
+};
+
+const getInitialView = () => {
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+  if (/^\/@[^/]+(?:\/post\/[^/]+)?$/i.test(path)) return 'seller';
+  return PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabrilux_active_view') || 'landing';
+};
+
 export default function App() {
   const publicSellerRoute = /^\/@[^/]+(?:\/post\/[^/]+)?$/i.test(window.location.pathname) || Boolean(new URLSearchParams(window.location.search).get('seller'));
   // Intro Loading animation state
@@ -44,7 +60,7 @@ export default function App() {
   });
 
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
-  const [currentView, setCurrentView] = useState<string>(() => sessionStorage.getItem('fabrilux_active_view') || 'landing');
+  const [currentView, setCurrentView] = useState<string>(getInitialView);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [sharedSeller, setSharedSeller] = useState<User | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
@@ -58,6 +74,32 @@ export default function App() {
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const pageMeta: Record<string, { title: string; description: string }> = {
+      landing: { title: 'Fabrilux Atelier | Tailor & Fabric Marketplace', description: 'Discover tailors, fabric sellers, and bespoke fashion specialists. Browse real collections, compare makers, and connect directly.' },
+      marketplace: { title: 'Tailors, Fabrics & Bespoke Pieces | Fabrilux Atelier', description: 'Explore garments and fabrics from independent tailors and fabric sellers. Search by seller tags, compare pieces, and contact makers directly.' },
+      artisan: { title: 'Find Tailors & Fabric Sellers | Fabrilux Atelier', description: 'Discover tailors and fabric merchants by location, explore their work, and visit their seller collections.' },
+      about: { title: 'About Fabrilux Atelier', description: 'Learn about Fabrilux Atelier, a marketplace connecting buyers with independent tailors and fabric sellers.' },
+      privacy: { title: 'Privacy Policy | Fabrilux Atelier', description: 'Read how Fabrilux Atelier handles account information and marketplace data.' },
+      terms: { title: 'Terms of Service | Fabrilux Atelier', description: 'Review the terms for using the Fabrilux Atelier marketplace.' },
+      contact: { title: 'Contact Fabrilux Atelier', description: 'Contact Fabrilux Atelier for account help, seller questions, partnerships, and marketplace support.' },
+      collections: { title: 'Saved Collection | Fabrilux Atelier', description: 'Review your saved fashion and fabric inspiration on Fabrilux Atelier.' },
+    };
+    const sellerTitle = sharedSeller ? `${sharedSeller.shopName || sharedSeller.name} | Fabrilux Atelier` : null;
+    const meta = pageMeta[currentView] || pageMeta.landing;
+    const description = sharedSeller?.bio?.trim() || meta.description;
+    const isPrivateView = ['admin', 'dashboard', 'messages', 'profile', 'collections'].includes(currentView);
+    document.title = sellerTitle || meta.title;
+    document.querySelector('meta[name="description"]')?.setAttribute('content', description);
+    document.querySelector('meta[property="og:title"]')?.setAttribute('content', sellerTitle || meta.title);
+    document.querySelector('meta[property="og:description"]')?.setAttribute('content', description);
+    document.querySelector('meta[property="og:url"]')?.setAttribute('content', `${window.location.origin}${window.location.pathname}`);
+    document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', sellerTitle || meta.title);
+    document.querySelector('meta[name="twitter:description"]')?.setAttribute('content', description);
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', `${window.location.origin}${window.location.pathname}`);
+    document.querySelector('meta[name="robots"]')?.setAttribute('content', isPrivateView ? 'noindex, nofollow' : 'index, follow, max-image-preview:large');
+  }, [currentView, sharedSeller]);
 
   // Modals
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -821,14 +863,16 @@ export default function App() {
       )}
 
       {/* 8. Authentication & Registration Modal */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        defaultRole={authDefaultRole}
-        onSuccess={handleAuthSuccess}
-        isDarkMode={isDarkMode}
-        onNavigate={setCurrentView}
-      />
+      {authModalOpen && <Suspense fallback={null}>
+        <AuthModal
+          isOpen
+          onClose={() => setAuthModalOpen(false)}
+          defaultRole={authDefaultRole}
+          onSuccess={handleAuthSuccess}
+          isDarkMode={isDarkMode}
+          onNavigate={setCurrentView}
+        />
+      </Suspense>}
 
       {/* 9. Social Share Handle Modal */}
       <SocialShareModal

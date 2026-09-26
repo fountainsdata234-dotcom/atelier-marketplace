@@ -15,19 +15,19 @@ export default defineConfig(() => {
       target: 'es2020',
       sourcemap: false,
       chunkSizeWarningLimit: 12000,
+      modulePreload: {
+        resolveDependencies: (_filename, dependencies, context) => context.hostType === 'html'
+          ? dependencies.filter(dependency => !/(?:utility-vendor|geo-data|artisan-directory)-[^/]+\.js$/.test(dependency))
+          : dependencies,
+      },
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (!id.includes('node_modules')) {
-              if (id.includes('geoData')) return 'geo-data';
-              if (id.includes('ArtisanDirectory')) return 'artisan-directory';
-              return undefined;
-            }
+            if (!id.includes('node_modules')) return undefined;
 
             if (id.includes('firebase')) return 'firebase-vendor';
-            if (id.includes('three') || id.includes('@react-three')) return 'three-vendor';
             if (id.includes('motion') || id.includes('framer-motion')) return 'motion-vendor';
-            if (id.includes('react') || id.includes('react-dom')) return 'react-vendor';
+            if (id.includes('/react/') || id.includes('/react-dom/')) return 'react-vendor';
             if (id.includes('lucide-react')) return 'icon-vendor';
             if (id.includes('country-state-city') || id.includes('libphonenumber-js')) return 'utility-vendor';
             return undefined;
