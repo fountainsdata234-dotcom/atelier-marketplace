@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Scissors, ShoppingBag, Shield, MapPin, Phone, Lock, Mail, User as UserIcon, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Chrome } from 'lucide-react';
 import { User, UserRole } from '../types';
-import { WORLD_COUNTRIES } from '../data/geoData';
+import { resolveLocationCoordinates, WORLD_COUNTRIES } from '../data/geoData';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import type { CountryCode } from 'libphonenumber-js';
 import { storageService } from '../services/storage';
@@ -301,6 +301,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       : `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
     const firebaseUser = await registerWithEmail(email.trim().toLowerCase(), password, name.trim());
+    const coordinates = resolveLocationCoordinates(selectedCountry.code, currentStateObj.code || '', selectedCityName, {
+      lat: selectedCountry.lat,
+      lng: selectedCountry.lng,
+    });
     const storedAvatarUrl = avatarFile
       ? await uploadUserImage(avatarFile, firebaseUser.uid, 'profiles', `avatar-${Date.now()}.${fileExtension(avatarFile)}`)
       : firebaseUser.photoURL || undefined;
@@ -309,7 +313,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       name: name.trim(),
       phone: parsedPhone.formatInternational(),
       countryCode: selectedCountry.dialCode,
-      location: { country: selectedCountry.name, countryCode: selectedCountry.code, currency: selectedCountry.currency, state: currentStateObj?.name || '', city: selectedCityName, lat: selectedCountry.lat, lng: selectedCountry.lng },
+      location: { country: selectedCountry.name, countryCode: selectedCountry.code, currency: selectedCountry.currency, state: currentStateObj?.name || '', city: selectedCityName, ...coordinates },
       whatsappNumber: parsedWhatsapp.formatInternational(),
       shopName: shopName.trim() || undefined,
       handle: userHandle,

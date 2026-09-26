@@ -115,3 +115,28 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return Math.round(R * c);
 }
+
+export function resolveLocationCoordinates(countryCode: string, stateCode: string, cityName: string, fallback: { lat: number; lng: number }) {
+  const countryApi = (countryStateCity as any)?.Country;
+  const stateApi = (countryStateCity as any)?.State;
+  const cityApi = (countryStateCity as any)?.City;
+
+  try {
+    const country = typeof countryApi?.getCountryByCode === 'function' ? countryApi.getCountryByCode(countryCode) : null;
+    const state = typeof stateApi?.getStateByCodeAndCountry === 'function'
+      ? stateApi.getStateByCodeAndCountry(stateCode, countryCode)
+      : null;
+    const cities = typeof cityApi?.getCitiesOfState === 'function' && state
+      ? cityApi.getCitiesOfState(countryCode, stateCode)
+      : [];
+    const city = Array.isArray(cities)
+      ? cities.find((item: any) => String(item?.name || '').toLowerCase() === cityName.trim().toLowerCase())
+      : null;
+    const source = city || state || country;
+    const lat = Number(source?.latitude);
+    const lng = Number(source?.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : fallback;
+  } catch {
+    return fallback;
+  }
+}

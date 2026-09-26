@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
-import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
+import { calculateDistanceKm, resolveLocationCoordinates, WORLD_COUNTRIES } from '../data/geoData';
 import { findExactArtisanMatch, getSearchSuggestions } from '../utils/globe';
 import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
 import { ArtisanGlobe3D } from './ArtisanGlobe3D';
@@ -21,7 +21,11 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
       .map((user) => {
         const userPosts = posts.filter((post) => post.authorId === user.id);
         const latestPost = [...userPosts].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-        const baseLocation = user.location ?? { city: 'Unknown city', state: 'Unknown', country: 'Unknown', lat: 0, lng: 0 };
+        const rawLocation = user.location ?? { city: 'Unknown city', state: 'Unknown', country: 'Unknown', lat: 0, lng: 0 };
+        const coordinates = rawLocation.countryCode && rawLocation.city
+          ? resolveLocationCoordinates(rawLocation.countryCode, rawLocation.state || '', rawLocation.city, { lat: rawLocation.lat ?? 0, lng: rawLocation.lng ?? 0 })
+          : { lat: rawLocation.lat ?? 0, lng: rawLocation.lng ?? 0 };
+        const baseLocation = { ...rawLocation, ...coordinates };
         const distanceKm = currentUser && baseLocation.lat && baseLocation.lng && currentUser.location.lat && currentUser.location.lng
           ? calculateDistanceKm(currentUser.location.lat, currentUser.location.lng, baseLocation.lat, baseLocation.lng)
           : null;

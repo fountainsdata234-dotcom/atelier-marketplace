@@ -22,7 +22,7 @@ interface ArtisanGlobe3DProps {
 }
 
 const EARTH_RADIUS = 2;
-const MARKER_RADIUS = 2.16;
+const MARKER_RADIUS = 2.09;
 
 const toGlobePosition = (latitude: number, longitude: number, radius = EARTH_RADIUS) => {
   const lat = THREE.MathUtils.degToRad(latitude);
@@ -133,18 +133,18 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
 
   return (
     <>
-      <Line
-        points={[anchor, position]}
-        color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'}
-        transparent
-        opacity={0.82}
-        lineWidth={1}
-        renderOrder={selected ? 19 : 1}
-      />
-      <mesh position={anchor.clone().normalize().multiplyScalar(0.008)} renderOrder={selected ? 19 : 1}>
-        <ringGeometry args={[0.035, 0.052, 24]} />
-        <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest />
-      </mesh>
+      {selected && <Line
+          points={[anchor, position]}
+          color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'}
+          transparent
+          opacity={0.82}
+          lineWidth={1}
+          renderOrder={19}
+        />}
+      {selected && <mesh position={anchor.clone().normalize().multiplyScalar(0.008)} renderOrder={19}>
+          <ringGeometry args={[0.035, 0.052, 24]} />
+          <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest />
+        </mesh>}
       <group
         ref={groupRef}
         renderOrder={selected ? 20 : 2}
@@ -155,18 +155,23 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
         onPointerOver={(event) => event.stopPropagation()}
         onPointerOut={(event) => event.stopPropagation()}
       >
-        <mesh ref={pulseRef} rotation={[Math.PI / 2, 0, 0]} renderOrder={selected ? 21 : 1}>
-          <torusGeometry args={[0.14, 0.012, 8, 32]} />
-          <meshBasicMaterial ref={pulseMaterialRef} color={artisan.role === 'tailor' ? '#ffb347' : '#8ea2ff'} transparent opacity={0} depthWrite={false} />
-        </mesh>
-        <mesh position={[0, 0.1, 0]} rotation={[0, 0, Math.PI]} castShadow>
-          <coneGeometry args={[0.07, 0.18, 8]} />
-          <meshStandardMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} roughness={0.42} metalness={0.28} />
-        </mesh>
-        <mesh position={[0, 0.21, 0]} castShadow>
-          <sphereGeometry args={[0.052, 12, 8]} />
-          <meshStandardMaterial color={selected ? '#fff1c2' : '#f8fafc'} emissive={selected ? '#ffb347' : '#18334a'} emissiveIntensity={selected ? 1.4 : 0.3} roughness={0.3} metalness={0.2} />
-        </mesh>
+        {selected ? <>
+          <mesh ref={pulseRef} rotation={[Math.PI / 2, 0, 0]} renderOrder={21}>
+            <torusGeometry args={[0.14, 0.012, 8, 32]} />
+            <meshBasicMaterial ref={pulseMaterialRef} color={artisan.role === 'tailor' ? '#ffb347' : '#8ea2ff'} transparent opacity={0} depthWrite={false} />
+          </mesh>
+          <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI]} castShadow>
+            <coneGeometry args={[0.045, 0.12, 8]} />
+            <meshStandardMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} roughness={0.42} metalness={0.28} />
+          </mesh>
+          <mesh position={[0, 0.15, 0]} castShadow>
+            <sphereGeometry args={[0.034, 12, 8]} />
+            <meshStandardMaterial color="#fff1c2" emissive="#ffb347" emissiveIntensity={1.4} roughness={0.3} metalness={0.2} />
+          </mesh>
+        </> : <mesh renderOrder={2}>
+          <sphereGeometry args={[0.028, 10, 8]} />
+          <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} />
+        </mesh>}
       </group>
     </>
   );
