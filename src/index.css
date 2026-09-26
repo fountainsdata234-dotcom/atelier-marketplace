@@ -302,6 +302,10 @@
   background: radial-gradient(circle at 50% 48%, rgba(38, 117, 181, 0.2), transparent 32%), radial-gradient(circle at 72% 16%, rgba(251, 146, 60, 0.12), transparent 24%);
 }
 
+.landing-globe .artisan-globe-3d {
+  background: transparent;
+}
+
 .artisan-globe-3d canvas {
   display: block;
   width: 100% !important;

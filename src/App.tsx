@@ -607,6 +607,7 @@ export default function App() {
               <LandingPage
                 onOpenAuth={handleOpenAuthWithRole}
                 onExploreMarketplace={() => setCurrentView('marketplace')}
+                onExploreArtisans={() => setCurrentView('artisan')}
                 isDarkMode={isDarkMode}
                 users={users}
                 posts={posts}

@@ -1,18 +1,18 @@
 import React, { lazy } from 'react';
 import { motion } from 'motion/react';
-import { Scissors, Sparkles, MapPin, MessageSquare, ShieldCheck, Heart, Share2, Compass, ArrowRight, Star, ShoppingBag, Globe2, Zap } from 'lucide-react';
+import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, Zap } from 'lucide-react';
 import { AdminPromoPlan, ClothPost, User, UserRole } from '../types';
-import { CraftAnimationReel } from './CraftAnimationReel';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 
 const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
 
-const HERO_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-17-44-am.avif';
-const NETWORK_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-16-27-am.avif';
+const RESPONSIVE_LANDSCAPE_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-17-44-am.avif';
+const RESPONSIVE_PORTRAIT_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-16-27-am.avif';
 
 interface LandingPageProps {
   onOpenAuth: (defaultRole: UserRole) => void;
   onExploreMarketplace: () => void;
+  onExploreArtisans: () => void;
   isDarkMode: boolean;
   users: User[];
   posts: ClothPost[];
@@ -22,12 +22,23 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenAuth,
   onExploreMarketplace,
+  onExploreArtisans,
   isDarkMode,
   users,
   posts,
   promoPlans,
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
+  const featuredPostIdRef = React.useRef<string | null>(null);
+  const featuredPost = React.useMemo(() => {
+    const availablePosts = posts.filter(post => post.imageUrl && post.description?.trim());
+    if (availablePosts.length === 0) return null;
+    const existing = availablePosts.find(post => post.id === featuredPostIdRef.current);
+    if (existing) return existing;
+    const next = availablePosts[Math.floor(Math.random() * availablePosts.length)];
+    featuredPostIdRef.current = next.id;
+    return next;
+  }, [posts]);
   const previewArtisans = React.useMemo<GlobeArtisan[]>(() => users
     .filter(user => user.role === 'tailor' || user.role === 'fabric_seller')
     .filter(user => Number.isFinite(user.location?.lat) && Number.isFinite(user.location?.lng))
@@ -44,18 +55,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="glass-panel overflow-hidden rounded-[32px] p-4 sm:p-6 lg:p-8"
+          className="overflow-hidden rounded-[32px] border border-amber-500/20 bg-[#111215] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:p-8"
         >
           <div className="grid items-center gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="text-center lg:text-left">
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-700">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-300">
                 <Sparkles className="w-3.5 h-3.5" />
                 Bespoke tailoring marketplace
               </div>
 
-              <h1 className="text-4xl font-black leading-none tracking-[-0.06em] text-slate-900 sm:text-5xl lg:text-7xl">
+              <h1 className="text-4xl font-black leading-none tracking-[-0.06em] text-white sm:text-5xl lg:text-7xl">
                 <span className="relative inline-block">
-                  Fabric Reality
+                  Fabrilux Atelier
                   <motion.span
                     aria-hidden="true"
                     animate={{ x: [0, 96, 0], y: [18, -4, 18], rotate: [-18, 12, -18] }}
@@ -67,14 +78,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </span>
               </h1>
 
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-600 sm:text-base">
-                Discover premium fabrics, connect with expert tailors, and manage every order and saved design from one polished marketplace.
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-neutral-300 sm:text-base">
+                Discover real tailors and fabric sellers, compare their work by location, and move from a saved idea to a direct conversation in one focused marketplace.
               </p>
 
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
                 <button
                   onClick={onExploreMarketplace}
-                  className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-slate-800"
+                  className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-3 text-sm font-semibold text-neutral-950 shadow-lg shadow-amber-500/15 transition hover:-translate-y-0.5 hover:bg-amber-300"
                 >
                   <Compass className="w-4 h-4" />
                   Explore marketplace
@@ -83,52 +94,52 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                 <button
                   onClick={() => onOpenAuth('buyer')}
-                  className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-amber-300 hover:text-amber-700"
+                  className="rounded-full border border-neutral-700 bg-neutral-900 px-5 py-3 text-sm font-semibold text-neutral-200 transition hover:border-amber-400 hover:text-amber-300"
                 >
                   Register as client
                 </button>
               </div>
 
-              <div className="mt-7 flex flex-wrap items-center justify-center gap-3 text-xs text-slate-500 lg:justify-start">
-                <span className="rounded-full bg-slate-100 px-2.5 py-1.5">Worldwide tailors</span>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1.5">Mobile-first shopping</span>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1.5">Virtual fit estimate</span>
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-3 text-xs text-neutral-400 lg:justify-start">
+                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">Worldwide tailors</span>
+                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">Mobile-first shopping</span>
+                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">Direct conversations</span>
               </div>
             </div>
 
             <div className="relative">
-              <div className="soft-card relative overflow-hidden rounded-[28px] p-4">
-                <div className="rounded-[22px] bg-gradient-to-br from-amber-100 via-white to-orange-50 p-4">
-                  <div className="mb-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                    <span>Featured</span>
-                    <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Live fit</span>
+              <div className="relative overflow-hidden rounded-[28px] border border-neutral-800 bg-neutral-950 p-4">
+                <div className="rounded-[22px] border border-amber-500/20 bg-gradient-to-br from-neutral-900 via-[#17181c] to-[#2a1715] p-4">
+                  <div className="mb-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-400">
+                    <span>From the seller network</span>
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-emerald-300">Live post</span>
                   </div>
 
-                  <div className="rounded-[22px] bg-gradient-to-br from-slate-900 to-slate-700 p-4 text-white">
+                  <div className="rounded-[22px] bg-neutral-900 p-4 text-white">
                     <div className="mb-3 flex items-center justify-between">
                       <div>
-                        <p className="text-[10px] uppercase tracking-[0.2em] text-slate-300">Classic senator</p>
-                        <h2 className="mt-1 text-2xl font-semibold">Royal Blue</h2>
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300">Seller post</p>
+                        <h2 className="mt-1 line-clamp-2 text-2xl font-semibold">{featuredPost?.title || 'Real work from real makers'}</h2>
                       </div>
-                      <div className="rounded-full bg-white/10 px-2 py-1 text-xs">Try on</div>
+                      <div className="rounded-full bg-white/10 px-2 py-1 text-xs">Marketplace</div>
                     </div>
 
                     <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
-                      <img src={HERO_IMAGE} alt="A fashion atelier with garments and textiles" className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" decoding="async" fetchPriority="high" />
-                      <div className="absolute inset-x-3 bottom-3 rounded-xl border border-white/20 bg-black/35 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm">Textiles with a point of view</div>
+                      {featuredPost ? <img src={featuredPost.imageUrl} alt={featuredPost.title} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" decoding="async" /> : <div className="flex h-full items-center justify-center px-6 text-center text-xs text-neutral-500">Seller work will appear here as the network grows.</div>}
                     </div>
+                    <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-neutral-300">{featuredPost?.description || 'A living catalogue of garments, fabrics, and ideas published by the people who make them.'}</p>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between rounded-2xl bg-white px-3 py-2 shadow-sm">
+                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900 px-3 py-2">
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">From</p>
-                      <p className="text-lg font-bold text-slate-900">$148</p>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-500">Seller catalogue</p>
+                      <p className="text-sm font-bold text-amber-300">Browse the full post</p>
                     </div>
                     <button
-                      onClick={() => onOpenAuth('buyer')}
+                      onClick={onExploreMarketplace}
                       className="rounded-full bg-amber-400 px-4 py-2 text-xs font-bold text-slate-900"
                     >
-                      Shop now
+                      Explore
                     </button>
                   </div>
                 </div>
@@ -138,36 +149,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </motion.div>
       </section>
 
-      <CraftAnimationReel />
+      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.12 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
+        <div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">One atelier, every screen</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Made for the way you browse.</h2></div><span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">Responsive by design</span></div>
+        <div className="grid items-end gap-5 md:grid-cols-[1.45fr_0.55fr]"><figure className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 p-2"><img src={RESPONSIVE_LANDSCAPE_IMAGE} alt="Fabrilux Atelier on a landscape screen" loading="lazy" decoding="async" className="h-auto w-full rounded-xl object-cover" /></figure><figure className="mx-auto w-full max-w-[19rem] overflow-hidden rounded-[2rem] border border-neutral-800 bg-neutral-950 p-2"><img src={RESPONSIVE_PORTRAIT_IMAGE} alt="Fabrilux Atelier on a portrait screen" loading="lazy" decoding="async" className="h-auto w-full rounded-[1.5rem] object-cover" /></figure></div>
+      </motion.section>
 
-      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.12 }} transition={{ duration: 0.6 }} className="grid gap-6 border-t border-amber-500/15 py-12 lg:grid-cols-[0.85fr_1.15fr]">
-        <div className="relative min-h-[18rem] overflow-hidden rounded-[2rem] border border-amber-500/20 bg-neutral-950">
-          <img src={NETWORK_IMAGE} alt="Tailoring and fabric discovery on Fabrilux Atelier" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-700 hover:scale-105" />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/35 to-transparent" />
-          <div className="absolute inset-x-5 bottom-5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-300">A working atelier network</p>
-            <h2 className="mt-2 max-w-md text-2xl font-serif font-bold text-white sm:text-3xl">The craft, the cloth, and the conversation in one place.</h2>
-          </div>
-        </div>
-        <div className={`rounded-[2rem] border p-6 sm:p-8 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}>
-          <div className="flex items-center gap-2 text-amber-500"><Globe2 className="h-5 w-5" /><span className="text-[10px] font-bold uppercase tracking-[0.22em]">Find the right maker</span></div>
-          <h2 className="mt-3 text-2xl font-serif font-bold sm:text-3xl">From local fittings to global discovery.</h2>
-          <p className={`mt-3 max-w-xl text-sm leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Fabrilux Atelier helps clients compare real makers by location, follow their work, save references, ask questions directly, and move from inspiration to a considered order.</p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {[['Discover', 'Browse real work from tailors and fabric merchants.'], ['Compare', 'Use location, craft, pricing, and ratings to narrow the field.'], ['Connect', 'Message, share, save, and enquire without leaving the atelier.']].map(([title, body]) => <div key={title} className={`rounded-2xl border p-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/70' : 'border-neutral-200 bg-neutral-50'}`}><Zap className="h-4 w-4 text-amber-500" /><p className="mt-2 text-xs font-bold">{title}</p><p className={`mt-1 text-[11px] leading-relaxed ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>{body}</p></div>)}
-          </div>
+      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Live network preview</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">See where the craft lives.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Open artisan directory <ArrowRight className="h-4 w-4" /></button></div>
+        <div className="landing-globe overflow-hidden">
+          {previewArtisans.length > 0 ? <React.Suspense fallback={<div className="flex h-[22rem] items-center justify-center text-xs text-amber-200/70">Loading the live artisan globe...</div>}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreArtisans} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="flex h-[22rem] items-center justify-center px-6 text-center text-xs text-amber-100/60">The live globe will populate as artisans join the network.</div>}
         </div>
       </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
-        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Live network preview</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">See where the craft lives.</h2></div><button type="button" onClick={onExploreMarketplace} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Explore the network <ArrowRight className="h-4 w-4" /></button></div>
-        <div className={`overflow-hidden rounded-[2rem] border ${isDarkMode ? 'border-neutral-800 bg-[#1f0d11]' : 'border-neutral-200 bg-neutral-950'}`}>
-          {previewArtisans.length > 0 ? <React.Suspense fallback={<div className="flex h-[22rem] items-center justify-center text-xs text-amber-200/70">Loading the live artisan globe...</div>}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreMarketplace} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="flex h-[22rem] items-center justify-center px-6 text-center text-xs text-amber-100/60">The live globe will populate as artisans join the network.</div>}
-        </div>
-      </motion.section>
-
-      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
-        <div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Current atelier plans</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Promotion that stays current.</h2></div><span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">Updated by admin</span></div>
+        <div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Current atelier plans</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Promotion that stays current.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 text-xs font-bold text-amber-500 hover:text-amber-300">Meet the artisans <ArrowRight className="h-4 w-4" /></button></div>
         <div className="grid gap-4 md:grid-cols-3">{promoPlans.map(plan => <article key={plan.id} className={`rounded-2xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{plan.badgeLabel || 'Atelier plan'}</p><h3 className="mt-2 text-lg font-serif font-bold">{plan.caption}</h3><p className={`mt-2 min-h-12 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{plan.description}</p><div className="mt-5 flex items-end justify-between gap-3"><strong className="text-xl">{plan.currency} {plan.amount}</strong><span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">{plan.timeRange}</span></div></article>)}</div>
       </motion.section>
 
