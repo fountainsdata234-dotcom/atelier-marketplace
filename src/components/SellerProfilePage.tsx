@@ -4,6 +4,8 @@ import { ClothPost, SellerCollection, User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { storageService } from '../services/storage';
 
+const SELLER_ATELIER_IMAGE = 'https://res.cloudinary.com/auwy7fil/image/upload/f_auto,q_auto,w_1200/v1790415437/ChatGPT_Image_Sep_26_2026_10_19_39_AM.png';
+
 interface SellerProfilePageProps {
   seller: User;
   posts: ClothPost[];
@@ -37,6 +39,15 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
       <button type="button" onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-xs font-semibold text-amber-500 hover:text-amber-300"><ArrowLeft className="h-4 w-4" /> Back to marketplace</button>
       <section className={`overflow-hidden rounded-[2rem] border ${surface}`}>
         <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/25 via-neutral-950 to-orange-900/30 p-6 sm:p-10">
+          <img
+            src={SELLER_ATELIER_IMAGE}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            decoding="async"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-[0.16]"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-neutral-950/95 via-neutral-950/75 to-neutral-950/35" />
           <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full border border-amber-300/10 bg-amber-400/5" />
           <div className="relative flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-center gap-4">
