@@ -70,7 +70,7 @@ const Earth: React.FC = () => {
   return (
     <group>
       <mesh>
-        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
+        <sphereGeometry args={[EARTH_RADIUS, 48, 48]} />
         <meshStandardMaterial
           map={surfaceMap}
           normalMap={normalMap}
@@ -81,11 +81,11 @@ const Earth: React.FC = () => {
         />
       </mesh>
       <mesh scale={1.002}>
-        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
+        <sphereGeometry args={[EARTH_RADIUS, 48, 48]} />
         <meshBasicMaterial map={lightsMap} transparent opacity={0.72} blending={THREE.AdditiveBlending} depthWrite={false} />
       </mesh>
       <mesh scale={1.018}>
-        <sphereGeometry args={[EARTH_RADIUS, 64, 64]} />
+        <sphereGeometry args={[EARTH_RADIUS, 48, 48]} />
         <meshBasicMaterial color="#52b8ff" transparent opacity={0.09} side={THREE.BackSide} depthWrite={false} blending={THREE.AdditiveBlending} />
       </mesh>
       <GlobeGrid />
@@ -116,7 +116,7 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
   useFrame((_, delta) => {
     if (!groupRef.current) return;
 
-    const targetScale = entered ? (selected ? 1.18 : 1) : 0.01;
+    const targetScale = entered ? (selected ? 1.08 : 0.72) : 0.01;
     const targetNormal = position.clone().normalize();
     const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), targetNormal);
 
@@ -169,7 +169,7 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
             <meshStandardMaterial color="#fff1c2" emissive="#ffb347" emissiveIntensity={1.4} roughness={0.3} metalness={0.2} />
           </mesh>
         </> : <mesh renderOrder={2}>
-          <sphereGeometry args={[0.028, 10, 8]} />
+          <sphereGeometry args={[0.022, 8, 6]} />
           <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} />
         </mesh>}
       </group>
@@ -248,7 +248,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       <ambientLight intensity={1.2} color="#f6d7bd" />
       <directionalLight position={[4, 3, 5]} intensity={2.4} color="#ffd8b0" />
       <pointLight position={[-4, -2, 3]} intensity={12} distance={12} color="#4dd4c0" />
-      <Stars radius={18} depth={8} count={900} factor={1.8} saturation={0.25} fade speed={0.25} />
+      <Stars radius={18} depth={8} count={450} factor={1.8} saturation={0.25} fade speed={0.25} />
       <group ref={rotatingGroupRef}>
         <Earth />
         {artisans.map((artisan, index) => (
@@ -292,7 +292,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
 
   return (
     <div className={`artisan-globe-3d ${isDarkMode ? 'is-dark' : 'is-light'}`} aria-label="Interactive 3D artisan globe">
-      <Canvas camera={{ position: [0, 0, 8.2], fov: 34 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}>
+      <Canvas camera={{ position: [0, 0, 8.2], fov: 34 }} dpr={[1, 1.2]} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}>
         <GlobeScene
           artisans={artisans}
           selectedArtisanId={selectedArtisanId}

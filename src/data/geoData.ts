@@ -46,6 +46,8 @@ const fallbackWorldCountries: CountryGeo[] = [
   }
 ];
 
+const locationCoordinateCache = new Map<string, { lat: number; lng: number }>();
+
 const normalizeCityNames = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value
@@ -117,6 +119,10 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
 }
 
 export function resolveLocationCoordinates(countryCode: string, stateCode: string, cityName: string, fallback: { lat: number; lng: number }) {
+  const cacheKey = `${countryCode}:${stateCode}:${cityName.trim().toLowerCase()}`;
+  const cached = locationCoordinateCache.get(cacheKey);
+  if (cached) return cached;
+
   const countryApi = (countryStateCity as any)?.Country;
   const stateApi = (countryStateCity as any)?.State;
   const cityApi = (countryStateCity as any)?.City;
@@ -135,8 +141,11 @@ export function resolveLocationCoordinates(countryCode: string, stateCode: strin
     const source = city || state || country;
     const lat = Number(source?.latitude);
     const lng = Number(source?.longitude);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : fallback;
+    const coordinates = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : fallback;
+    locationCoordinateCache.set(cacheKey, coordinates);
+    return coordinates;
   } catch {
+    locationCoordinateCache.set(cacheKey, fallback);
     return fallback;
   }
 }
