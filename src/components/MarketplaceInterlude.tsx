@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, ChevronLeft, ChevronRight, Scissors, Star, Sparkles } from 'lucide-react';
 import { ClothPost, User } from '../types';
+import { getRatingQuality } from '../utils/marketplaceRanking';
 
 interface MarketplaceInterludeProps {
   posts: ClothPost[];
@@ -12,30 +13,28 @@ interface MarketplaceInterludeProps {
 
 export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ posts, users, isDarkMode, onSelectSeller }) => {
   const [activeIndex, setActiveIndex] = useState(0);
+  const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
   const ratedSellers = useMemo(() => {
     const bySeller = new Map<string, { user: User; ratingTotal: number; ratingCount: number; post: ClothPost }>();
 
     posts.forEach(post => {
-      const user = users.find(candidate => candidate.id === post.authorId);
+      const user = userById.get(post.authorId);
       if (!user || (user.role !== 'tailor' && user.role !== 'fabric_seller')) return;
-      const existing = bySeller.get(user.id);
-      if (!existing || (post.rating || 0) > (existing.post.rating || 0)) {
-        bySeller.set(user.id, {
-          user,
-          ratingTotal: (existing?.ratingTotal || 0) + (post.rating || 0) * (post.ratingCount || 0),
-          ratingCount: (existing?.ratingCount || 0) + (post.ratingCount || 0),
-          post,
-        });
-      } else {
-        existing.ratingTotal += (post.rating || 0) * (post.ratingCount || 0);
-        existing.ratingCount += post.ratingCount || 0;
-      }
+      const existing = bySeller.get(user.id) || { user, ratingTotal: 0, ratingCount: 0, post };
+      const ratingCount = Number.isFinite(post.ratingCount) ? Math.max(0, post.ratingCount || 0) : 0;
+      const rating = Number.isFinite(post.rating) ? Math.min(5, Math.max(0, post.rating || 0)) : 0;
+      existing.ratingTotal += rating * ratingCount;
+      existing.ratingCount += ratingCount;
+      if ((post.ratingCount || 0) > (existing.post.ratingCount || 0)) existing.post = post;
+      bySeller.set(user.id, existing);
     });
 
     return Array.from(bySeller.values())
-      .sort((a, b) => (b.ratingTotal / Math.max(1, b.ratingCount)) - (a.ratingTotal / Math.max(1, a.ratingCount)))
+      .sort((a, b) => getRatingQuality(b.ratingTotal / Math.max(1, b.ratingCount), b.ratingCount)
+        - getRatingQuality(a.ratingTotal / Math.max(1, a.ratingCount), a.ratingCount)
+        || b.ratingCount - a.ratingCount)
       .slice(0, 5);
-  }, [posts, users]);
+  }, [posts, userById]);
 
   useEffect(() => {
     if (ratedSellers.length < 2) return;
@@ -49,7 +48,7 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
 
   if (ratedSellers.length === 0) return null;
   const active = ratedSellers[activeIndex];
-  const averageRating = active.ratingTotal / Math.max(1, active.ratingCount);
+  const averageRating = active.ratingCount ? active.ratingTotal / active.ratingCount : null;
 
   return (
     <motion.section
@@ -87,11 +86,11 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
             </div>
             <div className="min-w-0 flex-1 p-4 sm:p-5">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
+                <button type="button" onClick={() => onSelectSeller(active.user)} aria-label={`Visit ${active.user.shopName || active.user.name}`} className="flex min-w-0 items-center gap-2 text-left">
                   {active.user.avatarUrl ? <img src={active.user.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-amber-400/60" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400/15 text-xs font-bold text-amber-300">{active.user.name.slice(0, 2).toUpperCase()}</span>}
                   <div className="min-w-0"><p className="truncate text-sm font-bold">{active.user.shopName || active.user.name}</p><p className="truncate text-[10px] capitalize text-amber-400">{active.user.role.replace('_', ' ')}</p></div>
-                </div>
-                <div className="flex items-center gap-1 text-xs font-bold text-amber-400"><Star className="h-3.5 w-3.5 fill-current" />{averageRating.toFixed(1)}</div>
+                </button>
+                <div className="flex items-center gap-1 text-xs font-bold text-amber-400"><Star className="h-3.5 w-3.5 fill-current" />{averageRating === null ? 'New' : averageRating.toFixed(1)}</div>
               </div>
               <p className={`mt-5 line-clamp-2 font-serif text-xl font-bold ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{active.post.title}</p>
               <p className={`mt-1 line-clamp-2 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{active.user.bio || 'Known for careful finishing and considered detail.'}</p>

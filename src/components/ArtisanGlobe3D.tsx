@@ -311,9 +311,9 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
       {selectedArtisan && (
         <div className="globe-selected-card">
           <button type="button" className="globe-selected-close" onClick={onCloseArtisan} aria-label="Clear selected artisan"><X /></button>
-          <div className="globe-selected-avatar">
+          <button type="button" className="globe-selected-avatar" onClick={() => onOpenArtisan(selectedArtisan)} aria-label={`View ${selectedArtisan.name}'s profile`}>
             {selectedArtisan.avatarUrl ? <img src={selectedArtisan.avatarUrl} alt="" /> : selectedArtisan.name.slice(0, 1).toUpperCase()}
-          </div>
+          </button>
           <div className="globe-selected-copy">
             <span>{selectedArtisan.role === 'tailor' ? 'Tailor' : 'Fabric seller'}</span>
             <strong>{selectedArtisan.name}</strong>

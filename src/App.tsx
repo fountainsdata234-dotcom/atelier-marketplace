@@ -7,6 +7,7 @@ import { IntroLoader } from './components/IntroLoader';
 import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
 const Marketplace = lazy(() => import('./components/Marketplace').then(module => ({ default: module.Marketplace })));
+const PostDetailPage = lazy(() => import('./components/PostDetailPage').then(module => ({ default: module.PostDetailPage })));
 const TailorDashboard = lazy(() => import('./components/TailorDashboard').then(module => ({ default: module.TailorDashboard })));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 const DirectMessaging = lazy(() => import('./components/DirectMessaging').then(module => ({ default: module.DirectMessaging })));
@@ -47,6 +48,7 @@ export default function App() {
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [sharedSeller, setSharedSeller] = useState<User | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const lastDataRefreshStartedAt = useRef(0);
 
   // Application Data States
@@ -471,6 +473,16 @@ export default function App() {
     setSavePictureOpen(true);
   };
 
+  const handleSelectPost = (post: ClothPost) => {
+    setSelectedPostId(post.id);
+    setCurrentView('post');
+  };
+
+  const handleRecordPostView = (post: ClothPost) => {
+    storageService.recordDiscoveryEvent(post.id, 'VIEW', currentUser?.id);
+    if (currentUser) void api.recordDiscoveryEvent(post.id, 'VIEW', sessionStorage.getItem('atelier_session_id') || 'app-session');
+  };
+
   // Trigger Social Share Modal
   const handleShareTailorProfile = (tailor: User) => {
     setSocialShareHandle(tailor.handle);
@@ -630,6 +642,7 @@ export default function App() {
                 currentUser={currentUser}
                 onOpenAuth={() => handleOpenAuthWithRole('buyer')}
                 onSelectPostForMessage={handleSelectPostForMessage}
+                onSelectPost={handleSelectPost}
                 onSaveImageToViewer={handleSaveImageToViewer}
                 onSharePost={handleSharePost}
                 onShareTailorProfile={handleShareTailorProfile}
@@ -642,6 +655,25 @@ export default function App() {
                 isDarkMode={isDarkMode}
               />
             </motion.div>
+          )}
+
+          {currentView === 'post' && (
+            <PostDetailPage
+              post={posts.find(post => post.id === selectedPostId) || null}
+              posts={posts}
+              users={users}
+              isDarkMode={isDarkMode}
+              onBack={() => setCurrentView('marketplace')}
+              onSelectPost={handleSelectPost}
+              onSelectSeller={(seller) => {
+                setSharedSeller(seller);
+                setSharedPostId(null);
+                setCurrentView('seller');
+              }}
+              onInquire={handleSelectPostForMessage}
+              onShare={handleSharePost}
+              onView={handleRecordPostView}
+            />
           )}
 
           {currentView === 'artisan' && (
@@ -688,7 +720,7 @@ export default function App() {
           )}
 
           {currentView === 'seller' && sharedSeller && (
-            <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => setCurrentView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} />
+            <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => setCurrentView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} onSelectPost={handleSelectPost} />
           )}
 
           {currentView === 'dashboard' && currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') && (

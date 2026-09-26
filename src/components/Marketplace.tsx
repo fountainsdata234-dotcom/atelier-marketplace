@@ -2,13 +2,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
-import { ClothPost, DiscoveryEvent, DiscoveryEventType, User, UserLocation } from '../types';
-import { WORLD_COUNTRIES, calculateDistanceKm } from '../data/geoData';
+import { ClothPost, CountryGeo, DiscoveryEvent, DiscoveryEventType, User, UserLocation } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
+import { getRatingQuality, rankTrendingPosts } from '../utils/marketplaceRanking';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -16,6 +16,7 @@ interface MarketplaceProps {
   currentUser: User | null;
   onOpenAuth: () => void;
   onSelectPostForMessage: (post: ClothPost) => void;
+  onSelectPost: (post: ClothPost) => void;
   onSaveImageToViewer: (url: string, title: string) => void;
   onSharePost: (post: ClothPost) => void;
   onShareTailorProfile: (user: User) => void;
@@ -24,12 +25,22 @@ interface MarketplaceProps {
   isDarkMode: boolean;
 }
 
+const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const earthRadiusKm = 6371;
+  const deltaLat = (lat2 - lat1) * (Math.PI / 180);
+  const deltaLon = (lon2 - lon1) * (Math.PI / 180);
+  const value = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(deltaLon / 2) ** 2;
+  return Math.round(earthRadiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)));
+};
+
 export const Marketplace: React.FC<MarketplaceProps> = ({
   posts,
   users,
   currentUser,
   onOpenAuth,
   onSelectPostForMessage,
+  onSelectPost,
   onSaveImageToViewer,
   onSharePost,
   onShareTailorProfile,
@@ -59,6 +70,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         ratingCount: Number(post.ratingCount) || 0,
       };
     }), [posts, users]);
+  const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
+  const followedSellerIds = useMemo(() => new Set(
+    users.filter(user => currentUser && user.followers?.includes(currentUser.id)).map(user => user.id),
+  ), [users, currentUser?.id]);
   const tailorPosts = sellerPosts;
   const formatLocation = (location?: Partial<UserLocation>) => [location?.city, location?.state, location?.country].filter(Boolean).join(', ');
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,6 +81,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterState, setFilterState] = useState<string>('all');
   const [filterCity, setFilterCity] = useState<string>('all');
+  const [worldCountries, setWorldCountries] = useState<CountryGeo[]>([]);
+  const [showLocationFilters, setShowLocationFilters] = useState(false);
+  const [isLoadingLocationFilters, setIsLoadingLocationFilters] = useState(false);
   const [nearMeActive, setNearMeActive] = useState<boolean>(false);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
@@ -78,6 +96,24 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [searchHistory, setSearchHistory] = useState<string[]>(() => storageService.getSearchHistory(currentUser?.id));
   const seenPostIdsRef = useRef(new Set<string>());
   const trendScrollRef = useRef<HTMLDivElement | null>(null);
+  const locationDataRequestRef = useRef<Promise<CountryGeo[]> | null>(null);
+
+  const loadLocationFilters = () => {
+    setShowLocationFilters(true);
+    if (locationDataRequestRef.current) return;
+    setIsLoadingLocationFilters(true);
+    locationDataRequestRef.current = import('../data/geoData')
+      .then(({ WORLD_COUNTRIES }) => {
+        setWorldCountries(WORLD_COUNTRIES);
+        return WORLD_COUNTRIES;
+      })
+      .catch(() => {
+        locationDataRequestRef.current = null;
+        setLocationStatus('Location filters could not be loaded. Try again.');
+        return [];
+      })
+      .finally(() => setIsLoadingLocationFilters(false));
+  };
 
   useEffect(() => {
     setSearchHistory(storageService.getSearchHistory(currentUser?.id));
@@ -102,61 +138,24 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
   const carouselPosts = useMemo(() => {
     return tailorPosts
-      .filter(post => !users.find(user => user.id === post.authorId)?.isBlocked)
+      .filter(post => !userById.get(post.authorId)?.isBlocked)
       .sort((a, b) => {
-        const authorA = users.find(user => user.id === a.authorId);
-        const authorB = users.find(user => user.id === b.authorId);
-        const scoreA = (a.isPromoted || authorA?.isPromoted ? 100000 : 0) + (a.rating || 0) * 100 + Math.min(a.ratingCount || 0, 50) * 2 + a.likes.length + a.saves.length + new Date(a.createdAt).getTime() / 1e11;
-        const scoreB = (b.isPromoted || authorB?.isPromoted ? 100000 : 0) + (b.rating || 0) * 100 + Math.min(b.ratingCount || 0, 50) * 2 + b.likes.length + b.saves.length + new Date(b.createdAt).getTime() / 1e11;
+        const authorA = userById.get(a.authorId);
+        const authorB = userById.get(b.authorId);
+        const ageA = Math.max(0, Date.now() - new Date(a.createdAt).getTime());
+        const ageB = Math.max(0, Date.now() - new Date(b.createdAt).getTime());
+        const scoreA = (a.isPromoted || authorA?.isPromoted ? 100000 : 0) + getRatingQuality(a.rating, a.ratingCount) * 100 + Math.min(a.likes.length, 100) + Math.min(a.saves.length, 100) * 1.5 + Math.exp(-ageA / (30 * 86_400_000)) * 10;
+        const scoreB = (b.isPromoted || authorB?.isPromoted ? 100000 : 0) + getRatingQuality(b.rating, b.ratingCount) * 100 + Math.min(b.likes.length, 100) + Math.min(b.saves.length, 100) * 1.5 + Math.exp(-ageB / (30 * 86_400_000)) * 10;
         return scoreB - scoreA;
       })
       .slice(0, 8);
-  }, [posts, users]);
+  }, [tailorPosts, userById]);
 
   const trendingPosts = useMemo(() => {
-    const now = Date.now();
-    const eventWeights: Record<DiscoveryEventType, number> = { VIEW: 1, LIKE: 5, SAVE: 7, SHARE: 6, ENQUIRY: 9, ADD_TO_CART: 10, PURCHASE: 14, RATING: 4 };
-    const candidatePosts = tailorPosts.filter(post => !users.find(user => user.id === post.authorId)?.isBlocked);
-    const followedSellerIds = new Set(users.filter(user => currentUser && Array.isArray(user.followers) && user.followers.includes(currentUser.id)).map(user => user.id));
-    const eventScore = (post: ClothPost) => discoveryEvents.reduce((score, event) => {
-      if (event.itemId !== post.id) return score;
-      const ageHours = Math.max(0, (now - new Date(event.timestamp).getTime()) / 3_600_000);
-      return score + eventWeights[event.eventType] * Math.exp(-ageHours / 168);
-    }, 0);
-    const interestScore = (post: ClothPost) => {
-      const interactionScore = !currentUser ? 0 : discoveryEvents.reduce((score, event) => {
-        if (event.userId !== currentUser.id) return score;
-        const interactedPost = candidatePosts.find(item => item.id === event.itemId);
-        if (!interactedPost || !interactedPost.tags.some(tag => post.tags.some(postTag => postTag.toLowerCase() === tag.toLowerCase()))) return score;
-        return score + eventWeights[event.eventType];
-      }, 0);
-      const searchableText = `${post.title} ${post.description} ${post.tags.join(' ')} ${post.authorName}`.toLowerCase();
-      const searchScore = searchHistory.reduce((score, term, index) => searchableText.includes(term) ? score + Math.max(2, 10 - index) : score, 0);
-      return interactionScore + searchScore;
-    };
-
-    const rawScores = candidatePosts.map(post => {
-      const author = users.find(user => user.id === post.authorId);
-      const quality = ((post.rating || 0) / 5) * ((post.ratingCount || 0) / ((post.ratingCount || 0) + 5));
-      const freshness = Math.exp(-Math.max(0, now - new Date(post.createdAt).getTime()) / (30 * 86_400_000));
-      const sellerPosts = candidatePosts.filter(item => item.authorId === post.authorId);
-      const sellerRating = sellerPosts.reduce((sum, item) => sum + (item.rating || 0), 0) / Math.max(1, sellerPosts.length * 5);
-      const followerCount = Array.isArray(author?.followers) ? author.followers.length : 0;
-      const sellerReputation = Math.min(1, sellerRating * 0.8 + Math.min(followerCount / 100, 1) * 0.2);
-      return { post, trend: eventScore(post) + post.likes.length * 2 + post.saves.length * 3 + (followedSellerIds.has(post.authorId) ? 25 : 0), personal: interestScore(post), quality, freshness, sellerReputation };
-    });
-    const maxTrend = Math.max(1, ...rawScores.map(item => item.trend));
-    const maxPersonal = Math.max(1, ...rawScores.map(item => item.personal));
-
-    return rawScores
-      .sort((a, b) => {
-        const scoreA = 0.30 * Math.min(a.trend / maxTrend, 1) + 0.25 * Math.min(a.personal / maxPersonal, 1) + 0.20 * a.quality + 0.15 * a.freshness + 0.10 * a.sellerReputation;
-        const scoreB = 0.30 * Math.min(b.trend / maxTrend, 1) + 0.25 * Math.min(b.personal / maxPersonal, 1) + 0.20 * b.quality + 0.15 * b.freshness + 0.10 * b.sellerReputation;
-        return scoreB - scoreA;
-      })
-      .map(item => item.post)
+    const candidates = tailorPosts.filter(post => !userById.get(post.authorId)?.isBlocked);
+    return rankTrendingPosts(candidates, users, discoveryEvents, currentUser?.id, searchHistory)
       .slice(0, showAllTrending ? 12 : 7);
-  }, [posts, users, currentUser, discoveryEvents, searchHistory, showAllTrending]);
+  }, [tailorPosts, userById, users, discoveryEvents, currentUser?.id, searchHistory, showAllTrending]);
 
   const searchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -176,7 +175,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const filteredPosts = useMemo(() => {
     let result = tailorPosts.filter(post => {
       // Find author to check blocked status
-      const author = users.find(u => u.id === post.authorId);
+      const author = userById.get(post.authorId);
       if (author?.isBlocked) return false;
 
       // Search Query filter (matches author name, handle, title, description, tags)
@@ -220,8 +219,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     } else {
       // Priority: Promoted items first, then newest
       result.sort((a, b) => {
-        const followedIds = new Set(users.filter(user => currentUser && Array.isArray(user.followers) && user.followers.includes(currentUser.id)).map(user => user.id));
-        if (followedIds.has(a.authorId) !== followedIds.has(b.authorId)) return followedIds.has(a.authorId) ? -1 : 1;
+        if (followedSellerIds.has(a.authorId) !== followedSellerIds.has(b.authorId)) return followedSellerIds.has(a.authorId) ? -1 : 1;
         if (a.isPromoted && !b.isPromoted) return -1;
         if (!a.isPromoted && b.isPromoted) return 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -229,7 +227,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }
 
     return result;
-  }, [tailorPosts, users, searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
+  }, [tailorPosts, users, userById, followedSellerIds, searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
 
   const visiblePosts = filteredPosts.slice(0, visiblePostsCount);
 
@@ -369,7 +367,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       return;
     }
     const previousPost = storageService.getPosts().find(post => post.id === postId);
-    const previousEngagement = previousPost ? { rating: previousPost.rating || 0, ratingCount: previousPost.ratingCount || 0 } : null;
+    const previousEngagement = previousPost ? {
+      rating: previousPost.rating || 0,
+      ratingCount: previousPost.ratingCount || 0,
+      ratingsByUser: { ...(previousPost.ratingsByUser || {}) },
+    } : null;
     const localResult = storageService.ratePost(postId, currentUser.id, rating);
     if (localResult) window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
     api.ratePost(postId, rating)
@@ -511,6 +513,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   type="button"
                   onMouseDown={() => {
                     if (suggestion.user) onSelectSeller(suggestion.user);
+                    else if (suggestion.post) onSelectPost(suggestion.post);
                     else setSearchQuery(suggestion.label);
                   }}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs hover:bg-amber-500/10"
@@ -558,7 +561,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   transition={{ duration: 0.45 }}
                   className="relative aspect-[10/13] min-h-[320px] sm:aspect-[16/7] sm:min-h-[320px]"
                 >
-                  <button type="button" onClick={() => onSaveImageToViewer(post.imageUrl, post.title)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-zoom-in">
+                  <button type="button" onClick={() => onSelectPost(post)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-pointer">
                     <img src={post.imageUrl} alt={post.title} className="h-full w-full object-cover" loading="eager" />
                   </button>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.22),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.22),rgba(0,0,0,0.78))] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.25),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.9),rgba(0,0,0,0.55),rgba(0,0,0,0.2))]" />
@@ -575,7 +578,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 rounded-full border border-white/20 bg-black/40 px-1.5 py-1 backdrop-blur-md sm:px-2 sm:py-1.5">
+                    <button type="button" onClick={() => {
+                      const author = userById.get(post.authorId);
+                      if (author) onSelectSeller(author);
+                    }} aria-label={`View ${post.authorName}'s atelier`} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/40 px-1.5 py-1 text-left backdrop-blur-md transition hover:border-amber-300/70 sm:px-2 sm:py-1.5">
                       {post.authorAvatar ? (
                         <img src={post.authorAvatar} alt="" className="h-7 w-7 rounded-full object-cover ring-2 ring-amber-300/80 sm:h-8 sm:w-8" />
                       ) : (
@@ -584,7 +590,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         </span>
                       )}
                       <span className="hidden text-[10px] font-semibold text-white sm:block sm:text-xs">{post.authorName}</span>
-                    </div>
+                    </button>
                   </div>
 
                   <div className="absolute inset-x-0 bottom-0 p-3 sm:p-6 lg:p-8">
@@ -678,7 +684,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   type="button"
                   onClick={() => {
                     recordEvent(post.id, 'VIEW');
-                    onSaveImageToViewer(post.imageUrl, post.title);
+                    onSelectPost(post);
                   }}
                   aria-label={`Explore ${post.title}`}
                   className="group relative min-w-[260px] max-w-[320px] flex-1 shrink-0 snap-center overflow-hidden rounded-[1.5rem] border bg-neutral-900/70 text-left transition-all duration-300 ease-out"
@@ -742,10 +748,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 {locationStatus}
               </span>
             )}
+            <button type="button" onClick={() => showLocationFilters ? setShowLocationFilters(false) : loadLocationFilters()} aria-expanded={showLocationFilters} className="rounded-xl border border-neutral-700 px-3.5 py-2 text-xs font-semibold text-neutral-300 transition hover:border-amber-500/50 hover:text-white">
+              {isLoadingLocationFilters ? 'Loading locations...' : showLocationFilters ? 'Hide location filters' : 'Filter by country'}
+            </button>
           </div>
 
           {/* Cascading Location Selectors */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          {showLocationFilters && worldCountries.length > 0 && <div className="flex flex-wrap items-center gap-2 text-xs">
             {/* Country Selector */}
             <select
               value={filterCountry}
@@ -757,7 +766,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               className="px-2.5 py-1.5 rounded-lg bg-neutral-800/80 border border-neutral-700 text-xs text-neutral-200 focus:outline-none focus:border-amber-500"
             >
               <option value="all">All Countries</option>
-              {WORLD_COUNTRIES.map((c) => (
+              {worldCountries.map((c) => (
                 <option key={c.code} value={c.name}>
                   {c.flag} {c.name}
                 </option>
@@ -775,7 +784,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 className="px-2.5 py-1.5 rounded-lg bg-neutral-800/80 border border-neutral-700 text-xs text-neutral-200 focus:outline-none focus:border-amber-500"
               >
                 <option value="all">All States</option>
-                {WORLD_COUNTRIES.find(c => c.name === filterCountry)?.states.map((s) => (
+                {worldCountries.find(c => c.name === filterCountry)?.states.map((s) => (
                   <option key={s.name} value={s.name}>
                     {s.name}
                   </option>
@@ -791,7 +800,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 className="px-2.5 py-1.5 rounded-lg bg-neutral-800/80 border border-neutral-700 text-xs text-neutral-200 focus:outline-none focus:border-amber-500"
               >
                 <option value="all">All Cities</option>
-                {WORLD_COUNTRIES.find(c => c.name === filterCountry)
+                {worldCountries.find(c => c.name === filterCountry)
                   ?.states.find(s => s.name === filterState)
                   ?.cities.map((city) => (
                     <option key={city} value={city}>
@@ -815,7 +824,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 Reset Location
               </button>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* Tags / Categories Filter bar */}
@@ -913,6 +922,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
+                role="link"
+                tabIndex={0}
+                aria-label={`View ${post.title} by ${post.authorName}`}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
+                  onSelectPost(post);
+                }}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+                  event.preventDefault();
+                  onSelectPost(post);
+                }}
                 className={`feed-card-wave rounded-[1.5rem] border overflow-hidden transition-all group flex flex-col justify-between ${
                   isDarkMode
                     ? 'bg-[#121316] border-neutral-800/90 hover:border-amber-500/40'
@@ -921,7 +942,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               >
                 {/* Post Header: Tailor Handle, Location & Promoted Symbol */}
                 <div className="p-3 flex items-center justify-between border-b border-neutral-800/40">
-                  <div className="flex items-center gap-2.5">
+                  <button type="button" onClick={() => {
+                    const author = userById.get(post.authorId);
+                    if (author) onSelectSeller(author);
+                  }} className="flex min-w-0 items-center gap-2.5 text-left">
                     <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-xs flex items-center justify-center overflow-hidden">
                       {post.authorAvatar ? <img src={post.authorAvatar} alt="" className="h-full w-full object-cover" /> : post.authorName.charAt(0)}
                     </div>
@@ -951,7 +975,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   {/* Share post */}
                   <div className="flex items-center gap-1">
@@ -975,12 +999,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   <img
                     src={post.imageUrl}
                     alt={post.title}
-                    className="w-full h-full cursor-zoom-in object-cover object-center group-hover/img:scale-102 transition-transform duration-500 rounded-[1.1rem]"
+                    className="h-full w-full cursor-pointer rounded-[1.1rem] object-cover object-center transition-[transform,filter] duration-500 ease-out group-hover/img:scale-[1.025] group-hover/img:brightness-105 group-hover/img:saturate-105"
                     referrerPolicy="no-referrer"
                     loading="lazy"
+                    decoding="async"
                     draggable={false}
                     onContextMenu={(event) => event.preventDefault()}
-                    onClick={() => onSaveImageToViewer(post.imageUrl, post.title)}
+                    onClick={() => onSelectPost(post)}
                   />
 
                   {/* Top image overlay badges */}
@@ -1106,7 +1131,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {trendingPosts.slice(0, 3).map(trendingPost => (
-                      <button key={trendingPost.id} type="button" onClick={() => setSearchQuery(trendingPost.title)} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-emerald-500/15 bg-black/10 p-2 text-left transition hover:border-emerald-400/50">
+                      <button key={trendingPost.id} type="button" onClick={() => onSelectPost(trendingPost)} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-emerald-500/15 bg-black/10 p-2 text-left transition hover:border-emerald-400/50">
                         <img src={trendingPost.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover transition group-hover:scale-105" loading="lazy" />
                         <span className="min-w-0"><strong className="block truncate text-xs">{trendingPost.title}</strong><small className="mt-1 block truncate text-[10px] text-neutral-400">{trendingPost.authorName} · {trendingPost.likes.length + trendingPost.saves.length} signals</small></span>
                       </button>
@@ -1114,9 +1139,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
                 </section>
               )}
-              {postIndex === 19 && filteredPosts.length > 20 && (
+              {(postIndex + 1) % 12 === 0 && postIndex + 1 < filteredPosts.length && (
                 <div className="md:col-span-2 lg:col-span-3">
-                  <MarketplaceInterlude posts={filteredPosts} users={users} isDarkMode={isDarkMode} onSelectSeller={(seller) => onShareTailorProfile(seller)} />
+                  <MarketplaceInterlude posts={filteredPosts} users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
                 </div>
               )}
               </React.Fragment>

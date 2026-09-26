@@ -581,7 +581,7 @@ export const storageService = {
     return { savesCount: post.saves.length, isSaved };
   },
 
-  reconcilePostEngagement(postId: string, updates: Partial<Pick<ClothPost, 'likes' | 'saves' | 'rating' | 'ratingCount'>>): void {
+  reconcilePostEngagement(postId: string, updates: Partial<Pick<ClothPost, 'likes' | 'saves' | 'rating' | 'ratingCount' | 'ratingsByUser'>>): void {
     const posts = this.getPosts();
     const post = posts.find(item => item.id === postId);
     if (!post) return;
