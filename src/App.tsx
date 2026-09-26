@@ -608,6 +608,9 @@ export default function App() {
                 onOpenAuth={handleOpenAuthWithRole}
                 onExploreMarketplace={() => setCurrentView('marketplace')}
                 isDarkMode={isDarkMode}
+                users={users}
+                posts={posts}
+                promoPlans={promoPlans}
               />
             </motion.div>
           )}

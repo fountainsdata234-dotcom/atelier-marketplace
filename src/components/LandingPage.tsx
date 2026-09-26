@@ -1,20 +1,41 @@
-import React from 'react';
+import React, { lazy } from 'react';
 import { motion } from 'motion/react';
-import { Scissors, Sparkles, MapPin, MessageSquare, ShieldCheck, Heart, Share2, Compass, ArrowRight, Star, ShoppingBag } from 'lucide-react';
-import { UserRole } from '../types';
+import { Scissors, Sparkles, MapPin, MessageSquare, ShieldCheck, Heart, Share2, Compass, ArrowRight, Star, ShoppingBag, Globe2, Zap } from 'lucide-react';
+import { AdminPromoPlan, ClothPost, User, UserRole } from '../types';
 import { CraftAnimationReel } from './CraftAnimationReel';
+import type { GlobeArtisan } from './ArtisanGlobe3D';
+
+const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
+
+const HERO_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-17-44-am.avif';
+const NETWORK_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-16-27-am.avif';
 
 interface LandingPageProps {
   onOpenAuth: (defaultRole: UserRole) => void;
   onExploreMarketplace: () => void;
   isDarkMode: boolean;
+  users: User[];
+  posts: ClothPost[];
+  promoPlans: AdminPromoPlan[];
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenAuth,
   onExploreMarketplace,
-  isDarkMode
+  isDarkMode,
+  users,
+  posts,
+  promoPlans,
 }) => {
+  const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
+  const previewArtisans = React.useMemo<GlobeArtisan[]>(() => users
+    .filter(user => user.role === 'tailor' || user.role === 'fabric_seller')
+    .filter(user => Number.isFinite(user.location?.lat) && Number.isFinite(user.location?.lng))
+    .map(user => {
+      const userPosts = posts.filter(post => post.authorId === user.id);
+      return { ...user, distanceKm: null, postCount: userPosts.length, rating: userPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / Math.max(userPosts.length, 1) };
+    }), [posts, users]);
+
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-16">
       {/* Hero Section */}
@@ -93,7 +114,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
 
                     <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
-                      <img src="https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=900&q=75" alt="Rows of richly textured garments and cloth in a fashion atelier" className="h-full w-full object-cover transition duration-700 hover:scale-105" referrerPolicy="no-referrer" fetchPriority="high" />
+                      <img src={HERO_IMAGE} alt="A fashion atelier with garments and textiles" className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" decoding="async" fetchPriority="high" />
                       <div className="absolute inset-x-3 bottom-3 rounded-xl border border-white/20 bg-black/35 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm">Textiles with a point of view</div>
                     </div>
                   </div>
@@ -118,6 +139,37 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       <CraftAnimationReel />
+
+      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.12 }} transition={{ duration: 0.6 }} className="grid gap-6 border-t border-amber-500/15 py-12 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="relative min-h-[18rem] overflow-hidden rounded-[2rem] border border-amber-500/20 bg-neutral-950">
+          <img src={NETWORK_IMAGE} alt="Tailoring and fabric discovery on Fabrilux Atelier" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-700 hover:scale-105" />
+          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/35 to-transparent" />
+          <div className="absolute inset-x-5 bottom-5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-300">A working atelier network</p>
+            <h2 className="mt-2 max-w-md text-2xl font-serif font-bold text-white sm:text-3xl">The craft, the cloth, and the conversation in one place.</h2>
+          </div>
+        </div>
+        <div className={`rounded-[2rem] border p-6 sm:p-8 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}>
+          <div className="flex items-center gap-2 text-amber-500"><Globe2 className="h-5 w-5" /><span className="text-[10px] font-bold uppercase tracking-[0.22em]">Find the right maker</span></div>
+          <h2 className="mt-3 text-2xl font-serif font-bold sm:text-3xl">From local fittings to global discovery.</h2>
+          <p className={`mt-3 max-w-xl text-sm leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Fabrilux Atelier helps clients compare real makers by location, follow their work, save references, ask questions directly, and move from inspiration to a considered order.</p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            {[['Discover', 'Browse real work from tailors and fabric merchants.'], ['Compare', 'Use location, craft, pricing, and ratings to narrow the field.'], ['Connect', 'Message, share, save, and enquire without leaving the atelier.']].map(([title, body]) => <div key={title} className={`rounded-2xl border p-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/70' : 'border-neutral-200 bg-neutral-50'}`}><Zap className="h-4 w-4 text-amber-500" /><p className="mt-2 text-xs font-bold">{title}</p><p className={`mt-1 text-[11px] leading-relaxed ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>{body}</p></div>)}
+          </div>
+        </div>
+      </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Live network preview</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">See where the craft lives.</h2></div><button type="button" onClick={onExploreMarketplace} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Explore the network <ArrowRight className="h-4 w-4" /></button></div>
+        <div className={`overflow-hidden rounded-[2rem] border ${isDarkMode ? 'border-neutral-800 bg-[#1f0d11]' : 'border-neutral-200 bg-neutral-950'}`}>
+          {previewArtisans.length > 0 ? <React.Suspense fallback={<div className="flex h-[22rem] items-center justify-center text-xs text-amber-200/70">Loading the live artisan globe...</div>}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreMarketplace} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="flex h-[22rem] items-center justify-center px-6 text-center text-xs text-amber-100/60">The live globe will populate as artisans join the network.</div>}
+        </div>
+      </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
+        <div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Current atelier plans</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Promotion that stays current.</h2></div><span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">Updated by admin</span></div>
+        <div className="grid gap-4 md:grid-cols-3">{promoPlans.map(plan => <article key={plan.id} className={`rounded-2xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{plan.badgeLabel || 'Atelier plan'}</p><h3 className="mt-2 text-lg font-serif font-bold">{plan.caption}</h3><p className={`mt-2 min-h-12 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{plan.description}</p><div className="mt-5 flex items-end justify-between gap-3"><strong className="text-xl">{plan.currency} {plan.amount}</strong><span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">{plan.timeRange}</span></div></article>)}</div>
+      </motion.section>
 
       {/* 3 Pillars / Roles Section */}
       <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.6 }} className="py-12 border-t border-amber-500/15">
