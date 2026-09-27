@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
+import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp, Flame, Trophy, Zap } from 'lucide-react';
 import { ClothPost, CountryGeo, DiscoveryEvent, DiscoveryEventType, User, UserLocation } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -156,6 +156,67 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     return rankTrendingPosts(candidates, users, discoveryEvents, currentUser?.id, searchHistory)
       .slice(0, showAllTrending ? 12 : 7);
   }, [tailorPosts, userById, users, discoveryEvents, currentUser?.id, searchHistory, showAllTrending]);
+
+  const lastWeekHits = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return [...tailorPosts]
+      .filter(post => !userById.get(post.authorId)?.isBlocked)
+      .filter(post => Number.isFinite(Date.parse(post.createdAt)) && Date.parse(post.createdAt) >= weekAgo)
+      .sort((a, b) => ((b.likes?.length ?? 0) + (b.saves?.length ?? 0) + (b.ratingCount ?? 0)) - ((a.likes?.length ?? 0) + (a.saves?.length ?? 0) + (a.ratingCount ?? 0)))
+      .slice(0, 3);
+  }, [tailorPosts, userById]);
+
+  const topTailors = useMemo(() => {
+    return users
+      .filter(user => user.role === 'tailor' || user.role === 'fabric_seller')
+      .map(seller => {
+        const sellerPosts = tailorPosts.filter(post => post.authorId === seller.id);
+        const engagement = sellerPosts.reduce((sum, post) => sum + (post.likes?.length ?? 0) * 2 + (post.saves?.length ?? 0) * 3 + (post.ratingCount ?? 0), 0);
+        const avgRating = sellerPosts.length ? sellerPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / sellerPosts.length : 0;
+        const localBoost = currentUser && seller.location?.city && currentUser.location?.city && seller.location.city.toLowerCase() === currentUser.location.city.toLowerCase() ? 24 : 0;
+        const followedBoost = currentUser && seller.followers?.includes(currentUser.id) ? 30 : 0;
+        return { seller, score: engagement + avgRating * 35 + localBoost + followedBoost + (seller.isPromoted ? 18 : 0) };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.seller)
+      .slice(0, 3);
+  }, [users, tailorPosts, currentUser]);
+
+  const smartMarketplaceHighlights = useMemo(() => [
+    {
+      title: 'MOST SEARCHED',
+      icon: Flame,
+      accent: 'text-orange-300 border-orange-500/25 bg-orange-500/10',
+      items: trendingPosts.slice(0, 3).map(post => ({
+        id: post.id,
+        title: post.title,
+        subtitle: `${post.authorName} · ${post.likes.length + post.saves.length} live signals`,
+        imageUrl: post.imageUrl,
+      })),
+    },
+    {
+      title: 'LAST WEEK HIT',
+      icon: Zap,
+      accent: 'text-sky-300 border-sky-500/25 bg-sky-500/10',
+      items: lastWeekHits.map(post => ({
+        id: post.id,
+        title: post.title,
+        subtitle: `${post.authorName} · ${(post.tags && post.tags[0]) || 'new release'}`,
+        imageUrl: post.imageUrl,
+      })),
+    },
+    {
+      title: 'TOP TAILORS',
+      icon: Trophy,
+      accent: 'text-violet-300 border-violet-500/25 bg-violet-500/10',
+      items: topTailors.map(seller => ({
+        id: seller.id,
+        title: seller.shopName || seller.name,
+        subtitle: `${seller.role === 'fabric_seller' ? 'Fabric seller' : 'Tailor'} · ${(seller.followers?.length ?? 0)} followers`,
+        imageUrl: tailorPosts.find(post => post.authorId === seller.id)?.imageUrl || seller.avatarUrl || '',
+      })),
+    },
+  ], [trendingPosts, lastWeekHits, topTailors, tailorPosts]);
 
   const searchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -1120,22 +1181,49 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
                 </div>
               </motion.article>
-              {postIndex === 9 && trendingPosts.length > 0 && (
-                <section className={`md:col-span-2 lg:col-span-3 rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-emerald-200 bg-emerald-50'}`}>
-                  <div className="mb-3 flex items-center justify-between gap-3">
+              {(postIndex === 9 || postIndex === 19) && smartMarketplaceHighlights.length > 0 && (
+                <section className="md:col-span-2 lg:col-span-3 rounded-[2rem] border border-amber-500/20 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.18),_transparent_18%),linear-gradient(135deg,rgba(17,17,17,0.92),rgba(20,24,30,0.96))] p-4 sm:p-5">
+                  <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500">Keep discovering</p>
-                      <h2 className="mt-1 font-serif text-2xl font-bold">Trending this week</h2>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Smart discovery</p>
+                      <h2 className="mt-1 font-serif text-2xl font-bold text-white">Marketplace pulse</h2>
                     </div>
-                    <TrendingUp className="h-5 w-5 text-emerald-400" />
+                    <TrendingUp className="h-5 w-5 text-amber-300" />
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {trendingPosts.slice(0, 3).map(trendingPost => (
-                      <button key={trendingPost.id} type="button" onClick={() => onSelectPost(trendingPost)} className="group flex min-w-0 items-center gap-3 rounded-2xl border border-emerald-500/15 bg-black/10 p-2 text-left transition hover:border-emerald-400/50">
-                        <img src={trendingPost.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover transition group-hover:scale-105" loading="lazy" />
-                        <span className="min-w-0"><strong className="block truncate text-xs">{trendingPost.title}</strong><small className="mt-1 block truncate text-[10px] text-neutral-400">{trendingPost.authorName} · {trendingPost.likes.length + trendingPost.saves.length} signals</small></span>
-                      </button>
-                    ))}
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    {smartMarketplaceHighlights.map((block) => {
+                      const Icon = block.icon;
+                      return (
+                        <div key={block.title} className={`rounded-[1.5rem] border p-3 ${block.accent}`}>
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em]">
+                              <Icon className="h-3.5 w-3.5" />
+                              {block.title}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {block.items.length > 0 ? block.items.map(item => (
+                              <button key={`${block.title}-${item.id}`} type="button" onClick={() => {
+                                const internalPost = tailorPosts.find(post => post.id === item.id);
+                                if (internalPost) onSelectPost(internalPost);
+                                else if (item.title && item.imageUrl) {
+                                  const seller = users.find(user => user.id === item.id);
+                                  if (seller) onSelectSeller(seller);
+                                }
+                              }} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-black/15 p-2 text-left transition hover:border-white/20 hover:bg-black/20">
+                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" loading="lazy" /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-[10px] uppercase tracking-[0.12em] text-white/80">Live</div>}
+                                <span className="min-w-0">
+                                  <strong className="block truncate text-xs text-white">{item.title}</strong>
+                                  <small className="mt-1 block truncate text-[10px] text-neutral-300">{item.subtitle}</small>
+                                </span>
+                              </button>
+                            )) : (
+                              <div className="rounded-2xl border border-dashed border-white/15 p-3 text-[10px] uppercase tracking-[0.18em] text-neutral-300/80">No live signal yet</div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
               )}
