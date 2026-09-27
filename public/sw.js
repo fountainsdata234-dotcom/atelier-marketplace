@@ -1,9 +1,13 @@
-const CACHE_NAME = 'fabrilux-atelier-v6';
-const OFFLINE_URLS = ['/index.html', '/manifest.webmanifest', '/logo.png'];
+const CACHE_NAME = 'fabrilux-atelier-v7';
+const APP_SHELL = ['/index.html', '/manifest.webmanifest'];
+
+const isStaticAssetRequest = (url) => {
+  return url.pathname.startsWith('/assets/') || /\.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|map|json|txt|wasm)$/i.test(url.pathname);
+};
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_URLS).catch(() => undefined))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL).catch(() => undefined))
   );
   self.skipWaiting();
 });
@@ -25,6 +29,10 @@ self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
 
+  if (requestUrl.pathname.startsWith('/api/')) {
+    return;
+  }
+
   const isPublicDataRequest = ['/api/users', '/api/posts', '/api/promo-plans'].includes(requestUrl.pathname);
   if (isPublicDataRequest) {
     event.respondWith(
@@ -41,8 +49,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (requestUrl.pathname.startsWith('/api/')) return;
-
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -58,17 +64,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const networkRequest = fetch(event.request)
-        .then((networkResponse) => {
-          if (!networkResponse.ok) return networkResponse;
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+  if (isStaticAssetRequest(requestUrl)) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse.ok) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          }
           return networkResponse;
-        })
-        .catch(() => cachedResponse || caches.match('/index.html'));
-      return cachedResponse || networkRequest;
-    })
+        });
+      })
+    );
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request).catch(() => caches.match('/index.html'))
   );
 });
