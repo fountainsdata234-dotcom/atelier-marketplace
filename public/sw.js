@@ -1,9 +1,9 @@
-const CACHE_NAME = 'fabrilux-atelier-v5';
-const OFFLINE_URLS = ['/index.html', '/logo.png', '/favicon.svg', '/manifest.webmanifest'];
+const CACHE_NAME = 'fabrilux-atelier-v6';
+const OFFLINE_URLS = ['/index.html', '/manifest.webmanifest', '/logo.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_URLS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_URLS).catch(() => undefined))
   );
   self.skipWaiting();
 });
@@ -47,8 +47,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', responseClone));
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', responseClone));
+          }
           return response;
         })
         .catch(() => caches.match('/index.html'))
@@ -65,7 +67,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
           return networkResponse;
         })
-        .catch(() => caches.match('/index.html'));
+        .catch(() => cachedResponse || caches.match('/index.html'));
       return cachedResponse || networkRequest;
     })
   );

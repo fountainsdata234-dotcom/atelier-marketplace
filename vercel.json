@@ -6,8 +6,8 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self)" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://apis.google.com https://*.googleapis.com https://www.gstatic.com; connect-src 'self' https://atelier-marketplace.onrender.com https://*.firebaseio.com https://*.googleapis.com https://www.googleapis.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none';" }
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self), clipboard-read=(), clipboard-write=()" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://apis.google.com https://www.gstatic.com https://*.gstatic.com; connect-src 'self' https://atelier-marketplace.onrender.com https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com https://www.googleapis.com https://nominatim.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; manifest-src 'self';" }
       ]
     }
   ],
@@ -15,6 +15,10 @@
     {
       "source": "/assets/(.*)",
       "destination": "/assets/$1"
+    },
+    {
+      "source": "/src/(.*)",
+      "destination": "/src/$1"
     },
     {
       "source": "/textures/(.*)",
