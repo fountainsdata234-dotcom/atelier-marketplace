@@ -68,6 +68,7 @@ export default function App() {
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const lastDataRefreshStartedAt = useRef(0);
+  const inFlightDataRefresh = useRef<Promise<void> | null>(null);
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -123,12 +124,13 @@ export default function App() {
   const [savePictureUrl, setSavePictureUrl] = useState<string | null>(null);
   const [savePictureTitle, setSavePictureTitle] = useState<string | null>(null);
 
-  // Initialize storage and load initial data
-  const marketplaceViews = ['landing', 'marketplace', 'artisan', 'seller', 'dashboard', 'profile', 'collections', 'messages'];
+  // Only fetch market data when the user is actually on a live marketplace view.
+  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'dashboard', 'profile', 'collections', 'messages'];
+  const canRefreshMarketplaceData = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
 
   useEffect(() => {
     storageService.init();
-    if (document.visibilityState === 'visible' && marketplaceViews.includes(currentView)) {
+    if (canRefreshMarketplaceData) {
       void refreshAllData(false);
     }
 
@@ -337,95 +339,98 @@ export default function App() {
   };
 
   const refreshAllData = async (showLoader = true) => {
-    if (document.visibilityState === 'hidden') return;
-    if (!marketplaceViews.includes(currentView)) return;
+    const isEligibleView = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
+    if (!isEligibleView) return;
 
     const now = Date.now();
     if (now - lastDataRefreshStartedAt.current < 2_000) return;
     lastDataRefreshStartedAt.current = now;
+    if (inFlightDataRefresh.current) return;
 
-    if (showLoader) setIsDataLoading(true);
-    const localUsers = storageService.getUsers();
-    const localPosts = storageService.getPosts();
-    setCurrentUser(storageService.getCurrentUser());
+    const refreshTask = async () => {
+      if (showLoader) setIsDataLoading(true);
+      const localUsers = storageService.getUsers();
+      const localPosts = storageService.getPosts();
+      setCurrentUser(storageService.getCurrentUser());
 
-    if (localUsers.length > 0) {
-      setUsers(localUsers);
-    }
-    if (localPosts.length > 0 || posts.length > 0) {
-      setPosts(localPosts);
-    }
-
-    setPromoPlans(storageService.getPromoPlans());
-    setBroadcasts(storageService.getBroadcasts());
-    if (showLoader) setIsDataLoading(false);
-
-    try {
-      const [usersResult, postsResult, plansResult] = await Promise.allSettled([
-        api.getUsers(),
-        api.getPosts(),
-        api.getPromoPlans(),
-      ]);
-      const remoteUsers = usersResult.status === 'fulfilled' ? usersResult.value : null;
-      const remotePosts = postsResult.status === 'fulfilled' ? postsResult.value : null;
-      const remotePlans = plansResult.status === 'fulfilled' ? plansResult.value : null;
-      if (remoteUsers !== null) {
-        const localUsers = storageService.getUsers();
-        const uniqueRemoteUsers: User[] = Array.from(new Map<string, User>(remoteUsers.map(remoteUser => [remoteUser.id, remoteUser])).values());
-        const mergedUsers = uniqueRemoteUsers.map(remoteUser => {
-          const localUser = localUsers.find(user => user.id === remoteUser.id);
-          if (!localUser) return { ...remoteUser, followers: Array.isArray(remoteUser.followers) ? remoteUser.followers : [] };
-          return {
-            ...localUser,
-            ...remoteUser,
-            name: remoteUser.name || localUser.name,
-            handle: remoteUser.handle || localUser.handle,
-            bio: remoteUser.bio || localUser.bio || '',
-            avatarUrl: remoteUser.avatarUrl || localUser.avatarUrl,
-            shopName: remoteUser.shopName || localUser.shopName,
-            phone: remoteUser.phone || localUser.phone,
-            location: remoteUser.location?.country || remoteUser.location?.city ? remoteUser.location : localUser.location,
-            followers: Array.isArray(remoteUser.followers) && remoteUser.followers.length > 0 ? remoteUser.followers : localUser.followers,
-          };
-        });
-        storageService.saveUsers(mergedUsers);
-        setUsers(mergedUsers);
+      if (localUsers.length > 0) {
+        setUsers(localUsers);
+      }
+      if (localPosts.length > 0 || posts.length > 0) {
+        setPosts(localPosts);
       }
 
-      // Only a successful response may replace the local cache. An empty array is
-      // still authoritative, but a failed request must preserve existing data.
-      if (remotePosts !== null) {
-        const normalizedPosts = remotePosts.map(post => ({
-          ...post,
-          likes: Array.isArray(post.likes) ? post.likes : [],
-          saves: Array.isArray(post.saves) ? post.saves : [],
-          tags: Array.isArray(post.tags) ? post.tags : [],
-          ratingsByUser: post.ratingsByUser || {},
-          rating: Number(post.rating) || 0,
-          ratingCount: Number(post.ratingCount) || 0,
-          authorLocation: post.authorLocation || { country: '', state: '', city: '' },
-        }));
-        storageService.savePosts(normalizedPosts);
-        setPosts(normalizedPosts);
-      }
-
-      // Release the main marketplace as soon as its primary content is ready.
-      // Secondary plans can finish loading without blocking the first useful view.
+      setPromoPlans(storageService.getPromoPlans());
+      setBroadcasts(storageService.getBroadcasts());
       if (showLoader) setIsDataLoading(false);
 
-      if (remotePlans !== null && remotePlans.length > 0) {
-        const localPlans = storageService.getPromoPlans();
-        const completePlans = [0, 1, 2]
-          .map(index => remotePlans[index] || localPlans[index])
-          .filter((plan): plan is AdminPromoPlan => Boolean(plan));
-        storageService.savePromoPlans(completePlans);
-        setPromoPlans(completePlans);
+      try {
+        const [usersResult, postsResult, plansResult] = await Promise.allSettled([
+          api.getUsers(),
+          api.getPosts(),
+          api.getPromoPlans(),
+        ]);
+        const remoteUsers = usersResult.status === 'fulfilled' ? usersResult.value : null;
+        const remotePosts = postsResult.status === 'fulfilled' ? postsResult.value : null;
+        const remotePlans = plansResult.status === 'fulfilled' ? plansResult.value : null;
+        if (remoteUsers !== null) {
+          const localUsers = storageService.getUsers();
+          const uniqueRemoteUsers: User[] = Array.from(new Map<string, User>(remoteUsers.map(remoteUser => [remoteUser.id, remoteUser])).values());
+          const mergedUsers = uniqueRemoteUsers.map(remoteUser => {
+            const localUser = localUsers.find(user => user.id === remoteUser.id);
+            if (!localUser) return { ...remoteUser, followers: Array.isArray(remoteUser.followers) ? remoteUser.followers : [] };
+            return {
+              ...localUser,
+              ...remoteUser,
+              name: remoteUser.name || localUser.name,
+              handle: remoteUser.handle || localUser.handle,
+              bio: remoteUser.bio || localUser.bio || '',
+              avatarUrl: remoteUser.avatarUrl || localUser.avatarUrl,
+              shopName: remoteUser.shopName || localUser.shopName,
+              phone: remoteUser.phone || localUser.phone,
+              location: remoteUser.location?.country || remoteUser.location?.city ? remoteUser.location : localUser.location,
+              followers: Array.isArray(remoteUser.followers) && remoteUser.followers.length > 0 ? remoteUser.followers : localUser.followers,
+            };
+          });
+          storageService.saveUsers(mergedUsers);
+          setUsers(mergedUsers);
+        }
+
+        if (remotePosts !== null) {
+          const normalizedPosts = remotePosts.map(post => ({
+            ...post,
+            likes: Array.isArray(post.likes) ? post.likes : [],
+            saves: Array.isArray(post.saves) ? post.saves : [],
+            tags: Array.isArray(post.tags) ? post.tags : [],
+            ratingsByUser: post.ratingsByUser || {},
+            rating: Number(post.rating) || 0,
+            ratingCount: Number(post.ratingCount) || 0,
+            authorLocation: post.authorLocation || { country: '', state: '', city: '' },
+          }));
+          storageService.savePosts(normalizedPosts);
+          setPosts(normalizedPosts);
+        }
+
+        if (showLoader) setIsDataLoading(false);
+
+        if (remotePlans !== null && remotePlans.length > 0) {
+          const localPlans = storageService.getPromoPlans();
+          const completePlans = [0, 1, 2]
+            .map(index => remotePlans[index] || localPlans[index])
+            .filter((plan): plan is AdminPromoPlan => Boolean(plan));
+          storageService.savePromoPlans(completePlans);
+          setPromoPlans(completePlans);
+        }
+      } catch (error) {
+        console.error('Remote marketplace data unavailable', error);
+      } finally {
+        inFlightDataRefresh.current = null;
+        if (showLoader) setIsDataLoading(false);
       }
-    } catch (error) {
-      console.error('Remote marketplace data unavailable', error);
-    } finally {
-      if (showLoader) setIsDataLoading(false);
-    }
+    };
+
+    inFlightDataRefresh.current = refreshTask();
+    await inFlightDataRefresh.current;
   };
 
   useEffect(() => {
@@ -439,7 +444,8 @@ export default function App() {
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && marketplaceViews.includes(currentView)) {
+      const isEligibleView = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
+      if (isEligibleView) {
         void refreshAllData(false);
       }
     };
