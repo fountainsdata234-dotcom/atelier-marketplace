@@ -380,7 +380,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className={`relative w-full h-full sm:h-auto sm:max-w-3xl sm:max-h-[calc(100vh-2rem)] overflow-y-auto rounded-none sm:rounded-3xl border shadow-2xl p-4 sm:p-6 md:p-8 my-0 sm:my-8 transition-colors ${
+        className={`relative my-3 w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl border shadow-2xl p-4 sm:p-6 md:p-8 transition-colors sm:rounded-3xl ${
           isDarkMode
             ? 'bg-[#121316] border-neutral-800 text-neutral-100'
             : 'bg-white border-neutral-200 text-neutral-900'

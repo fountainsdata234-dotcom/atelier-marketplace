@@ -124,9 +124,13 @@ export default function App() {
   const [savePictureTitle, setSavePictureTitle] = useState<string | null>(null);
 
   // Initialize storage and load initial data
+  const marketplaceViews = ['landing', 'marketplace', 'artisan', 'seller', 'dashboard', 'profile', 'collections', 'messages'];
+
   useEffect(() => {
     storageService.init();
-    void refreshAllData();
+    if (document.visibilityState === 'visible' && marketplaceViews.includes(currentView)) {
+      void refreshAllData(false);
+    }
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -333,6 +337,9 @@ export default function App() {
   };
 
   const refreshAllData = async (showLoader = true) => {
+    if (document.visibilityState === 'hidden') return;
+    if (!marketplaceViews.includes(currentView)) return;
+
     const now = Date.now();
     if (now - lastDataRefreshStartedAt.current < 2_000) return;
     lastDataRefreshStartedAt.current = now;
@@ -422,9 +429,23 @@ export default function App() {
   };
 
   useEffect(() => {
-    const refreshTimer = window.setInterval(() => void refreshAllData(false), 60_000);
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && marketplaceViews.includes(currentView)) {
+        void refreshAllData(false);
+      }
+    }, 180_000);
     return () => window.clearInterval(refreshTimer);
-  }, []);
+  }, [currentView]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && marketplaceViews.includes(currentView)) {
+        void refreshAllData(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [currentView]);
 
   // Toggle Theme
   const handleToggleTheme = () => {

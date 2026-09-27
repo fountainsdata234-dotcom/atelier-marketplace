@@ -135,12 +135,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="text-center lg:text-left">
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-300">
                 <Sparkles className="w-3.5 h-3.5" />
-                Bespoke tailoring marketplace
+                Tailor & fabric marketplace
               </div>
 
               <h1 className="text-4xl font-black leading-none tracking-[-0.06em] text-white sm:text-5xl lg:text-7xl">
                 <span className="relative inline-block">
-                  Fabrilux Atelier
+                  Discover the Best Tailors Around You
                   <motion.span
                     aria-hidden="true"
                     animate={{ x: [0, 96, 0], y: [18, -4, 18], rotate: [-18, 12, -18] }}
@@ -153,8 +153,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </h1>
 
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-neutral-300 sm:text-base">
-                Discover real tailors and fabric sellers, compare their work by location, and move from a saved idea to a direct conversation in one focused marketplace.
+                Find premium fabrics, local bespoke specialists, and trend-ready inspiration in seconds. Every section is built to help buyers discover the right maker faster.
               </p>
+
+              <div className="mt-6 rounded-[24px] border border-amber-500/20 bg-neutral-950/70 p-3 shadow-[0_18px_40px_rgba(0,0,0,0.2)]">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex-1">
+                    <label className="sr-only">Search tailors and fabrics</label>
+                    <input
+                      type="text"
+                      value=""
+                      readOnly
+                      placeholder="Search tailors, Ankara, lace, wedding fits..."
+                      className="w-full rounded-full border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:border-amber-500/50 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onExploreMarketplace}
+                    className="inline-flex items-center justify-center gap-2 rounded-full bg-amber-400 px-5 py-3 text-sm font-semibold text-neutral-950 shadow-lg shadow-amber-500/15 transition hover:-translate-y-0.5 hover:bg-amber-300"
+                  >
+                    Search
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.14em] text-neutral-300">
+                  {['Native', 'Wedding', 'English', 'Senator', 'Ankara', 'Lace', 'Asoebi'].map(category => (
+                    <button key={category} type="button" onClick={onExploreMarketplace} className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5 transition hover:border-amber-500/40 hover:text-amber-300">
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
                 <button
@@ -175,9 +205,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
 
               <div className="mt-7 flex flex-wrap items-center justify-center gap-3 text-xs text-neutral-400 lg:justify-start">
-                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">Worldwide tailors</span>
-                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">Mobile-first shopping</span>
-                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">Direct conversations</span>
+                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">2,540 tailors near you</span>
+                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">18 new fabrics today</span>
+                <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1.5">Live seller activity</span>
               </div>
             </div>
 
@@ -259,7 +289,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-amber-300">
                 <TrendingUp className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Most searched</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Trending tailors near you</span>
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => scrollCarousel('most-searched-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll most searched left"><ChevronLeft className="h-4 w-4" /></button>
@@ -286,7 +316,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-amber-300">
                 <Zap className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Last week hit</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Trending fabrics near you</span>
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => scrollCarousel('last-week-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll last week hit left"><ChevronLeft className="h-4 w-4" /></button>
@@ -313,7 +343,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-amber-300">
                 <Trophy className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Top tailors</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Promoted tailors</span>
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => scrollCarousel('top-tailors-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll top tailors left"><ChevronLeft className="h-4 w-4" /></button>

@@ -8,7 +8,7 @@ import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
-import { getRatingQuality, rankTrendingPosts } from '../utils/marketplaceRanking';
+import { calculateFeedScore, getRatingQuality, rankTrendingPosts } from '../utils/marketplaceRanking';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -278,12 +278,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         return distA - distB;
       });
     } else {
-      // Priority: Promoted items first, then newest
       result.sort((a, b) => {
+        const scoreA = calculateFeedScore(a, userById.get(a.authorId), Date.now());
+        const scoreB = calculateFeedScore(b, userById.get(b.authorId), Date.now());
         if (followedSellerIds.has(a.authorId) !== followedSellerIds.has(b.authorId)) return followedSellerIds.has(a.authorId) ? -1 : 1;
         if (a.isPromoted && !b.isPromoted) return -1;
         if (!a.isPromoted && b.isPromoted) return 1;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return scoreB - scoreA || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
     }
 

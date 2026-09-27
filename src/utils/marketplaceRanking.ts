@@ -22,6 +22,44 @@ export const getRatingQuality = (rating = 0, ratingCount = 0): number => {
   return posteriorRating / 5;
 };
 
+export const calculateFeedScore = (
+  post: ClothPost,
+  seller?: User | null,
+  now = Date.now(),
+): number => {
+  const ageMs = Math.max(0, now - postTimestamp(post));
+  const likes = Array.isArray(post.likes) ? post.likes.length : 0;
+  const saves = Array.isArray(post.saves) ? post.saves.length : 0;
+  const ratingQuality = getRatingQuality(post.rating, post.ratingCount);
+  const followers = Array.isArray(seller?.followers) ? seller.followers.length : 0;
+  const sellerAgeDays = seller?.createdAt ? Math.max(0, (now - Date.parse(seller.createdAt)) / DAY_IN_MS) : 0;
+  const profileReputation = Math.min(1, 0.35 + Math.min(followers / 200, 0.35) + Math.min(sellerAgeDays / 365, 0.3) + (seller?.isPromoted ? 0.1 : 0));
+  const completionRate = (post.imageUrl ? 0.35 : 0)
+    + (post.description?.trim() ? 0.2 : 0)
+    + (Array.isArray(post.tags) && post.tags.length ? 0.2 : 0)
+    + (post.title?.trim() ? 0.15 : 0)
+    + (post.authorName?.trim() ? 0.1 : 0);
+  const freshness = Math.exp(-ageMs / (2 * DAY_IN_MS));
+  const recencyBoost = freshness * 240;
+  const duplicatePenalty = Array.isArray(post.tags) && post.tags.length > 6 ? 8 : 0;
+  const spamPenalty = seller?.isBlocked ? 80 : 0;
+  const likesScore = Math.log1p(likes) * 14;
+  const savesScore = Math.log1p(saves) * 18;
+  const ratingSignal = Math.log1p(Math.max(0, post.ratingCount ?? 0)) * 9;
+
+  const score = ratingQuality * 110
+    + likesScore
+    + savesScore
+    + ratingSignal
+    + profileReputation * 35
+    + completionRate * 25
+    + recencyBoost
+    - duplicatePenalty
+    - spamPenalty;
+
+  return Number.isFinite(score) ? score : 0;
+};
+
 export const getTopTailors = (
   posts: ClothPost[],
   users: User[],
@@ -123,29 +161,30 @@ export const rankTrendingPosts = (
     const sellerRatings = sellerRatingTotals.get(post.authorId) || { total: 0, count: 0 };
     const sellerRating = sellerRatings.count ? sellerRatings.total / sellerRatings.count : 0;
     const followers = Array.isArray(author?.followers) ? author.followers.length : 0;
+    const feedScore = calculateFeedScore(post, author, now);
+    const trendPulse = (eventScores.get(post.id) || 0) + (post.likes?.length || 0) * 2 + (post.saves?.length || 0) * 3 + (followedSellerIds.has(post.authorId) ? 25 : 0);
 
     return {
       post,
-      trend: (eventScores.get(post.id) || 0)
-        + (post.likes?.length || 0) * 2
-        + (post.saves?.length || 0) * 3
-        + (followedSellerIds.has(post.authorId) ? 25 : 0),
+      trend: trendPulse,
       personal,
       quality: getRatingQuality(post.rating, post.ratingCount),
       freshness: Math.exp(-ageMs / (30 * DAY_IN_MS)),
+      feedScore,
       sellerReputation: Math.min(1, (sellerRating / 5) * 0.8 + Math.min(followers / 100, 1) * 0.2),
     };
   });
 
   const maxTrend = Math.max(1, ...scores.map(item => item.trend));
   const maxPersonal = Math.max(1, ...scores.map(item => item.personal));
+  const maxFeedScore = Math.max(1, ...scores.map(item => item.feedScore));
 
   return scores
     .sort((a, b) => {
-      const scoreA = 0.3 * (a.trend / maxTrend) + 0.25 * (a.personal / maxPersonal)
-        + 0.2 * a.quality + 0.15 * a.freshness + 0.1 * a.sellerReputation;
-      const scoreB = 0.3 * (b.trend / maxTrend) + 0.25 * (b.personal / maxPersonal)
-        + 0.2 * b.quality + 0.15 * b.freshness + 0.1 * b.sellerReputation;
+      const scoreA = 0.28 * (a.trend / maxTrend) + 0.2 * (a.personal / maxPersonal)
+        + 0.18 * a.quality + 0.12 * a.freshness + 0.12 * a.sellerReputation + 0.1 * (a.feedScore / maxFeedScore);
+      const scoreB = 0.28 * (b.trend / maxTrend) + 0.2 * (b.personal / maxPersonal)
+        + 0.18 * b.quality + 0.12 * b.freshness + 0.12 * b.sellerReputation + 0.1 * (b.feedScore / maxFeedScore);
       return scoreB - scoreA
         || postTimestamp(b.post) - postTimestamp(a.post)
         || a.post.id.localeCompare(b.post.id);

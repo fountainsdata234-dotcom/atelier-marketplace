@@ -117,10 +117,47 @@ export const getMarkerScatterOffset = (
   };
 };
 
+const vectorLength = (vector: { x: number; y: number; z: number }) => Math.hypot(vector.x, vector.y, vector.z);
+
+const scaleVector = (vector: { x: number; y: number; z: number }, scalar: number) => ({
+  x: vector.x * scalar,
+  y: vector.y * scalar,
+  z: vector.z * scalar,
+});
+
+const subtractVectors = (
+  left: { x: number; y: number; z: number },
+  right: { x: number; y: number; z: number },
+) => ({
+  x: left.x - right.x,
+  y: left.y - right.y,
+  z: left.z - right.z,
+});
+
+const addVectors = (
+  left: { x: number; y: number; z: number },
+  right: { x: number; y: number; z: number },
+) => ({
+  x: left.x + right.x,
+  y: left.y + right.y,
+  z: left.z + right.z,
+});
+
+const normalizeVector = (vector: { x: number; y: number; z: number }) => {
+  const length = vectorLength(vector) || 1;
+  return {
+    x: vector.x / length,
+    y: vector.y / length,
+    z: vector.z / length,
+  };
+};
+
 export const getScatterOffsetsForLocations = (
   locations: Array<{ lat: number; lng: number }>,
   minimumDistance = 0.08,
 ) => {
+  if (locations.length === 0) return [];
+
   const orderedLocations = locations
     .map((location, originalIndex) => ({ ...location, originalIndex }))
     .sort((left, right) => {
@@ -132,79 +169,98 @@ export const getScatterOffsetsForLocations = (
   const offsets: Array<{ x: number; y: number; z: number }> = Array(locations.length).fill({ x: 0, y: 0, z: 0 });
   const clusterFactor = locations.length <= 2 ? 2.1 : locations.length <= 4 ? 1.8 : locations.length <= 6 ? 1.42 : locations.length <= 12 ? 1.16 : 1;
   const safeMinimumDistance = Math.max(0.08, Math.min(0.34, minimumDistance * clusterFactor));
-  const baseOffset = Math.min(0.036, safeMinimumDistance * 0.38);
+  const baseOffset = Math.min(0.038, safeMinimumDistance * 0.42);
   const maxOffsetLength = minimumDistance <= 0.12
-    ? Math.min(0.11, safeMinimumDistance * 0.9)
-    : Math.min(0.28, safeMinimumDistance * 0.9);
+    ? Math.min(0.12, safeMinimumDistance * 0.92)
+    : Math.min(0.28, safeMinimumDistance * 0.92);
 
-  orderedLocations.forEach((location, index) => {
+  for (let index = 0; index < orderedLocations.length; index += 1) {
+    const location = orderedLocations[index];
     const basis = getTangentBasis(location.lat, location.lng);
+    const anchorVector = normalizeVector({ x: basis.x, y: basis.y, z: basis.z });
     let bestCandidate: { x: number; y: number; z: number } | null = null;
-    let bestSeparation = -Infinity;
+    let bestScore = Number.NEGATIVE_INFINITY;
 
-    for (let ring = 0; ring < 20; ring += 1) {
-      const radius = safeMinimumDistance * (0.4 + ring * 0.22);
-      const steps = Math.max(8, Math.round((Math.PI * 2 * radius) / (safeMinimumDistance * 0.75)));
+    for (let ring = 0; ring < 22; ring += 1) {
+      const radius = safeMinimumDistance * (0.3 + ring * 0.22);
+      const steps = Math.max(10, Math.round((Math.PI * 2 * radius) / (safeMinimumDistance * 0.7)));
 
       for (let step = 0; step < steps; step += 1) {
-        const angle = ((index + 1) * 1.61803398875 + (step / steps) * Math.PI * 2) % (Math.PI * 2);
+        const angle = (step / steps) * Math.PI * 2 + (index + 1) * 1.61803398875;
         const candidate = {
-          x: basis.x * baseOffset + basis.tangentX * Math.cos(angle) * radius + basis.binormalX * Math.sin(angle) * radius * 0.7,
-          y: basis.y * baseOffset + basis.tangentY * Math.cos(angle) * radius + basis.binormalY * Math.sin(angle) * radius * 0.7,
-          z: basis.z * baseOffset + basis.tangentZ * Math.cos(angle) * radius + basis.binormalZ * Math.sin(angle) * radius * 0.7,
+          x: basis.x * baseOffset + basis.tangentX * Math.cos(angle) * radius + basis.binormalX * Math.sin(angle) * radius * 0.8,
+          y: basis.y * baseOffset + basis.tangentY * Math.cos(angle) * radius + basis.binormalY * Math.sin(angle) * radius * 0.8,
+          z: basis.z * baseOffset + basis.tangentZ * Math.cos(angle) * radius + basis.binormalZ * Math.sin(angle) * radius * 0.8,
         };
 
-        const candidateLength = Math.hypot(candidate.x, candidate.y, candidate.z);
-        if (candidateLength > maxOffsetLength + 0.0001) {
-          continue;
-        }
+        const candidateLength = vectorLength(candidate);
+        if (candidateLength > maxOffsetLength + 0.0001) continue;
 
-        const distancesToPrevious = offsets
-          .filter((previous) => previous && (previous.x || previous.y || previous.z))
-          .map((previous) => Math.hypot(
-            previous.x - candidate.x,
-            previous.y - candidate.y,
-            previous.z - candidate.z,
-          ));
+        const previousVectors = offsets.filter((previous) => previous && (previous.x || previous.y || previous.z));
+        const nearestDistance = previousVectors.reduce((nearest, previous) => {
+          const delta = subtractVectors(candidate, previous);
+          const distance = vectorLength(delta);
+          return Math.min(nearest, distance);
+        }, Number.POSITIVE_INFINITY);
 
-        const minDistanceToPrevious = distancesToPrevious.length > 0 ? Math.min(...distancesToPrevious) : Infinity;
-        if (minDistanceToPrevious < safeMinimumDistance) {
-          continue;
-        }
+        if (nearestDistance < safeMinimumDistance) continue;
 
-        const separationScore = minDistanceToPrevious - candidateLength * 0.4;
-        if (separationScore > bestSeparation || (Math.abs(separationScore - bestSeparation) < 1e-6 && (!bestCandidate || candidateLength < Math.hypot(bestCandidate.x, bestCandidate.y, bestCandidate.z)))) {
+        const score = nearestDistance - candidateLength * 0.45 + (1 / Math.max(radius, 0.08)) * 0.18;
+        if (score > bestScore || (!bestCandidate && score === bestScore)) {
           bestCandidate = candidate;
-          bestSeparation = separationScore;
+          bestScore = score;
         }
       }
 
-      if (bestCandidate) {
-        break;
-      }
+      if (bestCandidate) break;
     }
 
     if (!bestCandidate) {
       const fallbackAngle = ((index + 1) * Math.PI * 2) / Math.max(orderedLocations.length, 1);
       bestCandidate = {
-        x: basis.x * baseOffset + basis.tangentX * Math.cos(fallbackAngle) * safeMinimumDistance * 0.7 + basis.binormalX * Math.sin(fallbackAngle) * safeMinimumDistance * 0.5,
-        y: basis.y * baseOffset + basis.tangentY * Math.cos(fallbackAngle) * safeMinimumDistance * 0.7 + basis.binormalY * Math.sin(fallbackAngle) * safeMinimumDistance * 0.5,
-        z: basis.z * baseOffset + basis.tangentZ * Math.cos(fallbackAngle) * safeMinimumDistance * 0.7 + basis.binormalZ * Math.sin(fallbackAngle) * safeMinimumDistance * 0.5,
+        x: basis.x * baseOffset + basis.tangentX * Math.cos(fallbackAngle) * safeMinimumDistance * 0.75 + basis.binormalX * Math.sin(fallbackAngle) * safeMinimumDistance * 0.58,
+        y: basis.y * baseOffset + basis.tangentY * Math.cos(fallbackAngle) * safeMinimumDistance * 0.75 + basis.binormalY * Math.sin(fallbackAngle) * safeMinimumDistance * 0.58,
+        z: basis.z * baseOffset + basis.tangentZ * Math.cos(fallbackAngle) * safeMinimumDistance * 0.75 + basis.binormalZ * Math.sin(fallbackAngle) * safeMinimumDistance * 0.58,
       };
     }
 
-    const finalLength = Math.hypot(bestCandidate.x, bestCandidate.y, bestCandidate.z);
-    if (finalLength > maxOffsetLength) {
-      const scale = maxOffsetLength / finalLength;
-      bestCandidate = {
-        x: bestCandidate.x * scale,
-        y: bestCandidate.y * scale,
-        z: bestCandidate.z * scale,
-      };
-    }
+    const candidateLength = vectorLength(bestCandidate);
+    const finalScale = candidateLength > maxOffsetLength ? maxOffsetLength / candidateLength : 1;
+    const adjusted = scaleVector(bestCandidate, finalScale);
+    offsets[location.originalIndex] = adjusted;
+  }
 
-    offsets[location.originalIndex] = bestCandidate;
-  });
+  for (let iteration = 0; iteration < 5; iteration += 1) {
+    for (let index = 0; index < orderedLocations.length; index += 1) {
+      const location = orderedLocations[index];
+      const basis = getTangentBasis(location.lat, location.lng);
+      const anchorVector = normalizeVector({ x: basis.x, y: basis.y, z: basis.z });
+      const current = offsets[location.originalIndex];
+      let displacement = { x: 0, y: 0, z: 0 };
+
+      for (let compareIndex = 0; compareIndex < orderedLocations.length; compareIndex += 1) {
+        if (compareIndex === index) continue;
+        const other = offsets[orderedLocations[compareIndex].originalIndex];
+        const delta = subtractVectors(current, other);
+        const distance = vectorLength(delta) || 1;
+        const minAllowed = safeMinimumDistance * 0.8;
+
+        if (distance < minAllowed * 1.8) {
+          const repulsion = Math.max(0, minAllowed * 1.8 - distance) / 8;
+          const direction = normalizeVector(delta);
+          displacement = addVectors(displacement, scaleVector(direction, repulsion));
+        }
+      }
+
+      const attraction = scaleVector(anchorVector, 0.02 + safeMinimumDistance * 0.04);
+      displacement = addVectors(displacement, attraction);
+      const relaxed = addVectors(current, displacement);
+      const relaxedLength = vectorLength(relaxed);
+      const maxAllowed = Math.max(0.02, maxOffsetLength * 0.94);
+      const normalized = relaxedLength > maxAllowed ? scaleVector(relaxed, maxAllowed / relaxedLength) : relaxed;
+      offsets[location.originalIndex] = normalized;
+    }
+  }
 
   return offsets;
 };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ClothPost, DiscoveryEvent, User } from '../types';
-import { getRatingQuality, getTopTailors, rankTrendingPosts } from './marketplaceRanking';
+import { calculateFeedScore, getRatingQuality, getTopTailors, rankTrendingPosts } from './marketplaceRanking';
 
 const makePost = (id: string, overrides: Partial<ClothPost> = {}): ClothPost => ({
   id,
@@ -75,6 +75,57 @@ describe('marketplace ranking', () => {
 
     const ranked = rankTrendingPosts(posts, [] as User[], events, undefined, [], Date.parse('2026-09-26T12:00:00.000Z'));
     expect(ranked.map(post => post.id)).toEqual(['valid-date', 'invalid-date']);
+  });
+
+  it('rewards recency and quality over raw likes alone in the feed score', () => {
+    const now = Date.parse('2026-09-26T12:00:00.000Z');
+    const sellerA = {
+      id: 'seller-a',
+      email: 'a@example.com',
+      name: 'Seller A',
+      role: 'tailor' as const,
+      phone: '1',
+      countryCode: 'GH',
+      location: { country: 'Ghana', state: 'Greater Accra', city: 'Accra' },
+      handle: '@seller-a',
+      isPromoted: false,
+      isBlocked: false,
+      followers: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    };
+    const sellerB = {
+      id: 'seller-b',
+      email: 'b@example.com',
+      name: 'Seller B',
+      role: 'fabric_seller' as const,
+      phone: '2',
+      countryCode: 'GH',
+      location: { country: 'Ghana', state: 'Greater Accra', city: 'Accra' },
+      handle: '@seller-b',
+      isPromoted: false,
+      isBlocked: false,
+      followers: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    };
+
+    const oldPost = makePost('older', {
+      authorId: 'seller-a',
+      likes: Array.from({ length: 1200 }, (_, index) => `user-${index}`),
+      saves: Array.from({ length: 220 }, (_, index) => `save-${index}`),
+      rating: 4.9,
+      ratingCount: 180,
+      createdAt: '2026-09-20T00:00:00.000Z',
+    });
+    const trendingPost = makePost('hotter', {
+      authorId: 'seller-b',
+      likes: Array.from({ length: 12 }, (_, index) => `like-${index}`),
+      saves: Array.from({ length: 6 }, (_, index) => `save-${index}`),
+      rating: 4.8,
+      ratingCount: 24,
+      createdAt: '2026-09-26T11:45:00.000Z',
+    });
+
+    expect(calculateFeedScore(trendingPost, sellerB, now)).toBeGreaterThan(calculateFeedScore(oldPost, sellerA, now));
   });
 
   it('prioritizes local and followed sellers in top tailors rankings', () => {
