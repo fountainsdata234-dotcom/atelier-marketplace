@@ -22,6 +22,40 @@ export const getRatingQuality = (rating = 0, ratingCount = 0): number => {
   return posteriorRating / 5;
 };
 
+export const getTopTailors = (
+  posts: ClothPost[],
+  users: User[],
+  currentUser?: User | null,
+  now = Date.now(),
+): User[] => {
+  const sellers = users.filter(user => user.role === 'tailor' || user.role === 'fabric_seller');
+
+  return sellers
+    .map(seller => {
+      const sellerPosts = posts.filter(post => post.authorId === seller.id);
+      const averageRating = sellerPosts.length
+        ? sellerPosts.reduce((sum, post) => sum + (validRating(post.rating) * Math.max(1, validRatingCount(post.ratingCount))), 0) / sellerPosts.length
+        : 0;
+      const engagement = sellerPosts.reduce((sum, post) => sum + (post.likes?.length || 0) * 2 + (post.saves?.length || 0) * 3 + (post.ratingCount || 0), 0);
+      const localBoost = currentUser && seller.location?.city && currentUser.location?.city && seller.location.city.toLowerCase() === currentUser.location.city.toLowerCase() ? 24 : 0;
+      const followedBoost = currentUser && Array.isArray(seller.followers) && seller.followers.includes(currentUser.id) ? 30 : 0;
+      const promotedBoost = seller.isPromoted ? 16 : 0;
+      const recencyBoost = sellerPosts.reduce((sum, post) => {
+        const timestamp = Date.parse(post.createdAt);
+        if (!Number.isFinite(timestamp)) return sum;
+        const ageMs = Math.max(0, now - timestamp);
+        return sum + Math.exp(-ageMs / (14 * DAY_IN_MS));
+      }, 0) * 14;
+
+      return {
+        seller,
+        score: engagement + averageRating * 32 + localBoost + followedBoost + promotedBoost + recencyBoost,
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map(item => item.seller);
+};
+
 const validRatingCount = (count: number | undefined): number =>
   Number.isFinite(count) ? Math.max(0, count || 0) : 0;
 

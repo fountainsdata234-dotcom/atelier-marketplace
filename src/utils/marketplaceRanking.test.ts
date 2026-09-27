@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ClothPost, DiscoveryEvent, User } from '../types';
-import { getRatingQuality, rankTrendingPosts } from './marketplaceRanking';
+import { getRatingQuality, getTopTailors, rankTrendingPosts } from './marketplaceRanking';
 
 const makePost = (id: string, overrides: Partial<ClothPost> = {}): ClothPost => ({
   id,
@@ -75,5 +75,61 @@ describe('marketplace ranking', () => {
 
     const ranked = rankTrendingPosts(posts, [] as User[], events, undefined, [], Date.parse('2026-09-26T12:00:00.000Z'));
     expect(ranked.map(post => post.id)).toEqual(['valid-date', 'invalid-date']);
+  });
+
+  it('prioritizes local and followed sellers in top tailors rankings', () => {
+    const buyer: User = {
+      id: 'buyer-1',
+      email: 'buyer@example.com',
+      name: 'Buyer',
+      role: 'buyer',
+      phone: '123',
+      countryCode: 'GH',
+      location: { country: 'Ghana', state: 'Greater Accra', city: 'Accra' },
+      handle: '@buyer',
+      isPromoted: false,
+      isBlocked: false,
+      followers: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    };
+
+    const sellers: User[] = [
+      {
+        id: 'seller-1',
+        email: 'a@example.com',
+        name: 'A',
+        role: 'tailor',
+        phone: '1',
+        countryCode: 'GH',
+        location: { country: 'Ghana', state: 'Greater Accra', city: 'Accra' },
+        handle: '@a',
+        isPromoted: true,
+        isBlocked: false,
+        followers: ['buyer-1'],
+        createdAt: '2026-09-01T00:00:00.000Z',
+      },
+      {
+        id: 'seller-2',
+        email: 'b@example.com',
+        name: 'B',
+        role: 'tailor',
+        phone: '2',
+        countryCode: 'GH',
+        location: { country: 'Ghana', state: 'Ashanti', city: 'Kumasi' },
+        handle: '@b',
+        isPromoted: false,
+        isBlocked: false,
+        followers: [],
+        createdAt: '2026-09-01T00:00:00.000Z',
+      },
+    ];
+
+    const posts = [
+      makePost('p-1', { authorId: 'seller-1', rating: 5, ratingCount: 50 }),
+      makePost('p-2', { authorId: 'seller-2', rating: 4.5, ratingCount: 20 }),
+    ];
+
+    const ranked = getTopTailors(posts, sellers, buyer, Date.parse('2026-09-26T12:00:00.000Z'));
+    expect(ranked[0].id).toBe('seller-1');
   });
 });

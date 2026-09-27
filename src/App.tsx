@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { ArrowUp } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole, AppNotification } from './types';
 import { storageService } from './services/storage';
 import { NeedleThreadBackground } from './components/NeedleThreadBackground';
@@ -62,6 +63,7 @@ export default function App() {
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>(getInitialView);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const [sharedSeller, setSharedSeller] = useState<User | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -258,6 +260,15 @@ export default function App() {
       window.removeEventListener('atelier_notifications_updated', handleNotificationsUpdate);
     };
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    const handleScroll = () => setShowBackToTop(window.scrollY > 420);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -639,6 +650,15 @@ export default function App() {
         unreadCount={unreadCount}
       />
 
+      <button
+        type="button"
+        onClick={scrollToTop}
+        aria-label="Back to top"
+        className={`fixed bottom-20 right-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-amber-500/40 bg-[#111316]/90 text-amber-300 shadow-[0_20px_40px_rgba(251,146,60,0.35)] backdrop-blur-xl transition-all duration-300 ${showBackToTop ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0'}`}
+      >
+        <ArrowUp className="h-5 w-5" />
+      </button>
+
       {!isOnline && (
         <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200" role="status">
           You are offline. Showing saved Fabrilux content; new data will sync when connection returns.
@@ -663,6 +683,7 @@ export default function App() {
                 onExploreMarketplace={() => setCurrentView('marketplace')}
                 onExploreArtisans={() => setCurrentView('artisan')}
                 isDarkMode={isDarkMode}
+                currentUser={currentUser}
                 users={users}
                 posts={posts}
                 promoPlans={promoPlans}

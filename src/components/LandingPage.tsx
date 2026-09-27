@@ -1,7 +1,9 @@
 import React, { lazy } from 'react';
 import { motion } from 'motion/react';
-import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, Zap } from 'lucide-react';
+import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, Zap, Flame, Trophy, TrendingUp, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
 import { AdminPromoPlan, ClothPost, User, UserRole } from '../types';
+import { getTopTailors, rankTrendingPosts } from '../utils/marketplaceRanking';
+import { storageService } from '../services/storage';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 
 const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
@@ -14,6 +16,7 @@ interface LandingPageProps {
   onExploreMarketplace: () => void;
   onExploreArtisans: () => void;
   isDarkMode: boolean;
+  currentUser?: User | null;
   users: User[];
   posts: ClothPost[];
   promoPlans: AdminPromoPlan[];
@@ -24,6 +27,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onExploreMarketplace,
   onExploreArtisans,
   isDarkMode,
+  currentUser,
   users,
   posts,
   promoPlans,
@@ -32,6 +36,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
+  const searchHistory = React.useMemo(() => storageService.getSearchHistory(currentUser?.id || 'guest'), [currentUser?.id]);
+  const trendingPosts = React.useMemo(
+    () => rankTrendingPosts(posts, users, storageService.getDiscoveryEvents(), currentUser?.id, searchHistory, Date.now()),
+    [posts, users, currentUser?.id, searchHistory],
+  );
+  const hottestPosts = React.useMemo(() => trendingPosts.filter(post => post.imageUrl).slice(0, 6), [trendingPosts]);
+  const lastWeekHits = React.useMemo(() => {
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return [...trendingPosts]
+      .filter(post => Number.isFinite(Date.parse(post.createdAt)) && Date.parse(post.createdAt) > oneWeekAgo)
+      .slice(0, 6);
+  }, [trendingPosts]);
+  const topTailors = React.useMemo(() => getTopTailors(posts, users, currentUser, Date.now()).slice(0, 6), [posts, users, currentUser]);
   const featuredPost = React.useMemo(() => {
     const availablePosts = posts.filter(post => post.imageUrl && post.description?.trim());
     if (availablePosts.length === 0) return null;
@@ -60,6 +77,49 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     observer.observe(section);
     return () => observer.disconnect();
   }, []);
+
+  const scrollCarousel = (sectionId: string, direction: number) => {
+    const element = document.getElementById(sectionId);
+    if (!element) return;
+    element.scrollBy({ left: direction * 320, behavior: 'smooth' });
+  };
+
+  const renderTrendCards = (items: Array<{ id: string; title: string; subtitle: string; imageUrl?: string; tag: string; metric: string; location?: string; accent: string }>, sectionId: string, accentClass: string) => (
+    <div className="flex items-stretch gap-4 overflow-x-auto pb-3 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" id={sectionId}>
+      {items.map(item => (
+        <article key={item.id} className="group relative min-w-[280px] max-w-[320px] snap-start overflow-hidden rounded-[26px] border border-amber-500/20 bg-[#111316] shadow-[0_25px_65px_rgba(0,0,0,0.25)] transition-transform duration-300 hover:-translate-y-1">
+          <div className={`absolute inset-0 bg-gradient-to-br ${item.accent}`} />
+          <div className="absolute right-4 top-4 z-10 rounded-full border border-white/20 bg-black/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/90 backdrop-blur-sm">
+            {item.tag}
+          </div>
+          <div className="relative h-52 overflow-hidden border-b border-white/10">
+            {item.imageUrl ? (
+              <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" />
+            ) : (
+              <div className="flex h-full items-center justify-center bg-gradient-to-br from-neutral-800 via-neutral-900 to-neutral-950 text-center text-sm text-neutral-300">Live maker profile</div>
+            )}
+          </div>
+          <div className="relative space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-amber-200/80">
+              <span>{item.metric}</span>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-bold ${accentClass}`}>
+                <Flame className="h-3 w-3" />
+                Hot
+              </span>
+            </div>
+            <h3 className="line-clamp-2 text-lg font-semibold text-white">{item.title}</h3>
+            <p className="text-sm text-neutral-300">{item.subtitle}</p>
+            {item.location && (
+              <div className="flex items-center gap-1 text-xs text-neutral-400">
+                <MapPin className="h-3.5 w-3.5" />
+                <span>{item.location}</span>
+              </div>
+            )}
+          </div>
+        </article>
+      ))}
+    </div>
+  );
 
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-16">
@@ -178,6 +238,110 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
         <div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Current atelier plans</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Promotion that stays current.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 text-xs font-bold text-amber-500 hover:text-amber-300">Meet the artisans <ArrowRight className="h-4 w-4" /></button></div>
         <div className="grid gap-4 md:grid-cols-3">{promoPlans.map(plan => <article key={plan.id} className={`rounded-2xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{plan.badgeLabel || 'Atelier plan'}</p><h3 className="mt-2 text-lg font-serif font-bold">{plan.caption}</h3><p className={`mt-2 min-h-12 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{plan.description}</p><div className="mt-5 flex items-end justify-between gap-3"><strong className="text-xl">{plan.currency} {plan.amount}</strong><span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">{plan.timeRange}</span></div></article>)}</div>
+      </motion.section>
+
+      <motion.section initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300">
+              <Flame className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Marketplace pulse</p>
+              <h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Real buying heat, not random filler</h2>
+            </div>
+          </div>
+          <button type="button" onClick={onExploreMarketplace} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Open marketplace <ArrowRight className="h-4 w-4" /></button>
+        </div>
+
+        <div className="space-y-8">
+          <div className="rounded-[28px] border border-amber-500/15 bg-[radial-gradient(circle_at_top,_rgba(251,146,60,0.22),_transparent_18%),linear-gradient(135deg,#120d0a,#171c23,#111317)] p-4 shadow-[0_30px_70px_rgba(251,146,60,0.12)]">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-amber-300">
+                <TrendingUp className="h-4 w-4" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Most searched</span>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => scrollCarousel('most-searched-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll most searched left"><ChevronLeft className="h-4 w-4" /></button>
+                <button type="button" onClick={() => scrollCarousel('most-searched-track', 1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll most searched right"><ChevronRight className="h-4 w-4" /></button>
+              </div>
+            </div>
+            {renderTrendCards(
+              hottestPosts.map(post => ({
+                id: post.id,
+                title: post.title,
+                subtitle: `${post.authorName} • ${post.tags.slice(0, 2).join(' • ')}`,
+                imageUrl: post.imageUrl,
+                tag: 'Trending',
+                metric: `${(post.likes?.length || 0) + (post.saves?.length || 0) + (post.ratingCount || 0)} live signals`,
+                location: post.authorLocation ? `${post.authorLocation.city}, ${post.authorLocation.country}` : undefined,
+                accent: 'from-orange-400/35 via-amber-500/20 to-transparent',
+              })),
+              'most-searched-track',
+              'bg-amber-500/15 text-amber-200',
+            )}
+          </div>
+
+          <div className="rounded-[28px] border border-amber-500/15 bg-[linear-gradient(135deg,#12161d,#0f172a,#111317)] p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-amber-300">
+                <Zap className="h-4 w-4" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Last week hit</span>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => scrollCarousel('last-week-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll last week hit left"><ChevronLeft className="h-4 w-4" /></button>
+                <button type="button" onClick={() => scrollCarousel('last-week-track', 1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll last week hit right"><ChevronRight className="h-4 w-4" /></button>
+              </div>
+            </div>
+            {renderTrendCards(
+              lastWeekHits.map(post => ({
+                id: post.id,
+                title: post.title,
+                subtitle: `${post.authorName} • ${post.tags[0] || 'fashion'} update`,
+                imageUrl: post.imageUrl,
+                tag: 'Fresh',
+                metric: `${Math.max(1, (post.likes?.length ?? 0) + (post.saves?.length ?? 0))} engaged this week`,
+                location: post.authorLocation ? `${post.authorLocation.city}, ${post.authorLocation.country}` : undefined,
+                accent: 'from-cyan-400/25 via-sky-500/20 to-transparent',
+              })),
+              'last-week-track',
+              'bg-cyan-500/15 text-cyan-200',
+            )}
+          </div>
+
+          <div className="rounded-[28px] border border-amber-500/15 bg-[linear-gradient(135deg,#19120f,#0f1015,#17130d)] p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-amber-300">
+                <Trophy className="h-4 w-4" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Top tailors</span>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => scrollCarousel('top-tailors-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll top tailors left"><ChevronLeft className="h-4 w-4" /></button>
+                <button type="button" onClick={() => scrollCarousel('top-tailors-track', 1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll top tailors right"><ChevronRight className="h-4 w-4" /></button>
+              </div>
+            </div>
+            {renderTrendCards(
+              topTailors.map(seller => {
+                const sellerPosts = posts.filter(post => post.authorId === seller.id);
+                const avgRating = sellerPosts.length ? sellerPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / sellerPosts.length : 0;
+                const featuredImage = sellerPosts[0]?.imageUrl || seller.avatarUrl || '/favicon-32x32.png';
+                const sellerLocation = seller.location ? `${seller.location.city}, ${seller.location.country}` : 'Global atelier';
+                return {
+                  id: seller.id,
+                  title: seller.shopName || seller.name,
+                  subtitle: `${seller.role === 'fabric_seller' ? 'Fabric merchant' : 'Tailor'} • Avg rating ${avgRating.toFixed(1)}/5`,
+                  imageUrl: featuredImage,
+                  tag: seller.isPromoted ? 'Featured' : 'Popular',
+                  metric: `${seller.followers.length} followers`,
+                  location: sellerLocation,
+                  accent: 'from-fuchsia-500/30 via-purple-500/20 to-transparent',
+                };
+              }),
+              'top-tailors-track',
+              'bg-fuchsia-500/15 text-fuchsia-200',
+            )}
+          </div>
+        </div>
       </motion.section>
 
       {/* 3 Pillars / Roles Section */}
