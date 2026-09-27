@@ -23,9 +23,20 @@ async function waitForFirebaseAuth() {
 }
 
 async function getAuthToken(forceRefresh = false) {
+  if (!navigator.onLine) {
+    return null;
+  }
+
   await waitForFirebaseAuth();
   const firebase = await getFirebaseModule();
-  return firebase.firebaseAuth.currentUser ? firebase.firebaseAuth.currentUser.getIdToken(forceRefresh) : null;
+  return firebase.firebaseAuth.currentUser ? firebase.firebaseAuth.currentUser.getIdToken(forceRefresh).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/network|timed out|offline|ERR_CONNECTION_TIMED_OUT/i.test(message)) {
+      console.warn('Firebase auth token unavailable while offline; app will continue with cached content.', error);
+      return null;
+    }
+    throw error;
+  }) : null;
 }
 
 async function request<T>(path: string, options: RequestInit = {}, hasRetried = false) {

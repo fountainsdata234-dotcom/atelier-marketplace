@@ -132,6 +132,8 @@ export default function App() {
     storageService.init();
     if (canRefreshMarketplaceData) {
       void refreshAllData(false);
+    } else {
+      setIsDataLoading(false);
     }
 
     const handleOnline = () => setIsOnline(true);
@@ -170,10 +172,13 @@ export default function App() {
     window.addEventListener('touchend', handlePullRefresh, { passive: true });
 
     let unsubscribeFirebase: (() => void) | undefined;
-    import('./services/firebase').then(({ configureFirebaseAuth, subscribeToFirebaseAuth, toAppUser }) => configureFirebaseAuth().then(() => {
+    import('./services/firebase').then(({ configureFirebaseAuth, subscribeToFirebaseAuth, toAppUser }) => configureFirebaseAuth().catch((error) => {
+      console.warn('Firebase auth configuration skipped offline or failed gracefully.', error);
+    }).finally(() => {
       unsubscribeFirebase = subscribeToFirebaseAuth(async (firebaseUser) => {
         if (!firebaseUser) {
           setCurrentUser(null);
+          setIsDataLoading(false);
           return;
         }
         const baseUser = await toAppUser(firebaseUser);
@@ -181,8 +186,6 @@ export default function App() {
         try {
           savedProfile = await api.getProfile();
         } catch (error) {
-          // A new Firebase account can briefly exist before its profile document is saved.
-          // Keep the authenticated user active and let the profile sync below repair it.
           console.warn('Profile not available yet; using Firebase account details.', error);
         }
         const cachedProfile = storageService.getUsers().find(user => user.id === firebaseUser.uid);
@@ -223,7 +226,10 @@ export default function App() {
         }
         void refreshAllData();
       });
-    })).catch((error) => console.error('Firebase Auth initialization failed', error));
+    })).catch((error) => {
+      console.error('Firebase Auth initialization failed', error);
+      setIsDataLoading(false);
+    });
 
     // Listen to reactive update events
     const handleUsersUpdate = () => setUsers(storageService.getUsers());
@@ -340,7 +346,10 @@ export default function App() {
 
   const refreshAllData = async (showLoader = true) => {
     const isEligibleView = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
-    if (!isEligibleView) return;
+    if (!isEligibleView) {
+      setIsDataLoading(false);
+      return;
+    }
 
     const now = Date.now();
     if (now - lastDataRefreshStartedAt.current < 2_000) return;

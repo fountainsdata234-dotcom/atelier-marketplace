@@ -67,7 +67,20 @@ const resolveAuthPhotoUrl = (firebaseUser: FirebaseUser): string | undefined => 
 };
 
 export async function configureFirebaseAuth() {
-  await setPersistence(firebaseAuth, browserLocalPersistence);
+  if (!navigator.onLine) {
+    return;
+  }
+
+  try {
+    await setPersistence(firebaseAuth, browserLocalPersistence);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/network|timed out|offline|ERR_CONNECTION_TIMED_OUT/i.test(message)) {
+      console.warn('Firebase auth persistence skipped while offline.', error);
+      return;
+    }
+    console.warn('Firebase auth persistence setup failed; continuing without network auth.', error);
+  }
 }
 
 export function subscribeToFirebaseAuth(listener: (user: FirebaseUser | null) => void) {
