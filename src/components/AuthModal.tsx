@@ -394,12 +394,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className={`relative my-3 w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl border shadow-2xl p-4 sm:p-6 md:p-8 transition-colors sm:rounded-3xl ${
+        className={`mobile-panel relative my-2 w-full max-w-4xl max-h-[88vh] overflow-y-auto rounded-2xl border shadow-2xl p-4 sm:p-6 md:p-8 transition-colors sm:rounded-3xl ${
           isDarkMode
             ? 'bg-[#121316] border-neutral-800 text-neutral-100'
             : 'bg-white border-neutral-200 text-neutral-900'
@@ -414,17 +414,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </button>
 
         {/* Modal Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 mb-3">
-            {role === 'tailor' && <Scissors className="w-6 h-6" />}
-            {role === 'fabric_seller' && <Sparkles className="w-6 h-6" />}
-            {role === 'buyer' && <ShoppingBag className="w-6 h-6" />}
-            {role === 'admin' && <Shield className="w-6 h-6" />}
+        <div className="mb-5 text-center sm:mb-6">
+          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
+            {role === 'tailor' && <Scissors className="h-6 w-6" />}
+            {role === 'fabric_seller' && <Sparkles className="h-6 w-6" />}
+            {role === 'buyer' && <ShoppingBag className="h-6 w-6" />}
+            {role === 'admin' && <Shield className="h-6 w-6" />}
           </div>
-          <h2 className="text-2xl font-serif font-bold tracking-tight">
+          <h2 className="text-2xl font-serif font-bold tracking-tight sm:text-3xl">
             {isRegistering ? 'Join the Fabrilux Atelier Network' : 'Welcome Back to Fabrilux Atelier'}
           </h2>
-          <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
+          <p className={`mt-1 text-xs sm:text-sm ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             {isRegistering
               ? 'Choose your membership type to customize your tailored dashboard.'
               : 'Sign in to access your bespoke orders, inventory, or administration.'}
@@ -432,11 +432,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Mode Switcher */}
-        <div className="flex rounded-xl p-1 mb-6 bg-neutral-800/40 border border-neutral-700/40 text-xs font-medium">
+        <div className="mb-5 flex rounded-xl border border-neutral-700/40 bg-neutral-800/40 p-1 text-xs font-medium sm:mb-6">
           <button
             type="button"
             onClick={() => { setIsRegistering(true); setError(null); }}
-            className={`flex-1 py-2 rounded-lg transition-all ${
+            className={`flex-1 rounded-lg py-2.5 transition-all ${
               isRegistering
                 ? 'bg-amber-500 text-neutral-950 font-semibold shadow'
                 : 'text-neutral-400 hover:text-white'
@@ -447,7 +447,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="button"
             onClick={() => { setIsRegistering(false); setError(null); }}
-            className={`flex-1 py-2 rounded-lg transition-all ${
+            className={`flex-1 rounded-lg py-2.5 transition-all ${
               !isRegistering
                 ? 'bg-amber-500 text-neutral-950 font-semibold shadow'
                 : 'text-neutral-400 hover:text-white'
@@ -504,7 +504,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
         </AnimatePresence>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-4">
           {/* Role Picker (Registration only) */}
           {isRegistering && (
             <div>

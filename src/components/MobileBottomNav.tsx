@@ -34,7 +34,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <>
       <div
-          className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 py-1.5 transition-colors ${
+          className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 pb-[calc(0.8rem+env(safe-area-inset-bottom))] pt-2 transition-colors ${
           isDarkMode
             ? 'bg-[#0c0d10]/95 border-neutral-800 text-neutral-300'
             : 'bg-white/95 border-neutral-200 text-neutral-700 shadow-lg'
@@ -45,7 +45,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             <button
               type="button"
               onClick={onInstall}
-              className="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-300"
+              className="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-300"
             >
               <Download className="h-4 w-4" />
               Install app
@@ -54,7 +54,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           <div className="grid grid-cols-4 gap-1.5">
             <button
               onClick={() => handleNavigate(currentUser ? 'marketplace' : 'landing')}
-              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+              className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
                 primaryActionIsActive(currentUser ? 'marketplace' : 'landing') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
@@ -65,7 +65,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller' || currentUser.role === 'admin') ? (
               <button
                 onClick={() => handleNavigate(studioView)}
-                className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+                className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
                   primaryActionIsActive(studioView) ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
                 }`}
               >
@@ -75,7 +75,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             ) : (
               <button
                 onClick={() => onOpenAuth()}
-                className="flex flex-col items-center gap-0.5 rounded-xl p-2 text-neutral-400 transition-all"
+                className="flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 text-neutral-400 transition-all"
               >
                 <LogIn className="w-5 h-5 text-amber-500" />
                 <span className="text-[10px] font-medium">Join</span>
@@ -84,7 +84,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
             <button
               onClick={() => handleNavigate(currentUser ? 'messages' : 'artisan')}
-              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+              className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
                 primaryActionIsActive(currentUser ? 'messages' : 'artisan') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
@@ -94,7 +94,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
             <button
               onClick={() => handleNavigate(currentUser ? 'profile' : 'about')}
-              className={`flex flex-col items-center gap-0.5 rounded-xl p-2 transition-all ${
+              className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
                 primaryActionIsActive(currentUser ? 'profile' : 'about') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
