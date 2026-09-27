@@ -22,6 +22,8 @@
   html {
     scroll-behavior: smooth;
     overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   #root {
@@ -40,6 +42,7 @@
     color: var(--color-text-light);
     transition: background-color 0.3s ease, color 0.3s ease;
     overflow-x: hidden;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
   h1, h2, h3, .font-serif-luxury {
@@ -149,12 +152,17 @@
 
   button, input, select, textarea {
     font: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button {
+    min-height: 2.9rem;
   }
 
   input:not([type='checkbox']):not([type='radio']):not([type='file']),
   select,
   textarea {
-    min-height: 3rem;
+    min-height: 3.1rem;
     padding: 0.8rem 0.9rem;
     border-radius: 0.9rem;
     font-size: 1rem !important;
@@ -194,6 +202,10 @@
     font-size: 0.875rem;
   }
 
+  .mobile-panel {
+    border-radius: 1.5rem;
+  }
+
   img, video, canvas, svg {
     max-width: 100%;
   }
@@ -203,13 +215,22 @@
   input:not([type='checkbox']):not([type='radio']):not([type='file']),
   select,
   textarea {
-    min-height: 3.2rem;
-    padding: 0.9rem 1rem;
+    min-height: 3.35rem;
+    padding: 0.95rem 1rem;
     font-size: 1rem !important;
   }
 
   textarea {
     min-height: 7.5rem;
+  }
+
+  button {
+    min-height: 3.1rem;
+    border-radius: 0.95rem;
+  }
+
+  .mobile-panel {
+    border-radius: 1.25rem;
   }
 }
 

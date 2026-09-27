@@ -515,40 +515,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setRole('tailor')}
-                  className={`p-3 rounded-xl border text-left flex flex-col items-center text-center gap-1 transition-all ${
+                  className={`min-h-[3.4rem] p-3 rounded-xl border text-left flex flex-col items-center text-center gap-1 transition-all ${
                     role === 'tailor'
                       ? 'border-amber-500 bg-amber-500/15 text-amber-300'
                       : 'border-neutral-700/60 hover:border-neutral-600 text-neutral-400'
                   }`}
                 >
                   <Scissors className="w-4 h-4" />
-                  <span className="text-xs font-semibold">Master Tailor</span>
+                  <span className="text-xs font-semibold sm:text-[11px]">Master Tailor</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setRole('fabric_seller')}
-                  className={`p-3 rounded-xl border text-left flex flex-col items-center text-center gap-1 transition-all ${
+                  className={`min-h-[3.4rem] p-3 rounded-xl border text-left flex flex-col items-center text-center gap-1 transition-all ${
                     role === 'fabric_seller'
                       ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
                       : 'border-neutral-700/60 hover:border-neutral-600 text-neutral-400'
                   }`}
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span className="text-xs font-semibold">Fabric Merchant</span>
+                  <span className="text-xs font-semibold sm:text-[11px]">Fabric Merchant</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setRole('buyer')}
-                  className={`p-3 rounded-xl border text-left flex flex-col items-center text-center gap-1 transition-all ${
+                  className={`min-h-[3.4rem] p-3 rounded-xl border text-left flex flex-col items-center text-center gap-1 transition-all ${
                     role === 'buyer'
                       ? 'border-purple-500 bg-purple-500/15 text-purple-300'
                       : 'border-neutral-700/60 hover:border-neutral-600 text-neutral-400'
                   }`}
                 >
                   <ShoppingBag className="w-4 h-4" />
-                  <span className="text-xs font-semibold">Client / Buyer</span>
+                  <span className="text-xs font-semibold sm:text-[11px]">Client / Buyer</span>
                 </button>
               </div>
             </div>
@@ -830,7 +830,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={isResettingPassword || isSubmitting}
-            className="w-full py-3 rounded-xl font-medium text-xs uppercase tracking-wider text-neutral-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:shadow-lg hover:shadow-amber-500/20 transition-all duration-200 mt-2 cursor-pointer font-sans disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full min-h-[3.25rem] rounded-xl font-medium text-sm uppercase tracking-wider text-neutral-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:shadow-lg hover:shadow-amber-500/20 transition-all duration-200 mt-2 cursor-pointer font-sans disabled:opacity-70 disabled:cursor-not-allowed"
           >
             <span className="inline-flex items-center justify-center gap-2">
               {isSubmitting && <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-900/30 border-t-neutral-900" />}
