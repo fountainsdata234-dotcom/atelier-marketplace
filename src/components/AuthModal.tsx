@@ -49,6 +49,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [selectedCountryCode, setSelectedCountryCode] = useState('NG');
   const [selectedStateCode, setSelectedStateCode] = useState('');
   const [selectedCityName, setSelectedCityName] = useState('');
+  const [selectedCurrency, setSelectedCurrency] = useState('NGN');
   const [countrySearch, setCountrySearch] = useState('Nigeria');
   const [stateSearch, setStateSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
@@ -89,6 +90,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const states = selectedCountry.states;
   const currentStateObj = states.find(s => s.code === selectedStateCode) || null;
   const cities = currentStateObj ? currentStateObj.cities : [];
+  const CURRENCY_OPTIONS = ['NGN', 'USD', 'EUR', 'GBP', 'ZAR', 'KES', 'GHS', 'EGP', 'MAD', 'AED', 'CAD', 'CHF', 'XOF'];
+
+  useEffect(() => {
+    const nextCurrency = selectedCountry.currency || 'USD';
+    setSelectedCurrency((currentCurrency) => {
+      if (!currentCurrency || !CURRENCY_OPTIONS.includes(currentCurrency) || currentCurrency === nextCurrency) {
+        return nextCurrency;
+      }
+      return currentCurrency;
+    });
+  }, [selectedCountryCode, selectedCountry.currency]);
 
   const filteredCountries = WORLD_COUNTRIES.filter((country) => {
     const term = countrySearch.trim().toLowerCase();
@@ -313,7 +325,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       name: name.trim(),
       phone: parsedPhone.formatInternational(),
       countryCode: selectedCountry.dialCode,
-      location: { country: selectedCountry.name, countryCode: selectedCountry.code, currency: selectedCountry.currency, state: currentStateObj?.name || '', city: selectedCityName, ...coordinates },
+      location: {
+        country: selectedCountry.name,
+        countryCode: selectedCountry.code,
+        currency: selectedCurrency || selectedCountry.currency || 'USD',
+        state: currentStateObj?.name || '',
+        city: selectedCityName,
+        ...coordinates,
+      },
       whatsappNumber: parsedWhatsapp.formatInternational(),
       shopName: shopName.trim() || undefined,
       handle: userHandle,
@@ -662,6 +681,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     listId="city-search-list"
                     required
                   />
+                </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-400">
+                    Listing currency
+                  </label>
+                  <select
+                    value={selectedCurrency || selectedCountry.currency || 'USD'}
+                    onChange={(event) => setSelectedCurrency(event.target.value || selectedCountry.currency || 'USD')}
+                    className="w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-3 py-2 text-xs text-neutral-100 focus:border-amber-500 focus:outline-none"
+                  >
+                    {CURRENCY_OPTIONS.map((currency) => (
+                      <option key={currency} value={currency}>
+                        {currency} - {currency === (selectedCountry.currency || 'USD') ? 'Default for this country' : 'Available'}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <p className="text-[10px] text-neutral-500">
                   Local currency: <span className="text-amber-400 font-medium">{selectedCountry.currency}</span>
