@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /marketplace
+Allow: /artisan
+Allow: /about
+Allow: /privacy
+Allow: /terms
+Allow: /contact
+Disallow: /api/
+Disallow: /admin/
+Disallow: /dashboard/
+Disallow: /profile/
+Disallow: /messages/
+Disallow: /collections
+
+Sitemap: https://fabrilux-atelier.vercel.app/sitemap.xml
