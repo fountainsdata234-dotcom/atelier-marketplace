@@ -21,6 +21,14 @@
       "destination": "/sw.js"
     },
     {
+      "source": "/robots.txt",
+      "destination": "/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/sitemap.xml"
+    },
+    {
       "source": "/marketplace",
       "destination": "/index.html"
     },
