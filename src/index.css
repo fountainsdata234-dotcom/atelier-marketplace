@@ -147,12 +147,69 @@
     to { transform: translate3d(-0.7rem, 0.55rem, 0); opacity: 0.8; }
   }
 
-  button, input, select {
+  button, input, select, textarea {
     font: inherit;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  select,
+  textarea {
+    min-height: 3rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 0.9rem;
+    font-size: 1rem !important;
+    line-height: 1.45;
+    color: #f5f5f5;
+    background: rgba(24, 26, 32, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  }
+
+  input::placeholder,
+  textarea::placeholder,
+  select::placeholder {
+    color: rgba(148, 163, 184, 0.8);
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: rgba(251, 191, 36, 0.9);
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.12);
+    background: rgba(17, 18, 22, 0.82);
+  }
+
+  textarea {
+    min-height: 7rem;
+    resize: vertical;
+  }
+
+  input[type='file'] {
+    font-size: 0.95rem;
+    min-height: 3rem;
+  }
+
+  label {
+    font-size: 0.875rem;
   }
 
   img, video, canvas, svg {
     max-width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  select,
+  textarea {
+    min-height: 3.2rem;
+    padding: 0.9rem 1rem;
+    font-size: 1rem !important;
+  }
+
+  textarea {
+    min-height: 7.5rem;
   }
 }
 
