@@ -5,9 +5,10 @@
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self), clipboard-read=(), clipboard-write=()" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://apis.google.com https://www.gstatic.com https://*.gstatic.com; connect-src 'self' https://atelier-marketplace.onrender.com https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com https://www.googleapis.com https://nominatim.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; manifest-src 'self';" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://apis.google.com https://www.gstatic.com https://*.gstatic.com; connect-src 'self' https://atelier-marketplace.onrender.com https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com https://www.googleapis.com https://nominatim.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; manifest-src 'self';" }
       ]
     }
   ],

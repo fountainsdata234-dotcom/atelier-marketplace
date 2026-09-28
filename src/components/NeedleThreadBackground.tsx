@@ -31,6 +31,7 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (window.matchMedia('(max-width: 767px), (prefers-reduced-motion: reduce)').matches) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;

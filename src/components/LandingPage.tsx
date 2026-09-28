@@ -34,6 +34,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
   const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
+  const [disableGlobeMotion, setDisableGlobeMotion] = React.useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px), (prefers-reduced-motion: reduce)').matches);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
   const searchHistory = React.useMemo(() => storageService.getSearchHistory(currentUser?.id || 'guest'), [currentUser?.id]);
@@ -67,6 +68,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     }), [posts, users]);
 
   React.useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px), (prefers-reduced-motion: reduce)');
+    const updateMotionPreference = () => setDisableGlobeMotion(mediaQuery.matches);
+    updateMotionPreference();
+    mediaQuery.addEventListener('change', updateMotionPreference);
+    return () => mediaQuery.removeEventListener('change', updateMotionPreference);
+  }, []);
+
+  React.useEffect(() => {
+    if (disableGlobeMotion) {
+      setShouldLoadGlobe(false);
+      return;
+    }
     const section = globeSectionRef.current;
     if (!section) return;
     const observer = new IntersectionObserver(([entry]) => {
@@ -76,7 +89,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     }, { rootMargin: '320px' });
     observer.observe(section);
     return () => observer.disconnect();
-  }, []);
+  }, [disableGlobeMotion]);
 
   const scrollCarousel = (sectionId: string, direction: number) => {
     const element = document.getElementById(sectionId);
@@ -229,7 +242,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
 
                     <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
-                      {featuredPost ? <img src={featuredPost.imageUrl} alt={featuredPost.imageAlt || featuredPost.title || 'Atelier product showcase'} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" decoding="async" /> : <div className="flex h-full animate-pulse items-center justify-center rounded-[20px] border border-amber-500/20 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.15),rgba(17,19,22,0.9))] px-6 text-center text-xs text-neutral-300">Loading fresh seller pieces…</div>}
+                      {featuredPost ? <img src={featuredPost.imageUrl} alt={featuredPost.imageAlt || featuredPost.title || 'Atelier product showcase'} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" fetchPriority="high" decoding="async" /> : <div className="flex h-full animate-pulse items-center justify-center rounded-[20px] border border-amber-500/20 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.15),rgba(17,19,22,0.9))] px-6 text-center text-xs text-neutral-300">Loading fresh seller pieces…</div>}
                     </div>
                     <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-neutral-300">{featuredPost?.description || 'A living catalogue of garments, fabrics, and ideas published by the people who make them.'}</p>
                   </div>
@@ -261,7 +274,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <motion.section ref={globeSectionRef} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Live network preview</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">See where the craft lives.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Open artisan directory <ArrowRight className="h-4 w-4" /></button></div>
         <div className="landing-globe overflow-hidden">
-          {previewArtisans.length > 0 ? shouldLoadGlobe ? <React.Suspense fallback={<div className="h-[22rem] animate-pulse rounded-xl bg-neutral-900/70" aria-label="Loading artisan globe" />}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreArtisans} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="h-[22rem] rounded-xl bg-neutral-900/40" aria-hidden="true" /> : <div className="flex h-[22rem] items-center justify-center px-6 text-center text-xs text-amber-100/60">The live globe will populate as artisans join the network.</div>}
+          {previewArtisans.length > 0 ? disableGlobeMotion ? <div className="flex h-[22rem] flex-col items-center justify-center gap-4 rounded-xl bg-neutral-900/40 px-6 text-center"><p className="text-sm text-neutral-300">{previewArtisans.length} local makers are on the network.</p><button type="button" onClick={onExploreArtisans} className="inline-flex min-h-11 items-center justify-center rounded-full bg-amber-400 px-5 text-sm font-semibold text-neutral-950">Browse artisans</button></div> : shouldLoadGlobe ? <React.Suspense fallback={<div className="h-[22rem] animate-pulse rounded-xl bg-neutral-900/70" aria-label="Loading artisan globe" />}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreArtisans} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="h-[22rem] rounded-xl bg-neutral-900/40" aria-hidden="true" /> : <div className="flex h-[22rem] items-center justify-center px-6 text-center text-xs text-amber-100/60">The live globe will populate as artisans join the network.</div>}
         </div>
       </motion.section>
 
