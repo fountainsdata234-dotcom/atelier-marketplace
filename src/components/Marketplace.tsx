@@ -580,7 +580,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   }}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs hover:bg-amber-500/10"
                 >
-                  {suggestion.user?.avatarUrl ? <img src={suggestion.user.avatarUrl} alt="" className="h-9 w-9 rounded-lg object-cover" /> : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span> : suggestion.post ? <img src={suggestion.post.imageUrl} alt="" className="h-9 w-9 rounded-lg object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
+                  {suggestion.user?.avatarUrl ? <img src={suggestion.user.avatarUrl} alt={suggestion.user.name || 'Seller avatar'} className="h-9 w-9 rounded-lg object-cover" /> : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span> : suggestion.post ? <img src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
                   <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? 'Collection piece' : 'Category'}</small></span>
                 </button>
               ))}
@@ -624,7 +624,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   className="relative aspect-[10/13] min-h-[320px] sm:aspect-[16/7] sm:min-h-[320px]"
                 >
                   <button type="button" onClick={() => onSelectPost(post)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-pointer">
-                    <img src={post.imageUrl} alt={post.title} className="h-full w-full object-cover" loading="eager" />
+                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-cover" loading="eager" />
                   </button>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.22),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.22),rgba(0,0,0,0.78))] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.25),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.9),rgba(0,0,0,0.55),rgba(0,0,0,0.2))]" />
 
@@ -645,7 +645,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       if (author) onSelectSeller(author);
                     }} aria-label={`View ${post.authorName}'s atelier`} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/40 px-1.5 py-1 text-left backdrop-blur-md transition hover:border-amber-300/70 sm:px-2 sm:py-1.5">
                       {post.authorAvatar ? (
-                        <img src={post.authorAvatar} alt="" className="h-7 w-7 rounded-full object-cover ring-2 ring-amber-300/80 sm:h-8 sm:w-8" />
+                        <img src={post.authorAvatar} alt={post.authorName || 'Seller avatar'} className="h-7 w-7 rounded-full object-cover ring-2 ring-amber-300/80 sm:h-8 sm:w-8" />
                       ) : (
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-neutral-950 ring-2 ring-amber-200/80 sm:h-8 sm:w-8 sm:text-sm">
                           {post.authorName.slice(0, 2).toUpperCase()}
@@ -759,7 +759,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   }}
                 >
                   <div className="relative overflow-hidden">
-                    <img src={post.imageUrl} alt="" className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-3">
                       <p className="text-xs font-semibold truncate text-white">{post.title}</p>
@@ -1009,7 +1009,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     if (author) onSelectSeller(author);
                   }} className="flex min-w-0 items-center gap-2.5 text-left">
                     <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-xs flex items-center justify-center overflow-hidden">
-                      {post.authorAvatar ? <img src={post.authorAvatar} alt="" className="h-full w-full object-cover" /> : post.authorName.charAt(0)}
+                      {post.authorAvatar ? <img src={post.authorAvatar} alt={`${post.authorName || 'Seller'} avatar`} className="h-full w-full object-cover" /> : post.authorName.charAt(0)}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">

@@ -229,7 +229,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
 
                     <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
-                      {featuredPost ? <img src={featuredPost.imageUrl} alt={featuredPost.title} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" decoding="async" /> : <div className="flex h-full items-center justify-center px-6 text-center text-xs text-neutral-500">Seller work will appear here as the network grows.</div>}
+                      {featuredPost ? <img src={featuredPost.imageUrl} alt={featuredPost.imageAlt || featuredPost.title || 'Atelier product showcase'} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" decoding="async" /> : <div className="flex h-full animate-pulse items-center justify-center rounded-[20px] border border-amber-500/20 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.15),rgba(17,19,22,0.9))] px-6 text-center text-xs text-neutral-300">Loading fresh seller pieces…</div>}
                     </div>
                     <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-neutral-300">{featuredPost?.description || 'A living catalogue of garments, fabrics, and ideas published by the people who make them.'}</p>
                   </div>

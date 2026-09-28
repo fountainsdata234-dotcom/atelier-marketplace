@@ -17,3 +17,21 @@ export function getRoleLabel(role: UserRole): string {
 export function getHandleSlug(handle: string): string {
   return handle.replace(/^@/, '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-');
 }
+
+export function getImageAltText(input?: string, fallback?: string): string {
+  const value = input?.trim();
+  if (value) return value;
+  return fallback || 'Atelier marketplace product image';
+}
+
+export function buildSellerShareUrl(origin: string, handle: string): string {
+  return `${origin}/@${getHandleSlug(handle)}`;
+}
+
+export function buildPostShareUrl(origin: string, handle: string, postId: string): string {
+  return `${buildSellerShareUrl(origin, handle)}/post/${encodeURIComponent(postId)}`;
+}
+
+export function buildCollectionShareUrl(origin: string, handle: string, collectionId: string): string {
+  return `${buildSellerShareUrl(origin, handle)}/collection/${encodeURIComponent(collectionId)}`;
+}

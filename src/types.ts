@@ -73,6 +73,7 @@ export interface ClothPost {
   tags: string[];
   pricing: PricingBreakdown;
   imageUrl: string;
+  imageAlt?: string;
   imageHostSource?: string;
   likes: string[]; // User IDs who liked
   saves: string[]; // User IDs who saved picture

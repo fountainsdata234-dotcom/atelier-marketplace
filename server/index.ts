@@ -449,6 +449,7 @@ app.get('/api/posts', async (_req, res) => {
       saves: savesSnapshot.docs.map(item => item.id),
       rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : 0,
       ratingCount: ratings.length,
+      imageAlt: typeof data.imageAlt === 'string' ? data.imageAlt.trim() : undefined,
     };
     }))).filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
     postsCache = { expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS, value: posts };
@@ -612,6 +613,7 @@ app.post('/api/posts', requireAuth, requireActiveAccount, async (req: Authentica
     title: input.title.trim().slice(0, 160),
     description: typeof input.description === 'string' ? input.description.trim().slice(0, 3000) : '',
     imageUrl: input.imageUrl.slice(0, 2_000_000),
+    imageAlt: typeof input.imageAlt === 'string' ? input.imageAlt.trim().slice(0, 250) || `${input.title.trim()} by ${authorProfile.data()?.shopName || authorProfile.data()?.name || 'Atelier seller'}` : `${input.title.trim()} by ${authorProfile.data()?.shopName || authorProfile.data()?.name || 'Atelier seller'}`,
     tags: Array.isArray(input.tags) ? input.tags.filter((tag: unknown) => typeof tag === 'string').slice(0, 30) : [],
     pricing: input.pricing && typeof input.pricing === 'object' ? input.pricing : {},
     createdAt: new Date().toISOString(),

@@ -63,7 +63,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
         <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/25 via-neutral-950 to-orange-900/30 p-6 sm:p-10">
           <img
             src={SELLER_ATELIER_IMAGE}
-            alt=""
+            alt={seller.name ? `${seller.name} showroom banner` : 'Seller showroom banner'}
             aria-hidden="true"
             loading="lazy"
             decoding="async"

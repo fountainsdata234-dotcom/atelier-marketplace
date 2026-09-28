@@ -25,7 +25,7 @@ import { ContentSkeleton } from './components/ContentSkeleton';
 import { LegalPage } from './components/LegalPage';
 import { SellerProfilePage } from './components/SellerProfilePage';
 import { api } from './services/api';
-import { getHandleSlug } from './utils/profile';
+import { buildPostShareUrl, buildSellerShareUrl, getHandleSlug } from './utils/profile';
 
 const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
   '/': 'landing',
@@ -577,7 +577,7 @@ export default function App() {
     setSocialShareHandle(tailor.handle);
     setSocialShareName(tailor.name);
     setSharedPostId(null);
-    setSocialShareUrl(`${window.location.origin}/@${getHandleSlug(tailor.handle)}`);
+    setSocialShareUrl(buildSellerShareUrl(window.location.origin, tailor.handle));
     setSocialShareOpen(true);
   };
 
@@ -610,7 +610,7 @@ export default function App() {
   };
 
   const sharedProfileUrl = socialShareUrl || (socialShareHandle
-    ? `${window.location.origin}/@${getHandleSlug(socialShareHandle)}`
+    ? buildSellerShareUrl(window.location.origin, socialShareHandle)
     : window.location.origin);
 
   const handleSharePost = (post: ClothPost) => {
@@ -618,7 +618,7 @@ export default function App() {
     if (currentUser) void api.recordDiscoveryEvent(post.id, 'SHARE', sessionStorage.getItem('atelier_session_id') || 'app-session');
     setSocialShareHandle(post.authorHandle);
     setSocialShareName(`${post.title} by ${post.authorName}`);
-    setSocialShareUrl(`${window.location.origin}/@${getHandleSlug(post.authorHandle)}/post/${encodeURIComponent(post.id)}`);
+    setSocialShareUrl(buildPostShareUrl(window.location.origin, post.authorHandle, post.id));
     setSocialShareOpen(true);
   };
 
@@ -837,7 +837,7 @@ export default function App() {
                 onOpenSocialShare={(handle, name) => {
                   setSocialShareHandle(handle);
                   setSocialShareName(name);
-                  setSocialShareUrl(`${window.location.origin}/@${getHandleSlug(handle)}`);
+                  setSocialShareUrl(buildSellerShareUrl(window.location.origin, handle));
                   setSocialShareOpen(true);
                 }}
                 isDarkMode={isDarkMode}

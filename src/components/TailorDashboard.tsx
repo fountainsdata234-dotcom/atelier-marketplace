@@ -26,6 +26,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   // Post Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [imageAlt, setImageAlt] = useState('');
   const [tagsInput, setTagsInput] = useState('');
   const [pricingBasic, setPricingBasic] = useState<number>(0);
 
@@ -197,6 +198,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         bespokeComplexity: 0,
       },
       imageUrl: imageUrl.trim(),
+      imageAlt: imageAlt.trim() || `${title.trim()} by ${currentUser.shopName || currentUser.name}`,
       imageHostSource: compressionStats ? `Firebase Storage · ${compressionStats.compressedSizeKb}KB` : 'External Link'
     };
 
@@ -215,6 +217,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     setPostStatus({ type: 'success', message: 'Post published successfully to the marketplace!' });
     setTitle('');
     setDescription('');
+    setImageAlt('');
     setTagsInput('');
     setImageUrl('');
     setCompressionStats(null);
@@ -514,6 +517,11 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                           <button key={tag} type="button" onClick={() => setTagsInput(prev => { const currentValues = prev.split(',').map(item => item.trim()).filter(Boolean); return currentValues.includes(tag) ? prev : `${prev ? `${prev}, ` : ''}${tag}`; })} className="rounded-full border border-neutral-700 bg-neutral-800/60 px-2.5 py-1 text-[10px] text-neutral-300 hover:border-amber-500 hover:text-amber-300">{tag}</button>
                         ))}
                       </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-400 mb-1.5">Image Alt Description</label>
+                      <input type="text" disabled={currentUser.isBlocked} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="e.g. Tailored ivory wedding suit photographed in daylight on a neutral studio backdrop" className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none" />
+                      <p className="mt-1 text-[10px] text-neutral-500">This helps screen readers and makes the collection more professional.</p>
                     </div>
                     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4">
                       <span className="block text-xs font-semibold text-amber-400 font-mono">Seller Price ({currentUser.location.currency || 'USD'})</span>
