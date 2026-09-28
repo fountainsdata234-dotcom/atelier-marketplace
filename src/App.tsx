@@ -9,7 +9,7 @@ import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
 import { CollectionPage } from './components/CollectionPage';
 import { ProfilePage } from './components/ProfilePage';
-import { ArtisanDirectory } from './components/ArtisanDirectory';
+const ArtisanDirectory = lazy(() => import('./components/ArtisanDirectory').then(module => ({ default: module.ArtisanDirectory })));
 const Marketplace = lazy(() => import('./components/Marketplace').then(module => ({ default: module.Marketplace })));
 const PostDetailPage = lazy(() => import('./components/PostDetailPage').then(module => ({ default: module.PostDetailPage })));
 const TailorDashboard = lazy(() => import('./components/TailorDashboard').then(module => ({ default: module.TailorDashboard })));
@@ -74,6 +74,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [posts, setPosts] = useState<ClothPost[]>([]);
+  const [postsLoadError, setPostsLoadError] = useState(false);
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -131,7 +132,7 @@ export default function App() {
   useEffect(() => {
     storageService.init();
     if (canRefreshMarketplaceData) {
-      void refreshAllData(false);
+      void refreshAllData(true);
     } else {
       setIsDataLoading(false);
     }
@@ -178,7 +179,6 @@ export default function App() {
       unsubscribeFirebase = subscribeToFirebaseAuth(async (firebaseUser) => {
         if (!firebaseUser) {
           setCurrentUser(null);
-          setIsDataLoading(false);
           return;
         }
         const baseUser = await toAppUser(firebaseUser);
@@ -358,29 +358,56 @@ export default function App() {
 
     const refreshTask = async () => {
       if (showLoader) setIsDataLoading(true);
+      setPostsLoadError(false);
       const localUsers = storageService.getUsers();
       const localPosts = storageService.getPosts();
+      const availablePosts = localPosts.length > 0 ? localPosts : posts;
       setCurrentUser(storageService.getCurrentUser());
 
       if (localUsers.length > 0) {
         setUsers(localUsers);
       }
-      if (localPosts.length > 0 || posts.length > 0) {
-        setPosts(localPosts);
+      if (availablePosts.length > 0) {
+        setPosts(availablePosts);
+        if (showLoader) setIsDataLoading(false);
       }
 
       setPromoPlans(storageService.getPromoPlans());
       setBroadcasts(storageService.getBroadcasts());
-      if (showLoader) setIsDataLoading(false);
-
       try {
-        const [usersResult, postsResult, plansResult] = await Promise.allSettled([
-          api.getUsers(),
-          api.getPosts(),
-          api.getPromoPlans(),
-        ]);
+        const usersRequest = api.getUsers();
+        const postsRequest = api.getPosts();
+        const plansRequest = api.getPromoPlans();
+        let remotePosts: ClothPost[] | null = null;
+        try {
+          remotePosts = await postsRequest;
+        } catch (error) {
+          console.warn('Marketplace listings could not be refreshed.', error);
+          setPostsLoadError(availablePosts.length === 0);
+        }
+
+        if (remotePosts !== null) {
+          const normalizedPosts = remotePosts.map(post => ({
+            ...post,
+            likes: Array.isArray(post.likes) ? post.likes : [],
+            saves: Array.isArray(post.saves) ? post.saves : [],
+            tags: Array.isArray(post.tags) ? post.tags : [],
+            ratingsByUser: post.ratingsByUser || {},
+            rating: Number(post.rating) || 0,
+            ratingCount: Number(post.ratingCount) || 0,
+            authorLocation: post.authorLocation || { country: '', state: '', city: '' },
+          }));
+          const postsToDisplay = normalizedPosts.length === 0 && availablePosts.length > 0
+            ? availablePosts
+            : normalizedPosts;
+          storageService.savePosts(postsToDisplay);
+          setPosts(postsToDisplay);
+          setPostsLoadError(false);
+        }
+        if (showLoader) setIsDataLoading(false);
+
+        const [usersResult, plansResult] = await Promise.allSettled([usersRequest, plansRequest]);
         const remoteUsers = usersResult.status === 'fulfilled' ? usersResult.value : null;
-        const remotePosts = postsResult.status === 'fulfilled' ? postsResult.value : null;
         const remotePlans = plansResult.status === 'fulfilled' ? plansResult.value : null;
         if (remoteUsers !== null) {
           const localUsers = storageService.getUsers();
@@ -405,23 +432,6 @@ export default function App() {
           setUsers(mergedUsers);
         }
 
-        if (remotePosts !== null) {
-          const normalizedPosts = remotePosts.map(post => ({
-            ...post,
-            likes: Array.isArray(post.likes) ? post.likes : [],
-            saves: Array.isArray(post.saves) ? post.saves : [],
-            tags: Array.isArray(post.tags) ? post.tags : [],
-            ratingsByUser: post.ratingsByUser || {},
-            rating: Number(post.rating) || 0,
-            ratingCount: Number(post.ratingCount) || 0,
-            authorLocation: post.authorLocation || { country: '', state: '', city: '' },
-          }));
-          storageService.savePosts(normalizedPosts);
-          setPosts(normalizedPosts);
-        }
-
-        if (showLoader) setIsDataLoading(false);
-
         if (remotePlans !== null && remotePlans.length > 0) {
           const localPlans = storageService.getPromoPlans();
           const completePlans = [0, 1, 2]
@@ -443,6 +453,9 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!marketplaceViews.includes(currentView)) return;
+    const hasCachedPosts = storageService.getPosts().length > 0;
+    void refreshAllData(!hasCachedPosts && posts.length === 0);
     const refreshTimer = window.setInterval(() => {
       if (document.visibilityState === 'visible' && marketplaceViews.includes(currentView)) {
         void refreshAllData(false);
@@ -737,6 +750,8 @@ export default function App() {
             >
               <Marketplace
                 posts={posts}
+                postsLoadError={postsLoadError}
+                onRetryLoad={() => void refreshAllData(true)}
                 users={users}
                 currentUser={currentUser}
                 onOpenAuth={() => handleOpenAuthWithRole('buyer')}

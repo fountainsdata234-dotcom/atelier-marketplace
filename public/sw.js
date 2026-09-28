@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabrilux-atelier-v7';
+const CACHE_NAME = 'fabrilux-atelier-v8';
 const APP_SHELL = ['/index.html', '/manifest.webmanifest'];
 
 const isStaticAssetRequest = (url) => {
@@ -29,25 +29,32 @@ self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
 
-  if (requestUrl.pathname.startsWith('/api/')) {
-    return;
-  }
-
   const isPublicDataRequest = ['/api/users', '/api/posts', '/api/promo-plans'].includes(requestUrl.pathname);
   if (isPublicDataRequest) {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
+      (async () => {
+        try {
+          const response = await fetch(event.request);
           if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, response.clone());
+          } else {
+            const cachedResponse = await caches.match(event.request);
+            if (cachedResponse) return cachedResponse;
           }
           return response;
-        })
-        .catch(() => caches.match(event.request).then((cachedResponse) => cachedResponse || new Response('[]', { headers: { 'Content-Type': 'application/json' } })))
+        } catch {
+          return await caches.match(event.request) || new Response(
+            JSON.stringify({ error: 'Marketplace data is unavailable offline.' }),
+            { status: 503, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+      })(),
     );
     return;
   }
+
+  if (requestUrl.pathname.startsWith('/api/')) return;
 
   if (event.request.mode === 'navigate') {
     event.respondWith(

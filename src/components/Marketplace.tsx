@@ -12,6 +12,8 @@ import { calculateFeedScore, getRatingQuality, rankTrendingPosts } from '../util
 
 interface MarketplaceProps {
   posts: ClothPost[];
+  postsLoadError: boolean;
+  onRetryLoad: () => void;
   users: User[];
   currentUser: User | null;
   onOpenAuth: () => void;
@@ -36,6 +38,8 @@ const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: num
 
 export const Marketplace: React.FC<MarketplaceProps> = ({
   posts,
+  postsLoadError,
+  onRetryLoad,
   users,
   currentUser,
   onOpenAuth,
@@ -932,23 +936,55 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </div>
 
           <h3 className="text-2xl font-serif font-bold mb-2">
-            {currentUser?.role === 'tailor'
-              ? 'No cloth posts yet — publish your first collection'
-              : currentUser?.role === 'fabric_seller'
-                ? 'No fabric posts yet — list your first material stock'
-                : 'No cloths are available right now'}
+            {postsLoadError
+              ? 'The atelier feed could not be reached'
+              : sellerPosts.length > 0
+                ? 'No pieces match this view'
+                : currentUser?.role === 'tailor'
+                  ? 'Your first collection is waiting to be shared'
+                  : currentUser?.role === 'fabric_seller'
+                    ? 'Your fabric collection is ready to be listed'
+                    : 'Fresh work from the atelier is on its way'}
           </h3>
 
           <p className={`text-xs max-w-md mx-auto mb-6 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-            {currentUser?.role === 'tailor'
-              ? 'Tailors can publish garments, pricing, and fabric details here for buyers to discover and order.'
-              : currentUser?.role === 'fabric_seller'
-                ? 'Fabric sellers can upload materials, textures, and wholesale details for designers and tailors.'
-                : 'The marketplace is empty right now. Tailors and fabric sellers can post new items to fill the feed.'}
+            {postsLoadError
+              ? 'Your saved listings are safe. Check your connection and try loading the feed again.'
+              : sellerPosts.length > 0
+                ? 'Try clearing your search, category, or location filters to see more listings.'
+                : currentUser?.role === 'tailor'
+                  ? 'Publish garments, pricing, and fabric details for buyers to discover.'
+                  : currentUser?.role === 'fabric_seller'
+                    ? 'List materials, textures, and wholesale details for designers and tailors.'
+                    : 'New garments and fabrics from independent makers will appear here as they publish.'}
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') ? (
+            {postsLoadError ? (
+              <button
+                type="button"
+                onClick={onRetryLoad}
+                className="rounded-xl bg-amber-400 px-5 py-2.5 text-xs font-semibold text-neutral-950 transition hover:bg-amber-300"
+              >
+                Retry loading listings
+              </button>
+            ) : sellerPosts.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedTag('all');
+                  setFilterCountry('all');
+                  setFilterState('all');
+                  setFilterCity('all');
+                  setNearMeActive(false);
+                  setUserCoords(null);
+                }}
+                className="rounded-xl bg-amber-400 px-5 py-2.5 text-xs font-semibold text-neutral-950 transition hover:bg-amber-300"
+              >
+                Reset search and filters
+              </button>
+            ) : currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') ? (
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: 'dashboard' }))}
                 className="px-5 py-2.5 rounded-xl text-xs font-semibold text-neutral-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:shadow-lg hover:shadow-amber-500/25 transition-all"

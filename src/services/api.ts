@@ -40,7 +40,9 @@ async function getAuthToken(forceRefresh = false) {
 }
 
 async function request<T>(path: string, options: RequestInit = {}, hasRetried = false) {
-  const token = await getAuthToken(hasRetried);
+  const method = (options.method || 'GET').toUpperCase();
+  const isPublicRead = method === 'GET' && ['/api/posts', '/api/users', '/api/promo-plans'].includes(path);
+  const token = isPublicRead ? null : await getAuthToken(hasRetried);
   if (path.startsWith('/api/messages') && !token) {
     throw new Error('Authentication is required for messages.');
   }
