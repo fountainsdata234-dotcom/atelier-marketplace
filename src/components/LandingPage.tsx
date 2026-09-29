@@ -10,6 +10,7 @@ const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ d
 
 const RESPONSIVE_LANDSCAPE_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-17-44-am.avif';
 const RESPONSIVE_PORTRAIT_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-16-27-am.avif';
+const LANDING_FALLBACK_IMAGE = 'https://res.cloudinary.com/auwy7fil/image/upload/c_fill,w_720,h_400,g_auto,q_auto,f_auto/v1790415437/ChatGPT_Image_Sep_26_2026_10_19_39_AM.png';
 
 interface LandingPageProps {
   onOpenAuth: (defaultRole: UserRole) => void;
@@ -242,7 +243,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
 
                     <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
-                      {featuredPost ? <img src={featuredPost.imageUrl} alt={featuredPost.imageAlt || featuredPost.title || 'Atelier product showcase'} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" fetchPriority="high" decoding="async" /> : <div className="flex h-full animate-pulse items-center justify-center rounded-[20px] border border-amber-500/20 bg-[radial-gradient(circle_at_center,rgba(251,191,36,0.15),rgba(17,19,22,0.9))] px-6 text-center text-xs text-neutral-300">Loading fresh seller pieces…</div>}
+                      <img src={featuredPost?.imageUrl || LANDING_FALLBACK_IMAGE} alt={featuredPost?.imageAlt || featuredPost?.title || 'A bespoke garment from the Fabrilux Atelier marketplace'} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" fetchPriority="high" decoding="async" />
                     </div>
                     <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-neutral-300">{featuredPost?.description || 'A living catalogue of garments, fabrics, and ideas published by the people who make them.'}</p>
                   </div>

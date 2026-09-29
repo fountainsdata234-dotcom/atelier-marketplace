@@ -43,6 +43,17 @@ const getInitialView = () => {
   return PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabrilux_active_view') || 'landing';
 };
 
+const normalizeMarketplacePosts = (remotePosts: ClothPost[]): ClothPost[] => remotePosts.map(post => ({
+  ...post,
+  likes: Array.isArray(post.likes) ? post.likes : [],
+  saves: Array.isArray(post.saves) ? post.saves : [],
+  tags: Array.isArray(post.tags) ? post.tags : [],
+  ratingsByUser: post.ratingsByUser || {},
+  rating: Number(post.rating) || 0,
+  ratingCount: Number(post.ratingCount) || 0,
+  authorLocation: post.authorLocation || { country: '', state: '', city: '' },
+}));
+
 export default function App() {
   const publicSellerRoute = /^\/@[^/]+(?:\/post\/[^/]+)?$/i.test(window.location.pathname) || Boolean(new URLSearchParams(window.location.search).get('seller'));
   // Intro Loading animation state
@@ -69,6 +80,7 @@ export default function App() {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const lastDataRefreshStartedAt = useRef(0);
   const inFlightDataRefresh = useRef<Promise<void> | null>(null);
+  const landingPostsRequestStarted = useRef(false);
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -387,16 +399,7 @@ export default function App() {
         }
 
         if (remotePosts !== null) {
-          const normalizedPosts = remotePosts.map(post => ({
-            ...post,
-            likes: Array.isArray(post.likes) ? post.likes : [],
-            saves: Array.isArray(post.saves) ? post.saves : [],
-            tags: Array.isArray(post.tags) ? post.tags : [],
-            ratingsByUser: post.ratingsByUser || {},
-            rating: Number(post.rating) || 0,
-            ratingCount: Number(post.ratingCount) || 0,
-            authorLocation: post.authorLocation || { country: '', state: '', city: '' },
-          }));
+          const normalizedPosts = normalizeMarketplacePosts(remotePosts);
           const postsToDisplay = normalizedPosts.length === 0 && availablePosts.length > 0
             ? availablePosts
             : normalizedPosts;
@@ -451,6 +454,25 @@ export default function App() {
     inFlightDataRefresh.current = refreshTask();
     await inFlightDataRefresh.current;
   };
+
+  useEffect(() => {
+    if (currentView !== 'landing' || posts.length > 0 || landingPostsRequestStarted.current) return;
+    const cachedPosts = storageService.getPosts();
+    if (cachedPosts.length > 0) {
+      setPosts(cachedPosts);
+      return;
+    }
+
+    landingPostsRequestStarted.current = true;
+    void api.getPosts().then(remotePosts => {
+      if (remotePosts.length === 0) return;
+      const normalizedPosts = normalizeMarketplacePosts(remotePosts);
+      storageService.savePosts(normalizedPosts);
+      setPosts(normalizedPosts);
+    }).catch(error => {
+      console.warn('Landing page listings could not be refreshed.', error);
+    });
+  }, [currentView, posts.length]);
 
   useEffect(() => {
     if (!marketplaceViews.includes(currentView)) return;
