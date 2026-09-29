@@ -54,7 +54,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
               </div>
               <div className="flex items-center gap-2">
                 <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500 md:h-4 md:w-4" />
-                <span>Promoted atelier visibility</span>
+                <span>fountainsdsata234@gmail.com</span>
               </div>
             </div>
           </div>

@@ -100,16 +100,16 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   };
 
   return (
-    <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <div className={`rounded-[2rem] border p-5 sm:p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white/90 shadow-sm'}`}>
-        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div className="relative z-10 mx-auto min-w-0 w-full max-w-7xl overflow-x-clip px-3 py-5 sm:px-6 sm:py-6 lg:px-8">
+      <div className={`min-w-0 rounded-[2rem] border p-3 sm:p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white/90 shadow-sm'}`}>
+        <div className="mb-5 flex min-w-0 flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-500">Artisan network</p>
-            <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight">Nearby tailors & fabric merchants</h1>
+            <h1 className="mt-2 text-2xl font-serif font-bold leading-tight tracking-tight sm:text-3xl">Nearby tailors & fabric merchants</h1>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className={`relative flex min-w-0 items-center gap-2 rounded-xl border px-3 py-2 ${isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
+          <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] md:w-auto md:flex md:items-center">
+            <div className={`relative flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl border px-3 py-2 ${isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
               <Search className="h-3.5 w-3.5 shrink-0 text-amber-400" />
               <input
                 value={searchQuery}
@@ -132,7 +132,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                 }}
                 onBlur={() => window.setTimeout(() => dismissSearch(), 120)}
                 placeholder="Search name or @handle"
-                className="min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500"
+                className="w-full min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500"
                 aria-label="Search artisans by name or handle"
               />
               {searchSuggestionsOpen && searchQuery.trim().length > 0 && searchSuggestions.length > 0 && (
@@ -158,8 +158,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
               )}
             </div>
             <button
+              type="button"
               onClick={() => setNearMeOnly((prev) => !prev)}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+              className={`inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-center text-xs font-semibold leading-tight transition sm:w-auto ${
                 nearMeOnly
                   ? 'border-amber-500 bg-amber-500/10 text-amber-400'
                   : isDarkMode
@@ -173,16 +174,16 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
         </div>
 
-        <div className={`mb-6 grid gap-2 rounded-2xl border p-3 sm:grid-cols-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-          <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedArtisanId(null); }} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
+        <div className={`mb-6 grid min-w-0 grid-cols-1 gap-2 rounded-2xl border p-2 sm:grid-cols-3 sm:p-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
+          <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedArtisanId(null); }} className="box-border block w-full min-w-0 max-w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
             <option value="all">All countries</option>
             {WORLD_COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
           </select>
-          <select value={filterState} onChange={(event) => { setFilterState(event.target.value); setFilterCity('all'); setSelectedArtisanId(null); }} disabled={!selectedCountry} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
+          <select value={filterState} onChange={(event) => { setFilterState(event.target.value); setFilterCity('all'); setSelectedArtisanId(null); }} disabled={!selectedCountry} className="box-border block w-full min-w-0 max-w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
             <option value="all">All states / provinces</option>
             {selectedCountry?.states.map((state) => <option key={state.code} value={state.code}>{state.name}</option>)}
           </select>
-          <select value={filterCity} onChange={(event) => { setFilterCity(event.target.value); setSelectedArtisanId(null); }} disabled={!selectedState} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
+          <select value={filterCity} onChange={(event) => { setFilterCity(event.target.value); setSelectedArtisanId(null); }} disabled={!selectedState} className="box-border block w-full min-w-0 max-w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
             <option value="all">All cities</option>
             {selectedState?.cities.map((city) => <option key={city} value={city}>{city}</option>)}
           </select>
@@ -223,7 +224,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
 
         {filteredArtisans.length === 0 && (
           <div className={`mt-4 rounded-2xl border border-dashed p-6 text-center ${isDarkMode ? 'border-neutral-700 text-neutral-400' : 'border-neutral-300 text-neutral-500'}`}>
-            No artisans match the current location filter yet. Try a wider radius or browse the full network.
+            No makers match this view yet. Widen the search or browse the broader network.
           </div>
         )}
       </div>

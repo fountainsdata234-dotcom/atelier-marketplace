@@ -56,7 +56,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white';
   const muted = isDarkMode ? 'text-neutral-400' : 'text-neutral-600';
 
-  if (!post || !seller) {
+    if (!post) {
     return (
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
         <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-amber-500"><ArrowLeft className="h-4 w-4" /> Back to marketplace</button>
@@ -108,7 +108,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
             </div>
           </div>
 
-          <div className={`rounded-2xl border p-4 ${surface}`}>
+          {seller && <div className={`rounded-2xl border p-4 ${surface}`}>
             <button type="button" onClick={() => onSelectSeller(seller)} className="flex w-full items-center gap-3 text-left">
               {seller.avatarUrl ? <img src={seller.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover" /> : <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/15 text-sm font-bold text-amber-500">{seller.name.slice(0, 2).toUpperCase()}</span>}
               <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{seller.shopName || seller.name}</strong><small className={`mt-0.5 block truncate text-[10px] ${muted}`}>{seller.handle} · {getRoleLabel(seller.role)}</small></span>
@@ -116,7 +116,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
             </button>
             <div className="mt-4 flex items-center justify-between border-t border-neutral-800/60 pt-3"><h2 className="text-xs font-bold">{sameSeller.length ? 'More from this seller' : 'Explore this seller'}</h2><button type="button" onClick={() => onSelectSeller(seller)} className="text-[10px] font-semibold text-amber-500 hover:text-amber-300">View collection</button></div>
             {sameSeller.length > 0 && <div className="mt-3 grid grid-cols-2 gap-2">{sameSeller.slice(0, 2).map(renderRelatedCard)}</div>}
-          </div>
+          </div>}
         </aside>
       </section>
 

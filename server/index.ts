@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
+import { createHash } from 'node:crypto';
+import { getMessaging } from 'firebase-admin/messaging';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
 import multer from 'multer';
@@ -71,12 +73,34 @@ interface StoredMessage {
 
 const DISCOVERY_EVENT_TYPES = new Set(['VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'ADD_TO_CART', 'PURCHASE', 'RATING']);
 const PUBLIC_CACHE_TTL_MS = 60_000;
+const WEB_APP_URL = process.env.APP_URL?.trim() || 'https://fabrilux-atelier.vercel.app';
 let postsCache: { expiresAt: number; value: unknown } | null = null;
 let usersCache: { expiresAt: number; value: unknown } | null = null;
 
 function invalidatePublicCaches() {
   postsCache = null;
   usersCache = null;
+}
+
+function pushTokenDocumentId(token: string) {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+async function sendTopicPush(topic: string, title: string, body: string, url: string, type: string) {
+  try {
+    const link = new URL(url, WEB_APP_URL).toString();
+    await getMessaging().send({
+      topic,
+      notification: { title, body },
+      data: { title, body, url: link, type, tag: `fabrilux-${type}` },
+      webpush: {
+        notification: { title, body, icon: `${WEB_APP_URL}/logo.png`, badge: `${WEB_APP_URL}/favicon.svg`, tag: `fabrilux-${type}`, data: { url: link } },
+        fcmOptions: { link },
+      },
+    });
+  } catch (error) {
+    console.warn('Push notification delivery failed.', error);
+  }
 }
 
 async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -176,6 +200,60 @@ function buildProfileUpdate(input: Record<string, unknown>) {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'atelier-api' });
+});
+
+app.post('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  if (!token || token.length > 4096) {
+    res.status(400).json({ error: 'A valid push subscription token is required.' });
+    return;
+  }
+
+  const tokenRef = firestore.collection('pushTokens').doc(pushTokenDocumentId(token));
+  const existing = await tokenRef.get();
+  const uid = req.authUser!.uid;
+  const previousUid = existing.data()?.uid;
+  if (typeof previousUid === 'string' && previousUid !== uid) {
+    await getMessaging().unsubscribeFromTopic(token, `user_${previousUid}`).catch(() => undefined);
+  }
+
+  try {
+    await Promise.all([
+      getMessaging().subscribeToTopic(token, `user_${uid}`),
+      getMessaging().subscribeToTopic(token, 'marketplace_updates'),
+    ]);
+    await tokenRef.set({ uid, token, updatedAt: FieldValue.serverTimestamp() });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Push subscription registration failed.', error);
+    res.status(503).json({ error: 'Push alerts could not be enabled on this device.' });
+  }
+});
+
+app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  if (!token || token.length > 4096) {
+    res.status(400).json({ error: 'A valid push subscription token is required.' });
+    return;
+  }
+
+  const tokenRef = firestore.collection('pushTokens').doc(pushTokenDocumentId(token));
+  const existing = await tokenRef.get();
+  if (!existing.exists) {
+    res.status(204).send();
+    return;
+  }
+  if (existing.data()?.uid !== req.authUser!.uid) {
+    res.status(403).json({ error: 'This push subscription belongs to another account.' });
+    return;
+  }
+
+  await Promise.all([
+    getMessaging().unsubscribeFromTopic(token, `user_${req.authUser!.uid}`).catch(() => undefined),
+    getMessaging().unsubscribeFromTopic(token, 'marketplace_updates').catch(() => undefined),
+    tokenRef.delete(),
+  ]);
+  res.status(204).send();
 });
 
 app.post('/api/upload', requireAuth, upload.single('image'), async (req: AuthenticatedRequest, res) => {
@@ -389,6 +467,7 @@ app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) =
     firestore.collection('messages').where('recipientId', '==', uid).get(),
   ]);
   const discoveryEvents = await firestore.collection('discoveryEvents').where('userId', '==', uid).get();
+  const pushTokens = await firestore.collection('pushTokens').where('uid', '==', uid).get();
   const fabricRequests = await Promise.all([
     firestore.collection('fabricRequests').where('buyerId', '==', uid).get(),
     firestore.collection('fabricRequests').where('sellerId', '==', uid).get(),
@@ -396,8 +475,17 @@ app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) =
   const removableDocs = [
     ...messages.flatMap(snapshot => snapshot.docs),
     ...discoveryEvents.docs,
+    ...pushTokens.docs,
     ...fabricRequests.flatMap(snapshot => snapshot.docs),
   ];
+  await Promise.all(pushTokens.docs.map(async doc => {
+    const token = doc.data().token;
+    if (typeof token !== 'string') return;
+    await Promise.all([
+      getMessaging().unsubscribeFromTopic(token, `user_${uid}`).catch(() => undefined),
+      getMessaging().unsubscribeFromTopic(token, 'marketplace_updates').catch(() => undefined),
+    ]);
+  }));
   for (let index = 0; index < removableDocs.length; index += 400) {
     const batch = firestore.batch();
     removableDocs.slice(index, index + 400).forEach(doc => batch.delete(doc.ref));
@@ -624,6 +712,8 @@ app.post('/api/posts', requireAuth, requireActiveAccount, async (req: Authentica
   };
   const created = await firestore.collection('posts').add(post);
   invalidatePublicCaches();
+  const authorHandle = String(authorProfile.data()?.handle || '').replace(/^@/, '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-') || 'atelier';
+  void sendTopicPush('marketplace_updates', 'New atelier listing', `${post.title} is now available.`, `/@${authorHandle}/post/${encodeURIComponent(created.id)}`, 'new-post');
   res.status(201).json({ id: created.id, ...post });
 });
 
@@ -722,6 +812,7 @@ app.post('/api/messages', requireAuth, requireActiveAccount, async (req: Authent
     isRead: false,
   };
   const created = await firestore.collection('messages').add(message);
+  void sendTopicPush(`user_${message.recipientId}`, `New message from ${message.senderName}`, message.content.slice(0, 180), '/', 'message');
   res.status(201).json({ id: created.id, ...message });
 });
 
@@ -757,6 +848,7 @@ app.post('/api/admin/broadcast', requireAuth, requireAdmin, async (req: Authenti
     });
   });
   await batch.commit();
+  await Promise.all(recipients.map(doc => sendTopicPush(`user_${doc.id}`, title, body.slice(0, 180), '/', 'broadcast')));
   res.status(201).json({ id: `broadcast-${Date.now()}`, sender: String(req.body?.sender || 'Atelier Administration'), target, title, body, createdAt: new Date().toISOString() });
 });
 
@@ -858,6 +950,7 @@ app.post('/api/fabric-requests', requireAuth, async (req: AuthenticatedRequest, 
   };
 
   const created = await firestore.collection('fabricRequests').add(request);
+  void sendTopicPush(`user_${request.sellerId}`, 'New fabric inquiry', `${request.buyerName} requested ${request.postTitle}.`, '/', 'fabric-inquiry');
   res.status(201).json({ id: created.id, ...request });
 });
 

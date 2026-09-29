@@ -3,7 +3,7 @@ import { AlertTriangle, Bookmark, Camera, LogOut, Save, Trash2, UserRound } from
 import { User } from '../types';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
-import { firebaseAuth, logoutFromFirebase, uploadUserImage } from '../services/firebase';
+import { firebaseAuth, logoutFromFirebase, requestPushToken, uploadUserImage } from '../services/firebase';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 interface ProfilePageProps {
@@ -24,6 +24,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isEnablingPush, setIsEnablingPush] = useState(false);
+  const [pushStatus, setPushStatus] = useState<string | null>(null);
 
   const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -70,6 +72,20 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
     }
   };
 
+  const enablePushAlerts = async () => {
+    setIsEnablingPush(true);
+    setPushStatus(null);
+    try {
+      const token = await requestPushToken();
+      await api.registerPushToken(token);
+      setPushStatus('Push alerts are enabled for messages, new listings, and atelier announcements.');
+    } catch (error) {
+      setPushStatus(error instanceof Error ? error.message : 'Push alerts could not be enabled on this device.');
+    } finally {
+      setIsEnablingPush(false);
+    }
+  };
+
   const deleteAccount = async () => {
     const confirmation = window.prompt('This permanently deletes your account and all of its data. Type DELETE to continue.');
     if (confirmation?.trim().toUpperCase() !== 'DELETE') {
@@ -113,6 +129,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <button type="button" onClick={() => onNavigate('collections')} className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition hover:border-amber-500/50 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}><Bookmark className="h-5 w-5 text-amber-400" /><span><strong className="block text-sm">Saved collection</strong><small className="text-xs text-neutral-400">View your saved designs and inspiration.</small></span></button>
           <button type="button" onClick={() => onNavigate('marketplace')} className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition hover:border-amber-500/50 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}><UserRound className="h-5 w-5 text-amber-400" /><span><strong className="block text-sm">Continue exploring</strong><small className="text-xs text-neutral-400">Discover tailors and fabric sellers.</small></span></button>
         </div>
+
+        <section className={`mt-6 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${surface}`} aria-labelledby="push-alerts-title">
+          <div><h2 id="push-alerts-title" className="text-sm font-bold">Push alerts</h2><p className="mt-1 text-xs leading-relaxed text-neutral-400">Receive direct messages, new marketplace listings, and atelier announcements when Fabrilux is closed.</p>{pushStatus && <p className="mt-2 text-xs text-amber-300" role="status">{pushStatus}</p>}</div>
+          <button type="button" onClick={() => void enablePushAlerts()} disabled={isEnablingPush} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60">{isEnablingPush ? 'Enabling...' : typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'Enable on this device' : 'Enable push alerts'}</button>
+        </section>
 
         {currentUser.isWarned && currentUser.warningNote && (
           <section className="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4" aria-labelledby="account-alert-title">

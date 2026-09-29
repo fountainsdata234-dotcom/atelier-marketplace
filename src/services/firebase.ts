@@ -15,6 +15,7 @@ import {
 } from 'firebase/auth';
 import { User, UserRole } from '../types';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
 import { compressImageBlob } from '../utils/imageProgram';
 
 const firebaseConfig = {
@@ -110,6 +111,34 @@ export async function resetPassword(email: string) {
 export async function loginWithGoogle() {
   const credential = await signInWithPopup(firebaseAuth, googleProvider);
   return credential.user;
+}
+
+export async function requestPushToken() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    throw new Error('This browser does not support background push alerts.');
+  }
+  const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+  if (!vapidKey) {
+    throw new Error('Push alerts are not configured for this site yet.');
+  }
+  if (!(await isSupported())) {
+    throw new Error('This browser does not support Firebase web push.');
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') throw new Error('Allow notifications in your browser settings to enable push alerts.');
+  const serviceWorkerRegistration = await navigator.serviceWorker.ready;
+  const token = await getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration });
+  if (!token) throw new Error('The browser did not issue a push subscription token.');
+  return token;
+}
+
+export async function listenForForegroundPush(listener: (notification: { title: string; body: string; url: string }) => void) {
+  if (!(await isSupported())) return () => undefined;
+  return onMessage(getMessaging(app), payload => listener({
+    title: payload.notification?.title || payload.data?.title || 'Fabrilux Atelier',
+    body: payload.notification?.body || payload.data?.body || 'You have a new marketplace update.',
+    url: payload.data?.url || payload.fcmOptions?.link || '/',
+  }));
 }
 
 export async function logoutFromFirebase() {

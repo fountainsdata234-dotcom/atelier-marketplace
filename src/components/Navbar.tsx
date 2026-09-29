@@ -284,19 +284,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="min-w-0"><strong className="block truncate text-sm">{currentUser.name}</strong><small className="block text-[10px] capitalize text-amber-400">{currentUser.isSuperAdmin ? 'Super Admin' : currentUser.role.replace('_', ' ')}</small></span>
               </button>
             )}
-            <div className="grid grid-cols-2 gap-1 text-xs">
-              {!currentUser && <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item">Overview</button>}
-              <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
-              <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
-              {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
-              {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
-              {currentUser && <button type="button" onClick={() => navigate('messages')} className="mobile-nav-item"><MessageSquare className="h-4 w-4" />Messages {unreadCount > 0 && <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold text-neutral-950">{unreadCount}</span>}</button>}
-              {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}
-            </div>
-            <div className="mt-2 flex items-center gap-2 border-t border-neutral-800 pt-2">
-              <button type="button" onClick={() => { setMobileMenuOpen(false); onRefresh(); }} disabled={isRefreshing} className="mobile-nav-item flex-1"><RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />Refresh</button>
-              <button type="button" onClick={onToggleTheme} className="mobile-nav-item flex-1"><span>{isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}Theme</span></button>
-              {currentUser ? <button type="button" onClick={() => { setMobileMenuOpen(false); onLogout(); }} className="mobile-nav-item flex-1 text-red-300"><LogOut className="h-4 w-4" />Logout</button> : <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item flex-1 text-amber-300">Sign in</button>}
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {!currentUser && <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item">Overview</button>}
+                <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
+                <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
+                {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
+                {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
+                {currentUser && <button type="button" onClick={() => navigate('messages')} className="mobile-nav-item"><MessageSquare className="h-4 w-4" />Messages {unreadCount > 0 && <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold text-neutral-950">{unreadCount}</span>}</button>}
+                {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-t border-neutral-800 pt-2">
+                <button type="button" onClick={() => { setMobileMenuOpen(false); onRefresh(); }} disabled={isRefreshing} className="mobile-nav-item justify-center"><RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />Refresh</button>
+                <button type="button" onClick={onToggleTheme} className="mobile-nav-item justify-center"><span>{isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}Theme</span></button>
+                {currentUser ? <button type="button" onClick={() => { setMobileMenuOpen(false); onLogout(); }} className="mobile-nav-item justify-center text-red-300"><LogOut className="h-4 w-4" />Logout</button> : <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item justify-center text-amber-300">Sign in</button>}
+              </div>
             </div>
           </div>
         )}

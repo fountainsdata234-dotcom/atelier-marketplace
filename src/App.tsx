@@ -39,8 +39,20 @@ const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
 
 const getInitialView = () => {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
-  if (/^\/@[^/]+(?:\/post\/[^/]+)?$/i.test(path)) return 'seller';
+  if (/^\/@[^/]+\/post\/[^/]+$/i.test(path)) return 'post';
+  if (/^\/@[^/]+$/i.test(path)) return 'seller';
   return PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabrilux_active_view') || 'landing';
+};
+
+const getInitialPostId = () => {
+  const encodedId = window.location.pathname.match(/^\/@[^/]+\/post\/([^/]+)$/i)?.[1]
+    || new URLSearchParams(window.location.search).get('post');
+  if (!encodedId) return null;
+  try {
+    return decodeURIComponent(encodedId);
+  } catch {
+    return encodedId;
+  }
 };
 
 const normalizeMarketplacePosts = (remotePosts: ClothPost[]): ClothPost[] => remotePosts.map(post => ({
@@ -55,7 +67,10 @@ const normalizeMarketplacePosts = (remotePosts: ClothPost[]): ClothPost[] => rem
 }));
 
 export default function App() {
-  const publicSellerRoute = /^\/@[^/]+(?:\/post\/[^/]+)?$/i.test(window.location.pathname) || Boolean(new URLSearchParams(window.location.search).get('seller'));
+  const sharedPathMatch = window.location.pathname.match(/^\/@([^/]+)(?:\/post\/([^/]+))?$/i);
+  const routeParams = new URLSearchParams(window.location.search);
+  const publicSellerRoute = Boolean(sharedPathMatch || routeParams.get('seller'));
+  const publicPostRoute = Boolean(sharedPathMatch?.[2] || routeParams.get('post'));
   // Intro Loading animation state
   const [showIntro, setShowIntro] = useState<boolean>(() => sessionStorage.getItem('fabrilux_intro_seen') !== '1');
   const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
@@ -77,7 +92,7 @@ export default function App() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [sharedSeller, setSharedSeller] = useState<User | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(getInitialPostId);
   const lastDataRefreshStartedAt = useRef(0);
   const inFlightDataRefresh = useRef<Promise<void> | null>(null);
   const landingPostsRequestStarted = useRef(false);
@@ -85,8 +100,8 @@ export default function App() {
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [posts, setPosts] = useState<ClothPost[]>([]);
+  const [users, setUsers] = useState<User[]>(() => storageService.getUsers());
+  const [posts, setPosts] = useState<ClothPost[]>(() => storageService.getPosts());
   const [postsLoadError, setPostsLoadError] = useState(false);
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
   const [isPromoPlansLoading, setIsPromoPlansLoading] = useState(false);
@@ -140,7 +155,7 @@ export default function App() {
   const [savePictureTitle, setSavePictureTitle] = useState<string | null>(null);
 
   // Only fetch market data when the user is actually on a live marketplace view.
-  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'dashboard', 'profile', 'collections', 'messages'];
+  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'post', 'dashboard', 'profile', 'collections', 'messages'];
   const canRefreshMarketplaceData = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
 
   useEffect(() => {
@@ -230,7 +245,7 @@ export default function App() {
         const user = storageService.upsertUser(mergedUser);
         setCurrentUser(user);
         if (publicSellerRoute) {
-          setCurrentView('seller');
+          setCurrentView(publicPostRoute ? 'post' : 'seller');
         } else if (user.role === 'admin') {
           setCurrentView('admin');
         } else if (user.role === 'tailor' || user.role === 'fabric_seller') {
@@ -303,11 +318,19 @@ export default function App() {
     const handle = (pathMatch?.[1] || legacyHandle || '').replace(/^@/, '').toLowerCase();
     const pathPostId = pathMatch?.[2] || params.get('post');
     if (!handle || users.length === 0) return;
-    const seller = users.find(user => user.handle.replace(/^@/, '').toLowerCase() === handle);
+    const seller = users.find(user => getHandleSlug(user.handle) === getHandleSlug(handle));
     if (seller && (seller.role === 'tailor' || seller.role === 'fabric_seller')) {
       setSharedSeller(seller);
-      setSharedPostId(pathPostId || null);
-      setCurrentView('seller');
+      if (pathPostId) {
+        let postId = pathPostId;
+        try { postId = decodeURIComponent(pathPostId); } catch { /* Keep malformed IDs unchanged for the unavailable state. */ }
+        setSelectedPostId(postId);
+        setSharedPostId(postId);
+        setCurrentView('post');
+      } else {
+        setSharedPostId(null);
+        setCurrentView('seller');
+      }
     }
   }, [users]);
 
@@ -537,10 +560,14 @@ export default function App() {
   }, [currentUser?.id]);
 
   useEffect(() => {
-    if (!currentUser || !('Notification' in window) || Notification.permission === 'granted') return;
-    if (Notification.permission === 'default') {
-      void Notification.requestPermission().catch(() => undefined);
-    }
+    if (!currentUser) return;
+    let unsubscribe: (() => void) | undefined;
+    void import('./services/firebase').then(async ({ listenForForegroundPush }) => {
+      unsubscribe = await listenForForegroundPush(notification => {
+        storageService.addNotification(currentUser.id, notification.title, notification.body, 'system', notification.url);
+      });
+    }).catch(error => console.warn('Foreground push listener could not start.', error));
+    return () => unsubscribe?.();
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -612,7 +639,15 @@ export default function App() {
 
   const handleSelectPost = (post: ClothPost) => {
     setSelectedPostId(post.id);
+    window.history.pushState({ view: 'post' }, '', buildPostShareUrl(window.location.origin, post.authorHandle, post.id));
     setCurrentView('post');
+  };
+
+  const handleSelectSeller = (seller: User) => {
+    setSharedSeller(seller);
+    setSharedPostId(null);
+    window.history.pushState({ view: 'seller' }, '', buildSellerShareUrl(window.location.origin, seller.handle));
+    setCurrentView('seller');
   };
 
   const handleRecordPostView = (post: ClothPost) => {
@@ -766,6 +801,8 @@ export default function App() {
                 onOpenAuth={handleOpenAuthWithRole}
                 onExploreMarketplace={() => setCurrentView('marketplace')}
                 onExploreArtisans={() => setCurrentView('artisan')}
+                onSelectPost={handleSelectPost}
+                onSelectSeller={handleSelectSeller}
                 isDarkMode={isDarkMode}
                 currentUser={currentUser}
                 users={users}
@@ -797,33 +834,30 @@ export default function App() {
                 onSharePost={handleSharePost}
                 onShareTailorProfile={handleShareTailorProfile}
                 onToggleFollow={handleToggleFollow}
-                onSelectSeller={(seller) => {
-                  setSharedSeller(seller);
-                  setSharedPostId(null);
-                  setCurrentView('seller');
-                }}
+                onSelectSeller={handleSelectSeller}
                 isDarkMode={isDarkMode}
               />
             </motion.div>
           )}
 
           {currentView === 'post' && (
-            <PostDetailPage
-              post={posts.find(post => post.id === selectedPostId) || null}
-              posts={posts}
-              users={users}
-              isDarkMode={isDarkMode}
-              onBack={() => setCurrentView('marketplace')}
-              onSelectPost={handleSelectPost}
-              onSelectSeller={(seller) => {
-                setSharedSeller(seller);
-                setSharedPostId(null);
-                setCurrentView('seller');
-              }}
-              onInquire={handleSelectPostForMessage}
-              onShare={handleSharePost}
-              onView={handleRecordPostView}
-            />
+            <motion.div key="post" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }}>
+              <PostDetailPage
+                post={posts.find(post => post.id === selectedPostId) || null}
+                posts={posts}
+                users={users}
+                isDarkMode={isDarkMode}
+                onBack={() => {
+                  window.history.pushState({ view: 'marketplace' }, '', '/marketplace');
+                  setCurrentView('marketplace');
+                }}
+                onSelectPost={handleSelectPost}
+                onSelectSeller={handleSelectSeller}
+                onInquire={handleSelectPostForMessage}
+                onShare={handleSharePost}
+                onView={handleRecordPostView}
+              />
+            </motion.div>
           )}
 
           {currentView === 'artisan' && (
@@ -838,10 +872,7 @@ export default function App() {
                 users={users}
                 posts={posts}
                 currentUser={currentUser}
-                onSelectArtisan={(artisan) => {
-                  setSharedSeller(artisan);
-                  setCurrentView('seller');
-                }}
+                onSelectArtisan={handleSelectSeller}
                 onToggleFollow={handleToggleFollow}
                 isDarkMode={isDarkMode}
               />
@@ -870,7 +901,9 @@ export default function App() {
           )}
 
           {currentView === 'seller' && sharedSeller && (
-            <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => setCurrentView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} onSelectPost={handleSelectPost} />
+            <motion.div key="seller" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }}>
+              <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => setCurrentView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} onSelectPost={handleSelectPost} />
+            </motion.div>
           )}
 
           {currentView === 'dashboard' && currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') && (

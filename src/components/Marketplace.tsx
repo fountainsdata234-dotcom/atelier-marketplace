@@ -551,7 +551,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             {getGreeting(currentUser?.name || currentUser?.shopName || currentUser?.handle)}
           </h1>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-            Explore handcrafted bespoke garments and fine fabrics from authenticated tailors.
+            Discover handcrafted garments and premium fabrics from makers who take the details seriously.
           </p>
         </div>
 
@@ -606,14 +606,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-neutral-950 font-bold text-xs">
-                ★
+              <div className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-400/15 text-neutral-950 font-bold text-xs ring-1 ring-amber-500/30">
+                👘
               </div>
               <h2 className="text-sm font-semibold tracking-wide uppercase text-amber-400 font-mono">
-                Fabrilux Atelier Runway
+                Curated atelier picks
               </h2>
             </div>
-            <span className="text-[11px] text-neutral-400">Selected atelier work</span>
+            <span className="text-[11px] text-neutral-400">Selected work from real makers</span>
           </div>
 
           <div className="relative overflow-hidden rounded-[2rem] border border-amber-500/30 bg-neutral-950 shadow-[0_30px_80px_rgba(0,0,0,0.4)]">
@@ -647,15 +647,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <button type="button" onClick={() => {
                       const author = userById.get(post.authorId);
                       if (author) onSelectSeller(author);
-                    }} aria-label={`View ${post.authorName}'s atelier`} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/40 px-1.5 py-1 text-left backdrop-blur-md transition hover:border-amber-300/70 sm:px-2 sm:py-1.5">
-                      {post.authorAvatar ? (
-                        <img src={post.authorAvatar} alt={post.authorName || 'Seller avatar'} className="h-7 w-7 rounded-full object-cover ring-2 ring-amber-300/80 sm:h-8 sm:w-8" />
-                      ) : (
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-neutral-950 ring-2 ring-amber-200/80 sm:h-8 sm:w-8 sm:text-sm">
-                          {post.authorName.slice(0, 2).toUpperCase()}
-                        </span>
-                      )}
-                      <span className="hidden text-[10px] font-semibold text-white sm:block sm:text-xs">{post.authorName}</span>
+                    }} aria-label={`View ${post.authorName}'s atelier`} className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/35 px-2 py-1 text-left backdrop-blur-md transition hover:border-amber-300/70">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-neutral-950 sm:h-7 sm:w-7 sm:text-[10px]">
+                        {post.authorName.slice(0, 2).toUpperCase()}
+                      </span>
+                      <span className="text-[10px] font-semibold text-white sm:text-xs">{post.authorName}</span>
                     </button>
                   </div>
 
@@ -956,7 +952,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   ? 'Publish garments, pricing, and fabric details for buyers to discover.'
                   : currentUser?.role === 'fabric_seller'
                     ? 'List materials, textures, and wholesale details for designers and tailors.'
-                    : 'New garments and fabrics from independent makers will appear here as they publish.'}
+                    : 'No listings match this view right now. Try a broader search or check back for fresh drops.'}
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -1002,7 +998,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+        <div className="marketplace-masonry columns-2 gap-3 md:columns-2 md:gap-5 lg:columns-3">
           {visiblePosts.map((post, postIndex) => {
             const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
             const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
@@ -1032,7 +1028,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   event.preventDefault();
                   onSelectPost(post);
                 }}
-                className={`feed-card-wave rounded-[1.5rem] border overflow-hidden transition-all group flex flex-col justify-between ${
+                className={`marketplace-card feed-card-wave mb-3 break-inside-avoid rounded-[1.5rem] border overflow-hidden transition-all group flex flex-col justify-between ${
                   isDarkMode
                     ? 'bg-[#121316] border-neutral-800/90 hover:border-amber-500/40'
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
@@ -1054,10 +1050,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         </span>
                         {post.isPromoted && (
                           <span
-                            title="Promoted Atelier"
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500 text-neutral-950 uppercase tracking-tighter"
+                            title="Featured Atelier"
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 uppercase tracking-tighter ring-1 ring-amber-500/25"
                           >
-                            ★ Promoted
+                            👘 Featured
                           </span>
                         )}
                       </div>

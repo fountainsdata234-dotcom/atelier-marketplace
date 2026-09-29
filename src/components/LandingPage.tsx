@@ -1,6 +1,6 @@
 import React, { lazy } from 'react';
 import { motion } from 'motion/react';
-import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, Zap, Flame, Trophy, TrendingUp, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, Zap, Flame, Trophy, TrendingUp, MapPin } from 'lucide-react';
 import { AdminPromoPlan, ClothPost, User, UserRole } from '../types';
 import { getTopTailors, rankTrendingPosts } from '../utils/marketplaceRanking';
 import { storageService } from '../services/storage';
@@ -12,10 +12,99 @@ const RESPONSIVE_LANDSCAPE_IMAGE = 'https://user36765.na.imgto.link/public/20260
 const RESPONSIVE_PORTRAIT_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-16-27-am.avif';
 const LANDING_FALLBACK_IMAGE = 'https://res.cloudinary.com/auwy7fil/image/upload/c_fill,w_720,h_400,g_auto,q_auto,f_auto/v1790415437/ChatGPT_Image_Sep_26_2026_10_19_39_AM.png';
 
+interface LandingTrendCard {
+  id: string;
+  title: string;
+  subtitle: string;
+  imageUrl?: string;
+  tag: string;
+  metric: string;
+  location?: string;
+  accent: string;
+  post?: ClothPost;
+  seller?: User;
+}
+
+interface LandingTrendCarouselProps {
+  items: LandingTrendCard[];
+  label: string;
+  accentClass: string;
+  onSelectPost: (post: ClothPost) => void;
+  onSelectSeller: (seller: User) => void;
+}
+
+const LandingTrendCarousel: React.FC<LandingTrendCarouselProps> = ({ items, label, accentClass, onSelectPost, onSelectSeller }) => {
+  const trackRef = React.useRef<HTMLDivElement | null>(null);
+  const pauseUntilRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (items.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => {
+      const track = trackRef.current;
+      if (!track || document.visibilityState !== 'visible' || Date.now() < pauseUntilRef.current) return;
+      const bounds = track.getBoundingClientRect();
+      if (bounds.bottom <= 0 || bounds.top >= window.innerHeight) return;
+      const firstCard = track.querySelector<HTMLElement>('[data-trend-card]');
+      if (!firstCard) return;
+      const step = firstCard.offsetWidth + 16;
+      const maxScroll = track.scrollWidth - track.clientWidth;
+      track.scrollTo({ left: track.scrollLeft >= maxScroll - 12 ? 0 : track.scrollLeft + step, behavior: 'smooth' });
+    }, 4800);
+    return () => window.clearInterval(timer);
+  }, [items.length]);
+
+  const openCard = (item: LandingTrendCard) => {
+    if (item.post) onSelectPost(item.post);
+    else if (item.seller) onSelectSeller(item.seller);
+  };
+
+  return (
+    <div
+      ref={trackRef}
+      aria-label={label}
+      aria-roledescription="carousel"
+      className="flex min-w-0 snap-x snap-mandatory touch-pan-x gap-4 overflow-x-auto overscroll-x-contain pb-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      onPointerDown={() => { pauseUntilRef.current = Date.now() + 6500; }}
+      onPointerEnter={() => { pauseUntilRef.current = Date.now() + 6500; }}
+      onPointerLeave={() => { pauseUntilRef.current = Date.now() + 1200; }}
+      onTouchStart={() => { pauseUntilRef.current = Date.now() + 6500; }}
+      onTouchEnd={() => { pauseUntilRef.current = Date.now() + 1800; }}
+    >
+      {items.map(item => (
+        <button
+          key={item.id}
+          type="button"
+          data-trend-card
+          onClick={() => openCard(item)}
+          aria-label={item.post ? `View ${item.title} by ${item.post.authorName}` : `View ${item.title}'s seller page`}
+          className="group relative min-w-[82vw] max-w-[320px] flex-none snap-start overflow-hidden rounded-2xl border border-amber-500/20 bg-[#111316] text-left shadow-[0_20px_50px_rgba(0,0,0,0.22)] transition-transform duration-300 hover:-translate-y-1 sm:min-w-[280px]"
+        >
+          <div className={`absolute inset-0 bg-gradient-to-br ${item.accent}`} />
+          <div className="relative aspect-[4/3] overflow-hidden border-b border-white/10">
+            <img src={item.imageUrl || '/logo.png'} alt={item.post?.imageAlt || item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" />
+            <span className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[10px] font-bold uppercase text-white/90 backdrop-blur-sm">{item.tag}</span>
+          </div>
+          <div className="relative space-y-2.5 p-4">
+            <div className="flex items-center justify-between gap-3 text-[10px] uppercase text-amber-200/80">
+              <span className="truncate">{item.metric}</span>
+              <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-bold ${accentClass}`}><Flame className="h-3 w-3" />Hot</span>
+            </div>
+            <h3 className="line-clamp-2 text-base font-semibold text-white">{item.title}</h3>
+            <p className="line-clamp-2 text-sm text-neutral-300">{item.subtitle}</p>
+            {item.location && <p className="flex items-center gap-1 text-xs text-neutral-400"><MapPin className="h-3.5 w-3.5 shrink-0" />{item.location}</p>}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 interface LandingPageProps {
   onOpenAuth: (defaultRole: UserRole) => void;
   onExploreMarketplace: () => void;
   onExploreArtisans: () => void;
+  onSelectPost: (post: ClothPost) => void;
+  onSelectSeller: (seller: User) => void;
   isDarkMode: boolean;
   currentUser?: User | null;
   users: User[];
@@ -28,6 +117,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenAuth,
   onExploreMarketplace,
   onExploreArtisans,
+  onSelectPost,
+  onSelectSeller,
   isDarkMode,
   currentUser,
   users,
@@ -37,7 +128,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
   const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
-  const [disableGlobeMotion, setDisableGlobeMotion] = React.useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px), (prefers-reduced-motion: reduce)').matches);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
   const searchHistory = React.useMemo(() => storageService.getSearchHistory(currentUser?.id || 'guest'), [currentUser?.id]);
@@ -72,71 +162,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     }), [posts, users]);
 
   React.useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 767px), (prefers-reduced-motion: reduce)');
-    const updateMotionPreference = () => setDisableGlobeMotion(mediaQuery.matches);
-    updateMotionPreference();
-    mediaQuery.addEventListener('change', updateMotionPreference);
-    return () => mediaQuery.removeEventListener('change', updateMotionPreference);
-  }, []);
-
-  React.useEffect(() => {
-    if (disableGlobeMotion) {
-      setShouldLoadGlobe(false);
-      return;
-    }
     const section = globeSectionRef.current;
     if (!section) return;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       setShouldLoadGlobe(true);
       observer.disconnect();
-    }, { rootMargin: '320px' });
+    }, { rootMargin: window.matchMedia('(max-width: 767px)').matches ? '80px' : '320px' });
     observer.observe(section);
     return () => observer.disconnect();
-  }, [disableGlobeMotion]);
-
-  const scrollCarousel = (sectionId: string, direction: number) => {
-    const element = document.getElementById(sectionId);
-    if (!element) return;
-    element.scrollBy({ left: direction * 320, behavior: 'smooth' });
-  };
-
-  const renderTrendCards = (items: Array<{ id: string; title: string; subtitle: string; imageUrl?: string; tag: string; metric: string; location?: string; accent: string }>, sectionId: string, accentClass: string) => (
-    <div className="flex items-stretch gap-4 overflow-x-auto pb-3 snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" id={sectionId}>
-      {items.map(item => (
-        <article key={item.id} className="group relative min-w-[280px] max-w-[320px] snap-start overflow-hidden rounded-[26px] border border-amber-500/20 bg-[#111316] shadow-[0_25px_65px_rgba(0,0,0,0.25)] transition-transform duration-300 hover:-translate-y-1">
-          <div className={`absolute inset-0 bg-gradient-to-br ${item.accent}`} />
-          <div className="absolute right-4 top-4 z-10 rounded-full border border-white/20 bg-black/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/90 backdrop-blur-sm">
-            {item.tag}
-          </div>
-          <div className="relative h-52 overflow-hidden border-b border-white/10">
-            {item.imageUrl ? (
-              <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" />
-            ) : (
-              <div className="flex h-full items-center justify-center bg-gradient-to-br from-neutral-800 via-neutral-900 to-neutral-950 text-center text-sm text-neutral-300">Live maker profile</div>
-            )}
-          </div>
-          <div className="relative space-y-3 p-4">
-            <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-amber-200/80">
-              <span>{item.metric}</span>
-              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-bold ${accentClass}`}>
-                <Flame className="h-3 w-3" />
-                Hot
-              </span>
-            </div>
-            <h3 className="line-clamp-2 text-lg font-semibold text-white">{item.title}</h3>
-            <p className="text-sm text-neutral-300">{item.subtitle}</p>
-            {item.location && (
-              <div className="flex items-center gap-1 text-xs text-neutral-400">
-                <MapPin className="h-3.5 w-3.5" />
-                <span>{item.location}</span>
-              </div>
-            )}
-          </div>
-        </article>
-      ))}
-    </div>
-  );
+  }, []);
 
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-16">
@@ -157,7 +192,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               <h1 className="text-4xl font-black leading-none tracking-[-0.06em] text-white sm:text-5xl lg:text-7xl">
                 <span className="relative inline-block">
-                  Discover the Best Tailors Around You
+                  Tailoring and fabric sourcing with a human touch
                   <motion.span
                     aria-hidden="true"
                     animate={{ x: [0, 96, 0], y: [18, -4, 18], rotate: [-18, 12, -18] }}
@@ -170,7 +205,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </h1>
 
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-neutral-300 sm:text-base">
-                Find premium fabrics, local bespoke specialists, and trend-ready inspiration in seconds. Every section is built to help buyers discover the right maker faster.
+                Discover refined fabrics, trusted makers, and pieces chosen for fit, finish, and real life. Thoughtful tailoring without the clutter.
               </p>
 
               <div className="mt-6 rounded-[24px] border border-amber-500/20 bg-neutral-950/70 p-3 shadow-[0_18px_40px_rgba(0,0,0,0.2)]">
@@ -276,15 +311,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </motion.section>
 
       <motion.section ref={globeSectionRef} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
-        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Live network preview</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">See where the craft lives.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Open artisan directory <ArrowRight className="h-4 w-4" /></button></div>
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Maker network</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Where the craft is based.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Open artisan directory <ArrowRight className="h-4 w-4" /></button></div>
         <div className="landing-globe overflow-hidden">
-          {previewArtisans.length > 0 ? disableGlobeMotion ? <div className="flex h-[22rem] flex-col items-center justify-center gap-4 rounded-xl bg-neutral-900/40 px-6 text-center"><p className="text-sm text-neutral-300">{previewArtisans.length} local makers are on the network.</p><button type="button" onClick={onExploreArtisans} className="inline-flex min-h-11 items-center justify-center rounded-full bg-amber-400 px-5 text-sm font-semibold text-neutral-950">Browse artisans</button></div> : shouldLoadGlobe ? <React.Suspense fallback={<div className="h-[22rem] animate-pulse rounded-xl bg-neutral-900/70" aria-label="Loading artisan globe" />}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreArtisans} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="h-[22rem] rounded-xl bg-neutral-900/40" aria-hidden="true" /> : <div className="flex h-[22rem] items-center justify-center px-6 text-center text-xs text-amber-100/60">The live globe will populate as artisans join the network.</div>}
+          {shouldLoadGlobe ? <React.Suspense fallback={<div className="flex h-[22rem] flex-col items-center justify-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/70 text-center" role="status"><span className="h-9 w-9 animate-spin rounded-full border-2 border-amber-300/25 border-t-amber-300" /><span className="text-xs tracking-[0.18em] text-neutral-300 uppercase">Loading maker network</span></div>}><ArtisanGlobe3D artisans={previewArtisans} selectedArtisanId={selectedPreviewArtisanId} onSelectArtisan={artisan => setSelectedPreviewArtisanId(artisan.id)} onOpenArtisan={onExploreArtisans} onCloseArtisan={() => setSelectedPreviewArtisanId(null)} isDarkMode={isDarkMode} /></React.Suspense> : <div className="flex h-[22rem] flex-col items-center justify-center gap-4 rounded-xl border border-neutral-800 bg-neutral-900/40 px-6 text-center"><div className="h-10 w-10 animate-pulse rounded-full border border-cyan-300/40 bg-cyan-400/10" aria-hidden="true" /><div className="space-y-2"><p className="text-xs uppercase tracking-[0.2em] text-neutral-500">Loading maker network</p><p className="text-sm text-neutral-300">The artisan map is preparing itself for the next studio updates.</p></div><button type="button" onClick={() => setShouldLoadGlobe(true)} className="inline-flex min-h-11 items-center justify-center rounded-full bg-amber-400 px-5 text-sm font-semibold text-neutral-950">Load network view</button></div>}
         </div>
+        {previewArtisans.length === 0 && <p className="mt-3 text-center text-xs text-neutral-400">The maker map updates as new tailors and fabric sellers join the network.</p>}
       </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
-        <div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Current atelier plans</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Promotion that stays current.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 text-xs font-bold text-amber-500 hover:text-amber-300">Meet the artisans <ArrowRight className="h-4 w-4" /></button></div>
-        {promoPlansLoading ? <div className="grid gap-4 md:grid-cols-3" aria-label="Loading promotion plans">{[0, 1, 2].map(index => <div key={index} className="h-40 animate-pulse rounded-2xl border border-neutral-800 bg-neutral-900/50" />)}</div> : activePromoPlans.length > 0 ? <div className="grid gap-4 md:grid-cols-3">{activePromoPlans.map(plan => <article key={plan.id} className={`rounded-2xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{plan.badgeLabel || 'Atelier plan'}</p><h3 className="mt-2 text-lg font-serif font-bold">{plan.caption}</h3><p className={`mt-2 min-h-12 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{plan.description}</p><div className="mt-5 flex items-end justify-between gap-3"><strong className="text-xl">{plan.currency || 'USD'} {plan.amount}</strong><span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">{plan.timeRange}</span></div></article>)}</div> : <p className="rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-8 text-center text-sm text-neutral-400">No active promotion plans at this time.</p>}
+        <div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Current studio offers</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Featured studio plans.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 text-xs font-bold text-amber-500 hover:text-amber-300">Meet the artisans <ArrowRight className="h-4 w-4" /></button></div>
+        {promoPlansLoading ? <div className="grid gap-4 md:grid-cols-3" aria-label="Loading promotion plans">{[0, 1, 2].map(index => <div key={index} className="h-40 animate-pulse rounded-2xl border border-neutral-800 bg-neutral-900/50" />)}</div> : activePromoPlans.length > 0 ? <div className="grid gap-4 md:grid-cols-3">{activePromoPlans.map(plan => <article key={plan.id} className={`rounded-2xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{plan.badgeLabel || 'Atelier plan'}</p><h3 className="mt-2 text-lg font-serif font-bold">{plan.caption}</h3><p className={`mt-2 min-h-12 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{plan.description}</p><div className="mt-5 flex items-end justify-between gap-3"><strong className="text-xl">{plan.currency || 'USD'} {plan.amount}</strong><span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">{plan.timeRange}</span></div></article>)}</div> : <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-8 text-center"><p className="text-sm text-neutral-300">No studio plans are live right now.</p><p className="mt-2 text-xs text-neutral-400">New offers will appear here as soon as the next atelier edit is published.</p></div>}
       </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
@@ -295,7 +331,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Marketplace pulse</p>
-              <h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Real buying heat, not random filler</h2>
+              <h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">What buyers are browsing right now</h2>
             </div>
           </div>
           <button type="button" onClick={onExploreMarketplace} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Open marketplace <ArrowRight className="h-4 w-4" /></button>
@@ -308,25 +344,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <TrendingUp className="h-4 w-4" />
                 <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Trending tailors near you</span>
               </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => scrollCarousel('most-searched-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll most searched left"><ChevronLeft className="h-4 w-4" /></button>
-                <button type="button" onClick={() => scrollCarousel('most-searched-track', 1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll most searched right"><ChevronRight className="h-4 w-4" /></button>
-              </div>
             </div>
-            {renderTrendCards(
+            <LandingTrendCarousel
+              label="Trending tailor posts"
+              accentClass="bg-amber-500/15 text-amber-200"
+              onSelectPost={onSelectPost}
+              onSelectSeller={onSelectSeller}
+              items={
               hottestPosts.map(post => ({
                 id: post.id,
                 title: post.title,
                 subtitle: `${post.authorName} • ${post.tags.slice(0, 2).join(' • ')}`,
                 imageUrl: post.imageUrl,
+                post,
                 tag: 'Trending',
                 metric: `${(post.likes?.length || 0) + (post.saves?.length || 0) + (post.ratingCount || 0)} live signals`,
                 location: post.authorLocation ? `${post.authorLocation.city}, ${post.authorLocation.country}` : undefined,
                 accent: 'from-orange-400/35 via-amber-500/20 to-transparent',
-              })),
-              'most-searched-track',
-              'bg-amber-500/15 text-amber-200',
-            )}
+              }))}
+            />
           </div>
 
           <div className="rounded-[28px] border border-amber-500/15 bg-[linear-gradient(135deg,#12161d,#0f172a,#111317)] p-4">
@@ -335,25 +371,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <Zap className="h-4 w-4" />
                 <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Trending fabrics near you</span>
               </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => scrollCarousel('last-week-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll last week hit left"><ChevronLeft className="h-4 w-4" /></button>
-                <button type="button" onClick={() => scrollCarousel('last-week-track', 1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll last week hit right"><ChevronRight className="h-4 w-4" /></button>
-              </div>
             </div>
-            {renderTrendCards(
+            <LandingTrendCarousel
+              label="Recently active fabric posts"
+              accentClass="bg-cyan-500/15 text-cyan-200"
+              onSelectPost={onSelectPost}
+              onSelectSeller={onSelectSeller}
+              items={
               lastWeekHits.map(post => ({
                 id: post.id,
                 title: post.title,
                 subtitle: `${post.authorName} • ${post.tags[0] || 'fashion'} update`,
                 imageUrl: post.imageUrl,
+                post,
                 tag: 'Fresh',
                 metric: `${Math.max(1, (post.likes?.length ?? 0) + (post.saves?.length ?? 0))} engaged this week`,
                 location: post.authorLocation ? `${post.authorLocation.city}, ${post.authorLocation.country}` : undefined,
                 accent: 'from-cyan-400/25 via-sky-500/20 to-transparent',
-              })),
-              'last-week-track',
-              'bg-cyan-500/15 text-cyan-200',
-            )}
+              }))}
+            />
           </div>
 
           <div className="rounded-[28px] border border-amber-500/15 bg-[linear-gradient(135deg,#19120f,#0f1015,#17130d)] p-4">
@@ -362,31 +398,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <Trophy className="h-4 w-4" />
                 <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Promoted tailors</span>
               </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => scrollCarousel('top-tailors-track', -1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll top tailors left"><ChevronLeft className="h-4 w-4" /></button>
-                <button type="button" onClick={() => scrollCarousel('top-tailors-track', 1)} className="rounded-full border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-amber-300 hover:text-amber-300" aria-label="Scroll top tailors right"><ChevronRight className="h-4 w-4" /></button>
-              </div>
             </div>
-            {renderTrendCards(
-              topTailors.map(seller => {
+            <LandingTrendCarousel
+              label="Featured tailor and fabric seller profiles"
+              accentClass="bg-fuchsia-500/15 text-fuchsia-200"
+              onSelectPost={onSelectPost}
+              onSelectSeller={onSelectSeller}
+              items={topTailors.map(seller => {
                 const sellerPosts = posts.filter(post => post.authorId === seller.id);
                 const avgRating = sellerPosts.length ? sellerPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / sellerPosts.length : 0;
-                const featuredImage = sellerPosts[0]?.imageUrl || seller.avatarUrl || '/favicon-32x32.png';
+                const featuredImage = sellerPosts[0]?.imageUrl || '/logo.png';
                 const sellerLocation = seller.location ? `${seller.location.city}, ${seller.location.country}` : 'Global atelier';
                 return {
                   id: seller.id,
                   title: seller.shopName || seller.name,
                   subtitle: `${seller.role === 'fabric_seller' ? 'Fabric merchant' : 'Tailor'} • Avg rating ${avgRating.toFixed(1)}/5`,
                   imageUrl: featuredImage,
+                  seller,
                   tag: seller.isPromoted ? 'Featured' : 'Popular',
                   metric: `${seller.followers.length} followers`,
                   location: sellerLocation,
                   accent: 'from-fuchsia-500/30 via-purple-500/20 to-transparent',
                 };
-              }),
-              'top-tailors-track',
-              'bg-fuchsia-500/15 text-fuchsia-200',
-            )}
+              })}
+            />
           </div>
         </div>
       </motion.section>

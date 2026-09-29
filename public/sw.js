@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabrilux-atelier-v8';
+const CACHE_NAME = 'fabrilux-atelier-v10';
 const APP_SHELL = ['/index.html', '/manifest.webmanifest'];
 
 const isStaticAssetRequest = (url) => {
@@ -21,6 +21,50 @@ self.addEventListener('activate', (event) => {
     ))
   );
   self.clients.claim();
+});
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  let payload = {};
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { notification: { body: event.data.text() } };
+  }
+  const data = payload.data || {};
+  const notification = payload.notification || {};
+  const title = notification.title || data.title || 'Fabrilux Atelier';
+  const targetUrl = data.url || notification.data?.url || '/';
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    if (windowClients.some(client => client.visibilityState === 'visible')) return;
+    return self.registration.showNotification(title, {
+      body: notification.body || data.body || 'You have a new marketplace update.',
+      icon: notification.icon || '/logo.png',
+      badge: notification.badge || '/favicon.svg',
+      tag: notification.tag || data.tag || `fabrilux-${data.type || 'update'}`,
+      data: { url: targetUrl },
+      renotify: false,
+    });
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  let targetUrl;
+  try {
+    targetUrl = new URL(event.notification.data?.url || '/', self.location.origin);
+    if (targetUrl.origin !== self.location.origin) targetUrl = new URL('/', self.location.origin);
+  } catch {
+    targetUrl = new URL('/', self.location.origin);
+  }
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windowClients) => {
+    const client = windowClients.find(item => new URL(item.url).origin === self.location.origin);
+    if (client) {
+      await client.navigate(targetUrl.href);
+      return client.focus();
+    }
+    return self.clients.openWindow(targetUrl.href);
+  }));
 });
 
 self.addEventListener('fetch', (event) => {
