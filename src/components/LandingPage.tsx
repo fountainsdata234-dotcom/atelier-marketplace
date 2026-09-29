@@ -21,6 +21,7 @@ interface LandingPageProps {
   users: User[];
   posts: ClothPost[];
   promoPlans: AdminPromoPlan[];
+  promoPlansLoading: boolean;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
@@ -32,6 +33,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   users,
   posts,
   promoPlans,
+  promoPlansLoading,
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
   const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
@@ -60,6 +62,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     featuredPostIdRef.current = next.id;
     return next;
   }, [posts]);
+  const activePromoPlans = React.useMemo(() => promoPlans.filter(plan => plan.isActive), [promoPlans]);
   const previewArtisans = React.useMemo<GlobeArtisan[]>(() => users
     .filter(user => user.role === 'tailor' || user.role === 'fabric_seller')
     .filter(user => Number.isFinite(user.location?.lat) && Number.isFinite(user.location?.lng))
@@ -281,7 +284,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
         <div className="mb-6 flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Current atelier plans</p><h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Promotion that stays current.</h2></div><button type="button" onClick={onExploreArtisans} className="inline-flex items-center gap-2 text-xs font-bold text-amber-500 hover:text-amber-300">Meet the artisans <ArrowRight className="h-4 w-4" /></button></div>
-        <div className="grid gap-4 md:grid-cols-3">{promoPlans.map(plan => <article key={plan.id} className={`rounded-2xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{plan.badgeLabel || 'Atelier plan'}</p><h3 className="mt-2 text-lg font-serif font-bold">{plan.caption}</h3><p className={`mt-2 min-h-12 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{plan.description}</p><div className="mt-5 flex items-end justify-between gap-3"><strong className="text-xl">{plan.currency} {plan.amount}</strong><span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">{plan.timeRange}</span></div></article>)}</div>
+        {promoPlansLoading ? <div className="grid gap-4 md:grid-cols-3" aria-label="Loading promotion plans">{[0, 1, 2].map(index => <div key={index} className="h-40 animate-pulse rounded-2xl border border-neutral-800 bg-neutral-900/50" />)}</div> : activePromoPlans.length > 0 ? <div className="grid gap-4 md:grid-cols-3">{activePromoPlans.map(plan => <article key={plan.id} className={`rounded-2xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{plan.badgeLabel || 'Atelier plan'}</p><h3 className="mt-2 text-lg font-serif font-bold">{plan.caption}</h3><p className={`mt-2 min-h-12 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{plan.description}</p><div className="mt-5 flex items-end justify-between gap-3"><strong className="text-xl">{plan.currency || 'USD'} {plan.amount}</strong><span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">{plan.timeRange}</span></div></article>)}</div> : <p className="rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-8 text-center text-sm text-neutral-400">No active promotion plans at this time.</p>}
       </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">

@@ -81,6 +81,7 @@ export default function App() {
   const lastDataRefreshStartedAt = useRef(0);
   const inFlightDataRefresh = useRef<Promise<void> | null>(null);
   const landingPostsRequestStarted = useRef(false);
+  const landingPromoPlansRequestStarted = useRef(false);
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -88,6 +89,7 @@ export default function App() {
   const [posts, setPosts] = useState<ClothPost[]>([]);
   const [postsLoadError, setPostsLoadError] = useState(false);
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
+  const [isPromoPlansLoading, setIsPromoPlansLoading] = useState(false);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -435,13 +437,10 @@ export default function App() {
           setUsers(mergedUsers);
         }
 
-        if (remotePlans !== null && remotePlans.length > 0) {
-          const localPlans = storageService.getPromoPlans();
-          const completePlans = [0, 1, 2]
-            .map(index => remotePlans[index] || localPlans[index])
-            .filter((plan): plan is AdminPromoPlan => Boolean(plan));
-          storageService.savePromoPlans(completePlans);
-          setPromoPlans(completePlans);
+        if (remotePlans !== null) {
+          landingPromoPlansRequestStarted.current = true;
+          storageService.savePromoPlans(remotePlans);
+          setPromoPlans(remotePlans);
         }
       } catch (error) {
         console.error('Remote marketplace data unavailable', error);
@@ -473,6 +472,20 @@ export default function App() {
       console.warn('Landing page listings could not be refreshed.', error);
     });
   }, [currentView, posts.length]);
+
+  useEffect(() => {
+    if (currentView !== 'landing' || landingPromoPlansRequestStarted.current) return;
+    landingPromoPlansRequestStarted.current = true;
+    if (promoPlans.length === 0) setIsPromoPlansLoading(true);
+    void api.getPromoPlans().then(remotePlans => {
+      storageService.savePromoPlans(remotePlans);
+      setPromoPlans(remotePlans);
+    }).catch(error => {
+      console.warn('Landing promotion plans could not be refreshed.', error);
+    }).finally(() => {
+      setIsPromoPlansLoading(false);
+    });
+  }, [currentView]);
 
   useEffect(() => {
     if (!marketplaceViews.includes(currentView)) return;
@@ -758,6 +771,7 @@ export default function App() {
                 users={users}
                 posts={posts}
                 promoPlans={promoPlans}
+                promoPlansLoading={isPromoPlansLoading}
               />
             </motion.div>
           )}
