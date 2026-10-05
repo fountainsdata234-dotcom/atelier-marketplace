@@ -10,8 +10,6 @@ const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ d
 
 const RESPONSIVE_LANDSCAPE_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-17-44-am.avif';
 const RESPONSIVE_PORTRAIT_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-16-27-am.avif';
-const LANDING_FALLBACK_IMAGE = 'https://res.cloudinary.com/auwy7fil/image/upload/c_fill,w_720,h_400,g_auto,q_auto,f_auto/v1790415437/ChatGPT_Image_Sep_26_2026_10_19_39_AM.png';
-
 interface LandingTrendCard {
   id: string;
   title: string;
@@ -36,9 +34,11 @@ interface LandingTrendCarouselProps {
 const LandingTrendCarousel: React.FC<LandingTrendCarouselProps> = ({ items, label, accentClass, onSelectPost, onSelectSeller }) => {
   const trackRef = React.useRef<HTMLDivElement | null>(null);
   const pauseUntilRef = React.useRef(0);
+  const [failedImageUrls, setFailedImageUrls] = React.useState<Record<string, string>>({});
+  const visibleItems = items.filter(item => item.imageUrl && failedImageUrls[item.id] !== item.imageUrl);
 
   React.useEffect(() => {
-    if (items.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (visibleItems.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const timer = window.setInterval(() => {
       const track = trackRef.current;
       if (!track || document.visibilityState !== 'visible' || Date.now() < pauseUntilRef.current) return;
@@ -51,7 +51,7 @@ const LandingTrendCarousel: React.FC<LandingTrendCarouselProps> = ({ items, labe
       track.scrollTo({ left: track.scrollLeft >= maxScroll - 12 ? 0 : track.scrollLeft + step, behavior: 'smooth' });
     }, 4800);
     return () => window.clearInterval(timer);
-  }, [items.length]);
+  }, [visibleItems.length]);
 
   const openCard = (item: LandingTrendCard) => {
     if (item.post) onSelectPost(item.post);
@@ -70,7 +70,7 @@ const LandingTrendCarousel: React.FC<LandingTrendCarouselProps> = ({ items, labe
       onTouchStart={() => { pauseUntilRef.current = Date.now() + 6500; }}
       onTouchEnd={() => { pauseUntilRef.current = Date.now() + 1800; }}
     >
-      {items.map(item => (
+      {visibleItems.map(item => (
         <button
           key={item.id}
           type="button"
@@ -81,7 +81,7 @@ const LandingTrendCarousel: React.FC<LandingTrendCarouselProps> = ({ items, labe
         >
           <div className={`absolute inset-0 bg-gradient-to-br ${item.accent}`} />
           <div className="relative aspect-[4/3] overflow-hidden border-b border-white/10">
-            <img src={item.imageUrl || '/logo.png'} alt={item.post?.imageAlt || item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" />
+            <img src={item.imageUrl} alt={item.post?.imageAlt || item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" onError={() => setFailedImageUrls(current => ({ ...current, [item.id]: item.imageUrl || '' }))} />
             <span className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[10px] font-bold uppercase text-white/90 backdrop-blur-sm">{item.tag}</span>
           </div>
           <div className="relative space-y-2.5 p-4">
@@ -128,6 +128,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
   const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
+  const [failedFeaturedPostId, setFailedFeaturedPostId] = React.useState<string | null>(null);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
   const searchHistory = React.useMemo(() => storageService.getSearchHistory(currentUser?.id || 'guest'), [currentUser?.id]);
@@ -142,7 +143,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       .filter(post => Number.isFinite(Date.parse(post.createdAt)) && Date.parse(post.createdAt) > oneWeekAgo)
       .slice(0, 6);
   }, [trendingPosts]);
-  const topTailors = React.useMemo(() => getTopTailors(posts, users, currentUser, Date.now()).slice(0, 6), [posts, users, currentUser]);
+  const topTailors = React.useMemo(() => getTopTailors(posts, users, currentUser, Date.now())
+    .filter(seller => posts.some(post => post.authorId === seller.id && post.imageUrl?.trim()))
+    .slice(0, 6), [posts, users, currentUser]);
   const featuredPost = React.useMemo(() => {
     const availablePosts = posts.filter(post => post.imageUrl && post.description?.trim());
     if (availablePosts.length === 0) return null;
@@ -263,7 +266,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </div>
 
-            <div className="relative">
+            {featuredPost && featuredPost.id !== failedFeaturedPostId && <div className="relative">
               <div className="relative overflow-hidden rounded-[28px] border border-neutral-800 bg-neutral-950 p-4">
                 <div className="rounded-[22px] border border-amber-500/20 bg-gradient-to-br from-neutral-900 via-[#17181c] to-[#2a1715] p-4">
                   <div className="mb-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-400">
@@ -281,7 +284,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
 
                     <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
-                      <img src={featuredPost?.imageUrl || LANDING_FALLBACK_IMAGE} alt={featuredPost?.imageAlt || featuredPost?.title || 'A bespoke garment from the Fabrilux Atelier marketplace'} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" fetchPriority="high" decoding="async" />
+                      <img src={featuredPost?.imageUrl || ''} alt={featuredPost?.imageAlt || featuredPost?.title || 'Atelier listing'} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" fetchPriority="high" decoding="async" onError={() => { if (featuredPost) setFailedFeaturedPostId(featuredPost.id); }} />
                     </div>
                     <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-neutral-300">{featuredPost?.description || 'A living catalogue of garments, fabrics, and ideas published by the people who make them.'}</p>
                   </div>
@@ -300,7 +303,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                 </div>
               </div>
-            </div>
+            </div>}
           </div>
         </motion.div>
       </section>
@@ -407,7 +410,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               items={topTailors.map(seller => {
                 const sellerPosts = posts.filter(post => post.authorId === seller.id);
                 const avgRating = sellerPosts.length ? sellerPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / sellerPosts.length : 0;
-                const featuredImage = sellerPosts[0]?.imageUrl || '/logo.png';
+                const featuredImage = sellerPosts.find(post => post.imageUrl?.trim())?.imageUrl;
                 const sellerLocation = seller.location ? `${seller.location.city}, ${seller.location.country}` : 'Global atelier';
                 return {
                   id: seller.id,

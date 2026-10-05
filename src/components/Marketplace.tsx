@@ -53,8 +53,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   isDarkMode
 }) => {
   // Search & Filter States
+  const [failedPostImageUrls, setFailedPostImageUrls] = useState<Record<string, string>>({});
+  const handlePostImageError = (post: ClothPost) => {
+    setFailedPostImageUrls(current => ({ ...current, [post.id]: post.imageUrl }));
+  };
   const sellerPosts = useMemo(() => posts
-    .filter(post => post.authorRole === 'tailor' || post.authorRole === 'fabric_seller')
+    .filter(post => (post.authorRole === 'tailor' || post.authorRole === 'fabric_seller') && post.imageUrl?.trim() && failedPostImageUrls[post.id] !== post.imageUrl)
     .map(post => {
       const author = users.find(user => user.id === post.authorId);
       return {
@@ -73,7 +77,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         rating: Number(post.rating) || 0,
         ratingCount: Number(post.ratingCount) || 0,
       };
-    }), [posts, users]);
+    }), [posts, users, failedPostImageUrls]);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
   const followedSellerIds = useMemo(() => new Set(
     users.filter(user => currentUser && user.followers?.includes(currentUser.id)).map(user => user.id),
@@ -173,6 +177,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const topTailors = useMemo(() => {
     return users
       .filter(user => user.role === 'tailor' || user.role === 'fabric_seller')
+      .filter(user => tailorPosts.some(post => post.authorId === user.id && post.imageUrl?.trim()))
       .map(seller => {
         const sellerPosts = tailorPosts.filter(post => post.authorId === seller.id);
         const engagement = sellerPosts.reduce((sum, post) => sum + (post.likes?.length ?? 0) * 2 + (post.saves?.length ?? 0) * 3 + (post.ratingCount ?? 0), 0);
@@ -217,7 +222,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         id: seller.id,
         title: seller.shopName || seller.name,
         subtitle: `${seller.role === 'fabric_seller' ? 'Fabric seller' : 'Tailor'} · ${(seller.followers?.length ?? 0)} followers`,
-        imageUrl: tailorPosts.find(post => post.authorId === seller.id)?.imageUrl || seller.avatarUrl || '',
+        imageUrl: tailorPosts.find(post => post.authorId === seller.id && post.imageUrl?.trim())?.imageUrl || '',
       })),
     },
   ], [trendingPosts, lastWeekHits, topTailors, tailorPosts]);
@@ -628,7 +633,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   className="relative aspect-[10/13] min-h-[320px] sm:aspect-[16/7] sm:min-h-[320px]"
                 >
                   <button type="button" onClick={() => onSelectPost(post)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-pointer">
-                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-cover" loading="eager" />
+                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-cover" loading="eager" onError={() => handlePostImageError(post)} />
                   </button>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.22),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.22),rgba(0,0,0,0.78))] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.25),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.9),rgba(0,0,0,0.55),rgba(0,0,0,0.2))]" />
 
@@ -759,7 +764,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   }}
                 >
                   <div className="relative overflow-hidden">
-                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" onError={() => handlePostImageError(post)} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-3">
                       <p className="text-xs font-semibold truncate text-white">{post.title}</p>
@@ -1100,6 +1105,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     draggable={false}
                     onContextMenu={(event) => event.preventDefault()}
                     onClick={() => onSelectPost(post)}
+                    onError={() => handlePostImageError(post)}
                   />
 
                   {/* Top image overlay badges */}
@@ -1244,7 +1250,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                                   if (seller) onSelectSeller(seller);
                                 }
                               }} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-black/15 p-2 text-left transition hover:border-white/20 hover:bg-black/20">
-                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" loading="lazy" /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-[10px] uppercase tracking-[0.12em] text-white/80">Live</div>}
+                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" loading="lazy" onError={() => { const failedPost = tailorPosts.find(post => post.imageUrl === item.imageUrl); if (failedPost) handlePostImageError(failedPost); }} /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-[10px] uppercase tracking-[0.12em] text-white/80">Live</div>}
                                 <span className="min-w-0">
                                   <strong className="block truncate text-xs text-white">{item.title}</strong>
                                   <small className="mt-1 block truncate text-[10px] text-neutral-300">{item.subtitle}</small>
