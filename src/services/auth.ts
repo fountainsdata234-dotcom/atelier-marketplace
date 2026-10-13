@@ -22,6 +22,16 @@ const normalizeRole = (role: unknown): UserRole => {
     : 'buyer';
 };
 
+const normalizeAvatarUrl = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const normalizeSupabaseUser = (user: SupabaseUser): AuthUser => {
   const metadata = user.user_metadata ?? {};
   const appMetadata = user.app_metadata ?? {};
@@ -38,11 +48,11 @@ const normalizeSupabaseUser = (user: SupabaseUser): AuthUser => {
   const name = typeof metadata.name === 'string'
     ? metadata.name.trim()
     : email.split('@')[0] || 'Atelier Member';
-  const avatarUrl = typeof metadata.avatar_url === 'string'
-    ? metadata.avatar_url
-    : typeof metadata.picture === 'string'
-      ? metadata.picture
-      : undefined;
+  const googleIdentity = user.identities?.find(identity => identity.provider === 'google')?.identity_data;
+  const avatarUrl = normalizeAvatarUrl(metadata.avatar_url)
+    || normalizeAvatarUrl(metadata.picture)
+    || normalizeAvatarUrl(googleIdentity?.avatar_url)
+    || normalizeAvatarUrl(googleIdentity?.picture);
 
   return {
     id: user.id,

@@ -115,6 +115,7 @@ export default function App() {
   const [isPromoPlansLoading, setIsPromoPlansLoading] = useState(false);
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const lastAuthEventUserId = useRef<string | null>(null);
 
   useEffect(() => {
     const pageMeta: Record<string, { title: string; description: string }> = {
@@ -252,46 +253,48 @@ export default function App() {
           setAuthModalOpen(false);
         }
         if (!authUser) {
+          lastAuthEventUserId.current = null;
           setCurrentUser(null);
           return;
         }
-        let savedProfile: Partial<User> | undefined;
-        try {
-          savedProfile = await api.getProfile();
-        } catch (error) {
-          console.warn('Profile not available yet; using authenticated account details.', error);
-        }
+        if (
+          lastAuthEventUserId.current === authUser.id
+          && (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')
+        ) return;
+        lastAuthEventUserId.current = authUser.id;
         const cachedProfile = storageService.getUsers().find(user => user.id === authUser.id);
-        const profileValue = <T,>(key: keyof User, fallback: T): T => {
-          const remoteValue = savedProfile?.[key] as T | undefined;
-          const cachedValue = cachedProfile?.[key] as T | undefined;
-          if (remoteValue !== undefined && remoteValue !== null && remoteValue !== '') return remoteValue;
-          if (cachedValue !== undefined && cachedValue !== null && cachedValue !== '') return cachedValue;
-          return fallback;
+        const mergeProfile = (savedProfile?: Partial<User>): User => {
+          const profileValue = <T,>(key: keyof User, fallback: T): T => {
+            const remoteValue = savedProfile?.[key] as T | undefined;
+            const cachedValue = cachedProfile?.[key] as T | undefined;
+            if (remoteValue !== undefined && remoteValue !== null && remoteValue !== '') return remoteValue;
+            if (cachedValue !== undefined && cachedValue !== null && cachedValue !== '') return cachedValue;
+            return fallback;
+          };
+          const savedRole = savedProfile?.role;
+          return {
+            id: authUser.id,
+            email: authUser.email,
+            name: savedProfile?.name || cachedProfile?.name || authUser.name,
+            role: authUser.isAdmin ? 'admin' : (savedRole || cachedProfile?.role || authUser.role),
+            phone: savedProfile?.phone || cachedProfile?.phone || '',
+            countryCode: savedProfile?.countryCode || cachedProfile?.countryCode || '',
+            location: savedProfile?.location || cachedProfile?.location || { country: '', state: '', city: '' },
+            whatsappNumber: savedProfile?.whatsappNumber || cachedProfile?.whatsappNumber,
+            shopName: savedProfile?.shopName || cachedProfile?.shopName,
+            bio: savedProfile?.bio || cachedProfile?.bio || '',
+            handle: profileValue('handle', `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`),
+            avatarUrl: profileValue('avatarUrl', authUser.avatarUrl),
+            isPromoted: profileValue('isPromoted', false),
+            isBlocked: profileValue('isBlocked', false),
+            followers: profileValue('followers', []),
+            createdAt: authUser.createdAt,
+            isSuperAdmin: authUser.isSuperAdmin,
+            isWarned: savedProfile?.isWarned ?? cachedProfile?.isWarned,
+            warningNote: savedProfile?.warningNote ?? cachedProfile?.warningNote,
+          };
         };
-        const savedRole = savedProfile?.role;
-        const mergedUser: User = {
-          id: authUser.id,
-          email: authUser.email,
-          name: authUser.name,
-          role: authUser.isAdmin ? 'admin' : (savedRole || authUser.role),
-          phone: savedProfile?.phone || '',
-          countryCode: savedProfile?.countryCode || '',
-          location: savedProfile?.location || { country: '', state: '', city: '' },
-          whatsappNumber: savedProfile?.whatsappNumber,
-          shopName: savedProfile?.shopName,
-          bio: savedProfile?.bio || '',
-          handle: profileValue('handle', `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`),
-          avatarUrl: profileValue('avatarUrl', authUser.avatarUrl),
-          isPromoted: profileValue('isPromoted', false),
-          isBlocked: profileValue('isBlocked', false),
-          followers: profileValue('followers', []),
-          createdAt: authUser.createdAt,
-          isSuperAdmin: authUser.isSuperAdmin,
-          isWarned: savedProfile?.isWarned,
-          warningNote: savedProfile?.warningNote,
-        };
-        const user = storageService.upsertUser(mergedUser);
+        const user = storageService.upsertUser(mergeProfile());
         setCurrentUser(user);
         if (publicSellerRoute) {
           setCurrentView(publicPostRoute ? 'post' : 'seller');
@@ -302,6 +305,17 @@ export default function App() {
         } else {
           setCurrentView('marketplace');
         }
+        void api.getProfile().then(savedProfile => {
+          const syncedUser = storageService.upsertUser(mergeProfile(savedProfile));
+          setCurrentUser(syncedUser);
+          if (!savedProfile.avatarUrl && authUser.avatarUrl) {
+            void api.saveProfile({ avatarUrl: authUser.avatarUrl }).catch(error => {
+              console.warn('Google profile photo could not be saved.', error);
+            });
+          }
+        }).catch(error => {
+          console.warn('Profile could not be synchronized; continuing with available account details.', error);
+        });
         void refreshAllData();
       });
       return configureAuth().catch((error) => {

@@ -106,7 +106,7 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 
 interface AuthenticatedRequest extends Request {
-  authUser?: { uid: string; email?: string; admin?: boolean; blocked?: boolean };
+  authUser?: { uid: string; email?: string; name?: string; avatarUrl?: string; admin?: boolean; blocked?: boolean };
 }
 
 interface StoredMessage {
@@ -171,7 +171,13 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
   const accessToken = header.slice(7);
   const supabaseUrl = process.env.SUPABASE_URL?.trim();
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  let authenticatedUser: { id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> };
+  let authenticatedUser: {
+    id: string;
+    email?: string;
+    user_metadata?: Record<string, unknown>;
+    app_metadata?: Record<string, unknown>;
+    google_identity_data?: Record<string, unknown>;
+  };
 
   try {
     if (supabaseUrl && supabaseServiceRoleKey) {
@@ -183,6 +189,7 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
         email: user.email,
         user_metadata: user.user_metadata,
         app_metadata: user.app_metadata,
+        google_identity_data: user.identities?.find(identity => identity.provider === 'google')?.identity_data,
       };
     } else {
       const token = await adminAuth.verifyIdToken(accessToken);
@@ -199,13 +206,33 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
   try {
     const profileData = await readProfile(authenticatedUser.id) || {};
     const appMetadata = authenticatedUser.app_metadata || {};
+    const userMetadata = authenticatedUser.user_metadata || {};
+    const googleIdentityData = authenticatedUser.google_identity_data || {};
     const isAdminFromProfile = profileData.role === 'admin'
       || authenticatedUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com'
       || appMetadata.role === 'admin'
       || appMetadata.is_admin === true
       || (authenticatedUser as { admin?: boolean; role?: string }).admin === true
       || (authenticatedUser as { admin?: boolean; role?: string }).role === 'admin';
-    req.authUser = { uid: authenticatedUser.id, email: authenticatedUser.email, admin: Boolean(isAdminFromProfile), blocked: profileData.isBlocked === true };
+    const name = [userMetadata.name, userMetadata.full_name]
+      .find(value => typeof value === 'string' && value.trim());
+    const avatarUrl = [userMetadata.avatar_url, userMetadata.picture, googleIdentityData.avatar_url, googleIdentityData.picture]
+      .find(value => {
+        if (typeof value !== 'string' || !value.trim()) return false;
+        try {
+          return new URL(value).protocol === 'https:';
+        } catch {
+          return false;
+        }
+      });
+    req.authUser = {
+      uid: authenticatedUser.id,
+      email: authenticatedUser.email,
+      name: typeof name === 'string' ? name.trim().slice(0, 120) : undefined,
+      avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : undefined,
+      admin: Boolean(isAdminFromProfile),
+      blocked: profileData.isBlocked === true,
+    };
     next();
   } catch (error) {
     console.error('Unable to load authenticated profile.', error);
@@ -422,10 +449,18 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
 });
 
 app.get('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
-  const profile = await readProfile(req.authUser!.uid);
+  let profile = await readProfile(req.authUser!.uid);
   if (!profile) {
-    res.status(404).json({ error: 'Profile has not been created yet.' });
-    return;
+    const email = req.authUser!.email || '';
+    profile = await upsertProfile(req.authUser!.uid, {
+      id: req.authUser!.uid,
+      email,
+      name: req.authUser!.name || email.split('@')[0] || 'Atelier Member',
+      role: req.authUser!.admin ? 'admin' : 'buyer',
+      handle: `@${(email.split('@')[0] || 'atelier_member').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
+      avatarUrl: req.authUser!.avatarUrl || '',
+      isSuperAdmin: email.trim().toLowerCase() === 'fountainsdata234@gmail.com',
+    });
   }
   res.json({ id: req.authUser!.uid, ...snakeToCamel(profile) });
 });

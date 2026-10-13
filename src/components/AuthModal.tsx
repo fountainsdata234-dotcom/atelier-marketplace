@@ -291,21 +291,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         shopName: cachedProfile?.shopName,
         bio: cachedProfile?.bio || '',
         handle: cachedProfile?.handle || `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
-        avatarUrl: cachedProfile?.avatarUrl || authUser.avatarUrl,
+        avatarUrl: authUser.avatarUrl || cachedProfile?.avatarUrl,
         isPromoted: cachedProfile?.isPromoted || false,
         isBlocked: cachedProfile?.isBlocked || false,
         followers: cachedProfile?.followers || [],
         createdAt: authUser.createdAt,
         isSuperAdmin: authUser.isSuperAdmin,
       });
-      void api.getProfile().then(savedProfile => {
-        const syncedUser = storageService.upsertUser({
-          ...user,
-          ...savedProfile,
-          role: authUser.isAdmin ? 'admin' : savedProfile.role || user.role,
-        });
-        window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: syncedUser }));
-      }).catch(() => undefined);
       setSuccessMsg(`Welcome back, ${user.name}! Your FABSATTIRE studio is ready for your next bespoke discovery.`);
       setTimeout(() => {
         onSuccess(user);

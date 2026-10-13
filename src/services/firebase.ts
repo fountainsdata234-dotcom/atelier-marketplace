@@ -41,8 +41,6 @@ if (firebaseAvailable) {
   firebaseStorage = getStorage(app);
   googleProvider = new GoogleAuthProvider();
   googleProvider.setCustomParameters({ prompt: 'select_account' });
-} else {
-  console.warn('Firebase is not configured; Firebase auth and storage features are disabled. Supabase is being used instead.');
 }
 
 const normalizeAvatarUrl = (url?: string | null): string | undefined => {
