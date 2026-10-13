@@ -396,7 +396,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
             {fabricRequests.map(request => (
               <article key={request.id} className={`overflow-hidden rounded-2xl border ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}>
                 <div className="flex gap-3 p-4">
-                  <img src={request.postImageUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                  <img src={request.postImageUrl} alt="" className="h-16 w-16 rounded-xl bg-neutral-950 object-contain" />
                   <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-sm font-semibold">{request.postTitle}</h3><span className="rounded-full border border-amber-500/30 px-2 py-0.5 text-[9px] uppercase tracking-wider text-amber-300">{request.status}</span></div><p className="mt-1 text-xs text-neutral-400">From {request.buyerName} · {request.buyerEmail}</p><p className="mt-1 text-xs text-neutral-300">{request.quantity} {request.quantityUnit}{request.preferredColor ? ` · ${request.preferredColor}` : ''}{request.budget ? ` · Budget ${request.currency} ${request.budget}` : ''}</p></div>
                 </div>
                 <div className="grid gap-2 border-t border-neutral-800/60 px-4 py-3 text-xs text-neutral-400 sm:grid-cols-2"><span>Deliver to: <strong className="font-medium text-neutral-200">{request.deliveryLocation}</strong></span><span>Needed by: <strong className="font-medium text-neutral-200">{request.neededBy || 'Flexible'}</strong></span></div>
@@ -564,7 +564,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
                     {imageUrl && (
                       <div className="relative aspect-16/10 overflow-hidden rounded-2xl border border-amber-500/30 bg-neutral-900">
-                        <img src={imageUrl} alt="Preview" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                        <img src={imageUrl} alt="Preview" className="h-full w-full object-contain brightness-110 saturate-110" referrerPolicy="no-referrer" />
                         <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-[9px] text-amber-300">Live preview</div>
                       </div>
                     )}
@@ -590,7 +590,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   {myPosts.map(post => (
                     <div key={post.id} className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/40">
                       <div className="relative aspect-4/3 overflow-hidden bg-neutral-900">
-                        <img src={post.imageUrl} alt={post.title} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                        <img src={post.imageUrl} alt={post.title} className="h-full w-full object-contain brightness-110 saturate-110" referrerPolicy="no-referrer" />
                         <button onClick={() => handleDeletePost(post.id)} title="Delete post" className="absolute right-2 top-2 rounded-lg bg-black/70 p-1.5 text-white transition-colors hover:bg-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                       <div className="space-y-2 p-4">

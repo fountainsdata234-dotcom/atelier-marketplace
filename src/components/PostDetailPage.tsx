@@ -69,8 +69,8 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
 
   const renderRelatedCard = (relatedPost: ClothPost) => (
     <button key={relatedPost.id} type="button" onClick={() => onSelectPost(relatedPost)} className={`group min-w-0 overflow-hidden rounded-xl border text-left transition-colors hover:border-amber-500/50 ${surface}`}>
-      <div className="aspect-[4/3] overflow-hidden bg-neutral-900">
-        <img src={relatedPost.imageUrl} alt={relatedPost.title} loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.025]" />
+      <div className="aspect-[4/3] overflow-hidden bg-neutral-950">
+        <img src={relatedPost.imageUrl} alt={relatedPost.title} loading="lazy" decoding="async" className="h-full w-full object-contain brightness-110 saturate-110" />
       </div>
       <span className="block truncate px-3 pt-2.5 text-xs font-semibold">{relatedPost.title}</span>
       <span className={`block truncate px-3 pb-3 pt-1 text-[10px] ${muted}`}>{relatedPost.tags.slice(0, 2).map(tag => `#${tag}`).join(' ')}</span>

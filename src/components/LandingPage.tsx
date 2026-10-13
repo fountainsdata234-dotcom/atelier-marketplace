@@ -81,7 +81,7 @@ const LandingTrendCarousel: React.FC<LandingTrendCarouselProps> = ({ items, labe
         >
           <div className={`absolute inset-0 bg-gradient-to-br ${item.accent}`} />
           <div className="relative aspect-[4/3] overflow-hidden border-b border-white/10">
-            <img src={item.imageUrl} alt={item.post?.imageAlt || item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" onError={() => setFailedImageUrls(current => ({ ...current, [item.id]: item.imageUrl || '' }))} />
+            <img src={item.imageUrl} alt={item.post?.imageAlt || item.title} className="h-full w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" decoding="async" onError={() => setFailedImageUrls(current => ({ ...current, [item.id]: item.imageUrl || '' }))} />
             <span className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[10px] font-bold uppercase text-white/90 backdrop-blur-sm">{item.tag}</span>
           </div>
           <div className="relative space-y-2.5 p-4">
@@ -283,8 +283,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <div className="rounded-full bg-white/10 px-2 py-1 text-xs">Marketplace</div>
                     </div>
 
-                    <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-900">
-                      <img src={featuredPost?.imageUrl || ''} alt={featuredPost?.imageAlt || featuredPost?.title || 'Atelier listing'} className="h-full w-full object-cover transition duration-700 hover:scale-105" loading="eager" fetchPriority="high" decoding="async" onError={() => { if (featuredPost) setFailedFeaturedPostId(featuredPost.id); }} />
+                    <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-950">
+                      <img src={featuredPost?.imageUrl || ''} alt={featuredPost?.imageAlt || featuredPost?.title || 'Atelier listing'} className="h-full w-full object-contain brightness-110 saturate-110" loading="eager" fetchPriority="high" decoding="async" onError={() => { if (featuredPost) setFailedFeaturedPostId(featuredPost.id); }} />
                     </div>
                     <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-neutral-300">{featuredPost?.description || 'A living catalogue of garments, fabrics, and ideas published by the people who make them.'}</p>
                   </div>

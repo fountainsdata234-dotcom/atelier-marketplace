@@ -109,12 +109,12 @@ export const signUpWithEmail = async (email: string, password: string, displayNa
   return normalizeSupabaseUser(data.user);
 };
 
-export const signInWithGoogle = async (): Promise<AuthUser> => {
-  const { error } = await requireSupabase().auth.signInWithOAuth({ provider: 'google' });
+export const signInWithGoogle = async (): Promise<void> => {
+  const { error } = await requireSupabase().auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: `${window.location.origin}/` },
+  });
   if (error) throw error;
-  const { data: { user } } = await requireSupabase().auth.getUser();
-  if (!user) throw new Error('Google sign-in did not return a user profile.');
-  return normalizeSupabaseUser(user);
 };
 
 export const resetAuthPassword = async (email: string) => {
@@ -142,6 +142,9 @@ export const getAuthErrorMessage = (error: unknown) => {
     'email-not-confirmed': 'Confirm your email address before signing in.',
   };
   if (code && supabaseMessages[code]) return supabaseMessages[code];
+  if (/unsupported provider|provider is not enabled/i.test(message)) {
+    return 'Google sign-in is not enabled in Supabase yet. Enable Google under Authentication > Providers and add your OAuth client credentials.';
+  }
   if (/email.*already|already.*email/i.test(message)) return 'An account already exists for this email.';
   if (/password|credential/i.test(message) && message.length < 160) return message;
   if (/captcha|rate limit|too many/i.test(message)) return message;

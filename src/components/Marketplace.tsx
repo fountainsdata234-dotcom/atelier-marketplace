@@ -593,7 +593,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   }}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs hover:bg-amber-500/10"
                 >
-                  {suggestion.user?.avatarUrl ? <img src={suggestion.user.avatarUrl} alt={suggestion.user.name || 'Seller avatar'} className="h-9 w-9 rounded-lg object-cover" /> : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span> : suggestion.post ? <img src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
+                  {suggestion.user?.avatarUrl ? <img src={suggestion.user.avatarUrl} alt={suggestion.user.name || 'Seller avatar'} className="h-9 w-9 rounded-lg object-cover" /> : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span> : suggestion.post ? <img src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg bg-neutral-950 object-contain" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
                   <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? 'Collection piece' : 'Category'}</small></span>
                 </button>
               ))}
@@ -634,12 +634,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   initial={{ opacity: 0.5, scale: 1.02 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.45 }}
-                  className="relative aspect-[10/13] min-h-[320px] sm:aspect-[16/7] sm:min-h-[320px]"
+                  className="relative aspect-[10/13] min-h-[320px] bg-neutral-950 sm:aspect-[16/7] sm:min-h-[320px]"
                 >
                   <button type="button" onClick={() => onSelectPost(post)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-pointer">
-                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-cover" loading="eager" onError={() => handlePostImageError(post)} />
+                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-contain brightness-110 saturate-110" loading="eager" onError={() => handlePostImageError(post)} />
                   </button>
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.22),transparent_28%),linear-gradient(180deg,rgba(0,0,0,0.22),rgba(0,0,0,0.78))] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.25),transparent_28%),linear-gradient(90deg,rgba(0,0,0,0.9),rgba(0,0,0,0.55),rgba(0,0,0,0.2))]" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.12),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.02)_25%,rgba(0,0,0,0.16)_55%,rgba(0,0,0,0.64)_100%)] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.14),transparent_30%),linear-gradient(90deg,rgba(0,0,0,0.72),rgba(0,0,0,0.3)_55%,rgba(0,0,0,0.04))]" />
 
                   <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-6">
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -761,7 +761,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   }}
                 >
                   <div className="relative overflow-hidden">
-                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" onError={() => handlePostImageError(post)} />
+                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" onError={() => handlePostImageError(post)} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-3">
                       <p className="text-xs font-semibold truncate text-white">{post.title}</p>
@@ -1000,7 +1000,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </div>
         </div>
       ) : (
-        <div className="marketplace-masonry columns-2 gap-3 md:columns-2 md:gap-5 lg:columns-3">
+        <div className="marketplace-masonry grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3">
           {visiblePosts.map((post, postIndex) => {
             const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
             const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
@@ -1091,11 +1091,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </div>
 
                 {/* Garment Image with High-Res Zoom / Save */}
-                <div className="feed-card-image relative aspect-[4/2.85] w-full overflow-hidden bg-neutral-900 group/img">
+                <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
                   <img
                     src={post.imageUrl}
                     alt={post.title}
-                    className="h-full w-full cursor-pointer rounded-[1.1rem] object-cover object-center transition-[transform,filter] duration-500 ease-out group-hover/img:scale-[1.025] group-hover/img:brightness-105 group-hover/img:saturate-105"
+                    className="block h-auto w-full cursor-pointer object-contain brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
                     referrerPolicy="no-referrer"
                     loading="lazy"
                     decoding="async"
@@ -1234,7 +1234,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                                   if (seller) onSelectSeller(seller);
                                 }
                               }} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-black/15 p-2 text-left transition hover:border-white/20 hover:bg-black/20">
-                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" loading="lazy" onError={() => { const failedPost = tailorPosts.find(post => post.imageUrl === item.imageUrl); if (failedPost) handlePostImageError(failedPost); }} /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-[10px] uppercase tracking-[0.12em] text-white/80">Live</div>}
+                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl bg-neutral-950 object-contain" loading="lazy" onError={() => { const failedPost = tailorPosts.find(post => post.imageUrl === item.imageUrl); if (failedPost) handlePostImageError(failedPost); }} /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-[10px] uppercase tracking-[0.12em] text-white/80">Live</div>}
                                 <span className="min-w-0">
                                   <strong className="block truncate text-xs text-white">{item.title}</strong>
                                   <small className="mt-1 block truncate text-[10px] text-neutral-300">{item.subtitle}</small>

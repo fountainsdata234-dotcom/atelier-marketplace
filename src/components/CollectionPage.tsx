@@ -220,7 +220,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {uploadQueue.map((item) => (
                     <div key={item.id} className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/30">
-                      <img src={item.preview} alt={item.name} className="h-20 w-full object-cover" />
+                      <img src={item.preview} alt={item.name} className="h-20 w-full bg-neutral-950 object-contain" />
                       <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-[10px]">
                         <span className="truncate text-neutral-300">{item.name}</span>
                         {item.status === 'done' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
@@ -256,7 +256,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold"><Layers className="h-4 w-4 text-amber-400" /> Published collections</div>
           <div className="grid gap-4 md:grid-cols-2">
             {sellerCollections.map(collection => <article key={collection.id} className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/30">
-              <div className="flex h-36 gap-0.5 overflow-x-auto bg-neutral-900">{collection.imageUrls.map(image => <img key={image} src={image} alt="" className="h-full w-1/3 min-w-[33.333%] object-cover" />)}</div>
+              <div className="flex h-36 gap-0.5 overflow-x-auto bg-neutral-950">{collection.imageUrls.map(image => <img key={image} src={image} alt="" className="h-full w-1/3 min-w-[33.333%] object-contain" />)}</div>
               <div className="p-3"><h2 className="text-sm font-semibold">{collection.title}</h2><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{collection.description || 'A curated seller collection.'}</p><p className="mt-2 text-[10px] text-amber-400">{collection.imageUrls.length} gallery images</p></div>
             </article>)}
           </div>
@@ -334,7 +334,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {savedPhotos.map((photo) => (
               <div key={photo.id} className={`overflow-hidden rounded-2xl border ${isDarkMode ? 'border-neutral-800 bg-neutral-950/40' : 'border-neutral-200 bg-neutral-50'}`}>
-                <img src={photo.url} alt={photo.title} className="h-48 w-full object-cover sm:h-52" />
+                <img src={photo.url} alt={photo.title} className="h-48 w-full bg-neutral-950 object-contain sm:h-52" />
                 <div className="p-3 space-y-2.5">
                   <div>
                     <p className="text-xs font-semibold truncate">{photo.title}</p>

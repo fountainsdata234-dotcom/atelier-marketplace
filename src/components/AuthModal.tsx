@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Scissors, ShoppingBag, Shield, MapPin, Phone, Lock, Mail, User as UserIcon, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Chrome } from 'lucide-react';
-import { User, UserRole } from '../types';
-import { resolveLocationCoordinates, WORLD_COUNTRIES } from '../data/geoData';
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { User, UserRole, CountryGeo } from '../types';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import type { CountryCode } from 'libphonenumber-js';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/firebase';
 import { getAuthErrorMessage, resetAuthPassword, signInWithEmail, signInWithGoogle, signUpWithEmail } from '../services/auth';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
+
+const INITIAL_COUNTRIES: CountryGeo[] = [{
+  name: 'Nigeria',
+  code: 'NG',
+  dialCode: '+234',
+  flag: 'NG',
+  lat: 9.082,
+  lng: 8.6753,
+  states: [{ name: 'Lagos', code: 'LA', cities: ['Ikeja', 'Lekki', 'Lagos'] }],
+}];
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -51,6 +60,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [selectedStateCode, setSelectedStateCode] = useState('');
   const [selectedCityName, setSelectedCityName] = useState('');
   const [selectedCurrency, setSelectedCurrency] = useState('NGN');
+  const [worldCountries, setWorldCountries] = useState<CountryGeo[]>(INITIAL_COUNTRIES);
+  const [resolveLocationCoordinates, setResolveLocationCoordinates] = useState<((countryCode: string, stateCode: string, cityName: string, fallback: { lat: number; lng: number }) => { lat: number; lng: number }) | null>(null);
   const [countrySearch, setCountrySearch] = useState('Nigeria');
   const [stateSearch, setStateSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
@@ -87,7 +98,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   // Sync country data
-  const selectedCountry = WORLD_COUNTRIES.find(c => c.code === selectedCountryCode) || WORLD_COUNTRIES[0];
+  const selectedCountry = worldCountries.find(c => c.code === selectedCountryCode) || worldCountries[0];
   const states = selectedCountry.states;
   const currentStateObj = states.find(s => s.code === selectedStateCode) || null;
   const cities = currentStateObj ? currentStateObj.cities : [];
@@ -103,13 +114,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     });
   }, [selectedCountryCode, selectedCountry.currency]);
 
-  const filteredCountries = WORLD_COUNTRIES.filter((country) => {
+  const filteredCountries = worldCountries.filter((country) => {
     const term = countrySearch.trim().toLowerCase();
     if (!term) return true;
     return country.name.toLowerCase().includes(term)
       || country.code.toLowerCase().includes(term)
       || country.dialCode.toLowerCase().includes(term);
   });
+
+  useEffect(() => {
+    if (!isOpen || !isRegistering || resolveLocationCoordinates) return;
+    let isActive = true;
+    void import('../data/geoData').then((locationData) => {
+      if (!isActive) return;
+      setWorldCountries(locationData.WORLD_COUNTRIES);
+      setResolveLocationCoordinates(() => locationData.resolveLocationCoordinates);
+    }).catch(() => undefined);
+    return () => { isActive = false; };
+  }, [isOpen, isRegistering, resolveLocationCoordinates]);
 
   const filteredStates = states.filter((state) => {
     const term = stateSearch.trim().toLowerCase();
@@ -126,7 +148,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const restoreAutoCountry = (overrideCode?: string) => {
     const nextCountryCode = overrideCode || detectedCountryCode || 'NG';
-    const fallbackCountry = WORLD_COUNTRIES.find((country) => country.code === nextCountryCode) || WORLD_COUNTRIES[0];
+    const fallbackCountry = worldCountries.find((country) => country.code === nextCountryCode) || worldCountries[0];
     setSelectedCountryCode(fallbackCountry.code);
     setCountrySearch(fallbackCountry.name);
     const firstState = fallbackCountry.states[0];
@@ -182,7 +204,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [defaultRole]);
 
   useEffect(() => {
-    if (!isOpen || !('geolocation' in navigator)) return;
+    if (!isOpen || !isRegistering || !('geolocation' in navigator)) return;
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -204,7 +226,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           if (!countryName && !stateName) return;
 
-          const matchedCountry = WORLD_COUNTRIES.find((country) => country.name.toLowerCase() === countryName.toLowerCase() || country.code.toLowerCase() === countryName.toLowerCase())
+          const matchedCountry = worldCountries.find((country) => country.name.toLowerCase() === countryName.toLowerCase() || country.code.toLowerCase() === countryName.toLowerCase())
             || selectedCountry;
 
           if (!matchedCountry) return;
@@ -245,7 +267,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       () => undefined,
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 600000 },
     );
-  }, [isOpen, selectedCountry]);
+  }, [isOpen, isRegistering, selectedCountry, worldCountries]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,27 +278,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
     if (!isRegistering) {
       const authUser = await signInWithEmail(email.trim(), password);
-      const savedProfile = await api.getProfile().catch(() => undefined);
       const cachedProfile = storageService.getUsers().find(user => user.id === authUser.id);
       const user = storageService.upsertUser({
         id: authUser.id,
         email: authUser.email,
         name: authUser.name,
-        role: savedProfile?.role || cachedProfile?.role || authUser.role,
-        phone: savedProfile?.phone || cachedProfile?.phone || '',
-        countryCode: savedProfile?.countryCode || cachedProfile?.countryCode || '',
-        location: savedProfile?.location || cachedProfile?.location || { country: '', state: '', city: '' },
-        whatsappNumber: savedProfile?.whatsappNumber || cachedProfile?.whatsappNumber,
-        shopName: savedProfile?.shopName || cachedProfile?.shopName,
-        bio: savedProfile?.bio || cachedProfile?.bio || '',
-        handle: savedProfile?.handle || cachedProfile?.handle || `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
-        avatarUrl: savedProfile?.avatarUrl || cachedProfile?.avatarUrl || authUser.avatarUrl,
-        isPromoted: savedProfile?.isPromoted || cachedProfile?.isPromoted || false,
-        isBlocked: savedProfile?.isBlocked || cachedProfile?.isBlocked || false,
-        followers: savedProfile?.followers || cachedProfile?.followers || [],
+        role: cachedProfile?.role || authUser.role,
+        phone: cachedProfile?.phone || '',
+        countryCode: cachedProfile?.countryCode || '',
+        location: cachedProfile?.location || { country: '', state: '', city: '' },
+        whatsappNumber: cachedProfile?.whatsappNumber,
+        shopName: cachedProfile?.shopName,
+        bio: cachedProfile?.bio || '',
+        handle: cachedProfile?.handle || `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+        avatarUrl: cachedProfile?.avatarUrl || authUser.avatarUrl,
+        isPromoted: cachedProfile?.isPromoted || false,
+        isBlocked: cachedProfile?.isBlocked || false,
+        followers: cachedProfile?.followers || [],
         createdAt: authUser.createdAt,
         isSuperAdmin: authUser.isSuperAdmin,
       });
+      void api.getProfile().then(savedProfile => {
+        const syncedUser = storageService.upsertUser({ ...user, ...savedProfile });
+        window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: syncedUser }));
+      }).catch(() => undefined);
       setSuccessMsg(`Welcome back, ${user.name}! Your FABSATTIRE studio is ready for your next bespoke discovery.`);
       setTimeout(() => {
         onSuccess(user);
@@ -334,10 +359,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       : `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
     const authUser = await signUpWithEmail(email.trim().toLowerCase(), password, name.trim());
-    const coordinates = resolveLocationCoordinates(selectedCountry.code, currentStateObj.code || '', selectedCityName, {
+    const coordinates = resolveLocationCoordinates?.(selectedCountry.code, currentStateObj.code || '', selectedCityName, {
       lat: selectedCountry.lat,
       lng: selectedCountry.lng,
-    });
+    }) || { lat: selectedCountry.lat, lng: selectedCountry.lng };
     const storedAvatarUrl = avatarFile
       ? await uploadUserImage(avatarFile, authUser.id, 'profiles', `avatar-${Date.now()}.${fileExtension(avatarFile)}`)
       : authUser.avatarUrl;
@@ -385,26 +410,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
     setIsSubmitting(true);
     try {
-      const authUser = await signInWithGoogle();
-      const user = storageService.upsertUser({
-        id: authUser.id,
-        email: authUser.email,
-        name: authUser.name,
-        role: authUser.isAdmin ? 'admin' : defaultRole,
-        phone: '',
-        countryCode: '',
-        location: { country: '', state: '', city: '' },
-        handle: `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
-        avatarUrl: authUser.avatarUrl,
-        isPromoted: false,
-        isBlocked: false,
-        followers: [],
-        createdAt: authUser.createdAt,
-        isSuperAdmin: authUser.isSuperAdmin,
-      });
-      await api.saveProfile(user);
-      onSuccess(user);
-      onClose();
+      await signInWithGoogle();
     } catch (authError) {
       setError(getAuthErrorMessage(authError));
     } finally {
@@ -656,7 +662,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={countrySearch}
                     onChange={(nextValue) => {
                       setCountrySearch(nextValue);
-                      const match = WORLD_COUNTRIES.find((country) => country.name.toLowerCase() === nextValue.trim().toLowerCase() || country.code.toLowerCase() === nextValue.trim().toLowerCase());
+                      const match = worldCountries.find((country) => country.name.toLowerCase() === nextValue.trim().toLowerCase() || country.code.toLowerCase() === nextValue.trim().toLowerCase());
                       if (match) {
                         setSelectedCountryCode(match.code);
                       }
@@ -683,7 +689,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }
                     }}
                     onClear={() => {
-                      const fallbackCountry = WORLD_COUNTRIES.find((country) => country.code === selectedCountryCode) || WORLD_COUNTRIES[0];
+                      const fallbackCountry = worldCountries.find((country) => country.code === selectedCountryCode) || worldCountries[0];
                       const firstState = fallbackCountry.states[0];
                       setStateSearch(firstState?.name || '');
                       setSelectedStateCode(firstState?.code || '');
@@ -709,7 +715,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }
                     }}
                     onClear={() => {
-                      const fallbackCountry = WORLD_COUNTRIES.find((country) => country.code === selectedCountryCode) || WORLD_COUNTRIES[0];
+                      const fallbackCountry = worldCountries.find((country) => country.code === selectedCountryCode) || worldCountries[0];
                       const fallbackState = fallbackCountry.states.find((state) => state.code === selectedStateCode) || fallbackCountry.states[0];
                       const fallbackCity = fallbackState?.cities[0] || '';
                       setCitySearch(fallbackCity);
