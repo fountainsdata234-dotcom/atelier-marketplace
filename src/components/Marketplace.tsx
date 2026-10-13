@@ -544,7 +544,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
   const getWhatsAppUrl = (post: ClothPost) => buildWhatsAppUrl(
     post.authorWhatsapp,
-    `Hello ${post.authorName}! I saw "${post.title}" on Fabrilux Atelier and would like to discuss it.`,
+    `Hello ${post.authorName}! I saw "${post.title}" on FABSATTIRE and would like to discuss it.`,
   );
 
   return (

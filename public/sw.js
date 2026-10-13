@@ -33,7 +33,7 @@ self.addEventListener('push', (event) => {
   }
   const data = payload.data || {};
   const notification = payload.notification || {};
-  const title = notification.title || data.title || 'FabsSAttire';
+  const title = notification.title || data.title || 'FABSATTIRE';
   const targetUrl = data.url || notification.data?.url || '/';
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
     if (windowClients.some(client => client.visibilityState === 'visible')) return;

@@ -277,7 +277,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         createdAt: authUser.createdAt,
         isSuperAdmin: authUser.isSuperAdmin,
       });
-      setSuccessMsg(`Welcome back, ${user.name}! Your FabsSAttire studio is ready for your next bespoke discovery.`);
+      setSuccessMsg(`Welcome back, ${user.name}! Your FABSATTIRE studio is ready for your next bespoke discovery.`);
       setTimeout(() => {
         onSuccess(user);
         onClose();
@@ -369,7 +369,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     });
     await api.saveProfile(newUser);
 
-    setSuccessMsg(`Welcome to FabsSAttire. Your premium studio access is ready, and your tailored journey begins now.`);
+    setSuccessMsg(`Welcome to FABSATTIRE. Your premium studio access is ready, and your tailored journey begins now.`);
     setTimeout(() => {
       onSuccess(newUser);
       onClose();
@@ -461,7 +461,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {role === 'admin' && <Shield className="h-6 w-6" />}
           </div>
           <h2 className="text-2xl font-serif font-bold tracking-tight sm:text-3xl">
-            {isRegistering ? 'Join the FabsSAttire Network' : 'Welcome Back to FabsSAttire'}
+            {isRegistering ? 'Join the FABSATTIRE Network' : 'Welcome Back to FABSATTIRE'}
           </h2>
           <p className={`mt-1 text-xs sm:text-sm ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             {isRegistering

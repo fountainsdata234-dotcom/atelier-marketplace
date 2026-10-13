@@ -405,7 +405,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {buildWhatsAppUrl(tailor.whatsappNumber || tailor.phone, `Hello ${tailor.name}, I am contacting you from FabsSAttire.`) && <a href={buildWhatsAppUrl(tailor.whatsappNumber || tailor.phone, `Hello ${tailor.name}, I am contacting you from FabsSAttire.`) || undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500 hover:text-neutral-950">WhatsApp</a>}
+                    {buildWhatsAppUrl(tailor.whatsappNumber || tailor.phone, `Hello ${tailor.name}, I am contacting you from FABSATTIRE.`) && <a href={buildWhatsAppUrl(tailor.whatsappNumber || tailor.phone, `Hello ${tailor.name}, I am contacting you from FABSATTIRE.`) || undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500 hover:text-neutral-950">WhatsApp</a>}
                     <button
                       onClick={() => handleTogglePromote(tailor)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${

@@ -21,7 +21,7 @@ export function getHandleSlug(handle: string): string {
 export function getImageAltText(input?: string, fallback?: string): string {
   const value = input?.trim();
   if (value) return value;
-  return fallback || 'FabsSAttire marketplace product image';
+  return fallback || 'FABSATTIRE marketplace product image';
 }
 
 export function buildSellerShareUrl(origin: string, handle: string): string {

@@ -638,7 +638,7 @@ app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
         recipient_name: profileName,
         post_id: '',
         post_title: 'Welcome to Atelier',
-        content: `Welcome, ${profileName}. Welcome to FabsSAttire. Explore the marketplace, follow trusted studios, and discover tailored fashion and fabric sellers whenever you are ready.`,
+        content: `Welcome, ${profileName}. Welcome to FABSATTIRE. Explore the marketplace, follow trusted studios, and discover tailored fashion and fabric sellers whenever you are ready.`,
         timestamp: new Date().toISOString(),
         is_read: false,
         type: 'general',
@@ -658,7 +658,7 @@ app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
     await firestore.collection('messages').add({
       senderId: 'atelier-system', senderName: 'Atelier Team', senderRole: 'admin', recipientId: req.authUser!.uid,
       recipientName: profileName, postId: '', postTitle: 'Welcome to Atelier',
-      content: `Welcome, ${profileName}. Welcome to FabsSAttire. Explore the marketplace, follow trusted studios, and discover tailored fashion and fabric sellers whenever you are ready.`,
+      content: `Welcome, ${profileName}. Welcome to FABSATTIRE. Explore the marketplace, follow trusted studios, and discover tailored fashion and fabric sellers whenever you are ready.`,
       timestamp: new Date().toISOString(), isRead: false, type: 'general',
     });
   }

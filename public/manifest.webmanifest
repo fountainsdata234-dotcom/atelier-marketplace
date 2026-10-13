@@ -1,6 +1,6 @@
 {
-  "name": "FabsSAttire",
-  "short_name": "FabsSAttire",
+  "name": "FABSATTIRE",
+  "short_name": "FABSATTIRE",
   "start_url": "/",
   "scope": "/",
   "id": "/",
@@ -8,7 +8,7 @@
   "orientation": "portrait-primary",
   "background_color": "#0c0d10",
   "theme_color": "#0c0d10",
-  "description": "FabsSAttire marketplace for bespoke fashion and fabric discovery.",
+  "description": "FABSATTIRE marketplace for bespoke fashion and fabric discovery.",
   "prefer_related_applications": false,
   "icons": [
     {

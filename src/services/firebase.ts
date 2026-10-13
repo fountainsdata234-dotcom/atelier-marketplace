@@ -157,7 +157,7 @@ export async function requestPushToken() {
 export async function listenForForegroundPush(listener: (notification: { title: string; body: string; url: string }) => void) {
   if (!app || !firebaseAvailable || !(await isSupported())) return () => undefined;
   return onMessage(getMessaging(app), payload => listener({
-    title: payload.notification?.title || payload.data?.title || 'FabsSAttire',
+    title: payload.notification?.title || payload.data?.title || 'FABSATTIRE',
     body: payload.notification?.body || payload.data?.body || 'You have a new marketplace update.',
     url: payload.data?.url || payload.fcmOptions?.link || '/',
   }));

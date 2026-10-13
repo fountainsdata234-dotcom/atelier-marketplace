@@ -639,7 +639,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                       <span className="text-3xl font-serif font-bold text-amber-400">${plan.amount}</span>
                       <span className="text-xs text-neutral-400 font-mono">/ {plan.timeRange}</span>
                     </div>
-                    <a href={`https://wa.me/${plan.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello Admin! I am tailor ${currentUser.name} (${currentUser.handle}) on FabsSAttire. I would like to purchase the "${plan.caption}" plan for $${plan.amount} (${plan.timeRange}). Please activate my promoted studio.`)}`} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500">
+                    <a href={`https://wa.me/${plan.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello Admin! I am tailor ${currentUser.name} (${currentUser.handle}) on FABSATTIRE. I would like to purchase the "${plan.caption}" plan for $${plan.amount} (${plan.timeRange}). Please activate my promoted studio.`)}`} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500">
                       <Phone className="h-3.5 w-3.5" />Request Plan on WhatsApp
                     </a>
                   </div>

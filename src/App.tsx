@@ -117,16 +117,16 @@ export default function App() {
 
   useEffect(() => {
     const pageMeta: Record<string, { title: string; description: string }> = {
-      landing: { title: 'Fabrilux Atelier | Tailor & Fabric Marketplace', description: 'Discover tailors, fabric sellers, and bespoke fashion specialists. Browse real collections, compare makers, and connect directly.' },
-      marketplace: { title: 'Tailors, Fabrics & Bespoke Pieces | Fabrilux Atelier', description: 'Explore garments and fabrics from independent tailors and fabric sellers. Search by seller tags, compare pieces, and contact makers directly.' },
-      artisan: { title: 'Find Tailors & Fabric Sellers | Fabrilux Atelier', description: 'Discover tailors and fabric merchants by location, explore their work, and visit their seller collections.' },
-      about: { title: 'About Fabrilux Atelier', description: 'Learn about Fabrilux Atelier, a marketplace connecting buyers with independent tailors and fabric sellers.' },
-      privacy: { title: 'Privacy Policy | Fabrilux Atelier', description: 'Read how Fabrilux Atelier handles account information and marketplace data.' },
-      terms: { title: 'Terms of Service | Fabrilux Atelier', description: 'Review the terms for using the Fabrilux Atelier marketplace.' },
-      contact: { title: 'Contact Fabrilux Atelier', description: 'Contact Fabrilux Atelier for account help, seller questions, partnerships, and marketplace support.' },
-      collections: { title: 'Saved Collection | Fabrilux Atelier', description: 'Review your saved fashion and fabric inspiration on Fabrilux Atelier.' },
+      landing: { title: 'FABSATTIRE | Tailor & Fabric Marketplace', description: 'Discover tailors, fabric sellers, and bespoke fashion specialists. Browse real collections, compare makers, and connect directly.' },
+      marketplace: { title: 'Tailors, Fabrics & Bespoke Pieces | FABSATTIRE', description: 'Explore garments and fabrics from independent tailors and fabric sellers. Search by seller tags, compare pieces, and contact makers directly.' },
+      artisan: { title: 'Find Tailors & Fabric Sellers | FABSATTIRE', description: 'Discover tailors and fabric merchants by location, explore their work, and visit their seller collections.' },
+      about: { title: 'About FABSATTIRE', description: 'Learn about FABSATTIRE, a marketplace connecting buyers with independent tailors and fabric sellers.' },
+      privacy: { title: 'Privacy Policy | FABSATTIRE', description: 'Read how FABSATTIRE handles account information and marketplace data.' },
+      terms: { title: 'Terms of Service | FABSATTIRE', description: 'Review the terms for using the FABSATTIRE marketplace.' },
+      contact: { title: 'Contact FABSATTIRE', description: 'Contact FABSATTIRE for account help, seller questions, partnerships, and marketplace support.' },
+      collections: { title: 'Saved Collection | FABSATTIRE', description: 'Review your saved fashion and fabric inspiration on FABSATTIRE.' },
     };
-    const sellerTitle = sharedSeller ? `${sharedSeller.shopName || sharedSeller.name} | Fabrilux Atelier` : null;
+    const sellerTitle = sharedSeller ? `${sharedSeller.shopName || sharedSeller.name} | FABSATTIRE` : null;
     const meta = pageMeta[currentView] || pageMeta.landing;
     const description = sharedSeller?.bio?.trim() || meta.description;
     const isPrivateView = ['admin', 'dashboard', 'messages', 'profile', 'collections'].includes(currentView);
@@ -665,7 +665,7 @@ export default function App() {
     const seller = users.find(user => user.id === post.authorId);
     const contactUrl = buildWhatsAppUrl(
       post.authorWhatsapp || seller?.whatsappNumber || seller?.phone,
-      `Hello ${post.authorName}, I saw "${post.title}" on Fabrilux Atelier and would like to discuss it.`,
+      `Hello ${post.authorName}, I saw "${post.title}" on FABSATTIRE and would like to discuss it.`,
     );
     if (!contactUrl) return;
     storageService.recordDiscoveryEvent(post.id, 'ENQUIRY', currentUser?.id);

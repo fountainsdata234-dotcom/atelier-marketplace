@@ -1,6 +1,6 @@
-# Fabrilux Atelier
+# FABSATTIRE
 
-Fabrilux Atelier is a fashion and textile marketplace built to help shoppers discover real tailors, fabric sellers, and makers in their area. The app is designed around a practical problem: people often struggle to find reliable local artisans, compare services, and buy custom clothing or fabric without dealing with fragmented WhatsApp-only chains.
+FABSATTIRE is a fashion and textile marketplace built to help shoppers discover real tailors, fabric sellers, and makers in their area. The app is designed around a practical problem: people often struggle to find reliable local artisans, compare services, and buy custom clothing or fabric without dealing with fragmented WhatsApp-only chains.
 
 This project combines a premium storefront experience with a functional directory, location-aware discovery, and direct seller communication. Whether someone is searching for a tailor for a wedding outfit, a fabric merchant for a new collection, or a maker with a strong local presence, the platform is meant to make that discovery easier and more trustworthy.
 

@@ -105,16 +105,13 @@ const Earth: React.FC<{ isMobile: boolean; onReady: () => void }> = ({ isMobile,
 interface MarkerProps {
   artisan: GlobeArtisan;
   position: THREE.Vector3;
-  anchor: THREE.Vector3;
   selected: boolean;
   delay: number;
   onSelect: (artisan: GlobeArtisan) => void;
 }
 
-const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selected, delay, onSelect }) => {
+const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, delay, onSelect }) => {
   const groupRef = useRef<THREE.Group>(null);
-  const pulseRef = useRef<THREE.Mesh>(null);
-  const pulseMaterialRef = useRef<THREE.MeshBasicMaterial>(null);
   const [entered, setEntered] = useState(false);
 
   useEffect(() => {
@@ -125,7 +122,7 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
   useFrame((_, delta) => {
     if (!groupRef.current) return;
 
-    const targetScale = entered ? (selected ? 1.08 : 0.72) : 0.01;
+    const targetScale = entered ? (selected ? 1.25 : 0.9) : 0.01;
     const targetNormal = position.clone().normalize();
     const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), targetNormal);
 
@@ -133,56 +130,30 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, anchor, selecte
     groupRef.current.quaternion.slerp(targetQuaternion, 1 - Math.exp(-delta * 7.5));
     groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 1 - Math.exp(-delta * 8));
 
-    if (pulseRef.current && pulseMaterialRef.current) {
-      const phase = selected ? (performance.now() * 0.0008 + delay * 0.001) % 1 : 0;
-      pulseRef.current.scale.setScalar(selected ? 0.9 + phase * 2.6 : 0.01);
-      pulseMaterialRef.current.opacity = selected ? (1 - phase) * 0.72 : 0;
-    }
   });
 
   return (
-    <>
-      {selected && <Line
-          points={[anchor, position]}
+    <group
+      ref={groupRef}
+      renderOrder={selected ? 20 : 2}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect(artisan);
+      }}
+      onPointerOver={(event) => event.stopPropagation()}
+      onPointerOut={(event) => event.stopPropagation()}
+    >
+      <mesh renderOrder={selected ? 21 : 2}>
+        <sphereGeometry args={[selected ? 0.034 : 0.022, 16, 12]} />
+        <meshStandardMaterial
           color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'}
-          transparent
-          opacity={0.82}
-          lineWidth={1}
-          renderOrder={19}
-        />}
-      {selected && <mesh position={anchor.clone().normalize().multiplyScalar(0.008)} renderOrder={19}>
-          <ringGeometry args={[0.035, 0.052, 24]} />
-          <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} transparent opacity={0.85} side={THREE.DoubleSide} depthTest />
-        </mesh>}
-      <group
-        ref={groupRef}
-        renderOrder={selected ? 20 : 2}
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(artisan);
-        }}
-        onPointerOver={(event) => event.stopPropagation()}
-        onPointerOut={(event) => event.stopPropagation()}
-      >
-        {selected ? <>
-          <mesh ref={pulseRef} rotation={[Math.PI / 2, 0, 0]} renderOrder={21}>
-            <torusGeometry args={[0.14, 0.012, 8, 32]} />
-            <meshBasicMaterial ref={pulseMaterialRef} color={artisan.role === 'tailor' ? '#ffb347' : '#8ea2ff'} transparent opacity={0} depthWrite={false} />
-          </mesh>
-          <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI]} castShadow>
-            <coneGeometry args={[0.045, 0.12, 8]} />
-            <meshStandardMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} roughness={0.42} metalness={0.28} />
-          </mesh>
-          <mesh position={[0, 0.15, 0]} castShadow>
-            <sphereGeometry args={[0.034, 12, 8]} />
-            <meshStandardMaterial color="#fff1c2" emissive="#ffb347" emissiveIntensity={1.4} roughness={0.3} metalness={0.2} />
-          </mesh>
-        </> : <mesh renderOrder={2}>
-          <sphereGeometry args={[0.022, 8, 6]} />
-          <meshBasicMaterial color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'} />
-        </mesh>}
-      </group>
-    </>
+          emissive={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'}
+          emissiveIntensity={selected ? 0.55 : 0.18}
+          roughness={0.32}
+          metalness={0.38}
+        />
+      </mesh>
+    </group>
   );
 };
 
@@ -213,9 +184,8 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
       const offset = offsets[index] ?? { x: 0, y: 0, z: 0 };
       const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z);
-      const anchor = base.clone().add(markerOffset.clone().multiplyScalar(0.24)).normalize().multiplyScalar(EARTH_RADIUS + 0.006);
       const position = base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
-      return { anchor, position };
+      return { position };
     });
   }, [artisans]);
 
@@ -273,7 +243,6 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
             key={artisan.id}
             artisan={artisan}
             position={positions[index].position}
-            anchor={positions[index].anchor}
             selected={artisan.id === selectedArtisanId}
             delay={Math.min(index * 24, 720)}
             onSelect={onSelectArtisan}
@@ -307,19 +276,25 @@ const GlobeFallback: React.FC<Pick<ArtisanGlobe3DProps, 'artisans' | 'selectedAr
   <div className="globe-webgl-fallback" role="group" aria-label="Earth map with artisan locations">
     <div className="globe-fallback-sphere">
       <img src="/textures/earth/earth_atmos_2048.jpg" alt="" />
-      {artisans.map((artisan) => {
+      {artisans.map((artisan, index) => {
         const latitude = THREE.MathUtils.degToRad(artisan.location.lat ?? 0);
         const longitude = THREE.MathUtils.degToRad(artisan.location.lng ?? 0);
         const x = Math.cos(latitude) * Math.sin(longitude);
         const y = Math.sin(latitude);
         const depth = Math.cos(latitude) * Math.cos(longitude);
         if (depth < 0) return null;
+        const coordinateKey = `${Math.round(latitude * 20)}:${Math.round(longitude * 20)}`;
+        const clusterIndex = artisans.slice(0, index).filter((candidate) => (
+          `${Math.round(THREE.MathUtils.degToRad(candidate.location.lat ?? 0) * 20)}:${Math.round(THREE.MathUtils.degToRad(candidate.location.lng ?? 0) * 20)}` === coordinateKey
+        )).length;
+        const angle = clusterIndex * 2.4;
+        const spread = clusterIndex > 0 ? 6 : 0;
         return (
           <button
             key={artisan.id}
             type="button"
             className={`globe-fallback-marker ${artisan.role === 'tailor' ? 'is-tailor' : 'is-fabric-seller'}${artisan.id === selectedArtisanId ? ' is-selected' : ''}`}
-            style={{ left: `${50 + x * 43}%`, top: `${50 - y * 43}%` }}
+            style={{ left: `${50 + x * 43 + Math.cos(angle) * spread}%`, top: `${50 - y * 43 + Math.sin(angle) * spread}%` }}
             onClick={() => onSelectArtisan(artisan)}
             aria-label={`Select ${artisan.name}, ${formatLocation(artisan)}`}
             title={`${artisan.name} · ${formatLocation(artisan)}`}
