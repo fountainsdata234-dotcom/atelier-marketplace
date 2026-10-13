@@ -1,50 +1,23 @@
-import { AdminPromoPlan, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, User, DiscoveryEvent, DiscoveryEventType } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, User, DiscoveryEvent, DiscoveryEventType } from '../types';
+
+import { getAuthToken } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 
-let authReady: Promise<void> | null = null;
-let firebaseModule: typeof import('./firebase') | null = null;
-
-async function getFirebaseModule() {
-  firebaseModule ||= await import('./firebase');
-  return firebaseModule;
-}
-
-async function waitForFirebaseAuth() {
-  const firebase = await getFirebaseModule();
-  if (firebase.firebaseAuth.currentUser) return;
-  authReady ||= new Promise(resolve => {
-    const unsubscribe = firebase.subscribeToFirebaseAuth(() => {
-      unsubscribe();
-      resolve();
-    });
-  });
-  return authReady;
-}
-
-async function getAuthToken(forceRefresh = false) {
-  if (!navigator.onLine) {
-    return null;
-  }
-
-  await waitForFirebaseAuth();
-  const firebase = await getFirebaseModule();
-  return firebase.firebaseAuth.currentUser ? firebase.firebaseAuth.currentUser.getIdToken(forceRefresh).catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/network|timed out|offline|ERR_CONNECTION_TIMED_OUT/i.test(message)) {
-      console.warn('Firebase auth token unavailable while offline; app will continue with cached content.', error);
-      return null;
-    }
-    throw error;
-  }) : null;
+async function getAuthTokenForRequest() {
+  if (!navigator.onLine) return null;
+  return getAuthToken();
 }
 
 async function request<T>(path: string, options: RequestInit = {}, hasRetried = false) {
   const method = (options.method || 'GET').toUpperCase();
   const isPublicRead = method === 'GET' && ['/api/posts', '/api/users', '/api/promo-plans'].includes(path);
-  const token = isPublicRead ? null : await getAuthToken(hasRetried);
+  const token = isPublicRead ? null : await getAuthTokenForRequest();
   if (path.startsWith('/api/messages') && !token) {
     throw new Error('Authentication is required for messages.');
+  }
+  if (path.startsWith('/api/notifications') && !token) {
+    throw new Error('Authentication is required for notifications.');
   }
   if (path === '/api/profile' && !token) {
     throw new Error('Authentication is not ready.');
@@ -98,9 +71,11 @@ export const api = {
   deletePost: (postId: string) => request<void>(`/api/posts/${postId}`, { method: 'DELETE' }),
   toggleLike: (postId: string) => request<{ isLiked: boolean; likesCount: number }>(`/api/posts/${postId}/like`, { method: 'POST' }),
   toggleSave: (postId: string) => request<{ isSaved: boolean; savesCount: number }>(`/api/posts/${postId}/save`, { method: 'POST' }),
-  ratePost: (postId: string, rating: number) => request<{ rating: number; ratingCount: number }>(`/api/posts/${postId}/rating`, { method: 'POST', body: JSON.stringify({ rating }) }),
+  ratePost: (postId: string, rating: number) => request<{ rating: number; ratingCount: number; ratingsByUser: Record<string, number> }>(`/api/posts/${postId}/rating`, { method: 'POST', body: JSON.stringify({ rating }) }),
   recordDiscoveryEvent: (itemId: string, eventType: DiscoveryEventType, sessionId: string) => request<DiscoveryEvent>('/api/discovery-events', { method: 'POST', body: JSON.stringify({ itemId, eventType, sessionId }) }),
   getDiscoveryEvents: () => request<DiscoveryEvent[]>('/api/discovery-events'),
+  getNotifications: () => request<AppNotification[]>('/api/notifications'),
+  markNotificationsRead: () => request<void>('/api/notifications/read', { method: 'POST' }),
   getMessages: () => request<DirectMessage[]>('/api/messages'),
   registerPushToken: (token: string) => request<{ ok: boolean }>('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ token }) }),
   removePushToken: (token: string) => request<void>('/api/push/subscribe', { method: 'DELETE', body: JSON.stringify({ token }) }),

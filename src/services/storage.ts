@@ -96,6 +96,18 @@ export const storageService = {
     }
   },
 
+  mergeNotifications(remoteNotifications: AppNotification[]): void {
+    const existing = this.getNotifications();
+    const existingById = new Map<string, AppNotification>(existing.map(item => [item.id, item]));
+    const remoteIds = new Set(remoteNotifications.map(item => item.id));
+    const merged: AppNotification[] = [
+      ...remoteNotifications.map(item => ({ ...item, isRead: item.isRead || existingById.get(item.id)?.isRead || false })),
+      ...existing.filter(item => !remoteIds.has(item.id)),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 200);
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(merged));
+    window.dispatchEvent(new CustomEvent('atelier_notifications_updated'));
+  },
+
   addNotification(userId: string, title: string, body: string, type: AppNotification['type'], actionUrl?: string): AppNotification | null {
     try {
       const all = this.getNotifications();
@@ -109,7 +121,7 @@ export const storageService = {
         isRead: false,
         actionUrl,
       };
-      const next = [notification, ...all.filter(item => item.userId !== userId)].slice(0, 200);
+      const next = [notification, ...all.filter(item => item.id !== notification.id)].slice(0, 200);
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(next));
       window.dispatchEvent(new CustomEvent('atelier_notifications_updated', { detail: notification }));
 

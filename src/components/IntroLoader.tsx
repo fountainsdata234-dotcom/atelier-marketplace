@@ -93,7 +93,7 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
             transition={{ duration: 0.8, ease: 'easeOut' }}
             className="relative z-10 w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 via-neutral-900/80 to-amber-700/20 border border-amber-500/40 backdrop-blur-md flex items-center justify-center shadow-2xl shadow-amber-900/20"
           >
-            <img src="/logo.png" alt="Fabrilux Atelier" className="h-12 w-12 rounded-xl object-cover" />
+            <img src="/logo.png" alt="FabsSAttire" className="h-12 w-12 rounded-xl object-cover" />
           </motion.div>
 
           <motion.div

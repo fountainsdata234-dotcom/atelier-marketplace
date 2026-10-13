@@ -28,16 +28,22 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-const missingConfig = Object.entries(firebaseConfig).filter(([, value]) => !value).map(([key]) => key);
-if (missingConfig.length > 0) {
-  throw new Error(`Missing Firebase configuration: ${missingConfig.join(', ')}`);
-}
+const firebaseAvailable = Object.values(firebaseConfig).every(Boolean);
 
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const firebaseAuth = getAuth(app);
-export const firebaseStorage = getStorage(app);
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+let app: ReturnType<typeof initializeApp> | undefined;
+export let firebaseAuth: ReturnType<typeof getAuth> | null = null;
+export let firebaseStorage: ReturnType<typeof getStorage> | null = null;
+export let googleProvider: GoogleAuthProvider | null = null;
+
+if (firebaseAvailable) {
+  app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  firebaseAuth = getAuth(app);
+  firebaseStorage = getStorage(app);
+  googleProvider = new GoogleAuthProvider();
+  googleProvider.setCustomParameters({ prompt: 'select_account' });
+} else {
+  console.warn('Firebase is not configured; Firebase auth and storage features are disabled. Supabase is being used instead.');
+}
 
 const normalizeAvatarUrl = (url?: string | null): string | undefined => {
   if (typeof url !== 'string') return undefined;
@@ -68,7 +74,7 @@ const resolveAuthPhotoUrl = (firebaseUser: FirebaseUser): string | undefined => 
 };
 
 export async function configureFirebaseAuth() {
-  if (!navigator.onLine) {
+  if (!firebaseAuth || !navigator.onLine) {
     return;
   }
 
@@ -85,21 +91,31 @@ export async function configureFirebaseAuth() {
 }
 
 export function subscribeToFirebaseAuth(listener: (user: FirebaseUser | null) => void) {
+  if (!firebaseAuth) return () => undefined;
   return onAuthStateChanged(firebaseAuth, listener);
 }
 
 export async function registerWithEmail(email: string, password: string, displayName: string, photoURL?: string) {
+  if (!firebaseAuth) {
+    throw new Error('Firebase authentication is not configured. Use Supabase auth or add Firebase env values.');
+  }
   const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
   await updateProfile(credential.user, { displayName, photoURL: photoURL || null });
   return credential.user;
 }
 
 export async function loginWithEmail(email: string, password: string) {
+  if (!firebaseAuth) {
+    throw new Error('Firebase authentication is not configured. Use Supabase auth or add Firebase env values.');
+  }
   const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
   return credential.user;
 }
 
 export async function resetPassword(email: string) {
+  if (!firebaseAuth) {
+    throw new Error('Firebase authentication is not configured. Use Supabase auth or add Firebase env values.');
+  }
   const redirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL || 'http://localhost:3000';
 
   await sendPasswordResetEmail(firebaseAuth, email, {
@@ -109,11 +125,17 @@ export async function resetPassword(email: string) {
 }
 
 export async function loginWithGoogle() {
+  if (!firebaseAuth || !googleProvider) {
+    throw new Error('Firebase authentication is not configured. Use Supabase auth or add Firebase env values.');
+  }
   const credential = await signInWithPopup(firebaseAuth, googleProvider);
   return credential.user;
 }
 
 export async function requestPushToken() {
+  if (!app || !firebaseAvailable) {
+    throw new Error('Firebase web push is not configured. Use Supabase notifications or add Firebase env values.');
+  }
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     throw new Error('This browser does not support background push alerts.');
   }
@@ -133,23 +155,27 @@ export async function requestPushToken() {
 }
 
 export async function listenForForegroundPush(listener: (notification: { title: string; body: string; url: string }) => void) {
-  if (!(await isSupported())) return () => undefined;
+  if (!app || !firebaseAvailable || !(await isSupported())) return () => undefined;
   return onMessage(getMessaging(app), payload => listener({
-    title: payload.notification?.title || payload.data?.title || 'Fabrilux Atelier',
+    title: payload.notification?.title || payload.data?.title || 'FabsSAttire',
     body: payload.notification?.body || payload.data?.body || 'You have a new marketplace update.',
     url: payload.data?.url || payload.fcmOptions?.link || '/',
   }));
 }
 
 export async function logoutFromFirebase() {
+  if (!firebaseAuth) {
+    return;
+  }
   await signOut(firebaseAuth);
 }
 
-export async function uploadUserImage(file: Blob, userId: string, folder: 'profiles' | 'posts' | 'atelier' | string, fileName: string) {
+export async function uploadUserImage(file: Blob, userId: string, folder: 'profiles' | 'posts' | 'atelier' | string, fileName: string, alreadyOptimized = false) {
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8787';
-  const token = firebaseAuth.currentUser ? await firebaseAuth.currentUser.getIdToken() : null;
+  const { getAuthToken } = await import('./auth');
+  const token = await getAuthToken();
   const formData = new FormData();
-  const compressedFile = file.type.startsWith('image/') ? await compressImageBlob(file) : file;
+  const compressedFile = file.type.startsWith('image/') && !alreadyOptimized ? await compressImageBlob(file) : file;
   formData.append('image', compressedFile, `${fileName.replace(/\.[^.]+$/, '')}.jpg`);
   formData.append('folder', folder);
   formData.append('userId', userId);

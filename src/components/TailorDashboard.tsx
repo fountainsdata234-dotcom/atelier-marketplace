@@ -4,7 +4,8 @@ import { Scissors, Sparkles, Upload, Image as ImageIcon, Link as LinkIcon, Share
 import { User, ClothPost, AdminPromoPlan, FabricRequest } from '../types';
 import { compressAndGenerateImageLink, validateImageLink, ProcessedImageResult } from '../utils/imageProgram';
 import { storageService } from '../services/storage';
-import { firebaseAuth, uploadUserImage } from '../services/firebase';
+import { uploadUserImage } from '../services/firebase';
+import { getAuthUserId } from '../services/auth';
 import { api } from '../services/api';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
@@ -133,16 +134,17 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   // Handle file upload through Image Link Program
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    const userId = await getAuthUserId();
+    if (!file || !userId) return;
 
     setIsProcessingImage(true);
     setPostStatus(null);
     try {
       const result = await compressAndGenerateImageLink(file);
-      if (!result.blob || !firebaseAuth.currentUser) {
+      if (!result.blob) {
         throw new Error('Please sign in again before uploading an image.');
       }
-      const uploadedUrl = await uploadUserImage(result.blob, firebaseAuth.currentUser.uid, 'posts', `${Date.now()}.jpg`);
+      const uploadedUrl = await uploadUserImage(result.blob, userId, 'posts', `${Date.now()}.jpg`, true);
       URL.revokeObjectURL(result.url);
       setImageUrl(uploadedUrl);
       setCompressionStats(result);
@@ -199,7 +201,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       },
       imageUrl: imageUrl.trim(),
       imageAlt: imageAlt.trim() || `${title.trim()} by ${currentUser.shopName || currentUser.name}`,
-      imageHostSource: compressionStats ? `Firebase Storage · ${compressionStats.compressedSizeKb}KB` : 'External Link'
+      imageHostSource: compressionStats ? `Supabase Storage (${compressionStats.compressedSizeKb}KB)` : 'External Link'
     };
 
     try {
@@ -555,8 +557,8 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
                     {compressionStats && (
                       <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400 font-mono">
-                        <span>Compressed: {compressionStats.originalSizeKb}KB → {compressionStats.compressedSizeKb}KB</span>
-                        <span>Saved {Math.round((1 - compressionStats.compressedSizeKb / compressionStats.originalSizeKb) * 100)}%</span>
+                        <span>Upload size: {compressionStats.originalSizeKb}KB → {compressionStats.compressedSizeKb}KB</span>
+                        <span>{compressionStats.compressedSizeKb < compressionStats.originalSizeKb ? `Saved ${Math.round((1 - compressionStats.compressedSizeKb / compressionStats.originalSizeKb) * 100)}%` : 'Original kept'}</span>
                       </div>
                     )}
 
@@ -637,7 +639,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                       <span className="text-3xl font-serif font-bold text-amber-400">${plan.amount}</span>
                       <span className="text-xs text-neutral-400 font-mono">/ {plan.timeRange}</span>
                     </div>
-                    <a href={`https://wa.me/${plan.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello Admin! I am tailor ${currentUser.name} (${currentUser.handle}) on Atelier Marketplace. I would like to purchase the "${plan.caption}" plan for $${plan.amount} (${plan.timeRange}). Please activate my promoted studio.`)}`} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500">
+                    <a href={`https://wa.me/${plan.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello Admin! I am tailor ${currentUser.name} (${currentUser.handle}) on FabsSAttire. I would like to purchase the "${plan.caption}" plan for $${plan.amount} (${plan.timeRange}). Please activate my promoted studio.`)}`} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500">
                       <Phone className="h-3.5 w-3.5" />Request Plan on WhatsApp
                     </a>
                   </div>

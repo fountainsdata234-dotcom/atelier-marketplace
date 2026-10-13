@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Rajdhani:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 @layer base {
@@ -50,13 +51,17 @@
   }
 
   .font-display {
-    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Orbitron', 'Segoe UI', sans-serif;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
 
   .brand-wordmark {
-    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-    letter-spacing: 0.16em;
+    font-family: 'Orbitron', 'Segoe UI', sans-serif;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
+    text-shadow: 0 0 16px rgba(245, 158, 11, 0.4), 0 0 28px rgba(251, 191, 36, 0.18);
+    font-weight: 900;
   }
 
   .navbar-sunset-rays {
@@ -402,6 +407,75 @@
   cursor: grabbing;
 }
 
+.artisan-globe-3d.webgl-unavailable canvas {
+  visibility: hidden;
+}
+
+.globe-webgl-fallback {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  background: radial-gradient(circle at 50% 46%, rgba(71, 157, 185, 0.17), transparent 48%);
+}
+
+.globe-fallback-sphere {
+  position: relative;
+  width: min(78vw, 30rem);
+  max-width: calc(100% - 2rem);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(147, 220, 235, 0.52);
+  border-radius: 50%;
+  background: #092333;
+  box-shadow: inset -2.8rem -1.2rem 3.5rem rgba(1, 13, 25, 0.72), 0 0 3rem rgba(65, 180, 205, 0.2);
+}
+
+.globe-fallback-sphere::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 35%, rgba(2, 12, 24, 0.68) 100%);
+  content: '';
+  pointer-events: none;
+}
+
+.globe-fallback-sphere > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.9;
+}
+
+.globe-fallback-marker {
+  position: absolute;
+  z-index: 1;
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid #fff4dc;
+  border-radius: 50%;
+  box-shadow: 0 0 0.8rem currentColor;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+
+.globe-fallback-marker.is-tailor { background: #ff7043; color: #ff7043; }
+.globe-fallback-marker.is-fabric-seller { background: #5b7cff; color: #5b7cff; }
+.globe-fallback-marker.is-selected { width: 1rem; height: 1rem; outline: 2px solid #fff4dc; outline-offset: 3px; }
+
+.globe-fallback-label {
+  position: absolute;
+  top: 0.8rem;
+  left: 1rem;
+  color: rgba(255, 237, 213, 0.7);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .globe-marker {
   position: relative;
   display: grid;
@@ -435,12 +509,12 @@
   75%, 100% { opacity: 0; transform: scale(1.8); }
 }
 
-.globe-legend { position: absolute; bottom: 0.9rem; left: 1rem; display: flex; flex-wrap: wrap; gap: 0.7rem; color: rgba(255, 237, 213, 0.72); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.55rem; letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
+.globe-legend { position: absolute; z-index: 3; bottom: 0.9rem; left: 1rem; display: flex; flex-wrap: wrap; gap: 0.7rem; color: rgba(255, 237, 213, 0.72); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.55rem; letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
 .globe-legend span { display: inline-flex; align-items: center; gap: 0.28rem; }
 .globe-legend svg { width: 0.72rem; height: 0.72rem; color: #f6bd78; }
 .globe-legend-zoom { color: rgba(165, 243, 252, 0.62); }
 
-.globe-selected-card { position: absolute; right: 1rem; bottom: 1rem; display: flex; align-items: center; gap: 0.55rem; width: min(19rem, calc(100% - 2rem)); border: 1px solid rgba(255, 219, 177, 0.28); border-radius: 0.85rem; background: rgba(8, 22, 30, 0.9); padding: 0.6rem; box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.28); backdrop-filter: blur(14px); }
+.globe-selected-card { position: absolute; z-index: 3; right: 1rem; bottom: 1rem; display: flex; align-items: center; gap: 0.55rem; width: min(19rem, calc(100% - 2rem)); border: 1px solid rgba(255, 219, 177, 0.28); border-radius: 0.85rem; background: rgba(8, 22, 30, 0.9); padding: 0.6rem; box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.28); backdrop-filter: blur(14px); }
 .globe-selected-close { position: absolute; right: 0.4rem; top: 0.4rem; display: grid; width: 1.15rem; height: 1.15rem; place-items: center; border: 0; border-radius: 50%; background: transparent; color: rgba(255, 237, 213, 0.65); cursor: pointer; }
 .globe-selected-close svg { width: 0.72rem; height: 0.72rem; }
 .globe-selected-avatar { display: grid; width: 2.4rem; height: 2.4rem; flex: 0 0 auto; place-items: center; overflow: hidden; border: 1px solid rgba(251, 191, 36, 0.7); border-radius: 50%; background: #a94e2f; color: #fff7ed; font-weight: 800; }

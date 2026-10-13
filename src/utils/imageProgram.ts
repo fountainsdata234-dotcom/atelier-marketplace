@@ -35,7 +35,13 @@ export async function compressImageBlob(file: Blob, maxDim = 1400): Promise<Blob
   context.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
   return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not compress image')), 'image/jpeg', 0.78);
+    canvas.toBlob(blob => {
+      if (!blob) {
+        reject(new Error('Could not compress image'));
+        return;
+      }
+      resolve(blob.size < file.size ? blob : file);
+    }, 'image/jpeg', 0.78);
   });
 }
 
@@ -83,14 +89,16 @@ export async function compressAndGenerateImageLink(
             reject(new Error('Could not compress this image'));
             return;
           }
+          const selectedBlob = blob.size < file.size ? blob : file;
+          const keptOriginal = selectedBlob === file;
           resolve({
-            url: URL.createObjectURL(blob),
+            url: URL.createObjectURL(selectedBlob),
             sourceType: 'firebase_storage',
             originalSizeKb,
-            compressedSizeKb: Math.round(blob.size / 1024),
-            width,
-            height,
-            blob,
+            compressedSizeKb: Math.round(selectedBlob.size / 1024),
+            width: keptOriginal ? img.naturalWidth : width,
+            height: keptOriginal ? img.naturalHeight : height,
+            blob: selectedBlob,
           });
         }, 'image/jpeg', 0.82);
       };

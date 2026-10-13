@@ -20,8 +20,7 @@ This project is built with:
 
 - React + Vite for the frontend experience
 - TypeScript for safer production code
-- Firebase Auth and Firestore for user and marketplace data
-- Firebase Storage for media handling
+- Supabase Auth, Postgres, and Storage for user and marketplace data
 - Express backend routes for admin and API operations
 - Three.js / React Three Fiber for the interactive globe view
 
@@ -40,32 +39,35 @@ It is especially useful for communities where shoppers want to:
 
 1. Install dependencies:
    `npm install`
-2. Copy [.env.example](.env.example) to `.env.local` and add your Firebase settings.
-3. If needed, place your Firebase Admin service account JSON in `server/firebase-service-account.json`.
+2. Copy [.env.example](.env.example) to `.env.local` and set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`.
+3. Run `supabase/schema.sql` and then `supabase/storage.sql` in the Supabase SQL editor. Keep the service-role key server-only.
 4. Start the backend:
    `npm run server`
-5. Start the frontend:
+5. Start the frontend in another terminal:
    `npm run dev`
 6. Run checks:
    `npm run lint`
    `npm run server:check`
 
-For the Render API deployment, set `FIREBASE_PROJECT_ID=atelier-bespoke-marketplace` and provide either `FIREBASE_SERVICE_ACCOUNT_JSON` (the complete service-account JSON) or `FIREBASE_SERVICE_ACCOUNT_BASE64` (that JSON encoded as base64). The credential must come from the same Firebase project. The local `server/firebase-service-account.json` file is intentionally ignored and is not included in deployments. A missing or mismatched credential causes signup/profile saves to return `401` and public `/api/users` and `/api/posts` reads to return `503`.
+For the Render API deployment, set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the service environment. The Vercel frontend uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; its `/api` rewrite forwards API requests to Render.
+
+To import legacy Firebase records once, place the Firebase Admin service-account JSON at the ignored path `server/firebase-service-account.json`, confirm the Supabase SQL files have been applied, and run `npm run migrate:firebase-to-supabase`. The migration is additive and safe to rerun. Firebase passwords cannot be exported as plain text, so migrated users must reset their password before signing in. Firebase is not required for normal app startup or Supabase-backed marketplace operations.
 
 ## Scripts
 
 - `npm run dev` — start the frontend
 - `npm run build` — create a production build
 - `npm run server` — run the backend API server
+- `npm run migrate:firebase-to-supabase` — import legacy Firebase data once
 - `npm run lint` — type-check the app
 - `npm run server:check` — type-check the server code
 
 ## Security and deployment notes
 
-- Keep Firebase service account files private and never commit them.
-- Use real Firebase web config values in your environment.
+- Keep Supabase service-role keys server-only and never commit them.
+- Firebase credentials are needed only for the one-time legacy data migration.
 - Deploy with proper hosting and backend settings before exposing the app publicly.
-- Treat storage and Firestore with the right privacy and moderation rules for production usage.
+- Apply and review the Supabase RLS and Storage policies before exposing the app publicly.
 
 ## Marketplace model
 

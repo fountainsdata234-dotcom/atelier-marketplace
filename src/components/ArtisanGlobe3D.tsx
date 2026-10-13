@@ -303,15 +303,47 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
   );
 };
 
+const GlobeFallback: React.FC<Pick<ArtisanGlobe3DProps, 'artisans' | 'selectedArtisanId' | 'onSelectArtisan'>> = ({ artisans, selectedArtisanId, onSelectArtisan }) => (
+  <div className="globe-webgl-fallback" role="group" aria-label="Earth map with artisan locations">
+    <div className="globe-fallback-sphere">
+      <img src="/textures/earth/earth_atmos_2048.jpg" alt="" />
+      {artisans.map((artisan) => {
+        const latitude = THREE.MathUtils.degToRad(artisan.location.lat ?? 0);
+        const longitude = THREE.MathUtils.degToRad(artisan.location.lng ?? 0);
+        const x = Math.cos(latitude) * Math.sin(longitude);
+        const y = Math.sin(latitude);
+        const depth = Math.cos(latitude) * Math.cos(longitude);
+        if (depth < 0) return null;
+        return (
+          <button
+            key={artisan.id}
+            type="button"
+            className={`globe-fallback-marker ${artisan.role === 'tailor' ? 'is-tailor' : 'is-fabric-seller'}${artisan.id === selectedArtisanId ? ' is-selected' : ''}`}
+            style={{ left: `${50 + x * 43}%`, top: `${50 - y * 43}%` }}
+            onClick={() => onSelectArtisan(artisan)}
+            aria-label={`Select ${artisan.name}, ${formatLocation(artisan)}`}
+            title={`${artisan.name} · ${formatLocation(artisan)}`}
+          />
+        );
+      })}
+    </div>
+    <span className="globe-fallback-label">Static Earth view</span>
+  </div>
+);
+
 export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan, onOpenArtisan, onCloseArtisan, isDarkMode }) => {
   const [zoomDistance, setZoomDistance] = useState(8.2);
   const [isEarthReady, setIsEarthReady] = useState(false);
+  const [isWebGlUnavailable, setIsWebGlUnavailable] = useState(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const readyTimerRef = useRef<number | null>(null);
+  const fallbackTimerRef = useRef<number | null>(null);
   const selectedArtisan = artisans.find((artisan) => artisan.id === selectedArtisanId) ?? null;
   const markersReadyDelay = Math.min(Math.max(artisans.length - 1, 0) * 24, 720) + 650;
   const handleEarthReady = useCallback(() => {
+    if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = null;
     setIsEarthReady(false);
     if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);
     readyTimerRef.current = window.setTimeout(() => {
@@ -322,6 +354,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
 
   useEffect(() => () => {
     if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);
+    if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -342,12 +375,40 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
 
   useEffect(() => {
     setIsEarthReady(false);
+    setIsWebGlUnavailable(false);
     if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);
+    if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = window.setTimeout(() => {
+      setIsWebGlUnavailable(true);
+      setIsEarthReady(true);
+      fallbackTimerRef.current = null;
+    }, 12000);
   }, [isMobile]);
 
   return (
-    <div className={`artisan-globe-3d ${isDarkMode ? 'is-dark' : 'is-light'}`} aria-label="Interactive 3D artisan globe" aria-busy={!isEarthReady}>
-      <Canvas key={isMobile ? 'mobile' : 'desktop'} camera={{ position: [0, 0, 8.2], fov: 34 }} dpr={isMobile ? 1 : [1, 1.2]} gl={{ antialias: !isMobile, alpha: true, powerPreference: isMobile ? 'low-power' : 'high-performance' }}>
+    <div className={`artisan-globe-3d ${isDarkMode ? 'is-dark' : 'is-light'}${isWebGlUnavailable ? ' webgl-unavailable' : ''}`} aria-label="Interactive artisan globe" aria-busy={!isEarthReady && !isWebGlUnavailable}>
+      <Canvas
+        key={isMobile ? 'mobile' : 'desktop'}
+        camera={{ position: [0, 0, 8.2], fov: 34 }}
+        dpr={isMobile ? 1 : 1.2}
+        gl={{ antialias: false, alpha: true, powerPreference: 'low-power' }}
+        onCreated={({ gl }) => {
+          gl.setClearColor('#000000', 0);
+          gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.2));
+          gl.domElement.addEventListener('webglcontextlost', (event) => {
+            event.preventDefault();
+            setIsWebGlUnavailable(true);
+            setIsEarthReady(true);
+            if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);
+            if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+            fallbackTimerRef.current = null;
+          });
+          gl.domElement.addEventListener('webglcontextrestored', () => {
+            setIsWebGlUnavailable(false);
+            handleEarthReady();
+          });
+        }}
+      >
         <GlobeScene
           artisans={artisans}
           selectedArtisanId={selectedArtisanId}
@@ -361,7 +422,8 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
           onEarthReady={handleEarthReady}
         />
       </Canvas>
-      {!isEarthReady && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#10151b]/90 px-5 text-center" role="status" aria-live="polite"><span className="h-10 w-10 animate-spin rounded-full border-2 border-amber-300/25 border-t-amber-300" /><strong className="text-sm text-white">Mapping artisan locations</strong><span className="text-xs text-neutral-300">Loading the Earth and placing makers on the map.</span></div>}
+      {isWebGlUnavailable && <GlobeFallback artisans={artisans} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
+      {!isEarthReady && !isWebGlUnavailable && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#10151b]/90 px-5 text-center" role="status" aria-live="polite"><span className="h-10 w-10 animate-spin rounded-full border-2 border-amber-300/25 border-t-amber-300" /><strong className="text-sm text-white">Mapping artisan locations</strong><span className="text-xs text-neutral-300">Loading the Earth and placing makers on the map.</span></div>}
       <div className="globe-legend" aria-hidden="true">
         <span><Scissors /> Tailors</span>
         <span><Shirt /> Fabric sellers</span>

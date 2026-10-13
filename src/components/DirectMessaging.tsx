@@ -113,7 +113,7 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
   const openPartnerWhatsApp = () => {
     if (!activePartner?.whatsappNumber) return;
     const phone = activePartner.whatsappNumber.replace(/\D/g, '');
-    const text = encodeURIComponent(`Hello ${activePartner.name}, I am messaging you from Atelier Marketplace.`);
+    const text = encodeURIComponent(`Hello ${activePartner.name}, I am messaging you from FabsSAttire.`);
     window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
   };
 

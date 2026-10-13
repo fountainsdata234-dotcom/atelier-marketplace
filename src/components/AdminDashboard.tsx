@@ -4,6 +4,7 @@ import { Shield, Users, UserPlus, UserX, Star, Ban, CheckCircle2, MessageSquare,
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
+import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -11,7 +12,6 @@ interface AdminDashboardProps {
   posts: ClothPost[];
   promoPlans: AdminPromoPlan[];
   broadcasts: BroadcastMessage[];
-  onMessageUser: (user: User) => void;
   isDarkMode: boolean;
 }
 
@@ -21,7 +21,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   posts,
   promoPlans,
   broadcasts,
-  onMessageUser,
   isDarkMode
 }) => {
   const isSuperAdmin = currentUser.isSuperAdmin === true;
@@ -36,7 +35,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastBody, setBroadcastBody] = useState('');
   const [broadcastSentMsg, setBroadcastSentMsg] = useState<string | null>(null);
-  const [sentMessages, setSentMessages] = useState<import('../types').DirectMessage[]>([]);
 
   // Promotion Template Cards state
   const [editablePlans, setEditablePlans] = useState<AdminPromoPlan[]>(promoPlans);
@@ -48,21 +46,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     setEditablePlans(promoPlans);
   }, [promoPlans]);
-
-  useEffect(() => {
-    api.getMessages().then(messages => setSentMessages(messages.filter(message => message.senderId === currentUser.id))).catch(() => undefined);
-  }, [currentUser.id]);
-
-  const handleDeleteSentMessage = async (messageId: string) => {
-    if (!window.confirm('Delete this sent message for all recipients?')) return;
-    try {
-      await api.deleteMessage(messageId);
-      setSentMessages(messages => messages.filter(message => message.id !== messageId));
-      setBroadcastSentMsg('Message deleted for all recipients.');
-    } catch (error) {
-      setBroadcastSentMsg(error instanceof Error ? error.message : 'The message could not be deleted.');
-    }
-  };
 
   // Filtered lists
   const uniqueUsers = Array.from(new Map(users.map(user => [user.id, user])).values());
@@ -208,7 +191,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
 
-    setBroadcastSentMsg(`Broadcast sent successfully to ${broadcastTarget.toUpperCase()}!`);
+    setBroadcastSentMsg(`Notification sent successfully to ${broadcastTarget.toUpperCase()}!`);
     setBroadcastTitle('');
     setBroadcastBody('');
     setTimeout(() => setBroadcastSentMsg(null), 4000);
@@ -365,7 +348,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div>
               <h2 className="text-xl font-serif font-bold">Registered Tailors & Fabric Sellers</h2>
               <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                Message, warn, promote, or block marketplace users. Posts can be removed from the Posts tab.
+                Contact sellers on WhatsApp, warn, promote, or block users. Posts can be removed from the Posts tab.
               </p>
             </div>
           </div>
@@ -422,12 +405,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => onMessageUser(tailor)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500 hover:text-neutral-950 transition-all"
-                    >
-                      Message
-                    </button>
+                    {buildWhatsAppUrl(tailor.whatsappNumber || tailor.phone, `Hello ${tailor.name}, I am contacting you from FabsSAttire.`) && <a href={buildWhatsAppUrl(tailor.whatsappNumber || tailor.phone, `Hello ${tailor.name}, I am contacting you from FabsSAttire.`) || undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500 hover:text-neutral-950">WhatsApp</a>}
                     <button
                       onClick={() => handleTogglePromote(tailor)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -598,7 +576,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="mb-6 pb-4 border-b border-neutral-800">
             <h2 className="text-xl font-serif font-bold">Broadcast Center</h2>
             <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Send direct announcements to Tailors/Fabric Sellers, Customers/Buyers, or both simultaneously.
+              Send one-way notifications to everyone, sellers only, or customers only. Recipients cannot reply in the app.
             </p>
           </div>
 
@@ -624,7 +602,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       : 'border-neutral-700 text-neutral-400'
                   }`}
                 >
-                  Both Sellers & Customers
+                  Public · Everyone
                 </button>
                 <button
                   type="button"
@@ -635,7 +613,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       : 'border-neutral-700 text-neutral-400'
                   }`}
                 >
-                  Sellers / Tailors Only
+                  Sellers Only
                 </button>
                 <button
                   type="button"
@@ -646,7 +624,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       : 'border-neutral-700 text-neutral-400'
                   }`}
                 >
-                  Clients / Buyers Only
+                  Customers Only
                 </button>
               </div>
             </div>
@@ -707,10 +685,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          {sentMessages.length > 0 && <div className="mt-8 border-t border-neutral-800 pt-6">
-            <h3 className="mb-3 text-sm font-serif font-bold">Sent Messages & Announcements ({sentMessages.length})</h3>
-            <div className="space-y-3">{sentMessages.map(message => <div key={message.id} className="rounded-xl border border-neutral-800 bg-neutral-900/30 p-3 text-xs"><div className="flex items-center justify-between gap-3 text-[11px] text-neutral-400"><span className="font-bold uppercase text-amber-400">{message.type === 'general' ? 'Announcement' : 'Direct message'}</span><button type="button" onClick={() => handleDeleteSentMessage(message.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 px-2 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/10"><Trash2 className="h-3 w-3" /> Delete</button></div><p className="mt-2 text-neutral-200">{message.content}</p><p className="mt-1 text-[10px] text-neutral-500">To {message.recipientName} · {new Date(message.timestamp).toLocaleString()}</p></div>)}</div>
-          </div>}
         </section>
       )}
 

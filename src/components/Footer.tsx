@@ -19,8 +19,8 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
         <div className="grid grid-cols-3 items-start gap-3 md:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr] md:gap-8">
           <div className="col-span-3 flex min-w-0 items-center gap-3 md:col-span-1 md:block">
             <div className="flex shrink-0 items-center gap-2.5">
-              <img src="/logo.png" alt="Fabrilux Atelier logo" className="h-9 w-9 rounded-xl object-cover shadow-lg shadow-amber-500/20 md:h-11 md:w-11 md:rounded-2xl" />
-              <div><p className="font-display text-xl font-black tracking-[0.14em] text-amber-400">FABRILUX</p><p className="text-[10px] uppercase tracking-[0.25em] text-amber-500/80">Atelier</p></div>
+              <img src="/logo.png" alt="FabsSAttire logo" className="h-9 w-9 rounded-xl object-cover shadow-lg shadow-amber-500/20 md:h-11 md:w-11 md:rounded-2xl" />
+              <div><p className="font-display text-xl font-black tracking-[0.14em] text-amber-400">FABS</p><p className="text-[10px] uppercase tracking-[0.25em] text-amber-500/80">SATTIRE</p></div>
             </div>
             <p className={`hidden max-w-sm text-sm leading-relaxed md:mt-3 md:block ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
               A global network for fine tailors, fabric merchants, and clients seeking premium bespoke craftsmanship.
@@ -61,7 +61,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
         </div>
 
         <div className={`mt-4 border-t pt-3 text-center text-[10px] leading-relaxed md:mt-6 md:pt-4 md:text-xs ${isDarkMode ? 'border-neutral-800 text-neutral-500' : 'border-neutral-200 text-neutral-500'}`}>
-          © 2026 Fabrilux Atelier. Crafted for bespoke fashion and premium fabric discovery.
+          © 2026 FabsSAttire. Crafted for bespoke fashion and premium fabric discovery.
         </div>
       </div>
     </footer>

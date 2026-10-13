@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, MapPin, Filter, Star, Heart, Bookmark, MessageCircle, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp, Flame, Trophy, Zap } from 'lucide-react';
+import { Search, MapPin, Filter, Star, Heart, Bookmark, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp, Flame, Trophy, Zap } from 'lucide-react';
 import { ClothPost, CountryGeo, DiscoveryEvent, DiscoveryEventType, User, UserLocation } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -9,6 +9,7 @@ import { MarketplaceInterlude } from './MarketplaceInterlude';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
 import { calculateFeedScore, getRatingQuality, rankTrendingPosts } from '../utils/marketplaceRanking';
+import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -17,7 +18,6 @@ interface MarketplaceProps {
   users: User[];
   currentUser: User | null;
   onOpenAuth: () => void;
-  onSelectPostForMessage: (post: ClothPost) => void;
   onSelectPost: (post: ClothPost) => void;
   onSaveImageToViewer: (url: string, title: string) => void;
   onSharePost: (post: ClothPost) => void;
@@ -43,7 +43,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   users,
   currentUser,
   onOpenAuth,
-  onSelectPostForMessage,
   onSelectPost,
   onSaveImageToViewer,
   onSharePost,
@@ -68,6 +67,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         authorName: author?.name || post.authorName || 'Atelier Member',
         authorHandle: author?.handle || post.authorHandle || '@atelier_member',
         authorAvatar: author?.avatarUrl || post.authorAvatar,
+        authorWhatsapp: author?.whatsappNumber || post.authorWhatsapp || author?.phone || '',
         authorLocation: author?.location || post.authorLocation || { country: '', state: '', city: '' },
         isPromoted: author?.isPromoted || post.isPromoted,
         tags: Array.isArray(post.tags) ? post.tags : [],
@@ -447,7 +447,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     if (localResult) window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
     api.ratePost(postId, rating)
       .then(result => {
-        storageService.reconcilePostEngagement(postId, { rating: result.rating, ratingCount: result.ratingCount });
+        storageService.reconcilePostEngagement(postId, { rating: result.rating, ratingCount: result.ratingCount, ratingsByUser: result.ratingsByUser });
         recordEvent(postId, 'RATING');
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
@@ -472,6 +472,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
     api.toggleSave(post.id)
       .then(serverResult => {
+        const savedPost = storageService.getPosts().find(item => item.id === post.id);
+        const saves = savedPost?.saves.filter(userId => userId !== currentUser.id) || [];
+        if (serverResult.isSaved) saves.push(currentUser.id);
+        storageService.reconcilePostEngagement(post.id, { saves });
         const savedPhotos = storageService.getSavedPhotos();
         if (!serverResult.isSaved) {
           const saved = savedPhotos.find(photo => photo.postId === post.id);
@@ -532,16 +536,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   // Direct WhatsApp Inquiry link
   const openWhatsApp = (post: ClothPost) => {
                                                                                                                     
+    const url = getWhatsAppUrl(post);
+    if (!url) return;
     recordEvent(post.id, 'ENQUIRY');
-    const phone = post.authorWhatsapp?.replace(/\D/g, '');
-    if (!phone) return;
-    const text = encodeURIComponent(
-      `Hello ${post.authorName}! I saw your design "${post.title}" on Fabrilux Atelier. I would like to place an order or discuss custom tailoring.`
-    );
-    window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const hasWhatsApp = (post: ClothPost) => Boolean(post.authorWhatsapp?.replace(/\D/g, ''));
+  const getWhatsAppUrl = (post: ClothPost) => buildWhatsAppUrl(
+    post.authorWhatsapp,
+    `Hello ${post.authorName}! I saw "${post.title}" on Fabrilux Atelier and would like to discuss it.`,
+  );
 
   return (
     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
@@ -700,15 +704,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-                          <button
-                            type="button"
-                            onClick={() => onSelectPostForMessage(post)}
-                            className="rounded-xl border border-white/15 bg-white/5 px-2.5 py-2 text-[10px] font-semibold text-white transition hover:bg-white/10 sm:px-3 sm:text-[11px]"
-                          >
-                            Message Seller
-                          </button>
-                          {hasWhatsApp(post) && <button type="button" onClick={() => openWhatsApp(post)} className="col-span-2 rounded-xl bg-emerald-600 px-2.5 py-2 text-[10px] font-bold text-white transition hover:bg-emerald-500 sm:col-span-auto sm:px-3 sm:text-[11px]">WhatsApp</button>}
+                        <div className="flex flex-wrap items-center justify-end">
+                          {getWhatsAppUrl(post) ? <button type="button" onClick={() => openWhatsApp(post)} className="rounded-xl bg-emerald-600 px-3 py-2 text-[10px] font-bold text-white transition hover:bg-emerald-500 sm:text-[11px]">WhatsApp seller</button> : <span className="px-2 py-2 text-[10px] text-neutral-500">WhatsApp unavailable</span>}
                         </div>
                       </div>
                     </div>
@@ -1190,7 +1187,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
                 </div>
 
-                {/* Footer: Like Counter, In-App Message & WhatsApp Button */}
+                {/* Footer: Like Counter and WhatsApp Contact */}
                 <div className="flex items-center justify-between gap-2 border-t border-neutral-800/60 bg-neutral-900/20 px-3 py-2">
                   <button
                     onClick={() => handleLike(post.id)}
@@ -1204,20 +1201,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <span>{post.likes.length}</span>
                   </button>
 
-                  <div className="flex items-center gap-1.5">
-                    {/* In-App Direct Message Order Button */}
-                    <button
-                      onClick={() => onSelectPostForMessage(post)}
-                      className="px-3 py-2 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 flex items-center gap-1.5 transition-colors"
-                      title="Direct In-App Message"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Inquire</span>
-                    </button>
-
-                    {/* WhatsApp Direct Order Button */}
-                    {hasWhatsApp(post) && <button onClick={() => openWhatsApp(post)} className="px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 transition-colors shadow-xs" title="Order on WhatsApp"><Phone className="w-3.5 h-3.5" /><span>WhatsApp</span></button>}
-                  </div>
+                  {getWhatsAppUrl(post) ? <button type="button" onClick={() => openWhatsApp(post)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500" title="Contact seller on WhatsApp"><Phone className="h-3.5 w-3.5" /><span>WhatsApp</span></button> : <span className="text-[10px] text-neutral-500">WhatsApp unavailable</span>}
                 </div>
               </motion.article>
               {(postIndex === 9 || postIndex === 19) && smartMarketplaceHighlights.length > 0 && (

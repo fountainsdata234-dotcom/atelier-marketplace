@@ -26,6 +26,7 @@ import { LegalPage } from './components/LegalPage';
 import { SellerProfilePage } from './components/SellerProfilePage';
 import { api } from './services/api';
 import { buildPostShareUrl, buildSellerShareUrl, getHandleSlug } from './utils/profile';
+import { buildWhatsAppUrl } from './utils/whatsapp';
 
 const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
   '/': 'landing',
@@ -35,7 +36,13 @@ const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
   '/privacy': 'privacy',
   '/terms': 'terms',
   '/contact': 'contact',
+  '/profile': 'profile',
+  '/collections': 'collections',
+  '/dashboard': 'dashboard',
+  '/admin': 'admin',
 };
+
+const PATH_BY_VIEW: Record<string, string> = Object.fromEntries(Object.entries(PUBLIC_VIEW_BY_PATH).map(([path, view]) => [view, path]));
 
 const getInitialView = () => {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
@@ -137,8 +144,7 @@ export default function App() {
   // Modals
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authDefaultRole, setAuthDefaultRole] = useState<UserRole>('buyer');
-  
-  // Messaging Modal / Drawer state
+
   const [directMessageOpen, setDirectMessageOpen] = useState(false);
   const [directMessageRecipient, setDirectMessageRecipient] = useState<User | null>(null);
   const [directMessagePost, setDirectMessagePost] = useState<ClothPost | null>(null);
@@ -157,6 +163,41 @@ export default function App() {
   // Only fetch market data when the user is actually on a live marketplace view.
   const marketplaceViews = ['marketplace', 'artisan', 'seller', 'post', 'dashboard', 'profile', 'collections', 'messages'];
   const canRefreshMarketplaceData = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
+
+  const navigateToView = (view: string) => {
+    const nextPath = PATH_BY_VIEW[view] || '/';
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl !== nextPath) window.history.pushState({ view }, '', nextPath);
+    setSharedSeller(null);
+    setSharedPostId(null);
+    setSelectedPostId(null);
+    setCurrentView(view);
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const pathMatch = window.location.pathname.match(/^\/@([^/]+)(?:\/post\/([^/]+))?$/i);
+      const handle = (pathMatch?.[1] || params.get('seller') || '').replace(/^@/, '').toLowerCase();
+      if (handle) {
+        const seller = users.find(user => getHandleSlug(user.handle) === getHandleSlug(handle));
+        if (!seller) return;
+        setSharedSeller(seller);
+        const postId = pathMatch?.[2] || params.get('post');
+        setSharedPostId(postId || null);
+        setSelectedPostId(postId || null);
+        setCurrentView(postId ? 'post' : 'seller');
+        return;
+      }
+      setSharedSeller(null);
+      setSharedPostId(null);
+      setSelectedPostId(null);
+      const path = window.location.pathname.replace(/\/$/, '') || '/';
+      setCurrentView(PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabrilux_active_view') || 'landing');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [users]);
 
   useEffect(() => {
     storageService.init();
@@ -201,23 +242,22 @@ export default function App() {
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
     window.addEventListener('touchend', handlePullRefresh, { passive: true });
 
-    let unsubscribeFirebase: (() => void) | undefined;
-    import('./services/firebase').then(({ configureFirebaseAuth, subscribeToFirebaseAuth, toAppUser }) => configureFirebaseAuth().catch((error) => {
-      console.warn('Firebase auth configuration skipped offline or failed gracefully.', error);
+    let unsubscribeAuth: (() => void) | undefined;
+    import('./services/auth').then(({ configureAuth, subscribeToAuth }) => configureAuth().catch((error) => {
+      console.warn('Authentication configuration skipped offline or failed gracefully.', error);
     }).finally(() => {
-      unsubscribeFirebase = subscribeToFirebaseAuth(async (firebaseUser) => {
-        if (!firebaseUser) {
+      unsubscribeAuth = subscribeToAuth(async (authUser) => {
+        if (!authUser) {
           setCurrentUser(null);
           return;
         }
-        const baseUser = await toAppUser(firebaseUser);
         let savedProfile: Partial<User> | undefined;
         try {
           savedProfile = await api.getProfile();
         } catch (error) {
-          console.warn('Profile not available yet; using Firebase account details.', error);
+          console.warn('Profile not available yet; using authenticated account details.', error);
         }
-        const cachedProfile = storageService.getUsers().find(user => user.id === firebaseUser.uid);
+        const cachedProfile = storageService.getUsers().find(user => user.id === authUser.id);
         const profileValue = <T,>(key: keyof User, fallback: T): T => {
           const remoteValue = savedProfile?.[key] as T | undefined;
           const cachedValue = cachedProfile?.[key] as T | undefined;
@@ -226,21 +266,26 @@ export default function App() {
           return fallback;
         };
         const savedRole = savedProfile?.role;
-        const mergedUser = {
-          ...baseUser,
-          ...savedProfile,
-          name: profileValue('name', baseUser.name),
-          handle: profileValue('handle', baseUser.handle),
-          phone: profileValue('phone', baseUser.phone),
-          bio: profileValue('bio', baseUser.bio || ''),
-          avatarUrl: profileValue('avatarUrl', baseUser.avatarUrl),
-          shopName: profileValue('shopName', baseUser.shopName || ''),
-          location: profileValue('location', baseUser.location),
-          followers: profileValue('followers', baseUser.followers),
-          id: firebaseUser.uid,
-          email: firebaseUser.email || baseUser.email,
-          role: baseUser.role === 'admin' ? 'admin' : (savedRole || baseUser.role),
-          isSuperAdmin: baseUser.isSuperAdmin,
+        const mergedUser: User = {
+          id: authUser.id,
+          email: authUser.email,
+          name: authUser.name,
+          role: authUser.isAdmin ? 'admin' : (savedRole || authUser.role),
+          phone: savedProfile?.phone || '',
+          countryCode: savedProfile?.countryCode || '',
+          location: savedProfile?.location || { country: '', state: '', city: '' },
+          whatsappNumber: savedProfile?.whatsappNumber,
+          shopName: savedProfile?.shopName,
+          bio: savedProfile?.bio || '',
+          handle: profileValue('handle', `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`),
+          avatarUrl: profileValue('avatarUrl', authUser.avatarUrl),
+          isPromoted: profileValue('isPromoted', false),
+          isBlocked: profileValue('isBlocked', false),
+          followers: profileValue('followers', []),
+          createdAt: authUser.createdAt,
+          isSuperAdmin: authUser.isSuperAdmin,
+          isWarned: savedProfile?.isWarned,
+          warningNote: savedProfile?.warningNote,
         };
         const user = storageService.upsertUser(mergedUser);
         setCurrentUser(user);
@@ -256,7 +301,7 @@ export default function App() {
         void refreshAllData();
       });
     })).catch((error) => {
-      console.error('Firebase Auth initialization failed', error);
+      console.error('Authentication initialization failed', error);
       setIsDataLoading(false);
     });
 
@@ -266,7 +311,7 @@ export default function App() {
     const handlePlansUpdate = () => setPromoPlans(storageService.getPromoPlans());
     const handleAuthChange = (e: any) => setCurrentUser(e.detail);
     const handleBroadcastsUpdate = () => setBroadcasts(storageService.getBroadcasts());
-    const handleNavigateTab = (e: any) => setCurrentView(e.detail);
+    const handleNavigateTab = (e: any) => navigateToView(e.detail);
     const handleNotificationsUpdate = () => {
       if (!currentUser) {
         setNotifications([]);
@@ -284,7 +329,7 @@ export default function App() {
     window.addEventListener('atelier_notifications_updated', handleNotificationsUpdate);
 
     return () => {
-      unsubscribeFirebase?.();
+      unsubscribeAuth?.();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
@@ -310,6 +355,7 @@ export default function App() {
   }, []);
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -553,7 +599,14 @@ export default function App() {
       return;
     }
     setNotifications(storageService.getNotifications(currentUser.id).slice(0, 4));
-    const markAsRead = () => storageService.markNotificationsRead(currentUser.id);
+    void api.getNotifications().then(remoteNotifications => {
+      storageService.mergeNotifications(remoteNotifications);
+      setNotifications(storageService.getNotifications(currentUser.id).slice(0, 4));
+    }).catch(error => console.warn('Remote notifications could not be loaded.', error));
+    const markAsRead = () => {
+      storageService.markNotificationsRead(currentUser.id);
+      void api.markNotificationsRead().catch(() => undefined);
+    };
     markAsRead();
     const timer = window.setTimeout(markAsRead, 1500);
     return () => window.clearTimeout(timer);
@@ -602,32 +655,22 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    import('./services/firebase').then(({ logoutFromFirebase }) => logoutFromFirebase()).catch((error) => console.error('Firebase logout failed', error));
+    import('./services/auth').then(({ signOutAuth }) => signOutAuth()).catch((error) => console.error('Authentication logout failed', error));
     storageService.setCurrentUser(null);
     setCurrentUser(null);
     setCurrentView('landing');
   };
 
-  // Initiate In-App Message from a Post
-  const handleSelectPostForMessage = (post: ClothPost) => {
-    if (!currentUser) {
-      handleOpenAuthWithRole('buyer');
-      return;
-    }
-    const tailor = users.find(u => u.id === post.authorId);
-    if (!tailor) return;
-    storageService.recordDiscoveryEvent(post.id, 'ENQUIRY', currentUser.id);
-    void api.recordDiscoveryEvent(post.id, 'ENQUIRY', sessionStorage.getItem('atelier_session_id') || 'app-session');
-    setDirectMessageRecipient(tailor);
-    setDirectMessagePost(post);
-    setDirectMessageOpen(true);
-  };
-
-  const handleMessageUser = (user: User) => {
-    if (!currentUser) return;
-    setDirectMessageRecipient(user);
-    setDirectMessagePost(null);
-    setCurrentView('messages');
+  const handleContactSeller = (post: ClothPost) => {
+    const seller = users.find(user => user.id === post.authorId);
+    const contactUrl = buildWhatsAppUrl(
+      post.authorWhatsapp || seller?.whatsappNumber || seller?.phone,
+      `Hello ${post.authorName}, I saw "${post.title}" on Fabrilux Atelier and would like to discuss it.`,
+    );
+    if (!contactUrl) return;
+    storageService.recordDiscoveryEvent(post.id, 'ENQUIRY', currentUser?.id);
+    if (currentUser) void api.recordDiscoveryEvent(post.id, 'ENQUIRY', sessionStorage.getItem('atelier_session_id') || 'app-session');
+    window.open(contactUrl, '_blank', 'noopener,noreferrer');
   };
 
   // Trigger Save Image
@@ -756,7 +799,7 @@ export default function App() {
       <Navbar
         currentUser={currentUser}
         currentView={currentView}
-        onNavigate={setCurrentView}
+        onNavigate={navigateToView}
         onOpenAuth={() => handleOpenAuthWithRole('buyer')}
         onLogout={handleLogout}
         isDarkMode={isDarkMode}
@@ -766,7 +809,6 @@ export default function App() {
         onInstall={handleInstallApp}
         onRefresh={handlePageRefresh}
         isRefreshing={isRefreshing}
-        unreadCount={unreadCount}
       />
 
       <button
@@ -799,8 +841,8 @@ export default function App() {
             >
               <LandingPage
                 onOpenAuth={handleOpenAuthWithRole}
-                onExploreMarketplace={() => setCurrentView('marketplace')}
-                onExploreArtisans={() => setCurrentView('artisan')}
+                onExploreMarketplace={() => navigateToView('marketplace')}
+                onExploreArtisans={() => navigateToView('artisan')}
                 onSelectPost={handleSelectPost}
                 onSelectSeller={handleSelectSeller}
                 isDarkMode={isDarkMode}
@@ -828,7 +870,6 @@ export default function App() {
                 users={users}
                 currentUser={currentUser}
                 onOpenAuth={() => handleOpenAuthWithRole('buyer')}
-                onSelectPostForMessage={handleSelectPostForMessage}
                 onSelectPost={handleSelectPost}
                 onSaveImageToViewer={handleSaveImageToViewer}
                 onSharePost={handleSharePost}
@@ -848,12 +889,11 @@ export default function App() {
                 users={users}
                 isDarkMode={isDarkMode}
                 onBack={() => {
-                  window.history.pushState({ view: 'marketplace' }, '', '/marketplace');
-                  setCurrentView('marketplace');
+                  navigateToView('marketplace');
                 }}
                 onSelectPost={handleSelectPost}
                 onSelectSeller={handleSelectSeller}
-                onInquire={handleSelectPostForMessage}
+                onInquire={handleContactSeller}
                 onShare={handleSharePost}
                 onView={handleRecordPostView}
               />
@@ -902,7 +942,7 @@ export default function App() {
 
           {currentView === 'seller' && sharedSeller && (
             <motion.div key="seller" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }}>
-              <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => setCurrentView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} onSelectPost={handleSelectPost} />
+              <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => navigateToView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} onSelectPost={handleSelectPost} />
             </motion.div>
           )}
 
@@ -943,30 +983,11 @@ export default function App() {
                 posts={posts}
                 promoPlans={promoPlans}
                 broadcasts={broadcasts}
-                onMessageUser={handleMessageUser}
                 isDarkMode={isDarkMode}
               />
             </motion.div>
           )}
 
-          {currentView === 'messages' && currentUser && (
-            <motion.div
-              key="messages"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35 }}
-              className="py-4"
-            >
-              <DirectMessaging
-                currentUser={currentUser}
-                recipientUser={directMessageRecipient}
-                selectedPost={directMessagePost}
-                onClose={() => setCurrentView('marketplace')}
-                isDarkMode={isDarkMode}
-              />
-            </motion.div>
-          )}
           {(currentView === 'about' || currentView === 'privacy' || currentView === 'terms' || currentView === 'contact') && (
             <LegalPage page={currentView === 'contact' ? 'contact' : currentView} isDarkMode={isDarkMode} onBack={() => setCurrentView(currentUser ? 'marketplace' : 'landing')} />
           )}
@@ -974,34 +995,18 @@ export default function App() {
         </Suspense>}
       </main>
 
-      <Footer isDarkMode={isDarkMode} onNavigate={setCurrentView} />
+      <Footer isDarkMode={isDarkMode} onNavigate={navigateToView} />
 
       <MobileBottomNav
         currentUser={currentUser}
         currentView={currentView}
-        onNavigate={setCurrentView}
+        onNavigate={navigateToView}
         onOpenAuth={() => handleOpenAuthWithRole('buyer')}
         onLogout={handleLogout}
         isDarkMode={isDarkMode}
-        unreadCount={unreadCount}
         canInstall={canShowInstallPrompt}
         onInstall={handleInstallApp}
       />
-
-      {/* 6. Global Floating / Modal Direct Messaging */}
-      {directMessageOpen && currentUser && (
-        <DirectMessaging
-          currentUser={currentUser}
-          recipientUser={directMessageRecipient}
-          selectedPost={directMessagePost}
-          onClose={() => {
-            setDirectMessageOpen(false);
-            setDirectMessageRecipient(null);
-            setDirectMessagePost(null);
-          }}
-          isDarkMode={isDarkMode}
-        />
-      )}
 
       {/* 8. Authentication & Registration Modal */}
       {authModalOpen && <Suspense fallback={null}>

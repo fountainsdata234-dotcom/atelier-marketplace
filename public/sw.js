@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabrilux-atelier-v10';
+const CACHE_NAME = 'fabsattire-v10';
 const APP_SHELL = ['/index.html', '/manifest.webmanifest'];
 
 const isStaticAssetRequest = (url) => {
@@ -33,7 +33,7 @@ self.addEventListener('push', (event) => {
   }
   const data = payload.data || {};
   const notification = payload.notification || {};
-  const title = notification.title || data.title || 'Fabrilux Atelier';
+  const title = notification.title || data.title || 'FabsSAttire';
   const targetUrl = data.url || notification.data?.url || '/';
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
     if (windowClients.some(client => client.visibilityState === 'visible')) return;
@@ -41,7 +41,7 @@ self.addEventListener('push', (event) => {
       body: notification.body || data.body || 'You have a new marketplace update.',
       icon: notification.icon || '/logo.png',
       badge: notification.badge || '/favicon.svg',
-      tag: notification.tag || data.tag || `fabrilux-${data.type || 'update'}`,
+      tag: notification.tag || data.tag || `fabsattire-${data.type || 'update'}`,
       data: { url: targetUrl },
       renotify: false,
     });

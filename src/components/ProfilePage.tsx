@@ -3,7 +3,8 @@ import { AlertTriangle, Bookmark, Camera, LogOut, Save, Trash2, UserRound } from
 import { User } from '../types';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
-import { firebaseAuth, logoutFromFirebase, requestPushToken, uploadUserImage } from '../services/firebase';
+import { uploadUserImage } from '../services/firebase';
+import { getAuthUserId, signOutAuth } from '../services/auth';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
 interface ProfilePageProps {
@@ -24,16 +25,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [isEnablingPush, setIsEnablingPush] = useState(false);
-  const [pushStatus, setPushStatus] = useState<string | null>(null);
 
   const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !firebaseAuth.currentUser) return;
+    const userId = await getAuthUserId();
+    if (!file || !userId) return;
     setIsUploadingAvatar(true);
     setStatus(null);
     try {
-      const uploadedUrl = await uploadUserImage(file, firebaseAuth.currentUser.uid, 'profiles', `avatar-${Date.now()}.jpg`);
+      const uploadedUrl = await uploadUserImage(file, userId, 'profiles', `avatar-${Date.now()}.jpg`);
       setAvatarUrl(uploadedUrl);
       setStatus('Profile picture ready. Save your profile to publish it.');
     } catch (error) {
@@ -72,20 +72,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
     }
   };
 
-  const enablePushAlerts = async () => {
-    setIsEnablingPush(true);
-    setPushStatus(null);
-    try {
-      const token = await requestPushToken();
-      await api.registerPushToken(token);
-      setPushStatus('Push alerts are enabled for messages, new listings, and atelier announcements.');
-    } catch (error) {
-      setPushStatus(error instanceof Error ? error.message : 'Push alerts could not be enabled on this device.');
-    } finally {
-      setIsEnablingPush(false);
-    }
-  };
-
   const deleteAccount = async () => {
     const confirmation = window.prompt('This permanently deletes your account and all of its data. Type DELETE to continue.');
     if (confirmation?.trim().toUpperCase() !== 'DELETE') {
@@ -98,7 +84,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
       await api.deleteMyAccount();
       storageService.deleteUser(currentUser.id);
       storageService.setCurrentUser(null);
-      await logoutFromFirebase();
+      await signOutAuth();
       onLogout();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Your account could not be deleted. Please try again.');
@@ -130,11 +116,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <button type="button" onClick={() => onNavigate('marketplace')} className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition hover:border-amber-500/50 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}><UserRound className="h-5 w-5 text-amber-400" /><span><strong className="block text-sm">Continue exploring</strong><small className="text-xs text-neutral-400">Discover tailors and fabric sellers.</small></span></button>
         </div>
 
-        <section className={`mt-6 flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${surface}`} aria-labelledby="push-alerts-title">
-          <div><h2 id="push-alerts-title" className="text-sm font-bold">Push alerts</h2><p className="mt-1 text-xs leading-relaxed text-neutral-400">Receive direct messages, new marketplace listings, and atelier announcements when Fabrilux is closed.</p>{pushStatus && <p className="mt-2 text-xs text-amber-300" role="status">{pushStatus}</p>}</div>
-          <button type="button" onClick={() => void enablePushAlerts()} disabled={isEnablingPush} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60">{isEnablingPush ? 'Enabling...' : typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'Enable on this device' : 'Enable push alerts'}</button>
-        </section>
-
         {currentUser.isWarned && currentUser.warningNote && (
           <section className="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4" aria-labelledby="account-alert-title">
             <div className="flex items-start gap-3">
@@ -161,7 +142,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 id="delete-account-title" className="text-sm font-bold text-red-200">Delete account</h2>
-              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-neutral-400">Permanently removes your profile, posts, messages, collections, and Firebase login. This action cannot be reversed.</p>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-neutral-400">Permanently removes your profile, posts, messages, collections, and sign-in account. This action cannot be reversed.</p>
             </div>
             <button type="button" onClick={() => void deleteAccount()} disabled={isDeletingAccount} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-300 transition hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"><Trash2 className="h-4 w-4" /> {isDeletingAccount ? 'Deleting...' : 'Delete my account'}</button>
           </div>

@@ -24,7 +24,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   if (!isOpen) return null;
 
   const profileUrl = sharedProfileUrl || window.location.origin;
-  const shareText = `Explore master bespoke designs and couture creations by ${name} (${handle}) on Atelier Marketplace: ${profileUrl}`;
+  const shareText = `Explore master bespoke designs and couture creations by ${name} (${handle}) on FabsSAttire: ${profileUrl}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(profileUrl);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, MessageSquare, User as UserIcon, Shield, Scissors, LogIn, Users, Info, Download } from 'lucide-react';
+import { Compass, User as UserIcon, Shield, Scissors, LogIn, Users, Info, Download } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -9,7 +9,6 @@ interface MobileBottomNavProps {
   onOpenAuth: () => void;
   onLogout?: () => void;
   isDarkMode: boolean;
-  unreadCount?: number;
   canInstall?: boolean;
   onInstall?: () => void;
 }
@@ -21,7 +20,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onOpenAuth,
   onLogout,
   isDarkMode,
-  unreadCount = 0,
   canInstall = false,
   onInstall
 }) => {
@@ -83,13 +81,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             )}
 
             <button
-              onClick={() => handleNavigate(currentUser ? 'messages' : 'artisan')}
+              onClick={() => handleNavigate('artisan')}
               className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
-                primaryActionIsActive(currentUser ? 'messages' : 'artisan') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+                primaryActionIsActive('artisan') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
-              {currentUser ? <MessageSquare className="w-5 h-5" /> : <Users className="w-5 h-5" />}
-              <span className="text-[10px] font-medium">{currentUser ? 'Messages' : 'Artisans'}</span>
+              <Users className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Artisans</span>
             </button>
 
             <button

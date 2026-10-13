@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sun, Moon, MessageSquare, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw } from 'lucide-react';
+import { Sun, Moon, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -10,7 +10,6 @@ interface NavbarProps {
   onLogout: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
-  unreadCount?: number;
   isOnline: boolean;
   canInstall: boolean;
   onInstall: () => void;
@@ -26,7 +25,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   isDarkMode,
   onToggleTheme,
-  unreadCount = 0,
   isOnline,
   canInstall,
   onInstall,
@@ -57,17 +55,17 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <img
             src="/logo.png"
-            alt="Fabrilux Atelier logo"
+            alt="FabsSAttire logo"
             className="h-9 w-9 rounded-lg object-cover shadow-md shadow-amber-500/20 ring-1 ring-amber-500/30 transition-transform duration-200 group-hover:scale-105 sm:h-10 sm:w-10"
           />
           <div className="brand-lockup relative border-l border-amber-500/30 pl-3">
             <span className="brand-thread brand-thread-one" aria-hidden="true" />
             <span className="brand-thread brand-thread-two" aria-hidden="true" />
-            <span className="brand-wordmark block text-[15px] font-black leading-none text-amber-500 sm:text-xl">
-              FABRILUX
+            <span className="brand-wordmark block text-[15px] font-black leading-none text-amber-400 sm:text-xl">
+              FABS
             </span>
-            <span className="mt-1 block text-[8px] font-semibold uppercase tracking-[0.3em] text-amber-600/80 sm:text-[9px]">
-              Atelier Marketplace
+            <span className="mt-1 block text-[8px] font-semibold uppercase tracking-[0.32em] text-amber-600/80 sm:text-[9px]">
+              SATTIRE
             </span>
           </div>
         </div>
@@ -167,24 +165,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {currentUser && (
-            <button
-              onClick={() => onNavigate('messages')}
-              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer relative flex items-center gap-1.5 ${
-                currentView === 'messages'
-                  ? 'text-amber-400 bg-amber-500/10 font-semibold'
-                  : 'text-neutral-400 hover:text-neutral-100'
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Messages</span>
-              {unreadCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-amber-500 text-neutral-950 font-bold text-[9px] flex items-center justify-center">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          )}
         </nav>
 
         {/* Right Utility Buttons */}
@@ -197,7 +177,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {canInstall && (
             <button
               onClick={onInstall}
-              aria-label="Install Fabrilux Atelier app"
+              aria-label="Install FabsSAttire app"
               title="Install app"
               className="hidden items-center gap-1.5 rounded-xl border border-amber-500/40 px-2.5 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-500/10 sm:flex"
             >
@@ -268,10 +248,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           onClick={() => setMobileMenuOpen(open => !open)}
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700/60 text-neutral-300 transition hover:border-amber-500/50 hover:text-amber-300 lg:hidden"
         >
-          <span className="relative">
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            {unreadCount > 0 && !mobileMenuOpen && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-[#0c0d10]" aria-label={`${unreadCount} unread messages`} />}
-          </span>
+          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
 
         {mobileMenuOpen && (
@@ -291,7 +268,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
                 {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
                 {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
-                {currentUser && <button type="button" onClick={() => navigate('messages')} className="mobile-nav-item"><MessageSquare className="h-4 w-4" />Messages {unreadCount > 0 && <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold text-neutral-950">{unreadCount}</span>}</button>}
                 {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}
               </div>
               <div className="grid grid-cols-3 gap-2 border-t border-neutral-800 pt-2">

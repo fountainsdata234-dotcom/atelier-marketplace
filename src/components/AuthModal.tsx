@@ -6,7 +6,8 @@ import { resolveLocationCoordinates, WORLD_COUNTRIES } from '../data/geoData';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import type { CountryCode } from 'libphonenumber-js';
 import { storageService } from '../services/storage';
-import { firebaseErrorMessage, loginWithEmail, loginWithGoogle, registerWithEmail, resetPassword, toAppUser, uploadUserImage } from '../services/firebase';
+import { uploadUserImage } from '../services/firebase';
+import { getAuthErrorMessage, resetAuthPassword, signInWithEmail, signInWithGoogle, signUpWithEmail } from '../services/auth';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
 
@@ -254,9 +255,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
     if (!isRegistering) {
-      const firebaseUser = await loginWithEmail(email.trim(), password);
-      const user = storageService.upsertUser(await toAppUser(firebaseUser));
-      setSuccessMsg(`Welcome back, ${user.name}! Your Fabrilux Atelier studio is ready for your next bespoke discovery.`);
+      const authUser = await signInWithEmail(email.trim(), password);
+      const savedProfile = await api.getProfile().catch(() => undefined);
+      const cachedProfile = storageService.getUsers().find(user => user.id === authUser.id);
+      const user = storageService.upsertUser({
+        id: authUser.id,
+        email: authUser.email,
+        name: authUser.name,
+        role: savedProfile?.role || cachedProfile?.role || authUser.role,
+        phone: savedProfile?.phone || cachedProfile?.phone || '',
+        countryCode: savedProfile?.countryCode || cachedProfile?.countryCode || '',
+        location: savedProfile?.location || cachedProfile?.location || { country: '', state: '', city: '' },
+        whatsappNumber: savedProfile?.whatsappNumber || cachedProfile?.whatsappNumber,
+        shopName: savedProfile?.shopName || cachedProfile?.shopName,
+        bio: savedProfile?.bio || cachedProfile?.bio || '',
+        handle: savedProfile?.handle || cachedProfile?.handle || `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+        avatarUrl: savedProfile?.avatarUrl || cachedProfile?.avatarUrl || authUser.avatarUrl,
+        isPromoted: savedProfile?.isPromoted || cachedProfile?.isPromoted || false,
+        isBlocked: savedProfile?.isBlocked || cachedProfile?.isBlocked || false,
+        followers: savedProfile?.followers || cachedProfile?.followers || [],
+        createdAt: authUser.createdAt,
+        isSuperAdmin: authUser.isSuperAdmin,
+      });
+      setSuccessMsg(`Welcome back, ${user.name}! Your FabsSAttire studio is ready for your next bespoke discovery.`);
       setTimeout(() => {
         onSuccess(user);
         onClose();
@@ -312,17 +333,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       ? (handle.startsWith('@') ? handle.trim() : `@${handle.trim()}`)
       : `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
-    const firebaseUser = await registerWithEmail(email.trim().toLowerCase(), password, name.trim());
+    const authUser = await signUpWithEmail(email.trim().toLowerCase(), password, name.trim());
     const coordinates = resolveLocationCoordinates(selectedCountry.code, currentStateObj.code || '', selectedCityName, {
       lat: selectedCountry.lat,
       lng: selectedCountry.lng,
     });
     const storedAvatarUrl = avatarFile
-      ? await uploadUserImage(avatarFile, firebaseUser.uid, 'profiles', `avatar-${Date.now()}.${fileExtension(avatarFile)}`)
-      : firebaseUser.photoURL || undefined;
+      ? await uploadUserImage(avatarFile, authUser.id, 'profiles', `avatar-${Date.now()}.${fileExtension(avatarFile)}`)
+      : authUser.avatarUrl;
     const newUser = storageService.upsertUser({
-      ...(await toAppUser(firebaseUser, role)),
+      id: authUser.id,
+      email: authUser.email,
       name: name.trim(),
+      role: authUser.isAdmin ? 'admin' : role,
       phone: parsedPhone.formatInternational(),
       countryCode: selectedCountry.dialCode,
       location: {
@@ -338,16 +361,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       handle: userHandle,
       bio: bio.trim() || undefined,
       avatarUrl: storedAvatarUrl || avatarUrl || undefined,
+      isPromoted: false,
+      isBlocked: false,
+      followers: [],
+      createdAt: authUser.createdAt,
+      isSuperAdmin: authUser.isSuperAdmin,
     });
     await api.saveProfile(newUser);
 
-    setSuccessMsg(`Welcome to Fabrilux Atelier. Your premium studio access is ready, and your tailored journey begins now.`);
+    setSuccessMsg(`Welcome to FabsSAttire. Your premium studio access is ready, and your tailored journey begins now.`);
     setTimeout(() => {
       onSuccess(newUser);
       onClose();
     }, 600);
     } catch (authError) {
-      setError(firebaseErrorMessage(authError));
+      setError(getAuthErrorMessage(authError));
     } finally {
       setIsSubmitting(false);
     }
@@ -357,17 +385,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
     setIsSubmitting(true);
     try {
-      const firebaseUser = await loginWithGoogle();
-      const baseUser = await toAppUser(firebaseUser, defaultRole as UserRole);
+      const authUser = await signInWithGoogle();
       const user = storageService.upsertUser({
-        ...baseUser,
-        avatarUrl: baseUser.avatarUrl || firebaseUser.providerData.find(provider => provider.providerId === 'google.com')?.photoURL || undefined,
+        id: authUser.id,
+        email: authUser.email,
+        name: authUser.name,
+        role: authUser.isAdmin ? 'admin' : defaultRole,
+        phone: '',
+        countryCode: '',
+        location: { country: '', state: '', city: '' },
+        handle: `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+        avatarUrl: authUser.avatarUrl,
+        isPromoted: false,
+        isBlocked: false,
+        followers: [],
+        createdAt: authUser.createdAt,
+        isSuperAdmin: authUser.isSuperAdmin,
       });
       await api.saveProfile(user);
       onSuccess(user);
       onClose();
     } catch (authError) {
-      setError(firebaseErrorMessage(authError));
+      setError(getAuthErrorMessage(authError));
     } finally {
       setIsSubmitting(false);
     }
@@ -382,10 +421,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
     setIsResettingPassword(true);
     try {
-      await resetPassword(email.trim());
+      await resetAuthPassword(email.trim());
       setSuccessMsg('Password reset email sent. Check your inbox and spam folder.');
     } catch (authError) {
-      setError(firebaseErrorMessage(authError));
+      setError(getAuthErrorMessage(authError));
     } finally {
       setIsResettingPassword(false);
     }
@@ -422,7 +461,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {role === 'admin' && <Shield className="h-6 w-6" />}
           </div>
           <h2 className="text-2xl font-serif font-bold tracking-tight sm:text-3xl">
-            {isRegistering ? 'Join the Fabrilux Atelier Network' : 'Welcome Back to Fabrilux Atelier'}
+            {isRegistering ? 'Join the FabsSAttire Network' : 'Welcome Back to FabsSAttire'}
           </h2>
           <p className={`mt-1 text-xs sm:text-sm ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             {isRegistering
