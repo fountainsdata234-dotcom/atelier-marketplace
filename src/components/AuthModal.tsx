@@ -283,7 +283,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         id: authUser.id,
         email: authUser.email,
         name: authUser.name,
-        role: cachedProfile?.role || authUser.role,
+        role: authUser.isAdmin ? 'admin' : cachedProfile?.role === 'admin' ? authUser.role : cachedProfile?.role || authUser.role,
         phone: cachedProfile?.phone || '',
         countryCode: cachedProfile?.countryCode || '',
         location: cachedProfile?.location || { country: '', state: '', city: '' },
@@ -299,7 +299,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         isSuperAdmin: authUser.isSuperAdmin,
       });
       void api.getProfile().then(savedProfile => {
-        const syncedUser = storageService.upsertUser({ ...user, ...savedProfile });
+        const syncedUser = storageService.upsertUser({
+          ...user,
+          ...savedProfile,
+          role: authUser.isAdmin ? 'admin' : savedProfile.role || user.role,
+        });
         window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: syncedUser }));
       }).catch(() => undefined);
       setSuccessMsg(`Welcome back, ${user.name}! Your FABSATTIRE studio is ready for your next bespoke discovery.`);

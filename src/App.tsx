@@ -16,6 +16,7 @@ const TailorDashboard = lazy(() => import('./components/TailorDashboard').then(m
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 const DirectMessaging = lazy(() => import('./components/DirectMessaging').then(module => ({ default: module.DirectMessaging })));
 const AuthModal = lazy(() => import('./components/AuthModal').then(module => ({ default: module.AuthModal })));
+const PasswordRecoveryModal = lazy(() => import('./components/PasswordRecoveryModal').then(module => ({ default: module.PasswordRecoveryModal })));
 import { SocialShareModal } from './components/SocialShareModal';
 import { SavePictureModal } from './components/SavePictureModal';
 import { BroadcastBanner } from './components/BroadcastBanner';
@@ -143,6 +144,7 @@ export default function App() {
 
   // Modals
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [passwordRecoveryOpen, setPasswordRecoveryOpen] = useState(false);
   const [authDefaultRole, setAuthDefaultRole] = useState<UserRole>('buyer');
 
   const [directMessageOpen, setDirectMessageOpen] = useState(false);
@@ -243,10 +245,12 @@ export default function App() {
     window.addEventListener('touchend', handlePullRefresh, { passive: true });
 
     let unsubscribeAuth: (() => void) | undefined;
-    import('./services/auth').then(({ configureAuth, subscribeToAuth }) => configureAuth().catch((error) => {
-      console.warn('Authentication configuration skipped offline or failed gracefully.', error);
-    }).finally(() => {
-      unsubscribeAuth = subscribeToAuth(async (authUser) => {
+    import('./services/auth').then(({ configureAuth, subscribeToAuth }) => {
+      unsubscribeAuth = subscribeToAuth(async (authUser, event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setPasswordRecoveryOpen(true);
+          setAuthModalOpen(false);
+        }
         if (!authUser) {
           setCurrentUser(null);
           return;
@@ -300,7 +304,10 @@ export default function App() {
         }
         void refreshAllData();
       });
-    })).catch((error) => {
+      return configureAuth().catch((error) => {
+        console.warn('Authentication configuration skipped offline or failed gracefully.', error);
+      });
+    }).catch((error) => {
       console.error('Authentication initialization failed', error);
       setIsDataLoading(false);
     });
@@ -1017,6 +1024,12 @@ export default function App() {
           onSuccess={handleAuthSuccess}
           isDarkMode={isDarkMode}
           onNavigate={setCurrentView}
+        />
+      </Suspense>}
+      {passwordRecoveryOpen && <Suspense fallback={null}>
+        <PasswordRecoveryModal
+          isDarkMode={isDarkMode}
+          onComplete={() => setPasswordRecoveryOpen(false)}
         />
       </Suspense>}
 

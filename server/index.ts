@@ -198,11 +198,11 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
 
   try {
     const profileData = await readProfile(authenticatedUser.id) || {};
-    const metadata = authenticatedUser.user_metadata || authenticatedUser.app_metadata || {};
+    const appMetadata = authenticatedUser.app_metadata || {};
     const isAdminFromProfile = profileData.role === 'admin'
       || authenticatedUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com'
-      || metadata.role === 'admin'
-      || metadata.is_admin === true
+      || appMetadata.role === 'admin'
+      || appMetadata.is_admin === true
       || (authenticatedUser as { admin?: boolean; role?: string }).admin === true
       || (authenticatedUser as { admin?: boolean; role?: string }).role === 'admin';
     req.authUser = { uid: authenticatedUser.id, email: authenticatedUser.email, admin: Boolean(isAdminFromProfile), blocked: profileData.isBlocked === true };
@@ -624,6 +624,7 @@ app.delete('/api/admin/admins/:uid', requireAuth, requireSuperAdmin, async (req:
 
 app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   const profile = buildProfileUpdate(req.body || {});
+  delete profile.isSuperAdmin;
   const profileValues = { ...profile, id: req.authUser!.uid, email: req.authUser!.email || '' };
   if (supabaseDataEnabled) {
     const saved = await upsertProfile(req.authUser!.uid, profileValues);

@@ -1,4 +1,4 @@
-import type { User as SupabaseUser } from '@supabase/supabase-js';
+import type { AuthChangeEvent, User as SupabaseUser } from '@supabase/supabase-js';
 import type { UserRole } from '../types';
 import { getSupabaseClient } from '../lib/supabase';
 
@@ -14,7 +14,7 @@ export interface AuthUser {
   provider: 'supabase';
 }
 
-export type AuthStateListener = (user: AuthUser | null) => void;
+export type AuthStateListener = (user: AuthUser | null, event: AuthChangeEvent) => void;
 
 const normalizeRole = (role: unknown): UserRole => {
   return role === 'tailor' || role === 'fabric_seller' || role === 'admin' || role === 'buyer'
@@ -25,10 +25,19 @@ const normalizeRole = (role: unknown): UserRole => {
 const normalizeSupabaseUser = (user: SupabaseUser): AuthUser => {
   const metadata = user.user_metadata ?? {};
   const appMetadata = user.app_metadata ?? {};
-  const role = normalizeRole(metadata.role ?? appMetadata.role ?? metadata.user_role);
+  const email = user.email ?? '';
+  const isSuperAdmin = email.trim().toLowerCase() === 'fountainsdata234@gmail.com'
+    || appMetadata.is_super_admin === true;
+  const isAdmin = isSuperAdmin
+    || appMetadata.role === 'admin'
+    || appMetadata.is_admin === true;
+  const metadataRole = metadata.role ?? metadata.user_role;
+  const role = isAdmin
+    ? 'admin'
+    : normalizeRole(metadataRole === 'admin' ? undefined : metadataRole ?? appMetadata.role);
   const name = typeof metadata.name === 'string'
     ? metadata.name.trim()
-    : user.email.split('@')[0] || 'Atelier Member';
+    : email.split('@')[0] || 'Atelier Member';
   const avatarUrl = typeof metadata.avatar_url === 'string'
     ? metadata.avatar_url
     : typeof metadata.picture === 'string'
@@ -37,12 +46,12 @@ const normalizeSupabaseUser = (user: SupabaseUser): AuthUser => {
 
   return {
     id: user.id,
-    email: user.email,
+    email,
     name,
     role,
     avatarUrl,
-    isAdmin: role === 'admin' || Boolean(metadata.is_admin || appMetadata.is_admin),
-    isSuperAdmin: Boolean(metadata.is_super_admin || appMetadata.is_super_admin),
+    isAdmin,
+    isSuperAdmin,
     createdAt: user.created_at,
     provider: 'supabase',
   };
@@ -63,12 +72,12 @@ export const configureAuth = async () => {
 export const subscribeToAuth = (listener: AuthStateListener) => {
   const supabase = getSupabaseClient();
   if (!supabase) {
-    listener(null);
+    listener(null, 'INITIAL_SESSION');
     return () => undefined;
   }
-  const subscription = supabase.auth.onAuthStateChange((_event, session) => {
+  const subscription = supabase.auth.onAuthStateChange((event, session) => {
     const user = session?.user;
-    listener(user ? normalizeSupabaseUser(user) : null);
+    listener(user ? normalizeSupabaseUser(user) : null, event);
   });
   return () => subscription.data.subscription.unsubscribe();
 };
@@ -121,6 +130,11 @@ export const resetAuthPassword = async (email: string) => {
   const { error } = await requireSupabase().auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/`,
   });
+  if (error) throw error;
+};
+
+export const updateAuthPassword = async (password: string) => {
+  const { error } = await requireSupabase().auth.updateUser({ password });
   if (error) throw error;
 };
 
