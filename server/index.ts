@@ -624,7 +624,15 @@ app.delete('/api/admin/admins/:uid', requireAuth, requireSuperAdmin, async (req:
 
 app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   const profile = buildProfileUpdate(req.body || {});
+  const existingProfile = await readProfile(req.authUser!.uid);
+  if (existingProfile) delete profile.role;
+  delete profile.isPromoted;
+  delete profile.isBlocked;
+  delete profile.isWarned;
+  delete profile.warningNote;
   delete profile.isSuperAdmin;
+  delete profile.addedByEmail;
+  delete profile.followers;
   const profileValues = { ...profile, id: req.authUser!.uid, email: req.authUser!.email || '' };
   if (supabaseDataEnabled) {
     const saved = await upsertProfile(req.authUser!.uid, profileValues);
