@@ -118,7 +118,9 @@ export const signInWithGoogle = async (): Promise<void> => {
 };
 
 export const resetAuthPassword = async (email: string) => {
-  const { error } = await requireSupabase().auth.resetPasswordForEmail(email);
+  const { error } = await requireSupabase().auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/`,
+  });
   if (error) throw error;
 };
 
