@@ -164,7 +164,7 @@ export default function App() {
   const [savePictureTitle, setSavePictureTitle] = useState<string | null>(null);
 
   // Only fetch market data when the user is actually on a live marketplace view.
-  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'post', 'dashboard', 'profile', 'collections', 'messages'];
+  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'post', 'dashboard', 'profile', 'collections', 'messages', 'admin'];
   const canRefreshMarketplaceData = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
 
   const navigateToView = (view: string) => {

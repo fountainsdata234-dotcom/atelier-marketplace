@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Users, UserPlus, UserX, Star, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2 } from 'lucide-react';
+import { Shield, Users, UserPlus, UserX, Star, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2, Search, X } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -29,6 +29,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
   const [deletedSellerIds, setDeletedSellerIds] = useState<string[]>([]);
+  const [sellerSearch, setSellerSearch] = useState('');
+  const [visibleSellerCount, setVisibleSellerCount] = useState(10);
 
   // Broadcast message state
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'sellers' | 'buyers'>('all');
@@ -50,6 +52,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Filtered lists
   const uniqueUsers = Array.from(new Map(users.map(user => [user.id, user])).values());
   const moderatableUsers = uniqueUsers.filter(u => (u.role === 'tailor' || u.role === 'fabric_seller') && !deletedSellerIds.includes(u.id));
+  const sellerSearchTerm = sellerSearch.trim().toLowerCase();
+  const filteredModeratableUsers = sellerSearchTerm
+    ? moderatableUsers.filter(user => [
+        user.name,
+        user.shopName,
+        user.handle,
+        user.email,
+        user.role.replace('_', ' '),
+        user.location.city,
+        user.location.state,
+        user.location.country,
+        user.phone,
+        user.whatsappNumber,
+        user.bio,
+      ].some(value => value?.toLowerCase().includes(sellerSearchTerm)))
+    : moderatableUsers;
+  const visibleModeratableUsers = filteredModeratableUsers.slice(0, visibleSellerCount);
   const tailors = uniqueUsers.filter(u => u.role === 'tailor');
   const fabricSellers = uniqueUsers.filter(u => u.role === 'fabric_seller');
   const customers = uniqueUsers.filter(u => u.role === 'buyer');
@@ -344,12 +363,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <section className={`p-6 rounded-3xl border transition-colors ${
           isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'
         }`}>
-          <div className="flex items-center justify-between mb-6">
+          <div className="mb-5 flex flex-col gap-4">
             <div>
               <h2 className="text-xl font-serif font-bold">Registered Tailors & Fabric Sellers</h2>
               <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
                 Contact sellers on WhatsApp, warn, promote, or block users. Posts can be removed from the Posts tab.
               </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <label className="relative block min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-400" />
+                <input
+                  type="search"
+                  value={sellerSearch}
+                  onChange={event => {
+                    setSellerSearch(event.target.value);
+                    setVisibleSellerCount(10);
+                  }}
+                  placeholder="Search sellers by name, shop, role, location, phone, or email..."
+                  aria-label="Search registered tailors and fabric sellers"
+                  className={`w-full rounded-xl border py-3 pl-10 pr-10 text-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 ${
+                    isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white placeholder-neutral-500' : 'border-neutral-300 bg-white text-neutral-900 placeholder-neutral-400'
+                  }`}
+                />
+                {sellerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSellerSearch('');
+                      setVisibleSellerCount(10);
+                    }}
+                    aria-label="Clear seller search"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-neutral-400 hover:text-amber-400"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </label>
+              <span className="shrink-0 text-xs text-neutral-400" aria-live="polite">
+                {sellerSearchTerm
+                  ? `${filteredModeratableUsers.length} result${filteredModeratableUsers.length === 1 ? '' : 's'}`
+                  : `${moderatableUsers.length} sellers`}
+              </span>
             </div>
           </div>
 
@@ -357,9 +412,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="p-8 text-center text-xs text-neutral-400">
               No marketplace users registered yet.
             </div>
+          ) : filteredModeratableUsers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-neutral-700 p-8 text-center text-sm text-neutral-400">
+              No sellers match “{sellerSearch.trim()}”. Try a name, role, or location.
+            </div>
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {moderatableUsers.map((tailor) => (
+            <>
+              <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-y-auto overscroll-contain pr-1 xl:grid-cols-2">
+              {visibleModeratableUsers.map((tailor) => (
                 <div
                   key={tailor.id}
                   className={`rounded-2xl border p-4 space-y-3 transition-all ${
@@ -443,7 +503,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+              {visibleSellerCount < filteredModeratableUsers.length && (
+                <div className="mt-5 flex flex-col items-center gap-2">
+                  <p className="text-xs text-neutral-400">
+                    Showing {visibleModeratableUsers.length} of {filteredModeratableUsers.length} sellers
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleSellerCount(count => count + 10)}
+                    className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500 hover:text-neutral-950"
+                  >
+                    Load 10 more sellers
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
