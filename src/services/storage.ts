@@ -353,16 +353,28 @@ export const storageService = {
   },
 
   deleteUser(id: string): void {
-    this.saveUsers(this.getUsers().filter(user => user.id !== id));
+    const deletingCurrentUser = this.getCurrentUser()?.id === id;
+    const deletedPostIds = new Set(this.getPosts().filter(post => post.authorId === id).map(post => post.id));
+    this.saveUsers(this.getUsers()
+      .filter(user => user.id !== id)
+      .map(user => ({
+        ...user,
+        followers: Array.isArray(user.followers) ? user.followers.filter(followerId => followerId !== id) : [],
+      })));
     this.savePosts(this.getPosts().filter(post => post.authorId !== id));
     const collections = this.getSellerCollections().filter(collection => collection.sellerId !== id);
     localStorage.setItem(STORAGE_KEYS.SELLER_COLLECTIONS, JSON.stringify(collections));
+    if (deletedPostIds.size > 0) {
+      this.saveSavedPhotos(this.getSavedPhotos().filter(photo => !photo.postId || !deletedPostIds.has(photo.postId)));
+    }
     const messages = this.getAllMessages().filter(message => message.senderId !== id && message.recipientId !== id);
     localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
     const requests = this.getFabricRequests().filter(request => request.buyerId !== id && request.sellerId !== id);
     localStorage.setItem(STORAGE_KEYS.FABRIC_REQUESTS, JSON.stringify(requests));
     const discoveryEvents = this.getDiscoveryEvents().filter(event => event.userId !== id);
     localStorage.setItem(STORAGE_KEYS.DISCOVERY_EVENTS, JSON.stringify(discoveryEvents));
+    const notifications = this.getNotifications().filter(notification => notification.userId !== id);
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
     const searchHistory = localStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
     if (searchHistory) {
       try {
@@ -373,10 +385,14 @@ export const storageService = {
         localStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
       }
     }
-    localStorage.removeItem(STORAGE_KEYS.SAVED_PHOTOS);
-    localStorage.removeItem(STORAGE_KEYS.COLLECTION_PACKAGES);
+    if (deletingCurrentUser) {
+      localStorage.removeItem(STORAGE_KEYS.SAVED_PHOTOS);
+      localStorage.removeItem(STORAGE_KEYS.COLLECTION_PACKAGES);
+    }
     window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
     window.dispatchEvent(new CustomEvent('atelier_collections_updated'));
+    window.dispatchEvent(new CustomEvent('atelier_saved_photos_updated'));
+    window.dispatchEvent(new CustomEvent('atelier_notifications_updated'));
   },
 
   addSecondaryAdmin(email: string): { success: boolean; message: string; user?: User } {
@@ -491,6 +507,12 @@ export const storageService = {
     } catch {
       return [];
     }
+  },
+
+  replaceSellerCollections(sellerId: string, sellerCollections: SellerCollection[]): void {
+    const otherCollections = this.getSellerCollections().filter(collection => collection.sellerId !== sellerId);
+    localStorage.setItem(STORAGE_KEYS.SELLER_COLLECTIONS, JSON.stringify([...sellerCollections, ...otherCollections]));
+    window.dispatchEvent(new CustomEvent('atelier_collections_updated'));
   },
 
   saveSellerCollection(collection: Omit<SellerCollection, 'id' | 'createdAt'>): SellerCollection {

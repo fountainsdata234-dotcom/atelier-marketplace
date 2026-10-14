@@ -42,6 +42,15 @@ create table if not exists public.posts (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.seller_collections (
+  id uuid primary key default gen_random_uuid(),
+  seller_id uuid not null references public.profiles(id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  image_urls text[] not null default array[]::text[],
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.post_likes (
   post_id uuid not null references public.posts(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -118,7 +127,7 @@ create table if not exists public.notifications (
 
 create table if not exists public.discovery_events (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references public.profiles(id) on delete set null,
+  user_id uuid references public.profiles(id) on delete cascade,
   item_id text not null,
   event_type text not null check (event_type in ('VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'ADD_TO_CART', 'PURCHASE', 'RATING')),
   timestamp timestamptz not null default now(),
@@ -173,6 +182,7 @@ alter table public.notifications enable row level security;
 alter table public.discovery_events enable row level security;
 alter table public.push_tokens enable row level security;
 alter table public.settings enable row level security;
+alter table public.seller_collections enable row level security;
 
 create or replace function public.handles_profile_insert()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -207,6 +217,25 @@ create policy "Profiles can be updated by owner or admin"
 
 create policy "Profiles are deletable only by admin"
   on public.profiles for delete using (public.is_admin());
+
+create policy "Seller collections are publicly readable"
+  on public.seller_collections for select using (true);
+
+create policy "Sellers can create their own collections"
+  on public.seller_collections for insert
+  with check (seller_id = auth.uid() and exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role in ('tailor', 'fabric_seller') and not is_blocked
+  ));
+
+create policy "Sellers can update their own collections"
+  on public.seller_collections for update
+  using (seller_id = auth.uid() or public.is_admin())
+  with check (seller_id = auth.uid() or public.is_admin());
+
+create policy "Sellers can delete their own collections"
+  on public.seller_collections for delete
+  using (seller_id = auth.uid() or public.is_admin());
 
 create policy "Posts are publicly readable and not blocked"
   on public.posts for select using (not is_blocked and not exists (

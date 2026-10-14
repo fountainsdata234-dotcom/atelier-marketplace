@@ -1,4 +1,4 @@
-import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, User, DiscoveryEvent, DiscoveryEventType } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, DiscoveryEvent, DiscoveryEventType } from '../types';
 
 import { getAuthToken } from './auth';
 
@@ -56,6 +56,8 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
 export const api = {
   getUsers: () => request<User[]>('/api/users'),
   getProfile: () => request<Partial<User>>('/api/profile'),
+  getSellerCollections: () => request<SellerCollection[]>('/api/seller-collections'),
+  saveSellerCollection: (collection: Pick<SellerCollection, 'title' | 'description' | 'imageUrls'>) => request<SellerCollection>('/api/seller-collections', { method: 'POST', body: JSON.stringify(collection) }),
   getPromoPlans: () => request<AdminPromoPlan[]>('/api/promo-plans'),
   savePromoPlans: (plans: AdminPromoPlan[]) => request<AdminPromoPlan[]>('/api/promo-plans', { method: 'PUT', body: JSON.stringify({ plans }) }),
   toggleFollow: (userId: string) => request<{ followers: string[]; isFollowing: boolean }>(`/api/users/${userId}/follow`, { method: 'POST' }),

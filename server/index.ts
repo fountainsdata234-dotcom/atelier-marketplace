@@ -19,6 +19,8 @@ import {
   createNotifications,
   createPost,
   createPostWithUser,
+  createSellerCollection,
+  deleteUserUploads,
   deleteMessage,
   deletePost,
   getDiscoveryEvents,
@@ -32,6 +34,8 @@ import {
   getProfileByEmail,
   getPromoPlans,
   getPromoPlansData,
+  getSellerCollections,
+  removeUserFromFollowers,
   getUsers,
   listProfiles,
   markMessagesRead,
@@ -124,6 +128,17 @@ let usersCache: { expiresAt: number; value: unknown } | null = null;
 function invalidatePublicCaches() {
   postsCache = null;
   usersCache = null;
+}
+
+async function deleteSupabaseAccount(uid: string) {
+  await removeUserFromFollowers(uid);
+  await deleteUserUploads(uid);
+  const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: { persistSession: false },
+  });
+  const { error } = await supabase.auth.admin.deleteUser(uid);
+  if (error && error.code !== 'user_not_found') throw error;
+  invalidatePublicCaches();
 }
 
 async function readProfile(uid: string) {
@@ -356,6 +371,68 @@ app.post('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest, r
     console.error('Push subscription registration failed.', error);
     res.status(503).json({ error: 'Push alerts could not be enabled on this device.' });
   }
+});
+
+app.get('/api/seller-collections', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  if (supabaseDataEnabled) {
+    res.json(snakeToCamel(await getSellerCollections(req.authUser!.uid)));
+    return;
+  }
+  const snapshot = await firestore.collection('profiles').doc(req.authUser!.uid)
+    .collection('sellerCollections').orderBy('createdAt', 'desc').limit(50).get();
+  res.json(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) })));
+});
+
+app.post('/api/seller-collections', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const profile = await readProfile(req.authUser!.uid);
+  if (profile?.role !== 'tailor' && profile?.role !== 'fabric_seller') {
+    res.status(403).json({ error: 'Only tailor and fabric seller accounts can publish collections.' });
+    return;
+  }
+  if (profile.isBlocked === true) {
+    res.status(403).json({ error: 'Blocked seller accounts cannot publish collections.' });
+    return;
+  }
+
+  const title = typeof req.body?.title === 'string' ? req.body.title.trim().slice(0, 120) : '';
+  const description = typeof req.body?.description === 'string' ? req.body.description.trim().slice(0, 1000) : '';
+  const imageUrls = Array.isArray(req.body?.imageUrls)
+    ? req.body.imageUrls.filter((value: unknown): value is string => typeof value === 'string' && /^https:\/\//i.test(value)).slice(0, 12)
+    : [];
+  if (!title || imageUrls.length === 0) {
+    res.status(400).json({ error: 'A collection title and at least one valid HTTPS image URL are required.' });
+    return;
+  }
+
+  const existingCollections = supabaseDataEnabled
+    ? await getSellerCollections(req.authUser!.uid)
+    : (await firestore.collection('profiles').doc(req.authUser!.uid).collection('sellerCollections').get()).docs;
+  const collectionLimit = profile.isPromoted === true ? 50 : 3;
+  if (existingCollections.length >= collectionLimit) {
+    res.status(403).json({ error: `Your account has reached its ${collectionLimit}-collection limit.` });
+    return;
+  }
+
+  if (supabaseDataEnabled) {
+    const collection = await createSellerCollection(req.authUser!.uid, {
+      title,
+      description,
+      imageUrls,
+    });
+    res.status(201).json(snakeToCamel(collection));
+    return;
+  }
+
+  const collection = await firestore.collection('profiles').doc(req.authUser!.uid)
+    .collection('sellerCollections').add({
+      sellerId: req.authUser!.uid,
+      title,
+      description,
+      imageUrls,
+      createdAt: new Date().toISOString(),
+    });
+  const saved = await collection.get();
+  res.status(201).json({ id: saved.id, ...(saved.data() as Record<string, unknown>) });
 });
 
 app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -713,10 +790,7 @@ app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
 app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   const uid = req.authUser!.uid;
   if (supabaseDataEnabled) {
-    const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
-    const { error } = await supabase.auth.admin.deleteUser(uid);
-    if (error && error.code !== 'user_not_found') throw error;
-    invalidatePublicCaches();
+    await deleteSupabaseAccount(uid);
     res.status(204).send();
     return;
   }
@@ -1482,10 +1556,7 @@ app.delete('/api/admin/sellers/:uid', requireAuth, requireAdmin, async (req: Aut
       res.status(403).json({ error: 'Only tailor and fabric seller accounts can be deleted here.' });
       return;
     }
-    const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
-    const { error } = await supabase.auth.admin.deleteUser(uid);
-    if (error) throw error;
-    invalidatePublicCaches();
+    await deleteSupabaseAccount(uid);
     res.status(204).send();
     return;
   }

@@ -42,6 +42,7 @@ It is especially useful for communities where shoppers want to:
 2. Copy [.env.example](.env.example) to `.env.local` and set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`.
 3. Run `supabase/schema.sql` and then `supabase/storage.sql` in the Supabase SQL editor. Keep the service-role key server-only.
    For an existing Supabase project, also run `supabase/migrations/20261013_admin_role_policy.sql` to prevent users from granting themselves administrator privileges through profile updates.
+   Run `supabase/migrations/20261014_seller_data_cleanup.sql` as well to persist seller collections and cascade-delete seller data.
 4. Start the backend:
    `npm run server`
 5. Start the frontend in another terminal:

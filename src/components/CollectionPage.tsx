@@ -3,6 +3,7 @@ import { Bookmark, Download, Image as ImageIcon, Trash2, Sparkles, ShieldAlert, 
 import { SavedPhoto, SellerCollection, User } from '../types';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/firebase';
+import { api } from '../services/api';
 
 interface CollectionUploadItem {
   id: string;
@@ -35,6 +36,39 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
     setSavedPhotos(storageService.getSavedPhotos());
     setSellerCollections(storageService.getSellerCollections(currentUser?.id));
     setCollectionState(storageService.getCollectionPackageState());
+    let isActive = true;
+
+    if (currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller')) {
+      void api.getSellerCollections().then(collections => {
+        if (!isActive) return;
+        const localCollections = storageService.getSellerCollections(currentUser.id);
+        const collectionKey = (collection: SellerCollection) => JSON.stringify([
+          collection.title.trim(),
+          collection.description.trim(),
+          collection.imageUrls,
+        ]);
+        const knownCollections = new Set(collections.map(collectionKey));
+        const unsyncedCollections = localCollections.filter(collection => !knownCollections.has(collectionKey(collection)));
+        void (async () => {
+          const syncedCollections = [...collections];
+          for (const collection of unsyncedCollections) {
+            const saved = await api.saveSellerCollection({
+              title: collection.title,
+              description: collection.description,
+              imageUrls: collection.imageUrls,
+            });
+            syncedCollections.push(saved);
+          }
+          if (!isActive) return;
+          storageService.replaceSellerCollections(currentUser.id, syncedCollections);
+          setSellerCollections(syncedCollections);
+        })().catch(error => {
+          console.warn('Legacy seller collections could not be migrated.', error);
+        });
+      }).catch(error => {
+        console.warn('Seller collections could not be refreshed.', error);
+      });
+    }
 
     const handleSavedPhotosUpdate = () => {
       setSavedPhotos(storageService.getSavedPhotos());
@@ -44,6 +78,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
     window.addEventListener('atelier_saved_photos_updated', handleSavedPhotosUpdate);
     window.addEventListener('atelier_collections_updated', handleCollectionsUpdate);
     return () => {
+      isActive = false;
       window.removeEventListener('atelier_saved_photos_updated', handleSavedPhotosUpdate);
       window.removeEventListener('atelier_collections_updated', handleCollectionsUpdate);
     };
@@ -137,7 +172,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
     setCollectionStatus((current) => current || 'Collection photos are ready to publish.');
   };
 
-  const createSellerCollection = (event: React.FormEvent) => {
+  const createSellerCollection = async (event: React.FormEvent) => {
     event.preventDefault();
     const uploadedUrls = uploadQueue.filter((item) => item.status === 'done' && item.url).map((item) => item.url as string);
     const imageUrls = Array.from(new Set([...collectionImages.map((image) => image.trim()).filter(Boolean), ...uploadedUrls]));
@@ -149,13 +184,26 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
       setCollectionStatus(currentUser.isPromoted ? 'You have reached the 50-collection promoted limit.' : 'Promoted access unlocks up to 50 collections without the ad-supported limit.');
       return;
     }
-    storageService.saveSellerCollection({ sellerId: currentUser.id, title: collectionTitle.trim(), description: collectionDescription.trim(), imageUrls });
-    setSellerCollections(storageService.getSellerCollections(currentUser.id));
-    setCollectionTitle('');
-    setCollectionDescription('');
-    setCollectionImages(['']);
-    setUploadQueue([]);
-    setCollectionStatus('Collection published to your storefront.');
+    try {
+      const savedCollection = await api.saveSellerCollection({
+        title: collectionTitle.trim(),
+        description: collectionDescription.trim(),
+        imageUrls,
+      });
+      const currentCollections = storageService.getSellerCollections(currentUser.id);
+      storageService.replaceSellerCollections(currentUser.id, [
+        savedCollection,
+        ...currentCollections.filter(collection => collection.id !== savedCollection.id),
+      ]);
+      setSellerCollections(storageService.getSellerCollections(currentUser.id));
+      setCollectionTitle('');
+      setCollectionDescription('');
+      setCollectionImages(['']);
+      setUploadQueue([]);
+      setCollectionStatus('Collection published to your storefront.');
+    } catch (error) {
+      setCollectionStatus(error instanceof Error ? error.message : 'The collection could not be published.');
+    }
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {

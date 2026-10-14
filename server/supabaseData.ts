@@ -75,6 +75,61 @@ export async function updateProfile(uid: string, values: ProfileRecord): Promise
   return data;
 }
 
+export async function getSellerCollections(userId: string): Promise<ProfileRecord[]> {
+  const { data, error } = await requireClient()
+    .from('seller_collections')
+    .select('*')
+    .eq('seller_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw normalizeError(error);
+  return data || [];
+}
+
+export async function removeUserFromFollowers(userId: string): Promise<void> {
+  const supabase = requireClient();
+  const affectedProfiles: Array<{ id: string; followers: string[] }> = [];
+  const pageSize = 500;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, followers')
+      .contains('followers', [userId])
+      .range(offset, offset + pageSize - 1);
+    if (error) throw normalizeError(error);
+    if (!data?.length) break;
+
+    affectedProfiles.push(...data.map(profile => ({
+      id: String(profile.id),
+      followers: Array.isArray(profile.followers)
+        ? profile.followers.filter((followerId: unknown): followerId is string => typeof followerId === 'string')
+        : [],
+    })));
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  for (let index = 0; index < affectedProfiles.length; index += 50) {
+    const { error } = await Promise.all(affectedProfiles.slice(index, index + 50).map(profile =>
+      supabase.from('profiles')
+        .update({ followers: profile.followers.filter(followerId => followerId !== userId) })
+        .eq('id', profile.id)
+    )).then(results => ({ error: results.find(result => result.error)?.error }));
+    if (error) throw normalizeError(error);
+  }
+}
+
+export async function createSellerCollection(userId: string, values: ProfileRecord): Promise<ProfileRecord> {
+  const { data, error } = await requireClient()
+    .from('seller_collections')
+    .insert({ ...toDatabaseRecord(values), seller_id: userId })
+    .select('*')
+    .single();
+  if (error) throw normalizeError(error);
+  return data;
+}
+
 export async function updateAuthorPromotion(uid: string, isPromoted: boolean): Promise<void> {
   const { error } = await requireClient().from('posts').update({ is_promoted: isPromoted, updated_at: new Date().toISOString() }).eq('author_id', uid);
   if (error) throw normalizeError(error);
@@ -258,6 +313,34 @@ export async function uploadImage(userId: string, folder: string, fileName: stri
   if (error) throw normalizeError(error);
   const { data } = storage.from('uploads').getPublicUrl(path);
   return { url: data.publicUrl, path };
+}
+
+export async function deleteUserUploads(userId: string): Promise<void> {
+  const storage = requireClient().storage.from('uploads');
+  const pendingFolders = ['profiles', 'posts', 'atelier'].map(folder => `${folder}/${userId}`);
+
+  while (pendingFolders.length > 0) {
+    const folder = pendingFolders.pop()!;
+    let offset = 0;
+    const pageSize = 1000;
+    const files: string[] = [];
+
+    while (true) {
+      const { data, error } = await storage.list(folder, { limit: pageSize, offset });
+      if (error) throw normalizeError(error);
+      if (!data?.length) break;
+
+      files.push(...data.filter(item => item.id).map(item => `${folder}/${item.name}`));
+      pendingFolders.push(...data.filter(item => !item.id).map(item => `${folder}/${item.name}`));
+      if (data.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    for (let index = 0; index < files.length; index += 100) {
+      const { error } = await storage.remove(files.slice(index, index + 100));
+      if (error) throw normalizeError(error);
+    }
+  }
 }
 
 export async function getPromoPlans(): Promise<ProfileRecord[]> {
