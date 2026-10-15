@@ -17,6 +17,62 @@ export interface PricingBreakdown {
   bespokeComplexity: number;
 }
 
+export type ListingType = 'CLOTHING' | 'FABRIC' | 'TAILOR_PORTFOLIO';
+export type ListingStatus = 'draft' | 'pending_review' | 'published' | 'rejected' | 'paused' | 'sold_out' | 'archived';
+export type ListingModerationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ListingImageAsset {
+  url: string;
+  thumbnailUrl?: string;
+  width?: number;
+  height?: number;
+  mimeType?: string;
+}
+
+export interface FabricListingDetails {
+  material?: string;
+  colour?: string;
+  pattern?: string;
+  width?: number;
+  widthUnit?: 'cm' | 'in';
+  priceUnit?: 'yard' | 'metre' | 'piece' | 'roll';
+  minimumOrder?: number;
+}
+
+export interface ClothingListingDetails {
+  garmentType?: string;
+  gender?: string;
+  sizes?: string[];
+  customizationOptions?: string[];
+  leadTimeDays?: number;
+  fulfilment?: 'ready_made' | 'made_to_order';
+}
+
+export interface Listing {
+  id: string;
+  sellerId?: string;
+  listingType?: ListingType;
+  title: string;
+  description: string;
+  categoryId?: string;
+  tags: string[];
+  priceMin?: number | null;
+  priceMax?: number | null;
+  currency?: string;
+  location?: UserLocation;
+  imageAssets?: ListingImageAsset[];
+  status?: ListingStatus;
+  createdAt: string;
+  updatedAt?: string;
+  publishedAt?: string | null;
+  stockQuantity?: number | null;
+  availability?: 'available' | 'made_to_order' | 'limited' | 'unavailable';
+  moderationStatus?: ListingModerationStatus;
+  moderationNote?: string;
+  listingDetails?: FabricListingDetails | ClothingListingDetails;
+  deletedAt?: string | null;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -58,8 +114,7 @@ export interface SellerCollection {
   createdAt: string;
 }
 
-export interface ClothPost {
-  id: string;
+export interface ClothPost extends Listing {
   authorId: string;
   authorName: string;
   authorRole: 'tailor' | 'fabric_seller';
@@ -68,9 +123,6 @@ export interface ClothPost {
   authorLocation: UserLocation;
   authorWhatsapp?: string;
   isPromoted: boolean;
-  title: string;
-  description: string;
-  tags: string[];
   pricing: PricingBreakdown;
   imageUrl: string;
   imageAlt?: string;
@@ -80,7 +132,18 @@ export interface ClothPost {
   rating?: number;
   ratingCount?: number;
   ratingsByUser?: Record<string, number>;
-  createdAt: string; 
+}
+
+export interface ListingReport {
+  id: string;
+  listingId: string;
+  reporterId: string;
+  reason: string;
+  details: string;
+  status: 'open' | 'reviewed' | 'dismissed';
+  createdAt: string;
+  listing?: { title?: string };
+  reporter?: { name?: string; email?: string };
 }
 
 export type DiscoveryEventType = 'VIEW' | 'LIKE' | 'SAVE' | 'SHARE' | 'ENQUIRY' | 'ADD_TO_CART' | 'PURCHASE' | 'RATING';
@@ -181,4 +244,3 @@ export interface CountryGeo {
   lat: number;
   lng: number;
 }
-

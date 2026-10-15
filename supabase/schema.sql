@@ -36,10 +36,52 @@ create table if not exists public.posts (
   image_alt text not null default '',
   tags text[] not null default array[]::text[],
   pricing jsonb not null default '{}'::jsonb,
+  listing_type text not null default 'CLOTHING' check (listing_type in ('CLOTHING', 'FABRIC', 'TAILOR_PORTFOLIO')),
+  category_id text,
+  currency text not null default 'USD',
+  location jsonb not null default '{}'::jsonb,
+  image_assets jsonb not null default '[]'::jsonb,
+  status text not null default 'draft' check (status in ('draft', 'pending_review', 'published', 'rejected', 'paused', 'sold_out', 'archived')),
+  published_at timestamptz,
+  stock_quantity numeric(18, 3) check (stock_quantity is null or stock_quantity >= 0),
+  availability text not null default 'available' check (availability in ('available', 'made_to_order', 'limited', 'unavailable')),
+  moderation_status text not null default 'pending' check (moderation_status in ('pending', 'approved', 'rejected')),
+  moderation_note text not null default '',
+  listing_details jsonb not null default '{}'::jsonb,
+  price_min numeric(18, 2) check (price_min is null or price_min >= 0),
+  price_max numeric(18, 2) check (price_max is null or price_max >= 0),
+  deleted_at timestamptz,
+  search_document tsvector generated always as (
+    setweight(to_tsvector('simple', coalesce(title, '')), 'A')
+    || setweight(to_tsvector('simple', coalesce(description, '')), 'B')
+    || setweight(to_tsvector('simple', coalesce(array_to_string(tags, ' '), '')), 'C')
+    || to_tsvector('simple', coalesce(category_id, '') || ' ' || coalesce(listing_type, '') || ' ' || coalesce(listing_details::text, ''))
+  ) stored,
   is_promoted boolean not null default false,
   is_blocked boolean not null default false,
+  check (price_max is null or price_min is null or price_max >= price_min),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table if not exists public.listing_changes (
+  id bigint generated always as identity primary key,
+  listing_id uuid not null references public.posts(id) on delete cascade,
+  actor_id uuid references public.profiles(id) on delete set null,
+  action text not null,
+  changes jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.listing_reports (
+  id uuid primary key default gen_random_uuid(),
+  listing_id uuid not null references public.posts(id) on delete cascade,
+  reporter_id uuid not null references public.profiles(id) on delete cascade,
+  reason text not null,
+  details text not null default '',
+  status text not null default 'open' check (status in ('open', 'reviewed', 'dismissed')),
+  created_at timestamptz not null default now(),
+  unique (listing_id, reporter_id)
 );
 
 create table if not exists public.seller_collections (
@@ -173,6 +215,8 @@ $$;
 
 alter table public.profiles enable row level security;
 alter table public.posts enable row level security;
+alter table public.listing_changes enable row level security;
+alter table public.listing_reports enable row level security;
 alter table public.post_likes enable row level security;
 alter table public.post_saves enable row level security;
 alter table public.ratings enable row level security;
@@ -237,24 +281,14 @@ create policy "Sellers can delete their own collections"
   on public.seller_collections for delete
   using (seller_id = auth.uid() or public.is_admin());
 
-create policy "Posts are publicly readable and not blocked"
-  on public.posts for select using (not is_blocked and not exists (
+create policy "Published listings are publicly readable"
+  on public.posts for select using (
+    status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and not is_blocked and not exists (
     select 1 from public.profiles p where p.id = posts.author_id and p.is_blocked
   ));
 
-create policy "Seller-owned posts are insertable"
-  on public.posts for insert with check (
-    author_id = auth.uid() and exists (
-      select 1 from public.profiles p where p.id = auth.uid() and p.role in ('tailor', 'fabric_seller') and not p.is_blocked
-    ) and not public.is_admin()
-  );
-
-create policy "Posts can be edited by owner or admin"
-  on public.posts for update using (author_id = auth.uid() or public.is_admin())
-  with check (author_id = auth.uid() or public.is_admin());
-
-create policy "Posts can be deleted by owner or admin"
-  on public.posts for delete using (author_id = auth.uid() or public.is_admin());
+create policy "Listings are mutated through the authorized API"
+  on public.posts for all using (false) with check (false);
 
 create policy "Likes are owned by the authenticated user"
   on public.post_likes for all using (user_id = auth.uid()) with check (user_id = auth.uid());
@@ -315,6 +349,11 @@ create policy "Settings are writable by admin"
 
 create index if not exists posts_author_created_idx on public.posts(author_id, created_at desc);
 create index if not exists posts_created_idx on public.posts(created_at desc);
+create index if not exists posts_listing_feed_idx on public.posts (published_at desc)
+  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and not is_blocked;
+create index if not exists posts_search_document_idx on public.posts using gin (search_document);
+create index if not exists posts_owner_status_idx on public.posts (author_id, updated_at desc) where deleted_at is null;
+create index if not exists listing_reports_open_idx on public.listing_reports (created_at desc) where status = 'open';
 create index if not exists messages_sender_idx on public.messages(sender_id, timestamp);
 create index if not exists messages_recipient_idx on public.messages(recipient_id, timestamp);
 create index if not exists fabric_requests_buyer_idx on public.fabric_requests(buyer_id, created_at desc);

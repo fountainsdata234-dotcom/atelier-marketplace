@@ -8,7 +8,6 @@ import { FieldValue } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
 import multer from 'multer';
 import sharp from 'sharp';
-import { v2 as cloudinary } from 'cloudinary';
 import { adminAuth, firebaseAdminEnabled, firestore } from './firebaseAdmin.js';
 import type { UserRole } from '../src/types.js';
 import {
@@ -17,12 +16,13 @@ import {
   createFabricRequest,
   createMessage,
   createNotifications,
-  createPost,
   createPostWithUser,
   createSellerCollection,
+  createListingReport,
   deleteUserUploads,
   deleteMessage,
-  deletePost,
+  getListingsForModeration,
+  getListingReports,
   getDiscoveryEvents,
   getFabricRequests,
   getMessages,
@@ -30,6 +30,7 @@ import {
   getPost,
   getPostInteractions,
   getPosts,
+  getSellerListings,
   getProfile,
   getProfileByEmail,
   getPromoPlans,
@@ -41,6 +42,7 @@ import {
   markMessagesRead,
   markNotificationsRead,
   removePushToken,
+  recordListingChange,
   savePromoPlans,
   toggleFollow,
   savePushToken,
@@ -48,6 +50,9 @@ import {
   supabaseDataEnabled,
   toggleLike,
   toggleSave,
+  softDeleteListing,
+  updateListing,
+  updateListingReport,
   updateFabricRequest,
   updateAuthorPromotion,
   uploadImage,
@@ -83,12 +88,6 @@ function isLocalNetworkOrigin(origin: string) {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
-});
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 app.use(cors({
@@ -246,7 +245,7 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
       name: typeof name === 'string' ? name.trim().slice(0, 120) : undefined,
       avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : undefined,
       admin: Boolean(isAdminFromProfile),
-      blocked: profileData.isBlocked === true,
+      blocked: profileData.isBlocked === true || profileData.is_blocked === true,
     };
     next();
   } catch (error) {
@@ -287,6 +286,159 @@ function snakeToCamel<T>(value: T): T {
     key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase()),
     snakeToCamel(entry),
   ])) as T;
+}
+
+function listingText(value: unknown, limit: number): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').replace(/<[^>]*>/g, '').trim().slice(0, limit);
+}
+
+function isOwnedListingAsset(value: unknown, userId: string): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    const projectUrl = new URL(process.env.SUPABASE_URL!);
+    return (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)))
+      && url.origin === projectUrl.origin
+      && url.pathname.startsWith(`/storage/v1/object/public/uploads/posts/${userId}/`);
+  } catch {
+    return false;
+  }
+}
+
+function validateListingInput(input: Record<string, unknown>, userId: string, profile: Record<string, unknown>, unchangedLegacyImageUrl?: string) {
+  const role = profile.role;
+  const listingType = input.listingType;
+  if (listingType !== 'CLOTHING' && listingType !== 'FABRIC' && listingType !== 'TAILOR_PORTFOLIO') {
+    return { error: 'Choose a valid listing type.' };
+  }
+  if ((role === 'fabric_seller' && listingType !== 'FABRIC')
+    || (role === 'tailor' && listingType === 'FABRIC')
+    || (role !== 'tailor' && role !== 'fabric_seller')) {
+    return { error: 'This listing type is not available for your seller account.' };
+  }
+
+  const title = listingText(input.title, 160);
+  const description = listingText(input.description, 3000);
+  if (title.length < 3 || description.length < 10) return { error: 'Enter a title of at least 3 characters and a description of at least 10 characters.' };
+
+  if (Array.isArray(input.imageAssets) && input.imageAssets.length > 8) return { error: 'A listing can include up to 8 images.' };
+  const rawAssets = Array.isArray(input.imageAssets) ? input.imageAssets : [];
+  const imageAssets: Array<Record<string, unknown>> = [];
+  for (const entry of rawAssets) {
+    if (!entry || typeof entry !== 'object') return { error: 'Listing images must be uploaded through the secure image uploader.' };
+    const asset = entry as Record<string, unknown>;
+    const unchangedLegacyAsset = rawAssets.length === 1 && asset.url === unchangedLegacyImageUrl;
+    if ((!isOwnedListingAsset(asset.url, userId) && !unchangedLegacyAsset)
+      || (asset.thumbnailUrl !== undefined && !isOwnedListingAsset(asset.thumbnailUrl, userId))) {
+      return { error: 'Use images uploaded to your seller account through the secure image uploader.' };
+    }
+    imageAssets.push({
+      url: asset.url,
+      ...(typeof asset.thumbnailUrl === 'string' ? { thumbnailUrl: asset.thumbnailUrl } : {}),
+      ...(Number.isInteger(asset.width) && Number(asset.width) > 0 ? { width: Number(asset.width) } : {}),
+      ...(Number.isInteger(asset.height) && Number(asset.height) > 0 ? { height: Number(asset.height) } : {}),
+      mimeType: 'image/jpeg',
+    });
+  }
+  const imageUrl = typeof input.imageUrl === 'string' && (isOwnedListingAsset(input.imageUrl, userId) || input.imageUrl === unchangedLegacyImageUrl)
+    ? input.imageUrl
+    : imageAssets[0]?.url;
+  if (imageAssets.length === 0 && unchangedLegacyImageUrl && imageUrl === unchangedLegacyImageUrl) imageAssets.push({ url: unchangedLegacyImageUrl });
+  if (!imageUrl || imageAssets.length === 0) return { error: 'Upload at least one listing image.' };
+  if (!imageAssets.some(asset => asset.url === imageUrl)) return { error: 'The primary image must be one of the uploaded listing images.' };
+
+  const currency = typeof input.currency === 'string' ? input.currency.trim().toUpperCase() : '';
+  if (!/^[A-Z]{3}$/.test(currency)) return { error: 'Enter a valid three-letter currency code.' };
+  const priceMin = input.priceMin === undefined || input.priceMin === null || input.priceMin === '' ? null : Number(input.priceMin);
+  const priceMax = input.priceMax === undefined || input.priceMax === null || input.priceMax === '' ? null : Number(input.priceMax);
+  if ((priceMin !== null && (!Number.isFinite(priceMin) || priceMin < 0 || priceMin > 1_000_000_000))
+    || (priceMax !== null && (!Number.isFinite(priceMax) || priceMax < 0 || priceMax > 1_000_000_000))
+    || (priceMin !== null && priceMax !== null && priceMax < priceMin)) {
+    return { error: 'Enter a valid non-negative price or price range.' };
+  }
+  const stockQuantity = input.stockQuantity === undefined || input.stockQuantity === null || input.stockQuantity === '' ? null : Number(input.stockQuantity);
+  if (stockQuantity !== null && (!Number.isFinite(stockQuantity) || stockQuantity <= 0 || stockQuantity > 1_000_000_000)) {
+    return { error: 'Available stock must be greater than zero; leave it blank if quantity is not tracked.' };
+  }
+  const rawDetails = input.listingDetails && typeof input.listingDetails === 'object'
+    ? input.listingDetails as Record<string, unknown>
+    : {};
+  const listingDetails: Record<string, unknown> = {};
+  let availability = 'available';
+  if (listingType === 'FABRIC') {
+    const material = listingText(rawDetails.material, 100);
+    const colour = listingText(rawDetails.colour, 80);
+    const priceUnit = rawDetails.priceUnit;
+    const minimumOrder = Number(rawDetails.minimumOrder);
+    if (!material || !colour || !['yard', 'metre', 'piece', 'roll'].includes(String(priceUnit))
+      || !Number.isFinite(minimumOrder) || minimumOrder <= 0) {
+      return { error: 'Fabric listings require material, colour, price unit, and a positive minimum order.' };
+    }
+    if (stockQuantity !== null && minimumOrder > stockQuantity) return { error: 'Minimum order cannot exceed the available quantity.' };
+    const width = rawDetails.width === undefined || rawDetails.width === null || rawDetails.width === '' ? null : Number(rawDetails.width);
+    if (width !== null && (!Number.isFinite(width) || width <= 0 || width > 100_000)) {
+      return { error: 'Fabric width must be a positive measurement.' };
+    }
+    Object.assign(listingDetails, {
+      material,
+      colour,
+      pattern: listingText(rawDetails.pattern, 100),
+      ...(width !== null ? { width } : {}),
+      widthUnit: rawDetails.widthUnit === 'in' ? 'in' : 'cm',
+      priceUnit,
+      minimumOrder,
+    });
+    if (stockQuantity !== null) availability = 'limited';
+  } else {
+    const garmentType = listingText(rawDetails.garmentType, 100);
+    const fulfilment = rawDetails.fulfilment;
+    if (listingType === 'CLOTHING' && (!garmentType || !['ready_made', 'made_to_order'].includes(String(fulfilment)))) {
+      return { error: 'Clothing listings require a garment type and a ready-made or made-to-order selection.' };
+    }
+    const leadTimeDays = rawDetails.leadTimeDays === undefined || rawDetails.leadTimeDays === null || rawDetails.leadTimeDays === '' ? null : Number(rawDetails.leadTimeDays);
+    if (leadTimeDays !== null && (!Number.isInteger(leadTimeDays) || leadTimeDays < 0 || leadTimeDays > 365)) {
+      return { error: 'Lead time must be a whole number between 0 and 365 days.' };
+    }
+    Object.assign(listingDetails, {
+      ...(garmentType ? { garmentType } : {}),
+      gender: listingText(rawDetails.gender, 40),
+      sizes: Array.isArray(rawDetails.sizes) ? rawDetails.sizes
+        .filter((size): size is string => typeof size === 'string').map(size => listingText(size, 20)).filter(Boolean).slice(0, 20) : [],
+      customizationOptions: Array.isArray(rawDetails.customizationOptions) ? rawDetails.customizationOptions
+        .filter((option): option is string => typeof option === 'string').map(option => listingText(option, 80)).filter(Boolean).slice(0, 20) : [],
+      ...(leadTimeDays !== null ? { leadTimeDays } : {}),
+      ...(fulfilment === 'ready_made' || fulfilment === 'made_to_order' ? { fulfilment } : {}),
+    });
+    if (fulfilment === 'made_to_order') availability = 'made_to_order';
+    else if (stockQuantity !== null) availability = 'limited';
+  }
+
+  const tags = Array.isArray(input.tags)
+    ? input.tags.filter((tag): tag is string => typeof tag === 'string')
+      .map(tag => listingText(tag, 40)).filter(Boolean).slice(0, 20)
+    : [];
+  const imageAlt = listingText(input.imageAlt, 250) || `${title} by ${listingText(profile.shop_name || profile.shopName || profile.name, 120) || 'Atelier seller'}`;
+  return {
+    value: {
+      listing_type: listingType,
+      title,
+      description,
+      category_id: listingText(input.categoryId, 80) || null,
+      tags,
+      currency,
+      location: profile.location && typeof profile.location === 'object' ? profile.location : {},
+      image_url: imageUrl,
+      image_assets: imageAssets,
+      image_alt: imageAlt,
+      pricing: { currency, basic: priceMin ?? 0, premiumMaterial: 0, bespokeComplexity: 0 },
+      price_min: priceMin,
+      price_max: priceMax,
+      stock_quantity: stockQuantity,
+      availability,
+      listing_details: listingDetails,
+    },
+  };
 }
 
 function cleanProfile(input: Record<string, unknown>, allowAdmin: boolean) {
@@ -476,51 +628,58 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
     return;
   }
 
-  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'];
-  if (!allowedMimeTypes.includes(req.file.mimetype)) {
-    res.status(400).json({ error: 'Only common image types are allowed.' });
-    return;
-  }
-
   const requestedFolder = String(req.body?.folder || 'atelier');
   const safeFolder = ['profiles', 'posts', 'atelier'].includes(requestedFolder) ? requestedFolder : 'atelier';
-
-  try {
-    let uploadBuffer = req.file.buffer;
-    if (!supabaseDataEnabled) {
-      if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-        res.status(500).json({ error: 'Cloudinary credentials are not configured on the server.' });
-        return;
-      }
-      const optimizedBuffer = await sharp(req.file.buffer)
-        .rotate()
-        .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 78, progressive: true, mozjpeg: true })
-        .toBuffer();
-      uploadBuffer = optimizedBuffer.length < req.file.buffer.length ? optimizedBuffer : req.file.buffer;
-    }
-
-    if (supabaseDataEnabled) {
-      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.jpg`;
-      const result = await uploadImage(req.authUser!.uid, safeFolder, fileName, uploadBuffer, req.file.mimetype);
-      res.status(201).json({ url: result.url, publicId: result.path, width: 1600, height: 1600 });
+  if (safeFolder === 'posts') {
+    if (req.authUser?.blocked) {
+      res.status(403).json({ error: 'Blocked accounts cannot upload listing images.' });
       return;
     }
+    const profile = await readProfile(req.authUser!.uid);
+    if (profile?.role !== 'tailor' && profile?.role !== 'fabric_seller') {
+      res.status(403).json({ error: 'Only active sellers can upload listing images.' });
+      return;
+    }
+  }
 
-    const result = await new Promise<{ secure_url: string; public_id: string; width?: number; height?: number }>((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { folder: safeFolder, resource_type: 'image', transformation: [{ quality: 'auto', fetch_format: 'auto' }] },
-        (error, uploadResult) => {
-          if (error) { reject(error); return; }
-          if (!uploadResult) { reject(new Error('Cloudinary upload failed.')); return; }
-          resolve(uploadResult as { secure_url: string; public_id: string; width?: number; height?: number });
-        }
-      );
-      uploadStream.end(uploadBuffer);
+  try {
+    const metadata = await sharp(req.file.buffer, { limitInputPixels: 40_000_000 }).metadata();
+    if (!metadata.width || !metadata.height || !['jpeg', 'png', 'webp', 'gif'].includes(metadata.format || '')) {
+      res.status(400).json({ error: 'Upload a valid JPEG, PNG, WebP, or GIF image.' });
+      return;
+    }
+    const [optimizedBuffer, thumbnailBuffer] = await Promise.all([
+      sharp(req.file.buffer, { limitInputPixels: 40_000_000 })
+        .rotate()
+        .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+        .toBuffer(),
+      sharp(req.file.buffer, { limitInputPixels: 40_000_000 })
+        .rotate()
+        .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 72, progressive: true, mozjpeg: true })
+        .toBuffer(),
+    ]);
+
+    const fileName = `${Date.now()}-${createHash('sha256').update(req.file.buffer).digest('hex').slice(0, 12)}`;
+    const [original, thumbnail] = await Promise.all([
+      uploadImage(req.authUser!.uid, safeFolder, `${fileName}.jpg`, optimizedBuffer, 'image/jpeg'),
+      uploadImage(req.authUser!.uid, safeFolder, `${fileName}-thumb.jpg`, thumbnailBuffer, 'image/jpeg'),
+    ]);
+    res.status(201).json({
+      url: original.url,
+      thumbnailUrl: thumbnail.url,
+      publicId: original.path,
+      width: metadata.width,
+      height: metadata.height,
+      mimeType: 'image/jpeg',
     });
-    res.status(201).json({ url: result.secure_url, publicId: result.public_id, width: result.width, height: result.height });
   } catch (error) {
     console.error('Media upload failed', error);
+    if (error instanceof Error && /unsupported image format|input buffer contains unsupported image format/i.test(error.message)) {
+      res.status(400).json({ error: 'The uploaded file is not a supported image.' });
+      return;
+    }
     res.status(500).json({ error: 'Image upload failed on the server.' });
   }
 });
@@ -834,16 +993,17 @@ app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) =
   res.status(204).send();
 });
 
-app.get('/api/posts', async (_req, res) => {
+app.get('/api/posts', async (req, res) => {
+  const search = typeof req.query.q === 'string' ? listingText(req.query.q, 80) : '';
   try {
-    if (postsCache && postsCache.expiresAt > Date.now()) {
+    if (!search && postsCache && postsCache.expiresAt > Date.now()) {
       res.json(postsCache.value);
       return;
     }
 
     let posts: Array<Record<string, unknown> & { id: string; isBlocked?: boolean }>;
     if (supabaseDataEnabled) {
-      const rows = await getPosts(24);
+      const rows = await getPosts(24, search || undefined);
       const enriched = await Promise.all(rows.map(async row => {
         const author = row.author as Record<string, unknown> || {};
         const interactions = await getPostInteractions(String(row.id));
@@ -894,7 +1054,7 @@ app.get('/api/posts', async (_req, res) => {
         };
       }))).filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
     }
-    postsCache = { expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS, value: posts };
+    if (!search) postsCache = { expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS, value: posts };
     res.json(posts);
   } catch (error) {
     console.error('Unable to load marketplace posts', error);
@@ -1070,45 +1230,230 @@ app.post('/api/discovery-events', requireAuth, async (req: AuthenticatedRequest,
   res.status(201).json({ id: created.id, ...event });
 });
 
-app.post('/api/posts', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
-  const input = req.body || {};
-  if (typeof input.title !== 'string' || !input.title.trim() || typeof input.imageUrl !== 'string' || !input.imageUrl.trim()) {
-    res.status(400).json({ error: 'A title and image are required.' });
+app.get('/api/listings/mine', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const listings = await getSellerListings(req.authUser!.uid);
+    const enriched = await Promise.all(listings.map(async listing => {
+      const interactions = await getPostInteractions(String(listing.id));
+      const ratings = Object.values(interactions.ratings).map(Number);
+      const author = listing.author as Record<string, unknown> || {};
+      return {
+        ...snakeToCamel(listing),
+        authorId: req.authUser!.uid,
+        authorName: author.shop_name || author.name || 'Atelier Member',
+        authorRole: author.role || 'tailor',
+        authorHandle: author.handle || '@atelier_member',
+        authorAvatar: author.avatar_url || '',
+        authorLocation: author.location || {},
+        authorWhatsapp: author.whatsapp_number || '',
+        likes: interactions.likes,
+        saves: interactions.saves,
+        rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : 0,
+        ratingCount: ratings.length,
+        ratingsByUser: interactions.ratings,
+      };
+    }));
+    res.json(enriched);
+  } catch (error) {
+    console.error('Unable to load seller listings.', error);
+    res.status(503).json({ error: 'Your listings could not be loaded right now.' });
+  }
+});
+
+app.get('/api/admin/listings/moderation', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    res.json(snakeToCamel(await getListingsForModeration()));
+  } catch (error) {
+    console.error('Unable to load moderation queue.', error);
+    res.status(503).json({ error: 'The moderation queue could not be loaded right now.' });
+  }
+});
+
+app.get('/api/admin/listing-reports', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    res.json(snakeToCamel(await getListingReports()));
+  } catch (error) {
+    console.error('Unable to load listing reports.', error);
+    res.status(503).json({ error: 'Listing reports could not be loaded right now.' });
+  }
+});
+
+app.patch('/api/admin/listing-reports/:reportId', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const status = req.body?.status;
+  if (status !== 'reviewed' && status !== 'dismissed') {
+    res.status(400).json({ error: 'Choose reviewed or dismissed.' });
     return;
   }
+  await updateListingReport(req.params.reportId, status);
+  res.status(204).send();
+});
+
+app.post('/api/posts', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const input = req.body || {};
   const authorProfile = await readProfile(req.authUser!.uid);
   const authorRole = authorProfile?.role;
   if (authorRole !== 'tailor' && authorRole !== 'fabric_seller') {
     res.status(403).json({ error: 'Only approved tailors and fabric sellers can publish marketplace items.' });
     return;
   }
+  const validation = validateListingInput(input, req.authUser!.uid, authorProfile || {});
+  if ('error' in validation) {
+    res.status(400).json({ error: validation.error });
+    return;
+  }
+  const intent = input.intent === 'draft' ? 'draft' : 'pending_review';
+  const timestamp = new Date().toISOString();
   const post = {
+    ...validation.value,
     author_id: req.authUser!.uid,
-    title: input.title.trim().slice(0, 160),
-    description: typeof input.description === 'string' ? input.description.trim().slice(0, 3000) : '',
-    image_url: input.imageUrl.slice(0, 2_000_000),
-    image_alt: typeof input.imageAlt === 'string' ? input.imageAlt.trim().slice(0, 250) || `${input.title.trim()} by ${authorProfile?.shopName || authorProfile?.name || 'Atelier seller'}` : `${input.title.trim()} by ${authorProfile?.shopName || authorProfile?.name || 'Atelier seller'}`,
-    tags: Array.isArray(input.tags) ? input.tags.filter((tag: unknown) => typeof tag === 'string').slice(0, 30) : [],
-    pricing: input.pricing && typeof input.pricing === 'object' ? input.pricing : {},
-    created_at: new Date().toISOString(),
-    is_promoted: authorProfile?.isPromoted === true,
+    status: intent,
+    moderation_status: 'pending',
+    moderation_note: '',
+    created_at: timestamp,
+    updated_at: timestamp,
+    published_at: null,
+    is_promoted: authorProfile?.isPromoted === true || authorProfile?.is_promoted === true,
     is_blocked: false,
   };
   if (supabaseDataEnabled) {
     const created = await createPostWithUser(post, req.authUser!.uid);
     const createdId = String(created.id);
+    await recordListingChange(createdId, req.authUser!.uid, intent === 'draft' ? 'draft_created' : 'submitted_for_review');
     invalidatePublicCaches();
-    const authorHandle = String(authorProfile?.handle || '').replace(/^@/, '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-') || 'atelier';
-    const postTitle = String(post.title);
-    void sendTopicPush('marketplace_updates', 'New atelier listing', `${postTitle} is now available.`, `/@${authorHandle}/post/${encodeURIComponent(createdId)}`, 'new-post');
-    res.status(201).json({ id: createdId, ...snakeToCamel(post), authorId: req.authUser!.uid, authorRole, likes: [], saves: [] });
+    res.status(201).json({ id: createdId, ...snakeToCamel(post), authorId: req.authUser!.uid, authorRole, authorName: authorProfile?.shopName || authorProfile?.name, likes: [], saves: [] });
     return;
   }
-  const created = await firestore.collection('posts').add({ authorId: req.authUser!.uid, authorRole, title: post.title, description: post.description, imageUrl: post.image_url, imageAlt: post.image_alt, tags: post.tags, pricing: post.pricing, createdAt: post.created_at, isPromoted: post.is_promoted, isBlocked: false, likes: [], saves: [] });
+  res.status(503).json({ error: 'Listing publishing requires the configured Supabase database.' });
+});
+
+app.put('/api/posts/:postId', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const existing = await getPost(req.params.postId);
+  if (!existing) {
+    res.status(404).json({ error: 'That listing is no longer available.' });
+    return;
+  }
+  if (existing.author_id !== req.authUser!.uid) {
+    res.status(403).json({ error: 'You can only edit your own listings.' });
+    return;
+  }
+  const profile = await readProfile(req.authUser!.uid);
+  const validation = validateListingInput(req.body || {}, req.authUser!.uid, profile || {}, typeof existing.image_url === 'string' ? existing.image_url : undefined);
+  if ('error' in validation) {
+    res.status(400).json({ error: validation.error });
+    return;
+  }
+  const timestamp = new Date().toISOString();
+  const nextStatus = req.body?.intent === 'draft' ? 'draft' : 'pending_review';
+  const values = {
+    ...validation.value,
+    status: nextStatus,
+    moderation_status: 'pending',
+    moderation_note: '',
+    published_at: null,
+    updated_at: timestamp,
+  };
+  const updated = await updateListing(req.params.postId, values);
+  const changes = Object.fromEntries(Object.entries(validation.value)
+    .filter(([field, value]) => JSON.stringify(existing[field] ?? null) !== JSON.stringify(value))
+    .map(([field, value]) => [field, { from: existing[field] ?? null, to: value }]));
+  await recordListingChange(req.params.postId, req.authUser!.uid, nextStatus === 'draft' ? 'draft_updated' : 'resubmitted_for_review', {
+    changes,
+  });
   invalidatePublicCaches();
-  const authorHandle = String(authorProfile?.handle || '').replace(/^@/, '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-') || 'atelier';
-  void sendTopicPush('marketplace_updates', 'New atelier listing', `${String(post.title)} is now available.`, `/@${authorHandle}/post/${encodeURIComponent(created.id)}`, 'new-post');
-  res.status(201).json({ id: created.id, authorId: req.authUser!.uid, authorRole, title: post.title, description: post.description, imageUrl: post.image_url, imageAlt: post.image_alt, tags: post.tags, pricing: post.pricing, createdAt: post.created_at, isPromoted: post.is_promoted, isBlocked: false, likes: [], saves: [] });
+  res.json(snakeToCamel(updated));
+});
+
+app.patch('/api/posts/:postId/status', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const listing = await getPost(req.params.postId);
+  if (!listing) {
+    res.status(404).json({ error: 'That listing is no longer available.' });
+    return;
+  }
+  if (listing.author_id !== req.authUser!.uid) {
+    res.status(403).json({ error: 'You can only manage your own listings.' });
+    return;
+  }
+  const action = req.body?.action;
+  const timestamp = new Date().toISOString();
+  let values: Record<string, unknown>;
+  let auditAction: string;
+  if (action === 'publish') {
+    const details = listing && typeof listing.listing_details === 'object' ? listing.listing_details as Record<string, unknown> : {};
+    const availability = details.fulfilment === 'made_to_order'
+      ? 'made_to_order'
+      : Number(listing.stock_quantity) > 0 ? 'limited' : 'available';
+    values = { status: 'pending_review', moderation_status: 'pending', moderation_note: '', availability, published_at: null };
+    auditAction = 'submitted_for_review';
+  } else if (action === 'pause' && listing.status === 'published') {
+    values = { status: 'paused' };
+    auditAction = 'paused';
+  } else if (action === 'archive') {
+    values = { status: 'archived' };
+    auditAction = 'archived';
+  } else if (action === 'sold_out' && listing.status === 'published') {
+    values = { status: 'sold_out' };
+    auditAction = 'marked_sold_out';
+  } else {
+    res.status(400).json({ error: 'That listing status change is not allowed.' });
+    return;
+  }
+  const updated = await updateListing(req.params.postId, { ...values, updated_at: timestamp });
+  await recordListingChange(req.params.postId, req.authUser!.uid, auditAction);
+  invalidatePublicCaches();
+  res.json(snakeToCamel(updated));
+});
+
+app.patch('/api/admin/listings/:listingId/moderation', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const listing = await getPost(req.params.listingId);
+  if (!listing || listing.status !== 'pending_review' || listing.moderation_status !== 'pending') {
+    res.status(404).json({ error: 'The listing is not waiting for moderation.' });
+    return;
+  }
+  const decision = req.body?.decision;
+  if (decision !== 'approve' && decision !== 'reject') {
+    res.status(400).json({ error: 'Choose approve or reject.' });
+    return;
+  }
+  const timestamp = new Date().toISOString();
+  const reason = listingText(req.body?.reason, 300);
+  const values = decision === 'approve'
+    ? { status: 'published', moderation_status: 'approved', moderation_note: '', published_at: timestamp, updated_at: timestamp }
+    : { status: 'rejected', moderation_status: 'rejected', moderation_note: reason, published_at: null, updated_at: timestamp };
+  const updated = await updateListing(req.params.listingId, values);
+  await recordListingChange(req.params.listingId, req.authUser!.uid, decision === 'approve' ? 'approved' : 'rejected', {
+    reason,
+  });
+  if (decision === 'approve') {
+    const author = listing.author as Record<string, unknown> || {};
+    const authorHandle = String(author.handle || '').replace(/^@/, '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-') || 'atelier';
+    void sendTopicPush('marketplace_updates', 'New atelier listing', `${String(listing.title || 'A new listing')} is now available.`, `/@${authorHandle}/post/${encodeURIComponent(req.params.listingId)}`, 'new-post');
+  }
+  invalidatePublicCaches();
+  res.json(snakeToCamel(updated));
+});
+
+app.post('/api/posts/:postId/report', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const listing = await getPost(req.params.postId);
+  if (!listing || listing.status !== 'published' || listing.moderation_status !== 'approved') {
+    res.status(404).json({ error: 'That published listing could not be found.' });
+    return;
+  }
+  const reason = listingText(req.body?.reason, 80);
+  const details = listingText(req.body?.details, 1000);
+  if (!['Misleading content', 'Prohibited item', 'Impersonation', 'Inappropriate content', 'Other'].includes(reason)) {
+    res.status(400).json({ error: 'Choose a valid report reason.' });
+    return;
+  }
+  try {
+    await createListingReport(req.params.postId, req.authUser!.uid, reason, details);
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
+      res.status(409).json({ error: 'You have already reported this listing.' });
+      return;
+    }
+    throw error;
+  }
 });
 
 app.post('/api/posts/:postId/rating', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -1118,39 +1463,14 @@ app.post('/api/posts/:postId/rating', requireAuth, async (req: AuthenticatedRequ
     return;
   }
   const post = await getPost(req.params.postId);
-  if (!post) {
-    res.status(404).json({ error: 'That marketplace item no longer exists.' });
+  if (!post || (supabaseDataEnabled && (post.status !== 'published' || post.moderation_status !== 'approved' || post.deleted_at))) {
+    res.status(404).json({ error: 'That published marketplace listing no longer exists.' });
     return;
   }
   if (supabaseDataEnabled) {
     const result = await setRating(req.params.postId, req.authUser!.uid, rating);
     invalidatePublicCaches();
     res.json(result);
-    return;
-  }
-  if (supabaseDataEnabled) {
-    if (!(await getPost(req.params.postId))) {
-      res.status(404).json({ error: 'That marketplace item no longer exists.' });
-      return;
-    }
-    const result = await toggleLike(req.params.postId, req.authUser!.uid);
-    invalidatePublicCaches();
-    res.json(result);
-    return;
-  }
-  if (supabaseDataEnabled) {
-    const post = await getPost(req.params.postId);
-    if (!post) {
-      res.status(204).send();
-      return;
-    }
-    if (post.author_id !== req.authUser!.uid && !req.authUser!.admin) {
-      res.status(403).json({ error: 'You cannot delete this post.' });
-      return;
-    }
-    await deletePost(req.params.postId);
-    invalidatePublicCaches();
-    res.status(204).send();
     return;
   }
   const postRef = firestore.collection('posts').doc(req.params.postId);
@@ -1303,6 +1623,17 @@ app.post('/api/admin/broadcast', requireAuth, requireAdmin, async (req: Authenti
 });
 
 app.post('/api/posts/:postId/like', requireAuth, async (req: AuthenticatedRequest, res) => {
+  if (supabaseDataEnabled) {
+    const listing = await getPost(req.params.postId);
+    if (!listing || listing.status !== 'published' || listing.moderation_status !== 'approved' || listing.deleted_at) {
+      res.status(404).json({ error: 'That published listing no longer exists.' });
+      return;
+    }
+    const result = await toggleLike(req.params.postId, req.authUser!.uid);
+    invalidatePublicCaches();
+    res.json(result);
+    return;
+  }
   const postRef = firestore.collection('posts').doc(req.params.postId);
   if (!(await postRef.get()).exists) {
     res.status(404).json({ error: 'That marketplace item no longer exists.' });
@@ -1322,8 +1653,9 @@ app.post('/api/posts/:postId/like', requireAuth, async (req: AuthenticatedReques
 
 app.post('/api/posts/:postId/save', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   if (supabaseDataEnabled) {
-    if (!(await getPost(req.params.postId))) {
-      res.status(404).json({ error: 'That marketplace item no longer exists.' });
+    const listing = await getPost(req.params.postId);
+    if (!listing || listing.status !== 'published' || listing.moderation_status !== 'approved' || listing.deleted_at) {
+      res.status(404).json({ error: 'That published listing no longer exists.' });
       return;
     }
     const result = await toggleSave(req.params.postId, req.authUser!.uid);
@@ -1349,6 +1681,22 @@ app.post('/api/posts/:postId/save', requireAuth, async (req: AuthenticatedReques
 });
 
 app.delete('/api/posts/:postId', requireAuth, async (req: AuthenticatedRequest, res) => {
+  if (supabaseDataEnabled) {
+    const listing = await getPost(req.params.postId);
+    if (!listing) {
+      res.status(204).send();
+      return;
+    }
+    if (listing.author_id !== req.authUser!.uid && !req.authUser!.admin) {
+      res.status(403).json({ error: 'You cannot delete this listing.' });
+      return;
+    }
+    await softDeleteListing(req.params.postId, new Date().toISOString());
+    await recordListingChange(req.params.postId, req.authUser!.uid, 'deleted');
+    invalidatePublicCaches();
+    res.status(204).send();
+    return;
+  }
   const postRef = firestore.collection('posts').doc(req.params.postId);
   const post = await postRef.get();
   if (!post.exists) {
@@ -1592,6 +1940,10 @@ app.delete('/api/admin/sellers/:uid', requireAuth, requireAdmin, async (req: Aut
 });
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({ error: 'Images must be 15 MB or smaller.' });
+    return;
+  }
   console.error('API error', error);
   res.status(500).json({ error: 'Internal server error.' });
 });

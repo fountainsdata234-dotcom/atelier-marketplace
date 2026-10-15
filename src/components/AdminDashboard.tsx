@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Users, UserPlus, UserX, Star, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2, Search, X } from 'lucide-react';
-import { User, ClothPost, AdminPromoPlan, BroadcastMessage } from '../types';
+import { Shield, Users, UserPlus, UserX, Star, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2, Search, X, Flag } from 'lucide-react';
+import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
@@ -43,11 +43,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [planSaveStatus, setPlanSaveStatus] = useState<string | null>(null);
 
   // Tab State: 'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'
-  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'>('sellers');
+  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'moderation' | 'reports' | 'promo_plans' | 'broadcast' | 'admins'>('sellers');
+  const [moderationListings, setModerationListings] = useState<ClothPost[]>([]);
+  const [moderationStatus, setModerationStatus] = useState<string | null>(null);
+  const [listingReports, setListingReports] = useState<ListingReport[]>([]);
+  const [reportStatus, setReportStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setEditablePlans(promoPlans);
   }, [promoPlans]);
+
+  useEffect(() => {
+    if (activeTab !== 'moderation') return;
+    void api.getListingsForModeration()
+      .then(setModerationListings)
+      .catch(error => setModerationStatus(error instanceof Error ? error.message : 'Moderation queue could not be loaded.'));
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'reports') return;
+    void api.getListingReports()
+      .then(setListingReports)
+      .catch(error => setReportStatus(error instanceof Error ? error.message : 'Reports could not be loaded.'));
+  }, [activeTab]);
+
+  const moderateListing = async (listing: ClothPost, decision: 'approve' | 'reject') => {
+    const reason = decision === 'reject' ? window.prompt('Optional feedback for the seller:') || '' : '';
+    try {
+      await api.moderateListing(listing.id, decision, reason);
+      setModerationListings(current => current.filter(item => item.id !== listing.id));
+      setModerationStatus(decision === 'approve' ? 'Listing approved and published.' : 'Listing rejected; the seller can edit and resubmit it.');
+    } catch (error) {
+      setModerationStatus(error instanceof Error ? error.message : 'The moderation decision could not be saved.');
+    }
+  };
+
+  const resolveListingReport = async (report: ListingReport, status: 'reviewed' | 'dismissed') => {
+    try {
+      await api.updateListingReport(report.id, status);
+      setListingReports(current => current.filter(item => item.id !== report.id));
+      setReportStatus(status === 'reviewed' ? 'Report marked as reviewed.' : 'Report dismissed.');
+    } catch (error) {
+      setReportStatus(error instanceof Error ? error.message : 'The report could not be updated.');
+    }
+  };
 
   // Filtered lists
   const uniqueUsers = Array.from(new Map(users.map(user => [user.id, user])).values());
@@ -343,6 +382,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }`}
           >
             Marketplace Posts ({posts.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('moderation')}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'moderation'
+                ? 'bg-amber-500 text-neutral-950 font-semibold shadow'
+                : 'bg-neutral-800/40 text-neutral-400 hover:text-white'
+            }`}
+          >
+            Listing review
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'reports'
+                ? 'bg-amber-500 text-neutral-950 font-semibold shadow'
+                : 'bg-neutral-800/40 text-neutral-400 hover:text-white'
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5"><Flag className="h-3.5 w-3.5" /> Listing reports</span>
           </button>
 
           <button
@@ -830,6 +891,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'moderation' && (
+        <section className={`rounded-3xl border p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+          <h2 className="text-xl font-serif font-bold">Listing review queue</h2>
+          <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>New listings and edits remain private until approved. Approval publishes them to search and the marketplace.</p>
+          {moderationStatus && <p role="status" className="mt-3 text-xs text-amber-300">{moderationStatus}</p>}
+          {moderationListings.length === 0 ? (
+            <p className="py-8 text-center text-xs text-neutral-400">No listings are waiting for review.</p>
+          ) : (
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              {moderationListings.map(listing => (
+                <article key={listing.id} className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/40">
+                  <img src={listing.imageAssets?.[0]?.thumbnailUrl || listing.imageUrl} alt={listing.imageAlt || ''} className="h-52 w-full bg-neutral-950 object-contain" />
+                  <div className="space-y-2 p-4">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">{listing.listingType || listing.authorRole}</span>
+                    <h3 className="font-serif text-lg font-bold">{listing.title}</h3>
+                    <p className="line-clamp-3 whitespace-pre-line text-xs text-neutral-400">{listing.description}</p>
+                    <p className="text-[10px] text-neutral-500">Seller: {listing.authorName || listing.authorId}</p>
+                    <div className="flex gap-2 pt-2">
+                      <button type="button" onClick={() => void moderateListing(listing, 'approve')} className="rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-300">Approve & publish</button>
+                      <button type="button" onClick={() => void moderateListing(listing, 'reject')} className="rounded-lg bg-red-500/15 px-3 py-2 text-xs font-bold text-red-300">Reject with feedback</button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'reports' && (
+        <section className={`rounded-3xl border p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+          <h2 className="text-xl font-serif font-bold">Listing reports</h2>
+          <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Review buyer reports and record the resolution.</p>
+          {reportStatus && <p role="status" className="mt-3 text-xs text-amber-300">{reportStatus}</p>}
+          {listingReports.length === 0 ? (
+            <p className="py-8 text-center text-xs text-neutral-400">No open reports.</p>
+          ) : (
+            <div className="mt-5 space-y-3">
+              {listingReports.map(report => (
+                <article key={report.id} className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold">{report.listing?.title || 'Listing'}</h3>
+                      <p className="mt-1 text-xs text-amber-300">{report.reason}</p>
+                      <p className="mt-2 whitespace-pre-line text-xs text-neutral-400">{report.details || 'No additional information supplied.'}</p>
+                      <p className="mt-2 text-[10px] text-neutral-500">Reported by {report.reporter?.name || report.reporter?.email || report.reporterId} · {new Date(report.createdAt).toLocaleString()}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => void resolveListingReport(report, 'reviewed')} className="rounded-lg border border-emerald-500/30 px-3 py-2 text-[10px] font-bold text-emerald-300">Mark reviewed</button>
+                      <button type="button" onClick={() => void resolveListingReport(report, 'dismissed')} className="rounded-lg border border-neutral-700 px-3 py-2 text-[10px] font-bold text-neutral-300">Dismiss</button>
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </section>

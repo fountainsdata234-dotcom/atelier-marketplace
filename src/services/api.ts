@@ -1,4 +1,4 @@
-import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, DiscoveryEvent, DiscoveryEventType } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport } from '../types';
 
 import { getAuthToken } from './auth';
 
@@ -67,9 +67,35 @@ export const api = {
   deleteSeller: (userId: string) => request<void>(`/api/admin/sellers/${userId}`, { method: 'DELETE' }),
   deleteMyAccount: () => request<void>('/api/profile', { method: 'DELETE' }),
   setUserBlocked: (userId: string, blocked: boolean) => request<{ ok: boolean; blocked: boolean }>(`/api/admin/users/${userId}/block`, { method: 'POST', body: JSON.stringify({ blocked }) }),
-  getPosts: () => request<ClothPost[]>('/api/posts'),
+  getPosts: (search?: string) => request<ClothPost[]>(search ? `/api/posts?q=${encodeURIComponent(search)}` : '/api/posts'),
+  getMyListings: () => request<ClothPost[]>('/api/listings/mine'),
+  getListingsForModeration: () => request<ClothPost[]>('/api/admin/listings/moderation'),
+  getListingReports: () => request<ListingReport[]>('/api/admin/listing-reports'),
+  updateListingReport: (reportId: string, status: 'reviewed' | 'dismissed') => request<void>(`/api/admin/listing-reports/${reportId}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   saveProfile: (profile: Partial<User>) => request<User>('/api/profile', { method: 'PUT', body: JSON.stringify(profile) }),
-  createPost: (post: Omit<ClothPost, 'id' | 'likes' | 'saves' | 'createdAt'>) => request<ClothPost>('/api/posts', { method: 'POST', body: JSON.stringify(post) }),
+  createPost: (post: Omit<ClothPost, 'id' | 'likes' | 'saves' | 'createdAt'> & { intent?: 'draft' | 'publish' }) => request<ClothPost>('/api/posts', { method: 'POST', body: JSON.stringify(post) }),
+  updateListing: (listingId: string, post: Partial<ClothPost> & { intent?: 'draft' | 'publish' }) => request<ClothPost>(`/api/posts/${listingId}`, { method: 'PUT', body: JSON.stringify(post) }),
+  setListingStatus: (listingId: string, action: 'publish' | 'pause' | 'archive' | 'sold_out') => request<ClothPost>(`/api/posts/${listingId}/status`, { method: 'PATCH', body: JSON.stringify({ action }) }),
+  moderateListing: (listingId: string, decision: 'approve' | 'reject', reason?: string) => request<ClothPost>(`/api/admin/listings/${listingId}/moderation`, { method: 'PATCH', body: JSON.stringify({ decision, reason }) }),
+  reportListing: (listingId: string, reason: string, details?: string) => request<{ ok: boolean }>(`/api/posts/${listingId}/report`, { method: 'POST', body: JSON.stringify({ reason, details }) }),
+  uploadListingImage: async (file: Blob, fileName: string): Promise<ListingImageAsset> => {
+    const token = await getAuthTokenForRequest();
+    const formData = new FormData();
+    formData.append('image', file, fileName.replace(/\.[^.]+$/, '') + '.jpg');
+    formData.append('folder', 'posts');
+    const response = await fetch(`${API_URL}/api/upload`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || 'Image upload failed.');
+    }
+    const asset = await response.json() as ListingImageAsset;
+    if (!asset.url || !asset.thumbnailUrl) throw new Error('The image service did not return a complete image asset.');
+    return asset;
+  },
   deletePost: (postId: string) => request<void>(`/api/posts/${postId}`, { method: 'DELETE' }),
   toggleLike: (postId: string) => request<{ isLiked: boolean; likesCount: number }>(`/api/posts/${postId}/like`, { method: 'POST' }),
   toggleSave: (postId: string) => request<{ isSaved: boolean; savesCount: number }>(`/api/posts/${postId}/save`, { method: 'POST' }),

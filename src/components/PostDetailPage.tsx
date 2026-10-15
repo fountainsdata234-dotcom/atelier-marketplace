@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo } from 'react';
-import { ArrowLeft, ArrowRight, MapPin, MessageCircle, Share2, Star } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, ArrowRight, MapPin, MessageCircle, Share2, Star, Flag } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getRoleLabel } from '../utils/profile';
+import { api } from '../services/api';
 
 interface PostDetailPageProps {
   post: ClothPost | null;
@@ -28,10 +29,19 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
   onShare,
   onView,
 }) => {
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(post?.imageUrl || null);
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportReason, setReportReason] = useState('Misleading content');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
   const seller = users.find(user => user.id === post?.authorId);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
   const postTags = useMemo(() => new Set((post?.tags || []).map(tag => tag.trim().toLowerCase()).filter(Boolean)), [post?.tags]);
-  const visiblePosts = useMemo(() => posts.filter(item => !userById.get(item.authorId)?.isBlocked), [posts, userById]);
+  const visiblePosts = useMemo(() => posts.filter(item =>
+    !userById.get(item.authorId)?.isBlocked
+    && !item.deletedAt
+    && (item.status === undefined || (item.status === 'published' && (item.moderationStatus === undefined || item.moderationStatus === 'approved'))),
+  ), [posts, userById]);
   const sameSeller = useMemo(() => visiblePosts
     .filter(item => item.authorId === post?.authorId && item.id !== post?.id)
     .map(item => ({ post: item, matchCount: item.tags.filter(tag => postTags.has(tag.trim().toLowerCase())).length }))
@@ -53,6 +63,10 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
     if (post) onView(post);
   }, [post?.id]);
 
+  useEffect(() => {
+    setSelectedImageUrl(post?.imageUrl || null);
+  }, [post?.id]);
+
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white';
   const muted = isDarkMode ? 'text-neutral-400' : 'text-neutral-600';
 
@@ -66,11 +80,23 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
   }
 
   const location = [post.authorLocation.city, post.authorLocation.state, post.authorLocation.country].filter(Boolean).join(', ');
+  const reportListing = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setReportMessage(null);
+    try {
+      await api.reportListing(post.id, reportReason, reportDetails);
+      setReportMessage('Thank you. Your report has been sent to the moderation team.');
+      setIsReporting(false);
+      setReportDetails('');
+    } catch (error) {
+      setReportMessage(error instanceof Error ? error.message : 'Your report could not be submitted.');
+    }
+  };
 
   const renderRelatedCard = (relatedPost: ClothPost) => (
     <button key={relatedPost.id} type="button" onClick={() => onSelectPost(relatedPost)} className={`group min-w-0 overflow-hidden rounded-xl border text-left transition-colors hover:border-amber-500/50 ${surface}`}>
       <div className="aspect-[4/3] overflow-hidden bg-neutral-950">
-        <img src={relatedPost.imageUrl} alt={relatedPost.title} loading="lazy" decoding="async" className="h-full w-full object-contain brightness-110 saturate-110" />
+        <img src={relatedPost.imageAssets?.[0]?.thumbnailUrl || relatedPost.imageUrl} alt={relatedPost.title} loading="lazy" decoding="async" className="h-full w-full object-contain brightness-110 saturate-110" />
       </div>
       <span className="block truncate px-3 pt-2.5 text-xs font-semibold">{relatedPost.title}</span>
       <span className={`block truncate px-3 pb-3 pt-1 text-[10px] ${muted}`}>{relatedPost.tags.slice(0, 2).map(tag => `#${tag}`).join(' ')}</span>
@@ -84,14 +110,20 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)] lg:items-start">
         <div className={`overflow-hidden rounded-2xl border ${surface}`}>
           <div className="flex min-h-[320px] items-center justify-center bg-neutral-950 sm:min-h-[480px] lg:min-h-[620px]">
-            <img src={post.imageUrl} alt={post.title} fetchPriority="high" decoding="async" className="max-h-[78vh] w-full object-contain" />
+            <img src={selectedImageUrl || post.imageUrl} alt={post.imageAlt || post.title} fetchPriority="high" decoding="async" className="max-h-[78vh] w-full object-contain" />
           </div>
+          {(post.imageAssets?.length || 0) > 1 && <div className="grid grid-cols-4 gap-2 border-t border-neutral-800/60 p-3 sm:grid-cols-6">{post.imageAssets?.map((asset, index) => (
+            <button key={asset.url} type="button" onClick={() => setSelectedImageUrl(asset.url)} aria-label={`Show listing image ${index + 1}`} aria-pressed={selectedImageUrl === asset.url} className={`aspect-square overflow-hidden rounded-lg border ${selectedImageUrl === asset.url ? 'border-amber-400' : 'border-neutral-700'}`}>
+              <img src={asset.thumbnailUrl || asset.url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+            </button>
+          ))}</div>}
           {post.tags.length > 0 && <div className="flex flex-wrap gap-2 border-t border-neutral-800/60 p-4">{post.tags.map(tag => <span key={tag} className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold text-amber-400">#{tag}</span>)}</div>}
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24">
           <div className={`rounded-2xl border p-5 sm:p-6 ${surface}`}>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{getRoleLabel(post.authorRole)}</p>
+            {post.listingType && <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">{post.listingType.replace('_', ' ')}{post.categoryId ? ` · ${post.categoryId}` : ''}</p>}
             <h1 className="mt-2 font-serif text-2xl font-bold sm:text-3xl">{post.title}</h1>
             <div className={`mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs ${muted}`}>
               <span>{post.ratingCount ? <><Star className="mr-1 inline h-3.5 w-3.5 fill-amber-400 text-amber-400" />{post.rating?.toFixed(1)} ({post.ratingCount})</> : 'Not rated yet'}</span>
@@ -100,12 +132,26 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
             <p className={`mt-5 whitespace-pre-line text-sm leading-relaxed ${muted}`}>{post.description || 'Contact the seller for details about this piece.'}</p>
             <div className="mt-5 flex items-center justify-between border-t border-neutral-800/60 pt-4 text-xs">
               <span className="font-bold uppercase tracking-wider text-amber-500">Price</span>
-              <span>{post.pricing.basic > 0 ? `${post.pricing.currency || post.authorLocation.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable'}</span>
+              <span>{post.priceMin !== null && post.priceMin !== undefined
+                ? `${post.currency || post.pricing.currency || post.authorLocation.currency || 'USD'} ${post.priceMin}${post.priceMax !== null && post.priceMax !== undefined && post.priceMax !== post.priceMin ? ` – ${post.priceMax}` : ''}`
+                : post.pricing.basic > 0 ? `${post.pricing.currency || post.authorLocation.currency || 'USD'} ${post.pricing.basic}` : 'Price on request'}</span>
             </div>
+            {post.listingDetails && <div className={`mt-3 grid grid-cols-2 gap-2 border-t border-neutral-800/60 pt-4 text-xs ${muted}`}>
+              {'material' in post.listingDetails && <><span>Material</span><span className="text-right">{post.listingDetails.material}</span><span>Colour</span><span className="text-right">{post.listingDetails.colour}</span>{post.listingDetails.pattern && <><span>Pattern</span><span className="text-right">{post.listingDetails.pattern}</span></>}{post.listingDetails.width && <><span>Width</span><span className="text-right">{post.listingDetails.width} {post.listingDetails.widthUnit || 'cm'}</span></>}{post.listingDetails.priceUnit && <><span>Price unit</span><span className="text-right">{post.listingDetails.priceUnit}</span></>}{post.listingDetails.minimumOrder && <><span>Minimum order</span><span className="text-right">{post.listingDetails.minimumOrder} {post.listingDetails.priceUnit}</span></>}</>}
+              {'garmentType' in post.listingDetails && post.listingDetails.garmentType && <><span>Garment</span><span className="text-right">{post.listingDetails.garmentType}</span>{post.listingDetails.gender && <><span>Style</span><span className="text-right">{post.listingDetails.gender}</span></>}{post.listingDetails.fulfilment && <><span>Fulfilment</span><span className="text-right">{post.listingDetails.fulfilment.replace('_', ' ')}</span></>}{post.listingDetails.sizes?.length ? <><span>Sizes</span><span className="text-right">{post.listingDetails.sizes.join(', ')}</span></> : null}{post.listingDetails.leadTimeDays !== undefined && <><span>Lead time</span><span className="text-right">{post.listingDetails.leadTimeDays} days</span></>}{post.listingDetails.customizationOptions?.length ? <><span>Customization</span><span className="text-right">{post.listingDetails.customizationOptions.join(', ')}</span></> : null}</>}
+              {post.stockQuantity !== null && post.stockQuantity !== undefined && <><span>Available quantity</span><span className="text-right">{post.stockQuantity}</span></>}
+            </div>}
             <div className="mt-5 flex gap-2">
               <button type="button" onClick={() => onInquire(post)} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition-colors hover:bg-amber-300"><MessageCircle className="h-4 w-4" /> Inquire</button>
               <button type="button" onClick={() => onShare(post)} title="Share listing" aria-label="Share listing" className={`inline-flex h-11 w-11 items-center justify-center rounded-lg border ${isDarkMode ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-100'}`}><Share2 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { setIsReporting(open => !open); setReportMessage(null); }} title="Report listing" aria-label="Report listing" className={`inline-flex h-11 w-11 items-center justify-center rounded-lg border ${isDarkMode ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800' : 'border-neutral-300 text-neutral-700 hover:bg-neutral-100'}`}><Flag className="h-4 w-4" /></button>
             </div>
+            {isReporting && <form onSubmit={reportListing} className="mt-4 space-y-2 border-t border-neutral-800/60 pt-4">
+              <label className="block text-xs font-semibold">Report reason<select value={reportReason} onChange={event => setReportReason(event.target.value)} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs"><option>Misleading content</option><option>Prohibited item</option><option>Impersonation</option><option>Inappropriate content</option><option>Other</option></select></label>
+              <textarea value={reportDetails} onChange={event => setReportDetails(event.target.value)} maxLength={1000} rows={3} placeholder="Additional context (optional)" className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs" />
+              <button type="submit" className="rounded-lg bg-amber-400 px-3 py-2 text-xs font-bold text-neutral-950">Send report</button>
+            </form>}
+            {reportMessage && <p role="status" className="mt-3 text-xs text-amber-400">{reportMessage}</p>}
           </div>
 
           {seller && <div className={`rounded-2xl border p-4 ${surface}`}>

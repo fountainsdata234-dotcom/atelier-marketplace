@@ -43,6 +43,7 @@ It is especially useful for communities where shoppers want to:
 3. Run `supabase/schema.sql` and then `supabase/storage.sql` in the Supabase SQL editor. Keep the service-role key server-only.
    For an existing Supabase project, also run `supabase/migrations/20261013_admin_role_policy.sql` to prevent users from granting themselves administrator privileges through profile updates.
    Run `supabase/migrations/20261014_seller_data_cleanup.sql` as well to persist seller collections and cascade-delete seller data.
+   Run `supabase/migrations/20261014_production_listings.sql` to upgrade existing posts to the shared listing lifecycle, search index, reports, and audit log.
 4. Start the backend:
    `npm run server`
 5. Start the frontend in another terminal:
@@ -67,6 +68,7 @@ To import legacy Firebase records once, place the Firebase Admin service-account
 ## Security and deployment notes
 
 - Keep Supabase service-role keys server-only and never commit them.
+- New listings and edits are private drafts or enter the admin review queue; only approved, published listings are searchable and publicly displayed.
 - Firebase credentials are needed only for the one-time legacy data migration.
 - Deploy with proper hosting and backend settings before exposing the app publicly.
 - Apply and review the Supabase RLS and Storage policies before exposing the app publicly.

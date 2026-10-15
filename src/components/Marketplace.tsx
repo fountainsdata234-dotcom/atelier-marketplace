@@ -52,12 +52,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   isDarkMode
 }) => {
   // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchPosts, setSearchPosts] = useState<ClothPost[] | null>(null);
   const [failedPostImageUrls, setFailedPostImageUrls] = useState<Record<string, string>>({});
+  const sourcePosts = searchQuery.trim().length >= 2 && searchPosts !== null ? searchPosts : posts;
   const handlePostImageError = (post: ClothPost) => {
     setFailedPostImageUrls(current => ({ ...current, [post.id]: post.imageUrl }));
   };
-  const sellerPosts = useMemo(() => posts
-    .filter(post => (post.authorRole === 'tailor' || post.authorRole === 'fabric_seller') && post.imageUrl?.trim() && failedPostImageUrls[post.id] !== post.imageUrl)
+  const sellerPosts = useMemo(() => sourcePosts
+    .filter(post => (post.status === undefined || (post.status === 'published' && (post.moderationStatus === undefined || post.moderationStatus === 'approved')))
+      && !post.deletedAt
+      && (post.authorRole === 'tailor' || post.authorRole === 'fabric_seller')
+      && post.imageUrl?.trim() && failedPostImageUrls[post.id] !== post.imageUrl)
     .map(post => {
       const author = users.find(user => user.id === post.authorId);
       return {
@@ -77,14 +83,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         rating: Number(post.rating) || 0,
         ratingCount: Number(post.ratingCount) || 0,
       };
-    }), [posts, users, failedPostImageUrls]);
+    }), [sourcePosts, users, failedPostImageUrls]);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
   const followedSellerIds = useMemo(() => new Set(
     users.filter(user => currentUser && user.followers?.includes(currentUser.id)).map(user => user.id),
   ), [users, currentUser?.id]);
   const tailorPosts = sellerPosts;
   const formatLocation = (location?: Partial<UserLocation>) => [location?.city, location?.state, location?.country].filter(Boolean).join(', ');
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterState, setFilterState] = useState<string>('all');
@@ -105,6 +110,27 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const seenPostIdsRef = useRef(new Set<string>());
   const trendScrollRef = useRef<HTMLDivElement | null>(null);
   const locationDataRequestRef = useRef<Promise<CountryGeo[]> | null>(null);
+
+  useEffect(() => {
+    const term = searchQuery.trim();
+    if (term.length < 2) {
+      setSearchPosts(null);
+      return;
+    }
+    let cancelled = false;
+    setSearchPosts(null);
+    const timer = window.setTimeout(() => {
+      void api.getPosts(term).then(result => {
+        if (!cancelled) setSearchPosts(result);
+      }).catch(() => {
+        if (!cancelled) setSearchPosts(null);
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   const loadLocationFilters = () => {
     setShowLocationFilters(true);
@@ -637,7 +663,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   className="relative aspect-[10/13] min-h-[320px] bg-neutral-950 sm:aspect-[16/7] sm:min-h-[320px]"
                 >
                   <button type="button" onClick={() => onSelectPost(post)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-pointer">
-                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-contain brightness-110 saturate-110" loading="eager" onError={() => handlePostImageError(post)} />
+                    <img src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-contain brightness-110 saturate-110" loading="eager" onError={() => handlePostImageError(post)} />
                   </button>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.12),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.02)_25%,rgba(0,0,0,0.16)_55%,rgba(0,0,0,0.64)_100%)] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.14),transparent_30%),linear-gradient(90deg,rgba(0,0,0,0.72),rgba(0,0,0,0.3)_55%,rgba(0,0,0,0.04))]" />
 
@@ -761,7 +787,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   }}
                 >
                   <div className="relative overflow-hidden">
-                    <img src={post.imageUrl} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" onError={() => handlePostImageError(post)} />
+                    <img src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" onError={() => handlePostImageError(post)} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-3">
                       <p className="text-xs font-semibold truncate text-white">{post.title}</p>
@@ -1093,7 +1119,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 {/* Garment Image with High-Res Zoom / Save */}
                 <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
                   <img
-                    src={post.imageUrl}
+                    src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl}
                     alt={post.title}
                     className="block h-auto w-full cursor-pointer object-contain brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
                     referrerPolicy="no-referrer"

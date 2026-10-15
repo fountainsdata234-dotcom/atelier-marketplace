@@ -135,14 +135,39 @@ export async function updateAuthorPromotion(uid: string, isPromoted: boolean): P
   if (error) throw normalizeError(error);
 }
 
-export async function getPosts(limit = 24): Promise<PostRecord[]> {
-  const { data, error } = await requireClient().from('posts').select('*, author:profiles!posts_author_id_fkey(*)').order('created_at', { ascending: false }).limit(limit);
+export async function getPosts(limit = 24, search?: string): Promise<PostRecord[]> {
+  let query = requireClient().from('posts').select('*, author:profiles!posts_author_id_fkey(*)')
+    .eq('status', 'published')
+    .eq('moderation_status', 'approved')
+    .is('deleted_at', null)
+    .eq('is_blocked', false)
+    .neq('availability', 'unavailable')
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (search) query = query.textSearch('search_document', search, { type: 'websearch', config: 'simple' });
+  const { data, error } = await query;
   if (error) throw normalizeError(error);
   return (data || []).map(post => ({ ...post, author: post.author || {} }));
 }
 
+export async function getSellerListings(userId: string): Promise<PostRecord[]> {
+  const { data, error } = await requireClient().from('posts').select('*, author:profiles!posts_author_id_fkey(*)')
+    .eq('author_id', userId).is('deleted_at', null).order('updated_at', { ascending: false });
+  if (error) throw normalizeError(error);
+  return data || [];
+}
+
+export async function getListingsForModeration(): Promise<PostRecord[]> {
+  const { data, error } = await requireClient().from('posts').select('*, author:profiles!posts_author_id_fkey(*)')
+    .eq('status', 'pending_review').eq('moderation_status', 'pending').is('deleted_at', null)
+    .order('created_at', { ascending: true }).limit(100);
+  if (error) throw normalizeError(error);
+  return data || [];
+}
+
 export async function getPost(postId: string): Promise<PostRecord | null> {
-  const { data, error } = await requireClient().from('posts').select('*, author:profiles!posts_author_id_fkey(*)').eq('id', postId).maybeSingle();
+  const { data, error } = await requireClient().from('posts').select('*, author:profiles!posts_author_id_fkey(*)')
+    .eq('id', postId).is('deleted_at', null).maybeSingle();
   if (error) throw normalizeError(error);
   return data ? { ...data, author: data.author || {} } : null;
 }
@@ -157,6 +182,54 @@ export async function createPostWithUser(values: ProfileRecord, userId: string):
   const { data, error } = await requireClient().from('posts').insert({ ...values, author_id: userId }).select('*').single();
   if (error) throw normalizeError(error);
   return data;
+}
+
+export async function updateListing(listingId: string, values: ProfileRecord): Promise<PostRecord> {
+  const { data, error } = await requireClient().from('posts').update(values).eq('id', listingId).is('deleted_at', null).select('*').single();
+  if (error) throw normalizeError(error);
+  return data;
+}
+
+export async function softDeleteListing(listingId: string, deletedAt: string): Promise<void> {
+  const { error } = await requireClient().from('posts').update({
+    deleted_at: deletedAt,
+    status: 'archived',
+    updated_at: deletedAt,
+  }).eq('id', listingId).is('deleted_at', null);
+  if (error) throw normalizeError(error);
+}
+
+export async function recordListingChange(listingId: string, actorId: string, action: string, changes: ProfileRecord = {}): Promise<void> {
+  const { error } = await requireClient().from('listing_changes').insert({
+    listing_id: listingId,
+    actor_id: actorId,
+    action,
+    changes,
+  });
+  if (error) throw normalizeError(error);
+}
+
+export async function createListingReport(listingId: string, reporterId: string, reason: string, details: string): Promise<void> {
+  const { error } = await requireClient().from('listing_reports').insert({
+    listing_id: listingId,
+    reporter_id: reporterId,
+    reason,
+    details,
+  });
+  if (error) throw normalizeError(error);
+}
+
+export async function getListingReports(): Promise<ProfileRecord[]> {
+  const { data, error } = await requireClient().from('listing_reports')
+    .select('*, listing:posts!listing_reports_listing_id_fkey(title), reporter:profiles!listing_reports_reporter_id_fkey(name, email)')
+    .eq('status', 'open').order('created_at', { ascending: false }).limit(200);
+  if (error) throw normalizeError(error);
+  return data || [];
+}
+
+export async function updateListingReport(reportId: string, status: 'reviewed' | 'dismissed'): Promise<void> {
+  const { error } = await requireClient().from('listing_reports').update({ status }).eq('id', reportId);
+  if (error) throw normalizeError(error);
 }
 
 export async function deletePost(postId: string): Promise<void> {

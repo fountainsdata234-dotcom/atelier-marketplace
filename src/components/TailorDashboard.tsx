@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Scissors, Sparkles, Upload, Image as ImageIcon, Link as LinkIcon, Share2, Star, AlertTriangle, CheckCircle, Trash2, Heart, Bookmark, Phone, MessageSquare, DollarSign, Tag, Clock } from 'lucide-react';
-import { User, ClothPost, AdminPromoPlan, FabricRequest } from '../types';
-import { compressAndGenerateImageLink, validateImageLink, ProcessedImageResult } from '../utils/imageProgram';
+import { Scissors, Sparkles, Upload, Image as ImageIcon, Share2, Star, AlertTriangle, CheckCircle, Trash2, Heart, Bookmark, Phone, MessageSquare, DollarSign, Tag, Clock, Eye, Pause, Archive, RotateCcw } from 'lucide-react';
+import { User, ClothPost, AdminPromoPlan, FabricRequest, ListingImageAsset, ListingType } from '../types';
+import { compressAndGenerateImageLink, ProcessedImageResult } from '../utils/imageProgram';
 import { storageService } from '../services/storage';
-import { uploadUserImage } from '../services/firebase';
-import { getAuthUserId } from '../services/auth';
 import { api } from '../services/api';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 
@@ -29,7 +27,28 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [description, setDescription] = useState('');
   const [imageAlt, setImageAlt] = useState('');
   const [tagsInput, setTagsInput] = useState('');
-  const [pricingBasic, setPricingBasic] = useState<number>(0);
+  const [pricingBasic, setPricingBasic] = useState('');
+  const [priceMax, setPriceMax] = useState('');
+  const [stockQuantity, setStockQuantity] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [listingType, setListingType] = useState<ListingType>(currentUser.role === 'fabric_seller' ? 'FABRIC' : 'CLOTHING');
+  const [fabricMaterial, setFabricMaterial] = useState('');
+  const [fabricColour, setFabricColour] = useState('');
+  const [fabricPattern, setFabricPattern] = useState('');
+  const [fabricWidth, setFabricWidth] = useState('');
+  const [fabricWidthUnit, setFabricWidthUnit] = useState<'cm' | 'in'>('cm');
+  const [fabricPriceUnit, setFabricPriceUnit] = useState<'yard' | 'metre' | 'piece' | 'roll'>('yard');
+  const [fabricMinimumOrder, setFabricMinimumOrder] = useState('1');
+  const [garmentType, setGarmentType] = useState('');
+  const [garmentGender, setGarmentGender] = useState('');
+  const [garmentSizes, setGarmentSizes] = useState('');
+  const [customizationOptions, setCustomizationOptions] = useState('');
+  const [leadTimeDays, setLeadTimeDays] = useState('');
+  const [fulfilment, setFulfilment] = useState<'ready_made' | 'made_to_order'>('ready_made');
+  const [editingListingId, setEditingListingId] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [sellerListings, setSellerListings] = useState<ClothPost[]>(() => posts.filter(post => post.authorId === currentUser.id));
+  const [imageAssets, setImageAssets] = useState<ListingImageAsset[]>([]);
 
   const TAG_OPTIONS = ['Menwear', 'Womenwear', 'Commercial', 'Formal', 'Bridal', 'Casual', 'Streetwear', 'Fabrics'];
 
@@ -67,7 +86,6 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
   // Image Program State
   const [imageUrl, setImageUrl] = useState('');
-  const [imageHostMode, setImageHostMode] = useState<'upload_compress' | 'direct_link'>('upload_compress');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [compressionStats, setCompressionStats] = useState<ProcessedImageResult | null>(null);
   const [postStatus, setPostStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -77,7 +95,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [activeStudioTab, setActiveStudioTab] = useState<'overview' | 'posts' | 'plans'>('overview');
 
   // Filter posts belonging to this tailor/seller
-  const myPosts = posts.filter(p => p.authorId === currentUser.id).map(post => ({
+  const myPosts = sellerListings.filter(p => p.authorId === currentUser.id && !p.deletedAt).map(post => ({
     ...post,
     likes: Array.isArray(post.likes) ? post.likes : [],
     saves: Array.isArray(post.saves) ? post.saves : [],
@@ -86,6 +104,15 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const totalLikes = myPosts.reduce((acc, p) => acc + p.likes.length, 0);
   const totalSaves = myPosts.reduce((acc, p) => acc + p.saves.length, 0);
   const followerCount = Array.isArray(currentUser.followers) ? currentUser.followers.length : 0;
+
+  React.useEffect(() => {
+    setSellerListings(posts.filter(post => post.authorId === currentUser.id));
+    void api.getMyListings().then(setSellerListings).catch(() => undefined);
+  }, [currentUser.id]);
+
+  React.useEffect(() => {
+    setListingType(currentUser.role === 'fabric_seller' ? 'FABRIC' : 'CLOTHING');
+  }, [currentUser.role]);
 
   const acknowledgeWarning = async () => {
     const cleared = storageService.updateUser(currentUser.id, { isWarned: false, warningNote: '' });
@@ -133,21 +160,30 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
   // Handle file upload through Image Link Program
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const userId = await getAuthUserId();
-    if (!file || !userId) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
     setIsProcessingImage(true);
     setPostStatus(null);
     try {
-      const result = await compressAndGenerateImageLink(file);
-      if (!result.blob) {
-        throw new Error('Please sign in again before uploading an image.');
+      const remainingSlots = 8 - imageAssets.length;
+      if (files.length > remainingSlots) throw new Error(`You can add up to 8 images. ${remainingSlots} image slot(s) remain.`);
+      const uploadedAssets: ListingImageAsset[] = [];
+      let lastCompression: ProcessedImageResult | null = null;
+      for (const file of files) {
+        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+          throw new Error('Choose JPEG, PNG, WebP, or GIF images.');
+        }
+        if (file.size > 15 * 1024 * 1024) throw new Error(`${file.name} exceeds the 15 MB image limit.`);
+        const result = await compressAndGenerateImageLink(file);
+        if (!result.blob) throw new Error('Please sign in again before uploading an image.');
+        uploadedAssets.push(await api.uploadListingImage(result.blob, `${Date.now()}-${file.name}`));
+        URL.revokeObjectURL(result.url);
+        lastCompression = result;
       }
-      const uploadedUrl = await uploadUserImage(result.blob, userId, 'posts', `${Date.now()}.jpg`, true);
-      URL.revokeObjectURL(result.url);
-      setImageUrl(uploadedUrl);
-      setCompressionStats(result);
+      setImageAssets(current => [...current, ...uploadedAssets]);
+      if ((imageAssets.length === 0 || !imageUrl) && uploadedAssets[0]) setImageUrl(uploadedAssets[0].url);
+      setCompressionStats(lastCompression);
     } catch (err: any) {
       setPostStatus({
         type: 'error',
@@ -159,9 +195,10 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   };
 
   // Submit Post
-  const handlePublishPost = async (e: React.FormEvent) => {
+  const handlePublishPost = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setPostStatus(null);
+    const intent = new FormData(e.currentTarget).get('intent') === 'draft' ? 'draft' : 'publish';
 
     if (currentUser.isBlocked) {
       setPostStatus({
@@ -171,7 +208,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       return;
     }
 
-    if (!title.trim() || !imageUrl.trim()) {
+    if (!title.trim() || !imageUrl.trim() || imageAssets.length === 0) {
       setPostStatus({
         type: 'error',
         message: 'Please provide a post title and an image link or uploaded photo.'
@@ -181,6 +218,24 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
     const tags = normalizeTags(tagsInput);
 
+    const details = listingType === 'FABRIC'
+      ? {
+          material: fabricMaterial,
+          colour: fabricColour,
+          pattern: fabricPattern,
+          width: fabricWidth ? Number(fabricWidth) : null,
+          widthUnit: fabricWidthUnit,
+          priceUnit: fabricPriceUnit,
+          minimumOrder: Number(fabricMinimumOrder),
+        }
+      : {
+          garmentType,
+          gender: garmentGender,
+          sizes: garmentSizes.split(',').map(size => size.trim()).filter(Boolean),
+          customizationOptions: customizationOptions.split(',').map(option => option.trim()).filter(Boolean),
+          leadTimeDays: leadTimeDays ? Number(leadTimeDays) : null,
+          fulfilment,
+        };
     const postData = {
       authorId: currentUser.id,
       authorName: currentUser.shopName || currentUser.name,
@@ -192,6 +247,15 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       isPromoted: currentUser.isPromoted,
       title: title.trim(),
       description: description.trim(),
+      listingType,
+      categoryId,
+      currency: currentUser.location.currency || 'USD',
+      imageAssets,
+      stockQuantity: stockQuantity ? Number(stockQuantity) : null,
+      availability: listingType === 'FABRIC' ? 'available' as const : fulfilment === 'made_to_order' ? 'made_to_order' as const : 'available' as const,
+      priceMin: pricingBasic === '' ? null : Number(pricingBasic),
+      priceMax: priceMax === '' ? null : Number(priceMax),
+      listingDetails: details,
       tags: tags.length > 0 ? tags : [currentUser.role === 'fabric_seller' ? 'Fabrics' : 'Menwear'],
       pricing: {
         currency: currentUser.location.currency || 'USD',
@@ -205,24 +269,43 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     };
 
     try {
-      const createdPost = await api.createPost(postData);
+      const createdPost = editingListingId
+        ? await api.updateListing(editingListingId, { ...postData, intent })
+        : await api.createPost({ ...postData, intent });
       const cachedPosts = storageService.getPosts();
-      storageService.savePosts([
-        { ...createdPost, likes: createdPost.likes || [], saves: createdPost.saves || [], rating: createdPost.rating || 0, ratingCount: createdPost.ratingCount || 0, ratingsByUser: createdPost.ratingsByUser || {} },
-        ...cachedPosts.filter(item => item.id !== createdPost.id)
-      ]);
+      const normalizedPost = {
+        ...(cachedPosts.find(item => item.id === createdPost.id) || {}),
+        ...createdPost,
+        ...postData,
+        id: createdPost.id,
+        authorId: currentUser.id,
+        authorRole: currentUser.role,
+        likes: createdPost.likes || [],
+        saves: createdPost.saves || [],
+        rating: createdPost.rating || 0,
+        ratingCount: createdPost.ratingCount || 0,
+        ratingsByUser: createdPost.ratingsByUser || {},
+      } as ClothPost;
+      storageService.savePosts([normalizedPost, ...cachedPosts.filter(item => item.id !== createdPost.id)]);
+      setSellerListings(current => [normalizedPost, ...current.filter(item => item.id !== normalizedPost.id)]);
     } catch (error) {
       setPostStatus({ type: 'error', message: error instanceof Error ? error.message : 'Failed to publish post.' });
       return;
     }
 
-    setPostStatus({ type: 'success', message: 'Post published successfully to the marketplace!' });
+    setPostStatus({ type: 'success', message: intent === 'draft' ? 'Draft saved. It is visible only in your studio.' : 'Listing submitted for review and will appear in the marketplace after approval.' });
     setTitle('');
     setDescription('');
     setImageAlt('');
     setTagsInput('');
     setImageUrl('');
+    setImageAssets([]);
     setCompressionStats(null);
+    setPricingBasic('');
+    setPriceMax('');
+    setStockQuantity('');
+    setCategoryId('');
+    setEditingListingId(null);
   };
 
   // Delete Post
@@ -230,22 +313,90 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     if (!window.confirm('Are you sure you want to remove this bespoke design?')) return;
 
     const cachedPosts = storageService.getPosts();
-    const postExists = cachedPosts.some(post => post.id === postId);
-    if (!postExists) return;
-
     storageService.deletePost(postId, currentUser.id, false);
 
     try {
       await api.deletePost(postId);
+      setSellerListings(current => current.filter(post => post.id !== postId));
       setPostStatus({ type: 'success', message: 'Post removed from the marketplace.' });
     } catch (error) {
-      storageService.savePosts(cachedPosts);
+      if (cachedPosts.some(post => post.id === postId)) storageService.savePosts(cachedPosts);
       setPostStatus({ type: 'error', message: error instanceof Error ? error.message : 'The post could not be deleted.' });
+    }
+  };
+
+  const editListing = (post: ClothPost) => {
+    const details = post.listingDetails || {};
+    setEditingListingId(post.id);
+    setListingType(post.listingType || (currentUser.role === 'fabric_seller' ? 'FABRIC' : 'CLOTHING'));
+    setTitle(post.title);
+    setDescription(post.description);
+    setImageAlt(post.imageAlt || '');
+    setTagsInput(post.tags.join(', '));
+    setImageUrl(post.imageUrl);
+    setImageAssets(post.imageAssets || []);
+    const legacyPrice = Number(post.pricing?.basic);
+    setPricingBasic(post.priceMin === null || post.priceMin === undefined
+      ? legacyPrice > 0 ? String(legacyPrice) : ''
+      : String(post.priceMin));
+    setPriceMax(post.priceMax === null || post.priceMax === undefined ? '' : String(post.priceMax));
+    setStockQuantity(post.stockQuantity === null || post.stockQuantity === undefined ? '' : String(post.stockQuantity));
+    setCategoryId(post.categoryId || '');
+    setFabricMaterial('material' in details ? details.material || '' : '');
+    setFabricColour('colour' in details ? details.colour || '' : '');
+    setFabricPattern('pattern' in details ? details.pattern || '' : '');
+    setFabricWidth('width' in details && details.width ? String(details.width) : '');
+    setFabricWidthUnit('widthUnit' in details && details.widthUnit === 'in' ? 'in' : 'cm');
+    setFabricPriceUnit('priceUnit' in details && details.priceUnit ? details.priceUnit : 'yard');
+    setFabricMinimumOrder('minimumOrder' in details && details.minimumOrder ? String(details.minimumOrder) : '1');
+    setGarmentType('garmentType' in details ? details.garmentType || '' : '');
+    setGarmentGender('gender' in details ? details.gender || '' : '');
+    setGarmentSizes('sizes' in details && Array.isArray(details.sizes) ? details.sizes.join(', ') : '');
+    setCustomizationOptions('customizationOptions' in details && Array.isArray(details.customizationOptions) ? details.customizationOptions.join(', ') : '');
+    setLeadTimeDays('leadTimeDays' in details && details.leadTimeDays ? String(details.leadTimeDays) : '');
+    setFulfilment('fulfilment' in details && details.fulfilment === 'made_to_order' ? 'made_to_order' : 'ready_made');
+    setActiveStudioTab('posts');
+    setPostStatus(null);
+    document.getElementById('listing-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const changeListingStatus = async (post: ClothPost, action: 'publish' | 'pause' | 'archive' | 'sold_out') => {
+    try {
+      const updated = await api.setListingStatus(post.id, action);
+      const next = { ...post, ...updated, id: post.id } as ClothPost;
+      setSellerListings(current => current.map(item => item.id === post.id ? next : item));
+      storageService.savePosts(storageService.getPosts().map(item => item.id === post.id ? next : item));
+      const message = action === 'publish' ? 'Listing submitted for moderation.'
+        : action === 'sold_out' ? 'Listing marked sold out.'
+          : `Listing ${action === 'pause' ? 'paused' : 'archived'}.`;
+      setPostStatus({ type: 'success', message });
+    } catch (error) {
+      setPostStatus({ type: 'error', message: error instanceof Error ? error.message : 'The listing status could not be changed.' });
     }
   };
 
   return (
     <div className="relative z-10 flex w-full max-w-7xl flex-col mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+      {isPreviewOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-label="Listing preview">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-700 bg-[#121316] shadow-2xl">
+            {imageUrl && <img src={imageAssets[0]?.thumbnailUrl || imageUrl} alt={imageAlt || title} className="max-h-[50vh] w-full bg-neutral-950 object-contain" />}
+            <div className="space-y-3 p-5">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400">{listingType.replace('_', ' ')}</div>
+              <h2 className="font-serif text-2xl font-bold">{title || 'Listing title'}</h2>
+              <p className="whitespace-pre-line text-sm text-neutral-300">{description || 'Listing description preview.'}</p>
+              <div className="flex justify-between border-t border-neutral-700 pt-3 text-sm">
+                <span>{currentUser.location.currency || 'USD'} {pricingBasic || 'Price on request'}{priceMax ? ` – ${priceMax}` : ''}</span>
+                <span>{[currentUser.location.city, currentUser.location.country].filter(Boolean).join(', ')}</span>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setIsPreviewOpen(false)} className="rounded-lg border border-neutral-600 px-4 py-2 text-xs font-semibold">Close preview</button>
+                <button type="button" onClick={() => setIsPreviewOpen(false)} className="rounded-lg bg-amber-400 px-4 py-2 text-xs font-bold text-neutral-950">Continue editing</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <AnimatePresence>
         {warningModalOpen && currentUser.isWarned && currentUser.warningNote && (
           <motion.div
@@ -500,17 +651,47 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 )}
               </AnimatePresence>
 
-              <form onSubmit={handlePublishPost} className="space-y-6">
+              <form id="listing-editor" onSubmit={handlePublishPost} className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div>
+                      <label className="mb-1.5 block text-xs font-medium text-neutral-400">Listing type *</label>
+                      <select value={listingType} disabled={currentUser.isBlocked || Boolean(editingListingId)} onChange={event => setListingType(event.target.value as ListingType)} className="w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-3.5 py-2.5 text-xs focus:border-amber-500 focus:outline-none">
+                        {currentUser.role === 'fabric_seller'
+                          ? <option value="FABRIC">Fabric</option>
+                          : <><option value="CLOTHING">Clothing</option><option value="TAILOR_PORTFOLIO">Tailor portfolio</option></>}
+                      </select>
+                    </div>
+                    <div>
                       <label className="block text-xs font-medium text-neutral-400 mb-1.5">Item Title *</label>
-                      <input type="text" required disabled={currentUser.isBlocked} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={currentUser.role === 'fabric_seller' ? 'e.g. Royal Italian 100% Cashmere Wool' : 'e.g. Double-Breasted Tuxedo'} className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none" />
+                      <input type="text" minLength={3} maxLength={160} required disabled={currentUser.isBlocked} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={currentUser.role === 'fabric_seller' ? 'e.g. Royal Italian 100% Cashmere Wool' : 'e.g. Double-Breasted Tuxedo'} className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-neutral-400 mb-1.5">Description & Labeling *</label>
-                      <textarea rows={3} required disabled={currentUser.isBlocked} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the fabric weave, fit silhouette, occasion, and turnaround time." className="w-full p-3 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none" />
+                      <textarea rows={3} minLength={10} maxLength={3000} required disabled={currentUser.isBlocked} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the fabric weave, fit silhouette, occasion, and turnaround time." className="w-full p-3 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none" />
                     </div>
+                    {listingType === 'FABRIC' ? (
+                      <div className="grid grid-cols-2 gap-3 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4">
+                        <label className="text-xs text-neutral-400">Material *<input required value={fabricMaterial} onChange={event => setFabricMaterial(event.target.value)} maxLength={100} placeholder="Cotton, silk, wool…" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                        <label className="text-xs text-neutral-400">Colour *<input required value={fabricColour} onChange={event => setFabricColour(event.target.value)} maxLength={80} placeholder="Navy blue" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                        <label className="text-xs text-neutral-400">Pattern<input value={fabricPattern} onChange={event => setFabricPattern(event.target.value)} maxLength={100} placeholder="Plain, floral, plaid…" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                        <label className="text-xs text-neutral-400">Width<input type="number" min="0.1" step="0.1" value={fabricWidth} onChange={event => setFabricWidth(event.target.value)} placeholder="Optional" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                        <label className="text-xs text-neutral-400">Width unit<select value={fabricWidthUnit} onChange={event => setFabricWidthUnit(event.target.value as 'cm' | 'in')} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100"><option value="cm">Centimetres</option><option value="in">Inches</option></select></label>
+                        <label className="text-xs text-neutral-400">Price per *<select value={fabricPriceUnit} onChange={event => setFabricPriceUnit(event.target.value as 'yard' | 'metre' | 'piece' | 'roll')} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100"><option value="yard">Yard</option><option value="metre">Metre</option><option value="piece">Piece</option><option value="roll">Roll</option></select></label>
+                        <label className="col-span-2 text-xs text-neutral-400">Minimum order *<input type="number" required min="0.001" step="0.001" value={fabricMinimumOrder} onChange={event => setFabricMinimumOrder(event.target.value)} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                      </div>
+                    ) : listingType === 'CLOTHING' ? (
+                      <div className="grid grid-cols-2 gap-3 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4">
+                        <label className="text-xs text-neutral-400">Garment type *<input required value={garmentType} onChange={event => setGarmentType(event.target.value)} maxLength={100} placeholder="Suit, dress, shirt…" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                        <label className="text-xs text-neutral-400">Gender / style<input value={garmentGender} onChange={event => setGarmentGender(event.target.value)} maxLength={40} placeholder="Unisex, womenswear…" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                        <label className="col-span-2 text-xs text-neutral-400">Sizes<input value={garmentSizes} onChange={event => setGarmentSizes(event.target.value)} placeholder="Separate sizes with commas: S, M, L" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                        <label className="col-span-2 text-xs text-neutral-400">Customization options<input value={customizationOptions} onChange={event => setCustomizationOptions(event.target.value)} placeholder="Separate options with commas" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                        <label className="text-xs text-neutral-400">Fulfilment<select value={fulfilment} onChange={event => setFulfilment(event.target.value as 'ready_made' | 'made_to_order')} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100"><option value="ready_made">Ready-made</option><option value="made_to_order">Made to order</option></select></label>
+                        <label className="text-xs text-neutral-400">Lead time (days)<input type="number" min="0" max="365" value={leadTimeDays} onChange={event => setLeadTimeDays(event.target.value)} placeholder="Optional" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 text-xs text-neutral-400">Showcase a completed tailoring project in your portfolio. Include what was made, the techniques used, and any client-approved customization details.</div>
+                    )}
                     <div>
                       <label className="block text-xs font-medium text-neutral-400 mb-1.5">Tags</label>
                       <input type="text" disabled={currentUser.isBlocked} value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. menwear, womenwear, formal, bridal" className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none" />
@@ -525,35 +706,36 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                       <input type="text" disabled={currentUser.isBlocked} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="e.g. Tailored ivory wedding suit photographed in daylight on a neutral studio backdrop" className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none" />
                       <p className="mt-1 text-[10px] text-neutral-500">This helps screen readers and makes the collection more professional.</p>
                     </div>
-                    <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4">
-                      <span className="block text-xs font-semibold text-amber-400 font-mono">Seller Price ({currentUser.location.currency || 'USD'})</span>
-                      <div className="relative mt-3">
-                        <span className="absolute left-2.5 top-2 text-neutral-500 text-xs">{currentUser.location.currency || 'USD'}</span>
-                        <input type="number" min="0" disabled={currentUser.isBlocked} value={pricingBasic} onChange={(e) => setPricingBasic(Number(e.target.value))} placeholder="Leave blank for negotiable" className="w-full pl-6 pr-2 py-1.5 text-xs rounded-lg bg-neutral-800 border border-neutral-700 font-mono" />
-                      </div>
-                      <p className="mt-2 text-[10px] text-neutral-400">Leave it empty and the item will appear as negotiable.</p>
+                    <div className="grid grid-cols-2 gap-3 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4">
+                      <label className="text-xs font-semibold text-amber-400">Minimum price ({currentUser.location.currency || 'USD'})<input type="number" min="0" step="0.01" disabled={currentUser.isBlocked} value={pricingBasic} onChange={event => setPricingBasic(event.target.value)} placeholder="Optional" className="mt-2 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 font-mono text-xs text-neutral-100" /></label>
+                      <label className="text-xs font-semibold text-amber-400">Maximum price<input type="number" min="0" step="0.01" disabled={currentUser.isBlocked} value={priceMax} onChange={event => setPriceMax(event.target.value)} placeholder="Optional" className="mt-2 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 font-mono text-xs text-neutral-100" /></label>
+                      <label className="col-span-2 text-xs text-neutral-400">Available quantity<input type="number" min="0" step="0.001" disabled={currentUser.isBlocked} value={stockQuantity} onChange={event => setStockQuantity(event.target.value)} placeholder="Leave blank if availability is not quantity-based" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
+                      <label className="col-span-2 text-xs text-neutral-400">Category<input value={categoryId} onChange={event => setCategoryId(event.target.value)} maxLength={80} placeholder="Optional category" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-2 text-neutral-100" /></label>
                     </div>
                   </div>
 
                   <div className="space-y-4">
-                    <label className="block text-xs font-medium text-neutral-400">Garment image *</label>
-                    <div className="flex gap-2 text-xs">
-                      <button type="button" onClick={() => setImageHostMode('upload_compress')} className={`flex-1 rounded-xl border py-2 font-medium transition-all ${imageHostMode === 'upload_compress' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-neutral-700 text-neutral-400'}`}><span className="inline-flex items-center justify-center gap-1.5"><Upload className="w-3.5 h-3.5" />Upload & Compress</span></button>
-                      <button type="button" onClick={() => setImageHostMode('direct_link')} className={`flex-1 rounded-xl border py-2 font-medium transition-all ${imageHostMode === 'direct_link' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-neutral-700 text-neutral-400'}`}><span className="inline-flex items-center justify-center gap-1.5"><LinkIcon className="w-3.5 h-3.5" />Direct Link</span></button>
+                    <label className="block text-xs font-medium text-neutral-400">{listingType === 'FABRIC' ? 'Fabric images *' : 'Garment / portfolio images *'}</label>
+                    <div className="rounded-2xl border-2 border-dashed border-neutral-700 bg-neutral-900/30 p-6 text-center transition-all hover:border-amber-500/60">
+                    <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" id="tailor-file-input" disabled={currentUser.isBlocked || isProcessingImage || imageAssets.length >= 8} onChange={handleFileUpload} className="hidden" />
+                      <label htmlFor="tailor-file-input" className="flex cursor-pointer flex-col items-center justify-center">
+                        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400"><ImageIcon className="h-6 w-6" /></div>
+                        <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? 'Processing and securely uploading…' : 'Upload a product image'}</span>
+                        <span className="mt-1 text-[10px] text-neutral-500">Add up to 8 JPEG, PNG, WebP, or GIF images, 15 MB each. Optimized images and thumbnails are generated on the server.</span>
+                      </label>
                     </div>
-
-                    {imageHostMode === 'upload_compress' ? (
-                      <div className="rounded-2xl border-2 border-dashed border-neutral-700 bg-neutral-900/30 p-6 text-center transition-all hover:border-amber-500/60">
-                        <input type="file" accept="image/*" id="tailor-file-input" disabled={currentUser.isBlocked || isProcessingImage} onChange={handleFileUpload} className="hidden" />
-                        <label htmlFor="tailor-file-input" className="flex cursor-pointer flex-col items-center justify-center">
-                          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400"><ImageIcon className="h-6 w-6" /></div>
-                          <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? 'Compressing & generating optimized link...' : 'Click to upload a product image'}</span>
-                          <span className="mt-1 text-[10px] text-neutral-500">Our compression tool keeps files lightweight without sacrificing quality.</span>
-                        </label>
+                    {imageAssets.length > 0 && <div className="grid grid-cols-4 gap-2">{imageAssets.map((asset, index) => (
+                      <div key={asset.url} className="relative aspect-square overflow-hidden rounded-lg border border-neutral-700">
+                        <img src={asset.thumbnailUrl || asset.url} alt={`Listing image ${index + 1}`} className="h-full w-full object-cover" />
+                        <button type="button" onClick={() => {
+                          const next = imageAssets.filter(item => item.url !== asset.url);
+                          setImageAssets(next);
+                          if (imageUrl === asset.url) setImageUrl(next[0]?.url || '');
+                        }} className="absolute right-1 top-1 rounded bg-black/80 px-1.5 py-0.5 text-xs text-white" aria-label={`Remove image ${index + 1}`}>×</button>
+                        {imageUrl === asset.url && <span className="absolute bottom-1 left-1 rounded bg-black/80 px-1.5 py-0.5 text-[9px] text-amber-300">Main</span>}
+                        {imageUrl !== asset.url && <button type="button" onClick={() => setImageUrl(asset.url)} className="absolute inset-x-0 bottom-0 bg-black/70 py-1 text-[9px] text-white">Make primary</button>}
                       </div>
-                    ) : (
-                      <input type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://images.unsplash.com/... or Cloudinary URL" className="w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-3.5 py-2.5 text-xs font-mono focus:border-amber-500 focus:outline-none" />
-                    )}
+                    ))}</div>}
 
                     {compressionStats && (
                       <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400 font-mono">
@@ -571,9 +753,12 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-end border-t border-neutral-800 pt-4">
-                  <button type="submit" disabled={currentUser.isBlocked || isProcessingImage} className="rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 px-8 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-950 transition-all hover:shadow-lg hover:shadow-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50">
-                    Publish to Marketplace
+                <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-800 pt-4">
+                  {editingListingId && <button type="button" onClick={() => { setEditingListingId(null); setTitle(''); setDescription(''); setImageUrl(''); setImageAssets([]); }} className="rounded-xl border border-neutral-700 px-4 py-3 text-xs font-semibold">Cancel edit</button>}
+                  <button type="button" onClick={() => setIsPreviewOpen(true)} disabled={!title.trim()} className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 px-4 py-3 text-xs font-semibold disabled:opacity-40"><Eye className="h-4 w-4" />Preview</button>
+                  <button type="submit" name="intent" value="draft" disabled={currentUser.isBlocked || isProcessingImage} className="rounded-xl border border-neutral-600 px-5 py-3 text-xs font-semibold disabled:opacity-50">Save draft</button>
+                  <button type="submit" name="intent" value="publish" disabled={currentUser.isBlocked || isProcessingImage} className="rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 px-6 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-950 transition-all hover:shadow-lg hover:shadow-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50">
+                    {editingListingId ? 'Submit changes for review' : 'Submit for review'}
                   </button>
                 </div>
               </form>
@@ -581,7 +766,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
             <section className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-serif font-bold">Published Atelier Designs ({myPosts.length})</h2>
+                <h2 className="text-xl font-serif font-bold">My listings ({myPosts.length})</h2>
               </div>
               {myPosts.length === 0 ? (
                 <div className="rounded-2xl border border-neutral-800/60 bg-neutral-900/20 p-8 text-center text-xs text-neutral-400">You have not published any garments yet. Use the form above to post your first bespoke creation.</div>
@@ -594,12 +779,22 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                         <button onClick={() => handleDeletePost(post.id)} title="Delete post" className="absolute right-2 top-2 rounded-lg bg-black/70 p-1.5 text-white transition-colors hover:bg-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                       <div className="space-y-2 p-4">
+                        <div className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-amber-300">{(post.status || 'published').replace('_', ' ')}{post.moderationStatus === 'pending' ? ' · moderation pending' : ''}</div>
+                        {post.moderationStatus === 'rejected' && post.moderationNote && <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-[10px] text-red-300">Review feedback: {post.moderationNote}</p>}
                         <h3 className="font-serif text-base font-bold leading-tight">{post.title}</h3>
                         <p className="text-xs text-neutral-400 line-clamp-2">{post.description}</p>
                         <div className="flex items-center justify-between border-t border-neutral-800 pt-2 text-xs font-mono text-neutral-400">
                           <span>{post.likes.length} Likes</span>
                           <span>{post.saves.length} Saves</span>
                           <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 border-t border-neutral-800 p-3">
+                          <button type="button" onClick={() => editListing(post)} className="rounded-lg border border-neutral-700 px-3 py-1.5 text-[10px] font-semibold">Edit</button>
+                          {(post.status === 'draft' || post.status === 'rejected' || post.status === 'paused' || post.status === 'archived') && <button type="button" onClick={() => void changeListingStatus(post, 'publish')} className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-[10px] font-semibold text-amber-300">Submit for review</button>}
+                          {post.status === 'published' && <button type="button" onClick={() => void changeListingStatus(post, 'pause')} className="inline-flex items-center gap-1 rounded-lg border border-neutral-700 px-3 py-1.5 text-[10px] font-semibold"><Pause className="h-3 w-3" />Pause</button>}
+                          {post.status === 'published' && <button type="button" onClick={() => void changeListingStatus(post, 'sold_out')} className="rounded-lg border border-neutral-700 px-3 py-1.5 text-[10px] font-semibold">Sold out</button>}
+                          {post.status !== 'archived' && <button type="button" onClick={() => void changeListingStatus(post, 'archive')} className="inline-flex items-center gap-1 rounded-lg border border-neutral-700 px-3 py-1.5 text-[10px] font-semibold"><Archive className="h-3 w-3" />Archive</button>}
+                          {post.status === 'sold_out' && <button type="button" onClick={() => void changeListingStatus(post, 'publish')} className="inline-flex items-center gap-1 rounded-lg border border-neutral-700 px-3 py-1.5 text-[10px] font-semibold"><RotateCcw className="h-3 w-3" />Relist</button>}
                         </div>
                       </div>
                     </div>
