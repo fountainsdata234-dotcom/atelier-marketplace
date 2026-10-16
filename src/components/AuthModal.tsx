@@ -260,6 +260,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
     setSuccessMsg(null);
     setIsSubmitting(true);
+    let accountCreated = false;
 
     try {
     if (!isRegistering) {
@@ -309,8 +310,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError('Please enter your active phone number.');
       return;
     }
-    if (password.length < 8 || !/[A-Z]/.test(password) || !/\./.test(password)) {
-      setError('Password must be at least 8 characters long and contain a capital letter and a period.');
+    if (password.length < 8) {
+      setError(`Password is too short. Add ${8 - password.length} more character${8 - password.length === 1 ? '' : 's'} (8 minimum).`);
+      return;
+    }
+    if (!/[A-Z]/.test(password)) {
+      setError('Add at least one uppercase letter (A-Z) to your password.');
+      return;
+    }
+    if (!/\./.test(password)) {
+      setError('Add a period (.) to your password.');
       return;
     }
     if (!currentStateObj || !selectedCityName.trim()) {
@@ -340,14 +349,49 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       ? (handle.startsWith('@') ? handle.trim() : `@${handle.trim()}`)
       : `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
-    const authUser = await signUpWithEmail(email.trim().toLowerCase(), password, name.trim());
     const coordinates = resolveLocationCoordinates?.(selectedCountry.code, currentStateObj.code || '', selectedCityName, {
       lat: selectedCountry.lat,
       lng: selectedCountry.lng,
     }) || { lat: selectedCountry.lat, lng: selectedCountry.lng };
-    const storedAvatarUrl = avatarFile
-      ? await uploadUserImage(avatarFile, authUser.id, 'profiles', `avatar-${Date.now()}.${fileExtension(avatarFile)}`)
-      : authUser.avatarUrl;
+    const location = {
+      country: selectedCountry.name,
+      countryCode: selectedCountry.code,
+      currency: selectedCurrency || selectedCountry.currency || 'USD',
+      state: currentStateObj.name,
+      city: selectedCityName,
+      ...coordinates,
+    };
+    const signupProfile = {
+      role,
+      phone: parsedPhone.formatInternational(),
+      countryCode: selectedCountry.dialCode,
+      location,
+      whatsappNumber: parsedWhatsapp.formatInternational(),
+      shopName: shopName.trim() || undefined,
+      bio: bio.trim() || undefined,
+      handle: userHandle,
+    };
+    const signupResult = await signUpWithEmail(email.trim().toLowerCase(), password, name.trim(), signupProfile);
+    const authUser = signupResult.user;
+    accountCreated = true;
+
+    if (!signupResult.hasSession) {
+      setSuccessMsg('If this is a new account, check your email for a confirmation link. After confirming, sign in here; your account type and profile details are saved. If you already have an account, sign in or reset your password instead. You can add a profile photo after signing in.');
+      setPassword('');
+      setConfirmPassword('');
+      setIsRegistering(false);
+      return;
+    }
+
+    let avatarUploadFailed = false;
+    let storedAvatarUrl = authUser.avatarUrl;
+    if (avatarFile) {
+      try {
+        storedAvatarUrl = await uploadUserImage(avatarFile, authUser.id, 'profiles', `avatar-${Date.now()}.${fileExtension(avatarFile)}`);
+      } catch {
+        avatarUploadFailed = true;
+      }
+    }
     const newUser = storageService.upsertUser({
       id: authUser.id,
       email: authUser.email,
@@ -355,14 +399,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       role: authUser.isAdmin ? 'admin' : role,
       phone: parsedPhone.formatInternational(),
       countryCode: selectedCountry.dialCode,
-      location: {
-        country: selectedCountry.name,
-        countryCode: selectedCountry.code,
-        currency: selectedCurrency || selectedCountry.currency || 'USD',
-        state: currentStateObj?.name || '',
-        city: selectedCityName,
-        ...coordinates,
-      },
+      location,
       whatsappNumber: parsedWhatsapp.formatInternational(),
       shopName: shopName.trim() || undefined,
       handle: userHandle,
@@ -376,13 +413,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     });
     await api.saveProfile(newUser);
 
-    setSuccessMsg(`Welcome to FABSATTIRE. Your premium studio access is ready, and your tailored journey begins now.`);
+    setSuccessMsg(avatarUploadFailed
+      ? 'Your account is ready, but your profile photo did not upload. You can add it from your profile after signing in.'
+      : 'Welcome to FABSATTIRE. Your account is ready, and your tailored journey begins now.');
     setTimeout(() => {
       onSuccess(newUser);
       onClose();
     }, 600);
     } catch (authError) {
-      setError(getAuthErrorMessage(authError));
+      setError(accountCreated
+        ? 'Your account was created, but we could not finish saving your profile. Do not register again. Sign in after confirming your email; your account type and details were saved so setup can continue.'
+        : getAuthErrorMessage(authError));
     } finally {
       setIsSubmitting(false);
     }
@@ -491,6 +532,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
+              role="alert"
+              aria-live="assertive"
               className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center justify-between gap-2"
             >
               <div className="flex items-center gap-2">
@@ -800,7 +843,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-neutral-400 mb-1">
-              Password {isRegistering && '(8+ characters)'} *
+              Password {isRegistering && '(8+ characters, uppercase letter, period)'} *
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-3 text-neutral-500" />
@@ -816,7 +859,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use at least 8 characters, including one capital letter and a period. Longer passwords are welcome.</p>}
+            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use at least 8 characters, one uppercase letter (A-Z), and one period (.). Longer passwords are welcome.</p>}
           </div>
 
           {isRegistering && (

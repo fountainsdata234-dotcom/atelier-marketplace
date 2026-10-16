@@ -150,7 +150,15 @@ app.use((_req, res, next) => {
 app.use(express.json({ limit: '1mb' }));
 
 interface AuthenticatedRequest extends Request {
-  authUser?: { uid: string; email?: string; name?: string; avatarUrl?: string; admin?: boolean; blocked?: boolean };
+  authUser?: {
+    uid: string;
+    email?: string;
+    name?: string;
+    avatarUrl?: string;
+    admin?: boolean;
+    blocked?: boolean;
+    userMetadata?: Record<string, unknown>;
+  };
 }
 
 interface StoredMessage {
@@ -324,6 +332,7 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
       avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : undefined,
       admin: Boolean(isAdminFromProfile),
       blocked: profileData.isBlocked === true || profileData.is_blocked === true,
+      userMetadata,
     };
     next();
   } catch (error) {
@@ -827,12 +836,42 @@ app.get('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   let profile = await readProfile(req.authUser!.uid);
   if (!profile) {
     const email = req.authUser!.email || '';
+    const metadata = req.authUser!.userMetadata || {};
+    const metadataText = (key: string, maxLength: number) => typeof metadata[key] === 'string'
+      ? (metadata[key] as string).trim().slice(0, maxLength)
+      : '';
+    const metadataLocation = metadata.location && typeof metadata.location === 'object' && !Array.isArray(metadata.location)
+      ? metadata.location as Record<string, unknown>
+      : {};
+    const metadataLocationText = (key: string, maxLength: number) => typeof metadataLocation[key] === 'string'
+      ? (metadataLocation[key] as string).trim().slice(0, maxLength)
+      : '';
+    const latitude = metadataLocation.lat;
+    const longitude = metadataLocation.lng;
+    const location = {
+      country: metadataLocationText('country', 100),
+      countryCode: metadataLocationText('countryCode', 8),
+      currency: metadataLocationText('currency', 8),
+      state: metadataLocationText('state', 100),
+      city: metadataLocationText('city', 100),
+      ...(typeof latitude === 'number' && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 ? { lat: latitude } : {}),
+      ...(typeof longitude === 'number' && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180 ? { lng: longitude } : {}),
+    };
+    const role = metadata.role === 'tailor' || metadata.role === 'fabric_seller'
+      ? metadata.role
+      : 'buyer';
     profile = await upsertProfile(req.authUser!.uid, {
       id: req.authUser!.uid,
       email,
-      name: req.authUser!.name || email.split('@')[0] || 'Atelier Member',
-      role: req.authUser!.admin ? 'admin' : 'buyer',
-      handle: `@${(email.split('@')[0] || 'atelier_member').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
+      name: metadataText('name', 120) || req.authUser!.name || email.split('@')[0] || 'Atelier Member',
+      role: req.authUser!.admin ? 'admin' : role,
+      phone: metadataText('phone', 40),
+      countryCode: metadataText('countryCode', 8),
+      location,
+      whatsappNumber: metadataText('whatsappNumber', 40),
+      shopName: metadataText('shopName', 120),
+      bio: metadataText('bio', 1000),
+      handle: metadataText('handle', 60) || `@${(email.split('@')[0] || 'atelier_member').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
       avatarUrl: req.authUser!.avatarUrl || '',
       isSuperAdmin: email.trim().toLowerCase() === 'fountainsdata234@gmail.com',
     });

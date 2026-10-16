@@ -93,6 +93,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [feedRetry, setFeedRetry] = useState(0);
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const reportedAnalyticsFailures = useRef(new Set<string>());
+  const analyticsRetryAfter = useRef(0);
   const [failedPostImageUrls, setFailedPostImageUrls] = useState<Record<string, string>>({});
   const recommendationScope = useMemo(() => storageService.getRecommendationScope(currentUser?.id), [currentUser?.id]);
   const [recommendationPreferences, setRecommendationPreferences] = useState<RecommendationPreferences>(
@@ -642,8 +643,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       if (!cancelled) setTrendingPage(page);
     }).catch(error => {
       if (!cancelled) {
-        setTrendingPage(null);
-        setTrendingError(error instanceof Error ? error.message : 'Trending listings could not be loaded.');
+        const reason = error instanceof Error ? error.message : 'Trending listings could not be loaded.';
+        setTrendingError(`${reason} Previously loaded listings remain visible when available.`);
       }
     }).finally(() => {
       if (!cancelled) setTrendingLoading(false);
@@ -768,7 +769,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     },
   ) {
     if (currentUser?.id && currentUser.id === sellerId) return;
+    if (Date.now() < analyticsRetryAfter.current) return;
     void api.recordMarketplaceEvent(listingId, eventType, recommendation).catch(error => {
+      analyticsRetryAfter.current = Date.now() + 60_000;
       if (reportedAnalyticsFailures.current.has(eventType)) return;
       reportedAnalyticsFailures.current.add(eventType);
       console.warn(
@@ -785,8 +788,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   ) {
     const query = searchQuery.trim();
     if (query.length < 2) return;
+    if (Date.now() < analyticsRetryAfter.current) return;
     void api.recordMarketplaceSearchEvent(query, eventType, listingId, resultCount).catch(error => {
-      console.error(`Unable to record marketplace search ${eventType}.`, error);
+      analyticsRetryAfter.current = Date.now() + 60_000;
+      if (reportedAnalyticsFailures.current.has(`search-${eventType}`)) return;
+      reportedAnalyticsFailures.current.add(`search-${eventType}`);
+      console.warn(`Marketplace search ${eventType} analytics are temporarily unavailable; search results are unaffected.`, error);
     });
   }
 

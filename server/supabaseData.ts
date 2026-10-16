@@ -622,8 +622,32 @@ export async function getMarketplaceTrendingPage(options: {
     .limit(options.limit);
   if (blockedSellerFilter) trendQuery = trendQuery.not('listing.author_id', 'in', blockedSellerFilter);
   if (hiddenListingIds.length) trendQuery = trendQuery.not('listing_id', 'in', `(${hiddenListingIds.join(',')})`);
+
+  const fallbackToRecentListings = async () => {
+    const { rows } = await getMarketplacePostsPage({
+      view: 'all',
+      sort: 'newest',
+      limit: options.limit,
+      ...(options.scopeType === 'category' ? { categoryId: options.scopeValue } : {}),
+      ...(options.scopeType === 'region' ? { country: options.scopeValue } : {}),
+      ...(options.scopeType === 'style' ? { tag: options.scopeValue } : {}),
+      viewerId: options.viewerId,
+    });
+    return {
+      rows,
+      fallback: true,
+      computedAt: null,
+      ...(options.scopeType === 'global' && options.viewerId
+        ? { likes: await getMarketplaceViewerInteractions(rows.map(row => String(row.id)), options.viewerId) }
+        : {}),
+    };
+  };
+
   const { data, error } = await trendQuery;
-  if (error) throw normalizeError(error);
+  if (error) {
+    console.warn('Marketplace trend scores are unavailable; using eligible recent listings.', normalizeError(error));
+    return fallbackToRecentListings();
+  }
 
   if (data?.length) {
     return {
@@ -646,16 +670,7 @@ export async function getMarketplaceTrendingPage(options: {
     };
   }
 
-  const { rows } = await getMarketplacePostsPage({
-    view: 'all',
-    sort: 'newest',
-    limit: options.limit,
-    ...(options.scopeType === 'category' ? { categoryId: options.scopeValue } : {}),
-    ...(options.scopeType === 'region' ? { country: options.scopeValue } : {}),
-    ...(options.scopeType === 'style' ? { tag: options.scopeValue } : {}),
-    viewerId: options.viewerId,
-  });
-  return { rows, fallback: true, computedAt: null };
+  return fallbackToRecentListings();
 }
 
 export async function getMarketplaceViewerInteractions(postIds: string[], userId?: string): Promise<{

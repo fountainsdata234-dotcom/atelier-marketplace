@@ -1,5 +1,5 @@
 import type { AuthChangeEvent, User as SupabaseUser } from '@supabase/supabase-js';
-import type { UserRole } from '../types';
+import type { User, UserRole } from '../types';
 import { getSupabaseClient, isSupabaseReady } from '../lib/supabase';
 
 export interface AuthUser {
@@ -117,15 +117,34 @@ export const signInWithEmail = async (email: string, password: string): Promise<
   return normalizeSupabaseUser(data.user);
 };
 
-export const signUpWithEmail = async (email: string, password: string, displayName: string): Promise<AuthUser> => {
+type SignupProfile = Pick<User, 'role' | 'phone' | 'countryCode' | 'location' | 'whatsappNumber' | 'shopName' | 'bio' | 'handle'>;
+
+export const signUpWithEmail = async (
+  email: string,
+  password: string,
+  displayName: string,
+  profile: SignupProfile,
+): Promise<{ user: AuthUser; hasSession: boolean }> => {
   const { data, error } = await requireSupabase().auth.signUp({
     email,
     password,
-    options: { data: { name: displayName } },
+    options: {
+      data: {
+        name: displayName,
+        role: profile.role,
+        phone: profile.phone,
+        countryCode: profile.countryCode,
+        location: profile.location,
+        whatsappNumber: profile.whatsappNumber,
+        shopName: profile.shopName || '',
+        bio: profile.bio || '',
+        handle: profile.handle,
+      },
+    },
   });
   if (error) throw error;
   if (!data.user) throw new Error('Supabase did not return a user account.');
-  return normalizeSupabaseUser(data.user);
+  return { user: normalizeSupabaseUser(data.user), hasSession: Boolean(data.session) };
 };
 
 export const signInWithGoogle = async (): Promise<void> => {
@@ -156,8 +175,37 @@ export const signOutAuth = async () => {
 };
 
 export const getAuthErrorMessage = (error: unknown) => {
-  const code = (error as { code?: string; status?: number })?.code;
-  const message = error instanceof Error ? error.message : '';
+  const authError = error && typeof error === 'object'
+    ? error as { code?: unknown; status?: unknown; message?: unknown }
+    : {};
+  const code = typeof authError.code === 'string' ? authError.code.toLowerCase() : '';
+  const status = typeof authError.status === 'number' ? authError.status : undefined;
+  const message = typeof authError.message === 'string' ? authError.message : '';
+  const normalizedMessage = message.toLowerCase();
+
+  if (status === 429 || /rate.?limit|too many requests|over_email_send_rate_limit|over_request_rate_limit/.test(`${code} ${normalizedMessage}`)) {
+    return 'Too many sign-up attempts were made recently. Wait a few minutes before trying again. If you have already created an account, sign in or reset your password instead.';
+  }
+  if (code === 'weak_password' || /password.*(weak|short|at least|minimum)|weak password/.test(normalizedMessage)) {
+    return 'That password does not meet the requirements. Use at least 8 characters, one uppercase letter, and one period (.).';
+  }
+  if (['user_already_registered', 'email_exists', 'user_already_exists'].includes(code)
+    || /already registered|already exists|email.*in use/.test(normalizedMessage)) {
+    return 'An account may already exist for this email. Try signing in or use “Forgot password” to recover it.';
+  }
+  if (['invalid_email', 'email_address_invalid'].includes(code) || /invalid email/.test(normalizedMessage)) {
+    return 'Enter a valid email address, for example name@example.com.';
+  }
+  if (code === 'signup_disabled' || /signups? (are )?disabled/.test(normalizedMessage)) {
+    return 'New account creation is temporarily disabled. Please contact FABSATTIRE support.';
+  }
+  if (/email not confirmed|email_not_confirmed/.test(`${code} ${normalizedMessage}`)) {
+    return 'Confirm your email using the link we sent, then sign in again.';
+  }
+  if (/failed to fetch|network error|fetch failed/.test(normalizedMessage)) {
+    return 'We could not reach the sign-up service. Check your internet connection and try again.';
+  }
+
   const supabaseMessages: Record<string, string> = {
     'email-already-in-use': 'An account already exists for this email.',
     'invalid-email': 'Enter a valid email address.',
@@ -171,8 +219,7 @@ export const getAuthErrorMessage = (error: unknown) => {
   if (/unsupported provider|provider is not enabled/i.test(message)) {
     return 'Google sign-in is not enabled in Supabase yet. Enable Google under Authentication > Providers and add your OAuth client credentials.';
   }
-  if (/email.*already|already.*email/i.test(message)) return 'An account already exists for this email.';
   if (/password|credential/i.test(message) && message.length < 160) return message;
-  if (/captcha|rate limit|too many/i.test(message)) return message;
+  if (/captcha/i.test(message)) return 'The sign-up security check could not be completed. Refresh the page and try again.';
   return 'Authentication failed. Check your details and try again.';
 };
