@@ -1,6 +1,6 @@
 import type { AuthChangeEvent, User as SupabaseUser } from '@supabase/supabase-js';
 import type { UserRole } from '../types';
-import { getSupabaseClient } from '../lib/supabase';
+import { getSupabaseClient, isSupabaseReady } from '../lib/supabase';
 
 export interface AuthUser {
   id: string;
@@ -67,7 +67,7 @@ const normalizeSupabaseUser = (user: SupabaseUser): AuthUser => {
   };
 };
 
-export const isSupabaseAuthReady = Boolean(getSupabaseClient());
+export const isSupabaseAuthReady = isSupabaseReady;
 
 const requireSupabase = () => {
   const supabase = getSupabaseClient();

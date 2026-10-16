@@ -17,9 +17,5 @@ export const supabase: SupabaseClient | null =
 export const isSupabaseReady = Boolean(supabase);
 
 export const getSupabaseClient = () => {
-  if (!supabase) {
-    console.warn('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
-    return null;
-  }
   return supabase;
 };

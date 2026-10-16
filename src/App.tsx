@@ -245,7 +245,8 @@ export default function App() {
     window.addEventListener('touchend', handlePullRefresh, { passive: true });
 
     let unsubscribeAuth: (() => void) | undefined;
-    import('./services/auth').then(({ configureAuth, subscribeToAuth }) => {
+    import('./services/auth').then(({ configureAuth, isSupabaseAuthReady, subscribeToAuth }) => {
+      if (!isSupabaseAuthReady) return;
       unsubscribeAuth = subscribeToAuth(async (authUser, event) => {
         if (event === 'PASSWORD_RECOVERY') {
           setPasswordRecoveryOpen(true);
@@ -317,9 +318,7 @@ export default function App() {
         });
         void refreshAllData();
       });
-      return configureAuth().catch((error) => {
-        console.warn('Authentication configuration skipped offline or failed gracefully.', error);
-      });
+      return configureAuth();
     }).catch((error) => {
       console.error('Authentication initialization failed', error);
       setIsDataLoading(false);

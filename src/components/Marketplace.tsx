@@ -92,6 +92,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [feedError, setFeedError] = useState<string | null>(null);
   const [feedRetry, setFeedRetry] = useState(0);
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
+  const reportedAnalyticsFailures = useRef(new Set<string>());
   const [failedPostImageUrls, setFailedPostImageUrls] = useState<Record<string, string>>({});
   const recommendationScope = useMemo(() => storageService.getRecommendationScope(currentUser?.id), [currentUser?.id]);
   const [recommendationPreferences, setRecommendationPreferences] = useState<RecommendationPreferences>(
@@ -768,7 +769,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   ) {
     if (currentUser?.id && currentUser.id === sellerId) return;
     void api.recordMarketplaceEvent(listingId, eventType, recommendation).catch(error => {
-      console.error(`Unable to record marketplace ${eventType.toLowerCase()} event.`, error);
+      if (reportedAnalyticsFailures.current.has(eventType)) return;
+      reportedAnalyticsFailures.current.add(eventType);
+      console.warn(
+        `Marketplace ${eventType.toLowerCase()} analytics are temporarily unavailable; listing discovery is unaffected.`,
+        error,
+      );
     });
   }
 

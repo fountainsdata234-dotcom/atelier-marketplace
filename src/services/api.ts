@@ -1,6 +1,6 @@
 import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences } from '../types';
 
-import { getAuthToken } from './auth';
+import { getAuthToken, isSupabaseAuthReady } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 const PUBLIC_READ_CACHE_TTL_MS = 60_000;
@@ -19,7 +19,7 @@ function getMarketplaceSessionId() {
 }
 
 async function getAuthTokenForRequest() {
-  if (!navigator.onLine) return null;
+  if (!navigator.onLine || !isSupabaseAuthReady) return null;
   return getAuthToken();
 }
 
