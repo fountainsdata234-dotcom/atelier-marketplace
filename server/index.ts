@@ -170,10 +170,19 @@ interface StoredMessage {
 
 const DISCOVERY_EVENT_TYPES = new Set(['VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY']);
 const PUBLIC_CACHE_TTL_MS = 60_000;
+const PUBLIC_CACHE_STALE_MS = 15 * 60_000;
 const WEB_APP_URL = process.env.APP_URL?.trim() || 'https://fabrilux-atelier.vercel.app';
-let postsCache: { expiresAt: number; value: unknown } | null = null;
+let postsCache: { expiresAt: number; staleUntil: number; value: unknown } | null = null;
 let usersCache: { expiresAt: number; value: unknown } | null = null;
-const marketplaceFeedCache = new Map<string, { expiresAt: number; value: unknown }>();
+const marketplaceFeedCache = new Map<string, { expiresAt: number; staleUntil: number; value: unknown }>();
+
+function setMarketplaceResponseCacheHeaders(req: Request, res: Response) {
+  if (req.headers.authorization) {
+    res.setHeader('Cache-Control', 'private, no-store');
+    return;
+  }
+  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=900, stale-if-error=86400');
+}
 
 function invalidatePublicCaches() {
   postsCache = null;
@@ -1178,6 +1187,7 @@ app.get('/api/posts', async (req, res) => {
   const search = typeof req.query.q === 'string' ? listingText(req.query.q, 80) : '';
   try {
     if (!search && postsCache && postsCache.expiresAt > Date.now()) {
+      setMarketplaceResponseCacheHeaders(req, res);
       res.json(postsCache.value);
       return;
     }
@@ -1233,10 +1243,21 @@ app.get('/api/posts', async (req, res) => {
         };
       }))).filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
     }
-    if (!search) postsCache = { expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS, value: posts };
+    if (!search) {
+      const expiresAt = Date.now() + PUBLIC_CACHE_TTL_MS;
+      postsCache = { expiresAt, staleUntil: expiresAt + PUBLIC_CACHE_STALE_MS, value: posts };
+    }
+    if (!search) setMarketplaceResponseCacheHeaders(req, res);
     res.json(posts);
   } catch (error) {
     console.error('Unable to load marketplace posts', error);
+    if (!search && !req.headers.authorization && postsCache && postsCache.staleUntil > Date.now()) {
+      console.warn('Marketplace posts are temporarily unavailable; returning the last successful listings.');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Warning', '110 - "Response is stale"');
+      res.json(postsCache.value);
+      return;
+    }
     res.status(503).json({ error: 'Marketplace data is temporarily unavailable. Please try again shortly.' });
   }
 });
@@ -1339,8 +1360,9 @@ app.get('/api/marketplace/feed', optionalAuth, async (req: AuthenticatedRequest,
   }
   const locationHint = parseMarketplaceSearch(search).locationHint;
   const cacheKey = JSON.stringify({ view, sort, search, categoryId, tag, country, state, city, minimumPrice, maximumPrice, currency, material, colour, size, fulfilment, availability, cursor, limitValue });
-  const cached = req.authUser ? undefined : marketplaceFeedCache.get(cacheKey);
+  const cached = req.authUser || req.headers.authorization ? undefined : marketplaceFeedCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
+    setMarketplaceResponseCacheHeaders(req, res);
     res.json(cached.value);
     return;
   }
@@ -1442,11 +1464,34 @@ app.get('/api/marketplace/feed', optionalAuth, async (req: AuthenticatedRequest,
         const oldestKey = marketplaceFeedCache.keys().next().value;
         if (oldestKey) marketplaceFeedCache.delete(oldestKey);
       }
-      marketplaceFeedCache.set(cacheKey, { expiresAt: Date.now() + 30_000, value: result });
+      const expiresAt = Date.now() + 30_000;
+      marketplaceFeedCache.set(cacheKey, { expiresAt, staleUntil: expiresAt + PUBLIC_CACHE_STALE_MS, value: result });
     }
+    setMarketplaceResponseCacheHeaders(req, res);
     res.json(result);
   } catch (error) {
     console.error('Unable to load paginated marketplace feed.', error);
+    if (cached && cached.staleUntil > Date.now()) {
+      console.warn('Marketplace feed is temporarily unavailable; returning the last successful page.');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Warning', '110 - "Response is stale"');
+      res.json(cached.value);
+      return;
+    }
+    if (!req.headers.authorization
+      && ['all', 'for-you'].includes(view)
+      && ['newest', 'relevance'].includes(sort)
+      && !search && !categoryId && !tag && !country && !state && !city
+      && minimumPrice === undefined && maximumPrice === undefined
+      && !material && !colour && !size && !fulfilment && !availability
+      && postsCache && postsCache.staleUntil > Date.now()
+      && Array.isArray(postsCache.value)) {
+      console.warn('Marketplace feed query failed; using the last successful public listings.');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Warning', '110 - "Response is stale"');
+      res.json({ items: postsCache.value.slice(0, limitValue), nextCursor: null, hasMore: false });
+      return;
+    }
     res.status(503).json({ error: 'Marketplace listings could not be loaded right now. Please retry.' });
   }
 });
@@ -1536,6 +1581,7 @@ app.get('/api/marketplace/trending', optionalAuth, async (req: AuthenticatedRequ
         trendConfidence: Number(post.trendConfidence) || 0,
       };
     });
+    setMarketplaceResponseCacheHeaders(req, res);
     res.json({
       items,
       category,
@@ -1549,6 +1595,23 @@ app.get('/api/marketplace/trending', optionalAuth, async (req: AuthenticatedRequ
     });
   } catch (error) {
     console.error('Unable to load marketplace trends.', error);
+    if (!req.headers.authorization
+      && postsCache && postsCache.staleUntil > Date.now()
+      && Array.isArray(postsCache.value)) {
+      console.warn('Marketplace trends are temporarily unavailable; returning the last successful public listings.');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Warning', '110 - "Response is stale"');
+      res.json({
+        items: postsCache.value.slice(0, limit),
+        category,
+        scopeType,
+        scopeValue,
+        fallback: true,
+        fallbackMessage: 'Trend data is temporarily unavailable. Showing the last successfully loaded listings instead.',
+        computedAt: null,
+      });
+      return;
+    }
     res.status(503).json({ error: 'Marketplace trends could not be loaded right now. Please retry.' });
   }
 });
