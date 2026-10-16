@@ -45,6 +45,13 @@ const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
 
 const PATH_BY_VIEW: Record<string, string> = Object.fromEntries(Object.entries(PUBLIC_VIEW_BY_PATH).map(([path, view]) => [view, path]));
 
+const hasPasswordResetQuery = () => {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('auth') === 'reset'
+    || params.get('type') === 'recovery'
+    || window.location.hash.includes('type=recovery');
+};
+
 const getInitialView = () => {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
   if (/^\/@[^/]+\/post\/[^/]+$/i.test(path)) return 'post';
@@ -202,6 +209,11 @@ export default function App() {
   }, [users]);
 
   useEffect(() => {
+    if (hasPasswordResetQuery()) {
+      setPasswordRecoveryOpen(true);
+      setAuthModalOpen(false);
+    }
+
     storageService.init();
     if (canRefreshMarketplaceData) {
       void refreshAllData(true);

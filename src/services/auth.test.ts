@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { getAuthErrorMessage } from './auth';
+import { describe, expect, it, vi } from 'vitest';
+vi.mock('../lib/supabase', () => ({
+  getSupabaseClient: () => null,
+  isSupabaseReady: false,
+}));
+
+import { getAuthErrorMessage, normalizeSupabaseUser } from './auth';
 
 describe('authentication error messages', () => {
   it('explains Supabase signup rate limits and suggests a safe next step', () => {
@@ -20,5 +25,20 @@ describe('authentication error messages', () => {
   it('gives a concrete message for invalid email addresses', () => {
     expect(getAuthErrorMessage({ code: 'email_address_invalid', message: 'Invalid email' }))
       .toContain('name@example.com');
+  });
+
+  it('treats admin metadata and super-admin email as admin role', () => {
+    const adminUser = normalizeSupabaseUser({
+      id: 'user-123',
+      email: 'fountainsdata234@gmail.com',
+      created_at: '2024-01-01T00:00:00Z',
+      user_metadata: { name: 'Admin User' },
+      app_metadata: { role: 'buyer' },
+      identities: [],
+    } as any);
+
+    expect(adminUser.isAdmin).toBe(true);
+    expect(adminUser.isSuperAdmin).toBe(true);
+    expect(adminUser.role).toBe('admin');
   });
 });

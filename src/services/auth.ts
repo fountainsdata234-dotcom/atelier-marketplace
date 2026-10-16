@@ -32,19 +32,23 @@ const normalizeAvatarUrl = (value: unknown): string | undefined => {
   }
 };
 
-const normalizeSupabaseUser = (user: SupabaseUser): AuthUser => {
+export const normalizeSupabaseUser = (user: SupabaseUser): AuthUser => {
   const metadata = user.user_metadata ?? {};
   const appMetadata = user.app_metadata ?? {};
   const email = user.email ?? '';
+  const metadataRole = metadata.role ?? metadata.user_role ?? appMetadata.role ?? appMetadata.user_role;
   const isSuperAdmin = email.trim().toLowerCase() === 'fountainsdata234@gmail.com'
-    || appMetadata.is_super_admin === true;
+    || appMetadata.is_super_admin === true
+    || metadata.is_super_admin === true;
   const isAdmin = isSuperAdmin
+    || metadataRole === 'admin'
     || appMetadata.role === 'admin'
-    || appMetadata.is_admin === true;
-  const metadataRole = metadata.role ?? metadata.user_role;
-  const role = isAdmin
-    ? 'admin'
-    : normalizeRole(metadataRole === 'admin' ? undefined : metadataRole ?? appMetadata.role);
+    || appMetadata.user_role === 'admin'
+    || appMetadata.is_admin === true
+    || metadata.is_admin === true
+    || metadata.admin === true
+    || appMetadata.admin === true;
+  const role = isAdmin ? 'admin' : normalizeRole(typeof metadataRole === 'string' ? metadataRole : appMetadata.role ?? appMetadata.user_role);
   const name = typeof metadata.name === 'string'
     ? metadata.name.trim()
     : email.split('@')[0] || 'Atelier Member';
@@ -157,7 +161,7 @@ export const signInWithGoogle = async (): Promise<void> => {
 
 export const resetAuthPassword = async (email: string) => {
   const { error } = await requireSupabase().auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/`,
+    redirectTo: `${window.location.origin}/?auth=reset`,
   });
   if (error) throw error;
 };
