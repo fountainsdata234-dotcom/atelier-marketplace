@@ -4,6 +4,8 @@ import { getAuthToken, isSupabaseAuthReady } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 const PUBLIC_READ_CACHE_TTL_MS = 60_000;
+const API_REQUEST_TIMEOUT_MS = 20_000;
+const GET_RETRY_DELAYS_MS = [750, 1_500];
 const publicReadCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightPublicReads = new Map<string, Promise<unknown>>();
 
@@ -63,16 +65,24 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
   if (cacheable) {
     const cached = publicReadCache.get(path);
     if (cached && cached.expiresAt > Date.now()) return cached.value as T;
-    if (cached) publicReadCache.delete(path);
     const inFlight = inFlightPublicReads.get(path);
     if (inFlight) return inFlight as Promise<T>;
     const pending = performRequest<T>(path, options, token, hasRetried)
       .then(value => {
+        if (publicReadCache.size >= 100 && !publicReadCache.has(path)) {
+          const oldestPath = publicReadCache.keys().next().value;
+          if (oldestPath) publicReadCache.delete(oldestPath);
+        }
         publicReadCache.set(path, {
           expiresAt: Date.now() + publicReadCacheTtl(path),
           value,
         });
         return value;
+      })
+      .catch(error => {
+        if (!cached) throw error;
+        console.warn('Public API read failed; showing the last successful response while the service recovers.', error);
+        return cached.value as T;
       })
       .finally(() => inFlightPublicReads.delete(path));
     inFlightPublicReads.set(path, pending);
@@ -86,10 +96,11 @@ async function performRequest<T>(
   options: RequestInit,
   token: string | null,
   hasRetried: boolean,
+  retryAttempt = 0,
 ) {
   const method = (options.method || 'GET').toUpperCase();
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 15_000);
+  const timeout = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
@@ -103,7 +114,11 @@ async function performRequest<T>(
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('The server took too long to respond.');
+      error = new Error('The server took too long to respond.');
+    }
+    if (method === 'GET' && retryAttempt < GET_RETRY_DELAYS_MS.length && navigator.onLine) {
+      await new Promise<void>(resolve => window.setTimeout(resolve, GET_RETRY_DELAYS_MS[retryAttempt]));
+      return performRequest<T>(path, options, token, hasRetried, retryAttempt + 1);
     }
     throw error;
   } finally {
@@ -114,7 +129,14 @@ async function performRequest<T>(
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || 'The server request failed.');
+    const requestError = new Error(body.error || 'The server request failed.');
+    if ([502, 503, 504].includes(response.status)
+      && method === 'GET'
+      && retryAttempt < GET_RETRY_DELAYS_MS.length) {
+      await new Promise<void>(resolve => window.setTimeout(resolve, GET_RETRY_DELAYS_MS[retryAttempt]));
+      return performRequest<T>(path, options, token, hasRetried, retryAttempt + 1);
+    }
+    throw requestError;
   }
   if (method !== 'GET') invalidatePublicReadCache(path);
   return response.status === 204 ? undefined as T : response.json() as Promise<T>;

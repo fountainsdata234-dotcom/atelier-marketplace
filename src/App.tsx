@@ -512,6 +512,7 @@ export default function App() {
 
       setPromoPlans(storageService.getPromoPlans());
       setBroadcasts(storageService.getBroadcasts());
+      if (showLoader) setIsDataLoading(false);
       try {
         const usersRequest = currentUser?.role === 'admin' ? api.getAdminUsers() : api.getUsers();
         const postsRequest = api.getPosts();

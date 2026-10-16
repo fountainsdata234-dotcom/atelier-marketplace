@@ -340,7 +340,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     setFeedLoading(true);
     setFeedLoadingMore(false);
     setFeedError(null);
-    setFeedPosts([]);
     setFeedCursor(null);
     setFeedHasMore(false);
     const timer = window.setTimeout(() => {
@@ -644,13 +643,26 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }).catch(error => {
       if (!cancelled) {
         const reason = error instanceof Error ? error.message : 'Trending listings could not be loaded.';
+        if (posts.length) {
+          setTrendingPage(current => current?.category === activeTrendCategory && !current.fallback
+            ? current
+            : {
+              items: posts.slice(0, showAllTrending ? 12 : 7),
+              category: activeTrendCategory,
+              scopeType: 'global',
+              scopeValue: 'global',
+              fallback: true,
+              fallbackMessage: 'Trending is temporarily unavailable. Showing recent eligible listings instead.',
+              computedAt: null,
+            });
+        }
         setTrendingError(`${reason} Previously loaded listings remain visible when available.`);
       }
     }).finally(() => {
       if (!cancelled) setTrendingLoading(false);
     });
     return () => { cancelled = true; };
-  }, [activeTrendCategory, showAllTrending, trendingRetry]);
+  }, [activeTrendCategory, showAllTrending, trendingRetry, posts]);
 
   useEffect(() => {
     const node = trendScrollRef.current;
