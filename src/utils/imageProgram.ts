@@ -48,6 +48,9 @@ export async function compressImageBlob(file: Blob, maxDim = 1400): Promise<Blob
 export async function compressAndGenerateImageLink(
   file: File
 ): Promise<ProcessedImageResult> {
+  if (file.size > 8 * 1024 * 1024) {
+    throw new Error('Images must be 8 MB or smaller.');
+  }
   const originalSizeKb = Math.round(file.size / 1024);
 
   // Compress in the browser, then upload the resulting Blob to Firebase Storage.
@@ -56,7 +59,11 @@ export async function compressAndGenerateImageLink(
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const maxDim = 1000;
+        if (img.naturalWidth * img.naturalHeight > 40_000_000) {
+          reject(new Error('Image dimensions must be 40 megapixels or smaller.'));
+          return;
+        }
+        const maxDim = 1400;
         let { width, height } = img;
 
         if (width > maxDim || height > maxDim) {
@@ -100,7 +107,7 @@ export async function compressAndGenerateImageLink(
             height: keptOriginal ? img.naturalHeight : height,
             blob: selectedBlob,
           });
-        }, 'image/jpeg', 0.82);
+        }, 'image/jpeg', 0.78);
       };
       img.onerror = () => reject(new Error('Failed to load image file'));
       img.src = e.target?.result as string;

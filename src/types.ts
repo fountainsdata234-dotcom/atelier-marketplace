@@ -123,6 +123,7 @@ export interface ClothPost extends Listing {
   authorLocation: UserLocation;
   authorWhatsapp?: string;
   isPromoted: boolean;
+  isBlocked?: boolean;
   pricing: PricingBreakdown;
   imageUrl: string;
   imageAlt?: string;
@@ -131,7 +132,141 @@ export interface ClothPost extends Listing {
   saves: string[]; // User IDs who saved picture
   rating?: number;
   ratingCount?: number;
-  ratingsByUser?: Record<string, number>;
+  confidenceAdjustedRating?: number | null;
+  sellerRating?: number;
+  sellerReviewCount?: number;
+  sellerConfidenceAdjustedRating?: number | null;
+  likeCount?: number;
+  saveCount?: number;
+  trendScore?: number;
+  trendConfidence?: number;
+  recommendationReason?: string;
+  searchLocationMatch?: boolean;
+  searchLocationHint?: string;
+}
+
+export type MarketplaceFeedView = 'all' | 'clothing' | 'fabrics' | 'tailors' | 'for-you';
+export type MarketplaceSort = 'relevance' | 'newest' | 'price_asc' | 'price_desc' | 'rating' | 'popularity';
+
+export interface MarketplaceFeedQuery {
+  view: MarketplaceFeedView;
+  sort: MarketplaceSort;
+  search?: string;
+  categoryId?: string;
+  tag?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+  minimumPrice?: number;
+  maximumPrice?: number;
+  currency?: string;
+  material?: string;
+  colour?: string;
+  size?: string;
+  fulfilment?: 'ready_made' | 'made_to_order';
+  availability?: 'available' | 'made_to_order' | 'limited';
+  cursor?: string;
+  limit?: number;
+}
+
+export interface MarketplaceFeedPage {
+  items: ClothPost[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export type MarketplaceTrendCategory =
+  | 'TRENDING_NOW'
+  | 'RISING'
+  | 'POPULAR'
+  | 'NEW_NOTICED'
+  | 'HIGHLY_RATED'
+  | 'MOST_VIEWED';
+
+export type MarketplaceTrendEventType = 'IMPRESSION' | 'VIEW' | 'SHARE' | 'ENQUIRY' | 'HIDE';
+
+export interface MarketplaceTrendingPage {
+  items: ClothPost[];
+  category: MarketplaceTrendCategory;
+  scopeType: 'global' | 'region' | 'category' | 'style';
+  scopeValue: string;
+  fallback: boolean;
+  fallbackMessage: string | null;
+  computedAt: string | null;
+}
+
+export interface MarketplaceTrendingQuery {
+  category: MarketplaceTrendCategory;
+  scopeType?: 'global' | 'region' | 'category' | 'style';
+  scopeValue?: string;
+  limit?: number;
+}
+
+export type MarketplaceReviewType = 'listing' | 'seller';
+export type MarketplaceReviewModerationStatus = 'pending' | 'published' | 'rejected' | 'removed';
+
+export interface MarketplaceReview {
+  id: string;
+  reviewType: MarketplaceReviewType;
+  reviewerId: string;
+  reviewer?: { id: string; name: string; avatarUrl?: string };
+  sellerId: string;
+  listingId?: string | null;
+  rating: number;
+  categoryBreakdown: Record<string, number>;
+  reviewText: string;
+  evidenceAssets: ListingImageAsset[];
+  verificationStatus: 'unverified';
+  eligibilityType: 'firsthand_attestation';
+  moderationStatus: MarketplaceReviewModerationStatus;
+  moderationNote?: string;
+  createdAt: string;
+  updatedAt: string;
+  sellerResponse?: string;
+  sellerRespondedAt?: string;
+  helpfulCount: number;
+  viewerFoundHelpful: boolean;
+}
+
+export interface MarketplaceReviewSummary {
+  rawAverage: number;
+  eligibleReviewCount: number;
+  ratingDistribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+  confidenceAdjustedRating: number | null;
+  priorMean: number;
+  priorStrength: number;
+  baselineScope: string;
+  configVersion: string;
+}
+
+export interface MarketplaceReviewsPage {
+  summary: MarketplaceReviewSummary;
+  reviews: MarketplaceReview[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  ownReview: MarketplaceReview | null;
+}
+
+export interface MarketplaceReviewQueueItem {
+  id: string;
+  reviewType: MarketplaceReviewType;
+  queueType?: 'appeal' | 'report';
+  targetId?: string;
+  reviewerId?: string;
+  reporterId?: string;
+  reviewer?: { id: string; name?: string; email?: string };
+  reporter?: { id: string; name?: string; email?: string };
+  seller?: { id: string; name?: string; shopName?: string };
+  listing?: { id: string; title?: string };
+  review?: { id: string; rating?: number; reviewText?: string; listing?: { id: string; title?: string } } | null;
+  rating?: number;
+  reviewText?: string;
+  moderationStatus?: MarketplaceReviewModerationStatus;
+  reason?: string;
+  details?: string;
+  createdAt: string;
+  reviewId?: string;
+  status?: string;
 }
 
 export interface ListingReport {
@@ -146,14 +281,44 @@ export interface ListingReport {
   reporter?: { name?: string; email?: string };
 }
 
-export type DiscoveryEventType = 'VIEW' | 'LIKE' | 'SAVE' | 'SHARE' | 'ENQUIRY' | 'ADD_TO_CART' | 'PURCHASE' | 'RATING';
+export interface MarketplaceAbuseFlag {
+  id: number;
+  action: string;
+  flagType: string;
+  severity: 'low' | 'medium' | 'high';
+  actorId?: string | null;
+  targetId?: string | null;
+  signalHash?: string | null;
+  evidence: Record<string, unknown>;
+  status: 'open' | 'investigating' | 'resolved' | 'dismissed';
+  resolutionNote?: string;
+  createdAt: string;
+}
+
+export type DiscoveryEventType = 'VIEW' | 'LIKE' | 'SAVE' | 'SHARE' | 'ENQUIRY';
+export type RecommendationEventType = DiscoveryEventType | 'IMPRESSION' | 'HIDE' | 'DISMISS' | 'NOT_INTERESTED';
 
 export interface DiscoveryEvent {
   userId?: string;
   itemId: string;
-  eventType: DiscoveryEventType;
+  eventType: RecommendationEventType;
   timestamp: string;
   sessionId: string;
+  categoryId?: string;
+  listingType?: ListingType;
+  tags?: string[];
+  recommendationReason?: string;
+}
+
+export interface RecommendationPreferences {
+  enabled: boolean;
+  categories: string[];
+  styles: string[];
+  minimumPrice: number | null;
+  maximumPrice: number | null;
+  currency: string;
+  country: string;
+  state: string;
 }
 
 export interface AdminPromoPlan {

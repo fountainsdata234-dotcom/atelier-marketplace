@@ -1,10 +1,63 @@
 import React, { useMemo, useState } from 'react';
-import { Navigation, Search } from 'lucide-react';
+import { MapPin, Navigation, Search, Shirt, Store, Star } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
 import { getSearchSuggestions } from '../utils/globe';
 import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
 import { ArtisanGlobe3D } from './ArtisanGlobe3D';
+import { api } from '../services/api';
+
+type SellerReviewSummary = {
+  sellerId: string;
+  average: number;
+  count: number;
+  confidenceAdjustedRating: number | null;
+};
+
+type DirectorySeller = User & {
+  location: User['location'];
+  distanceKm: number | null;
+  postCount: number;
+  portfolioCount: number;
+  latestPost?: ClothPost;
+  listingTags: string[];
+  specializations: string[];
+  minimumPrice: number | null;
+  maximumPrice: number | null;
+  currency: string | null;
+  priceUnit: string | null;
+  minimumOrder: number | null;
+  leadTimeDays: number | null;
+  availability: string[];
+};
+
+const getDiscoveryTerms = (post: ClothPost): string[] => {
+  const details = post.listingDetails;
+  const detailTerms = details && 'material' in details
+    ? [details.material, details.pattern, details.colour, details.priceUnit]
+    : details && 'garmentType' in details
+      ? [details.garmentType, ...(details.customizationOptions || []), ...(details.sizes || [])]
+      : [];
+  return [
+    ...(Array.isArray(post.tags) ? post.tags : []),
+    ...detailTerms,
+  ].filter((term): term is string => typeof term === 'string' && Boolean(term.trim()));
+};
+
+const getLeadTime = (post: ClothPost): number | null => {
+  const details = post.listingDetails;
+  return details && 'leadTimeDays' in details && typeof details.leadTimeDays === 'number'
+    ? details.leadTimeDays
+    : null;
+};
+
+const matchesServiceType = (post: ClothPost, serviceType: string): boolean => {
+  const details = post.listingDetails;
+  const fulfilment = details && 'fulfilment' in details ? details.fulfilment : undefined;
+  if (serviceType === 'made_to_order') return fulfilment === 'made_to_order';
+  if (serviceType === 'ready_made') return fulfilment === 'ready_made';
+  return post.listingType === 'FABRIC';
+};
 
 interface ArtisanDirectoryProps {
   users: User[];
@@ -17,29 +70,58 @@ interface ArtisanDirectoryProps {
 
 export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts, currentUser, onSelectArtisan, onToggleFollow, isDarkMode }) => {
   const artisans = useMemo(() => {
-    return users.filter((user) => user.role === 'tailor' || user.role === 'fabric_seller')
-      .map((user) => {
-        const userPosts = posts.filter((post) => post.authorId === user.id);
+    return users.filter((user) => !user.isBlocked
+      && Boolean(user.name.trim() || user.shopName?.trim())
+      && (user.role === 'tailor' || user.role === 'fabric_seller'))
+      .map((user): DirectorySeller => {
+        const userPosts = posts.filter((post) => post.authorId === user.id
+          && !post.deletedAt
+          && !post.isBlocked
+          && (post.status === undefined || post.status === 'published')
+          && (post.moderationStatus === undefined || post.moderationStatus === 'approved')
+          && post.availability !== 'unavailable'
+          && post.status !== 'sold_out');
         const latestPost = [...userPosts].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
         const baseLocation = user.location ?? { city: 'Unknown city', state: 'Unknown', country: 'Unknown', lat: 0, lng: 0 };
         const distanceKm = currentUser && baseLocation.lat && baseLocation.lng && currentUser.location.lat && currentUser.location.lng
           ? calculateDistanceKm(currentUser.location.lat, currentUser.location.lng, baseLocation.lat, baseLocation.lng)
           : null;
+        const pricedPosts = userPosts.filter(post => typeof post.priceMin === 'number' && post.priceMin >= 0);
+        const pricingKeys = Array.from(new Set(pricedPosts.map(post => {
+          const details = post.listingDetails;
+          const unit = details && 'priceUnit' in details ? details.priceUnit : '';
+          return `${post.currency || ''}:${post.listingType || ''}:${unit || 'unitless'}`;
+        })));
+        const comparablePricedPosts = pricingKeys.length === 1 ? pricedPosts : [];
+        const currencies = Array.from(new Set(comparablePricedPosts.map(post => post.currency).filter((value): value is string => Boolean(value))));
+        const priceUnits = Array.from(new Set(comparablePricedPosts.map(post => {
+          const details = post.listingDetails;
+          return details && 'priceUnit' in details ? details.priceUnit : null;
+        }).filter((value): value is Exclude<typeof value, null> => Boolean(value))));
+        const orderedPrices = comparablePricedPosts.map(post => Number(post.priceMin)).sort((a, b) => a - b);
+        const orderedMaximumPrices = comparablePricedPosts.map(post => Number(post.priceMax ?? post.priceMin)).sort((a, b) => a - b);
+        const minimumOrders = userPosts.map(post => {
+          const details = post.listingDetails;
+          return details && 'minimumOrder' in details && typeof details.minimumOrder === 'number' ? details.minimumOrder : null;
+        }).filter((value): value is number => value !== null).sort((a, b) => a - b);
 
         return {
           ...user,
           location: baseLocation,
           distanceKm,
           postCount: userPosts.length,
+          portfolioCount: userPosts.filter(post => Boolean(post.imageUrl?.trim() || post.imageAssets?.length)).length,
           latestPost,
-          rating: userPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / Math.max(userPosts.length, 1),
+          listingTags: Array.from(new Set(userPosts.flatMap(getDiscoveryTerms))),
+          specializations: Array.from(new Set(userPosts.flatMap(getDiscoveryTerms))),
+          minimumPrice: orderedPrices[0] ?? null,
+          maximumPrice: orderedMaximumPrices.at(-1) ?? null,
+          currency: currencies.length === 1 ? currencies[0] : null,
+          priceUnit: priceUnits.length === 1 ? priceUnits[0] : null,
+          minimumOrder: minimumOrders[0] ?? null,
+          leadTimeDays: userPosts.map(getLeadTime).filter((days): days is number => days !== null).sort((a, b) => a - b)[0] ?? null,
+          availability: Array.from(new Set(userPosts.map(post => post.availability).filter((value): value is Exclude<typeof value, undefined> => Boolean(value)))),
         };
-      })
-      .sort((a, b) => {
-        if (a.distanceKm !== null && b.distanceKm !== null) return a.distanceKm - b.distanceKm;
-        if (a.distanceKm !== null) return -1;
-        if (b.distanceKm !== null) return 1;
-        return b.postCount - a.postCount;
       });
   }, [currentUser, posts, users]);
 
@@ -49,6 +131,16 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const [filterCountry, setFilterCountry] = useState(() => getDefaultLocationFilter(currentUser?.location));
   const [filterState, setFilterState] = useState('all');
   const [filterCity, setFilterCity] = useState('all');
+  const [sellerType, setSellerType] = useState<'all' | 'tailor' | 'fabric_seller'>('all');
+  const [specializationFilter, setSpecializationFilter] = useState('all');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
+  const [minimumRatingFilter, setMinimumRatingFilter] = useState(0);
+  const [minimumPriceFilter, setMinimumPriceFilter] = useState('');
+  const [maximumPriceFilter, setMaximumPriceFilter] = useState('');
+  const [availabilityFilter, setAvailabilityFilter] = useState('all');
+  const [sellerReviews, setSellerReviews] = useState<Record<string, SellerReviewSummary>>({});
+  const [sellerReviewsLoaded, setSellerReviewsLoaded] = useState(false);
+  const [sellerReviewsError, setSellerReviewsError] = useState(false);
   const [selectedArtisanId, setSelectedArtisanId] = useState<string | null>(null);
 
   React.useEffect(() => {
@@ -60,7 +152,32 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     setFilterCity(nextState?.cities.some((city) => city.toLowerCase() === currentUser?.location.city?.toLowerCase()) ? currentUser?.location.city || 'all' : 'all');
     setSelectedArtisanId(null);
   }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode, currentUser?.location?.state, currentUser?.location?.city]);
-  const focusArtisan = (artisan: typeof filteredArtisans[number] | null) => {
+  React.useEffect(() => {
+    const sellerIds = artisans.map(artisan => artisan.id);
+    if (!sellerIds.length) {
+      setSellerReviews({});
+      setSellerReviewsLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    setSellerReviewsLoaded(false);
+    setSellerReviewsError(false);
+    Promise.all(Array.from({ length: Math.ceil(sellerIds.length / 50) }, (_, index) =>
+      api.getSellerReviewSummaries(sellerIds.slice(index * 50, (index + 1) * 50)),
+    )).then(summaryPages => {
+      if (cancelled) return;
+      const summaries = summaryPages.flat();
+      setSellerReviews(Object.fromEntries(summaries.map(summary => [summary.sellerId, summary])));
+      setSellerReviewsLoaded(true);
+    }).catch(error => {
+      if (cancelled) return;
+      console.error('Unable to load public seller review summaries.', error);
+      setSellerReviewsError(true);
+      setSellerReviewsLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [artisans]);
+  const focusArtisan = (artisan: DirectorySeller | null) => {
     if (!artisan) return;
     setSelectedArtisanId(artisan.id);
     setSearchQuery(artisan.handle.startsWith('@') ? artisan.handle : `@${artisan.handle}`);
@@ -69,6 +186,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry);
   const selectedState = selectedCountry?.states.find((state) => state.code === filterState);
   const locationArtisans = artisans.filter((artisan) => {
+    if (sellerType !== 'all' && artisan.role !== sellerType) return false;
     const matchesLocation = matchesLocationFilter(
       artisan.location,
       filterCountry === 'all' ? 'all' : (selectedCountry?.name || artisan.location.countryCode || filterCountry),
@@ -81,9 +199,62 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const filteredArtisans = locationArtisans.filter((artisan) => {
     const term = searchQuery.trim().toLowerCase();
     const normalizedHandle = artisan.handle.trim().toLowerCase();
-    const matchesSearch = !term || artisan.name.toLowerCase().includes(term) || artisan.handle.toLowerCase().includes(term) || normalizedHandle.includes(term);
-    return matchesSearch;
+    const summary = sellerReviews[artisan.id];
+    const searchable = [
+      artisan.name, artisan.shopName || '', artisan.handle,
+      artisan.bio || '', artisan.role,
+      artisan.location.city, artisan.location.state, artisan.location.country,
+      ...artisan.specializations,
+      ...artisan.listingTags,
+      ...artisan.availability,
+      artisan.leadTimeDays === null ? '' : `${artisan.leadTimeDays} days`,
+      artisan.minimumOrder === null ? '' : `${artisan.minimumOrder} minimum order`,
+      ...posts.filter(post => post.authorId === artisan.id).map(post => `${post.title} ${post.description}`),
+    ].join(' ').toLowerCase();
+    const matchesSearch = !term || searchable.includes(term) || normalizedHandle.includes(term);
+    const matchesSpecialization = specializationFilter === 'all'
+      || artisan.specializations.some(value => value.toLowerCase() === specializationFilter.toLowerCase());
+    const matchesServiceType = serviceTypeFilter === 'all'
+      || posts.some(post => post.authorId === artisan.id
+        && matchesServiceType(post, serviceTypeFilter));
+    const matchesRating = minimumRatingFilter === 0 || !sellerReviewsLoaded || sellerReviewsError
+      || Boolean(summary && summary.count > 0 && (summary.confidenceAdjustedRating ?? summary.average) >= minimumRatingFilter);
+    const minimumPrice = minimumPriceFilter === '' ? null : Number(minimumPriceFilter);
+    const maximumPrice = maximumPriceFilter === '' ? null : Number(maximumPriceFilter);
+    const matchesPrice = (minimumPrice === null || (artisan.maximumPrice !== null && artisan.maximumPrice >= minimumPrice))
+      && (maximumPrice === null || (artisan.minimumPrice !== null && artisan.minimumPrice <= maximumPrice));
+    const matchesAvailability = availabilityFilter === 'all' || artisan.availability.includes(availabilityFilter);
+    return matchesSearch && matchesSpecialization && matchesServiceType && matchesRating && matchesPrice && matchesAvailability;
   });
+  const sortedArtisans = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    return [...filteredArtisans].sort((a, b) => {
+      const score = (artisan: DirectorySeller) => {
+        const summary = sellerReviews[artisan.id];
+        const haystack = [
+          artisan.name, artisan.shopName || '', artisan.bio || '',
+          ...artisan.specializations,
+          ...artisan.listingTags,
+          ...artisan.availability,
+          ...posts.filter(post => post.authorId === artisan.id).map(post => `${post.title} ${post.description}`),
+        ].join(' ').toLowerCase();
+        const exactMatch = term && `${artisan.name} ${artisan.shopName || ''} ${artisan.handle}`.toLowerCase().includes(term) ? 5 : 0;
+        const queryTerms = term.split(/\s+/).filter(Boolean);
+        const serviceMatch = queryTerms.length
+          ? (queryTerms.filter(word => haystack.includes(word)).length / queryTerms.length) * 4.5
+          : 0;
+        const locationMatch = (filterCity !== 'all' && artisan.location.city.toLowerCase() === filterCity.toLowerCase() ? 3 : 0)
+          + (filterState !== 'all' && artisan.location.state.toLowerCase() === (selectedState?.name || '').toLowerCase() ? 2 : 0)
+          + (filterCountry !== 'all' && (artisan.location.countryCode === filterCountry || artisan.location.country === selectedCountry?.name) ? 1 : 0);
+        const evidence = summary?.count ? Math.min(1, summary.count / 20) * ((summary.confidenceAdjustedRating ?? summary.average) / 5) : 0;
+        const distance = artisan.distanceKm === null ? 0 : 1 / (1 + artisan.distanceKm / 25);
+        const exploration = Date.now() - Date.parse(artisan.createdAt) <= 30 * 86_400_000 ? 0.35 : 0;
+        const portfolioCompleteness = artisan.postCount > 0 ? artisan.portfolioCount / artisan.postCount : 0;
+        return exactMatch + serviceMatch + locationMatch + evidence * 0.5 + distance * 0.25 + exploration + portfolioCompleteness * 0.15;
+      };
+      return score(b) - score(a) || a.id.localeCompare(b.id);
+    });
+  }, [filteredArtisans, searchQuery, sellerReviews, posts, filterCity, filterState, filterCountry, selectedState?.name, selectedCountry?.name]);
   const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
@@ -101,7 +272,10 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-500">Artisan network</p>
-            <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight">Nearby tailors & fabric merchants</h1>
+            <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight">Find a tailor or fabric seller</h1>
+            <p className={`mt-2 max-w-2xl text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
+              Match your service, materials, portfolio and location. Review feedback and listing activity are evidence to compare, not proof of professional credentials.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -126,9 +300,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                   }
                 }}
                 onBlur={() => window.setTimeout(() => dismissSearch(), 120)}
-                placeholder="Search name or @handle"
+                placeholder="Search styles, garments, materials, name, location..."
                 className="min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500"
-                aria-label="Search artisans by name or handle"
+                aria-label="Search sellers by service, specialization, listing, name, or location"
               />
               {searchSuggestionsOpen && searchQuery.trim().length > 0 && searchSuggestions.length > 0 && (
                 <div className={`absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-xl border shadow-2xl ${isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
@@ -168,8 +342,12 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
         </div>
 
-        <div className={`mb-6 grid gap-2 rounded-2xl border p-3 sm:grid-cols-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-          <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedArtisanId(null); }} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
+        <div className={`mb-6 grid gap-2 rounded-2xl border p-3 sm:grid-cols-2 lg:grid-cols-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
+        <label className="sr-only" htmlFor="seller-directory-type">Seller type</label>
+        <select id="seller-directory-type" value={sellerType} onChange={event => setSellerType(event.target.value as typeof sellerType)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
+          <option value="all">Tailors & fabric sellers</option><option value="tailor">Tailors</option><option value="fabric_seller">Fabric sellers</option>
+        </select>
+        <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedArtisanId(null); }} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
             <option value="all">All countries</option>
             {WORLD_COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
           </select>
@@ -181,20 +359,46 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             <option value="all">All cities</option>
             {selectedState?.cities.map((city) => <option key={city} value={city}>{city}</option>)}
           </select>
+          <label className="sr-only" htmlFor="seller-specialization">Filter by specialization</label>
+          <select id="seller-specialization" value={specializationFilter} onChange={event => setSpecializationFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
+            <option value="all">All specializations</option>
+            {Array.from(new Set(artisans.flatMap(artisan => artisan.specializations))).sort((a, b) => a.localeCompare(b)).map(value => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <label className="sr-only" htmlFor="seller-service-type">Filter by service type</label>
+          <select id="seller-service-type" value={serviceTypeFilter} onChange={event => setServiceTypeFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
+            <option value="all">All services</option><option value="made_to_order">Made to measure / made to order</option><option value="ready_made">Ready-made clothing</option><option value="fabric">Fabric sales</option>
+          </select>
+          <label className="sr-only" htmlFor="seller-rating-confidence">Minimum confidence-adjusted seller rating</label>
+          <select id="seller-rating-confidence" value={minimumRatingFilter} onChange={event => setMinimumRatingFilter(Number(event.target.value))} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
+            <option value={0}>Any review rating</option><option value={3}>Confidence-adjusted 3+ (reviewed only)</option><option value={4}>Confidence-adjusted 4+ (reviewed only)</option>
+          </select>
+          <label className="sr-only" htmlFor="seller-availability">Filter by seller listing availability</label>
+          <select id="seller-availability" value={availabilityFilter} onChange={event => setAvailabilityFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
+            <option value="all">Any availability</option><option value="available">Available</option><option value="limited">Limited stock</option><option value="made_to_order">Made to order</option>
+          </select>
+          <label className="sr-only" htmlFor="seller-minimum-price">Minimum listed price</label>
+          <input id="seller-minimum-price" type="number" min="0" step="any" value={minimumPriceFilter} onChange={event => setMinimumPriceFilter(event.target.value)} placeholder="Minimum listed price" className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200 placeholder-neutral-500' : 'border-neutral-300 bg-white text-neutral-800 placeholder-neutral-500'}`} />
+          <label className="sr-only" htmlFor="seller-maximum-price">Maximum listed price</label>
+          <input id="seller-maximum-price" type="number" min="0" step="any" value={maximumPriceFilter} onChange={event => setMaximumPriceFilter(event.target.value)} placeholder="Maximum listed price" className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200 placeholder-neutral-500' : 'border-neutral-300 bg-white text-neutral-800 placeholder-neutral-500'}`} />
         </div>
 
+        <p className={`mb-4 text-[10px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>
+          Price filters compare sellers only when their listing currency is consistent. Seller delivery area, response time, identity verification and skill credentials are not currently recorded; profile locations and listing details are shown as provided.
+        </p>
+        {sellerReviewsError && <p role="status" className="mb-3 text-[11px] text-amber-500">Review summaries are temporarily unavailable; the review rating filter is not being applied.</p>}
+        {minimumRatingFilter > 0 && !sellerReviewsLoaded && <p role="status" className="mb-3 text-[11px] text-neutral-500">Loading eligible firsthand review summaries for the selected rating filter…</p>}
         <div className="mb-6 grid gap-3 md:grid-cols-3">
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Verified tailors & fabric sellers</p>
-            <p className="mt-2 text-2xl font-black text-amber-500">{artisans.filter((artisan) => artisan.role === 'tailor' || artisan.role === 'fabric_seller').length}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Tailors</p>
+            <p className="mt-2 text-2xl font-black text-amber-500">{locationArtisans.filter(artisan => artisan.role === 'tailor').length}</p>
           </div>
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Within reach</p>
-            <p className="mt-2 text-2xl font-black text-emerald-500">{artisans.filter((artisan) => artisan.distanceKm !== null && artisan.distanceKm <= 100).length}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Fabric sellers</p>
+            <p className="mt-2 text-2xl font-black text-emerald-500">{locationArtisans.filter(artisan => artisan.role === 'fabric_seller').length}</p>
           </div>
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Promoted</p>
-            <p className="mt-2 text-2xl font-black text-violet-500">{artisans.filter((artisan) => artisan.isPromoted).length}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Matching this search</p>
+            <p className="mt-2 text-2xl font-black text-violet-500">{filteredArtisans.length}</p>
           </div>
         </div>
 
@@ -202,7 +406,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           <div className="artisan-globe-panel-header">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Live artisan signal</p>
-              <p className="mt-1 text-xs text-orange-50/75">Exploring {locationArtisans.length} seller{locationArtisans.length === 1 ? '' : 's'} in the selected region</p>
+              <p className="mt-1 text-xs text-orange-50/75">Showing {locationArtisans.length} eligible seller{locationArtisans.length === 1 ? '' : 's'} in the selected region</p>
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>
@@ -216,9 +420,68 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           />
         </section>
 
+        <section aria-label="Seller discovery results" className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">Sellers to compare</h2>
+            <p className="text-[11px] text-neutral-500">Search match and location lead; review confidence is secondary. Sponsored placement does not affect these results.</p>
+          </div>
+          {sortedArtisans.map(artisan => {
+            const review = sellerReviews[artisan.id];
+            const firstPortfolioPost = artisan.latestPost;
+            const isNewSeller = Number.isFinite(Date.parse(artisan.createdAt))
+              && Date.now() - Date.parse(artisan.createdAt) <= 30 * 86_400_000;
+            return (
+              <article key={artisan.id} className={`grid gap-4 rounded-2xl border p-4 sm:grid-cols-[96px_minmax(0,1fr)_auto] ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
+                <button type="button" onClick={() => onSelectArtisan(artisan)} className="h-24 w-24 overflow-hidden rounded-xl bg-neutral-800 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400" aria-label={`Open ${artisan.shopName || artisan.name} profile`}>
+                  {firstPortfolioPost?.imageAssets?.[0]?.thumbnailUrl || firstPortfolioPost?.imageUrl
+                    ? <img src={firstPortfolioPost.imageAssets?.[0]?.thumbnailUrl || firstPortfolioPost.imageUrl} alt={`${artisan.shopName || artisan.name} portfolio sample`} loading="lazy" className="h-full w-full object-cover" />
+                    : <span className="flex h-full w-full items-center justify-center">{artisan.role === 'tailor' ? <Shirt className="h-8 w-8 text-neutral-500" /> : <Store className="h-8 w-8 text-neutral-500" />}</span>}
+                </button>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => onSelectArtisan(artisan)} className="truncate text-left text-base font-semibold hover:text-amber-400">{artisan.shopName || artisan.name}</button>
+                    <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[9px] uppercase tracking-wide text-neutral-400">{artisan.role === 'tailor' ? 'Tailor' : 'Fabric seller'}</span>
+                    {isNewSeller && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold text-emerald-400">New seller</span>}
+                    {artisan.isPromoted && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold text-amber-400">Sponsored</span>}
+                  </div>
+                  <p className="mt-1 flex items-center gap-1 text-[11px] text-neutral-400"><MapPin className="h-3 w-3" />{[artisan.location.city, artisan.location.state, artisan.location.country].filter(Boolean).join(', ') || 'Location not provided'}{artisan.distanceKm !== null ? ` · ${artisan.distanceKm} km away` : ''}</p>
+                  {artisan.bio && <p className="mt-2 line-clamp-2 text-xs text-neutral-400">{artisan.bio}</p>}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {artisan.specializations.slice(0, 7).map(value => <span key={value} className="rounded-full border border-amber-500/20 bg-amber-500/5 px-2 py-1 text-[10px] text-amber-300">{value}</span>)}
+                    {artisan.specializations.length === 0 && <span className="text-[10px] text-neutral-500">No listing specializations provided</span>}
+                  </div>
+                  <p className="mt-2 text-[10px] text-neutral-500">
+                    {artisan.postCount} eligible listing{artisan.postCount === 1 ? '' : 's'} · {artisan.portfolioCount} portfolio image{artisan.portfolioCount === 1 ? '' : 's'}
+                    {artisan.minimumPrice !== null && artisan.currency ? ` · ${artisan.currency} ${artisan.minimumPrice.toLocaleString()}${artisan.maximumPrice !== null && artisan.maximumPrice !== artisan.minimumPrice ? `–${artisan.maximumPrice.toLocaleString()}` : ''}${artisan.priceUnit ? ` / ${artisan.priceUnit}` : ''}` : ''}
+                    {artisan.leadTimeDays !== null ? ` · Lead time from ${artisan.leadTimeDays} days` : ''}
+                    {artisan.availability.length > 0 ? ` · ${artisan.availability.join(', ').replaceAll('_', ' ')}` : ''}
+                    {artisan.minimumOrder !== null ? ` · Minimum fabric order ${artisan.minimumOrder}${artisan.priceUnit ? ` ${artisan.priceUnit}${artisan.minimumOrder === 1 ? '' : 's'}` : ''}` : ''}
+                  </p>
+                  {searchQuery.trim() && <p className="mt-1 text-[10px] text-emerald-500">
+                    {artisan.specializations.find(value => value.toLowerCase().includes(searchQuery.trim().toLowerCase().split(/\s+/)[0]))
+                      ? `Matching listed specialization: ${artisan.specializations.find(value => value.toLowerCase().includes(searchQuery.trim().toLowerCase().split(/\s+/)[0]))}`
+                      : 'Matches seller or listing details'}
+                  </p>}
+                </div>
+                <div className="flex flex-row items-start gap-2 sm:flex-col">
+                  <div className="rounded-xl border border-neutral-800 px-3 py-2 text-center">
+                    {review && review.count > 0
+                      ? <><p className="inline-flex items-center gap-1 text-sm font-semibold"><Star className="h-3.5 w-3.5 fill-current text-amber-400" />{review.average.toFixed(1)}</p><p className="text-[9px] text-neutral-500">{review.count} firsthand review{review.count === 1 ? '' : 's'}</p></>
+                      : <p className="text-[10px] text-neutral-500">No reviews yet</p>}
+                  </div>
+                  <button type="button" onClick={() => onToggleFollow(artisan)} className={`min-h-10 rounded-xl border px-4 text-xs font-semibold ${currentUser && artisan.followers?.includes(currentUser.id) ? 'border-emerald-500/40 text-emerald-400' : 'border-neutral-700 text-neutral-300 hover:border-amber-400'}`}>
+                    {currentUser && artisan.followers?.includes(currentUser.id) ? 'Following' : 'Follow'}
+                  </button>
+                  <button type="button" onClick={() => onSelectArtisan(artisan)} className="min-h-10 rounded-xl bg-amber-400 px-4 text-xs font-bold text-neutral-950 hover:bg-amber-300">Compare profile</button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
         {filteredArtisans.length === 0 && (
           <div className={`mt-4 rounded-2xl border border-dashed p-6 text-center ${isDarkMode ? 'border-neutral-700 text-neutral-400' : 'border-neutral-300 text-neutral-500'}`}>
-            No artisans match the current location filter yet. Try a wider radius or browse the full network.
+            No sellers match these filters. Try a broader location, remove a specialization or rating filter, or switch seller type.
           </div>
         )}
       </div>

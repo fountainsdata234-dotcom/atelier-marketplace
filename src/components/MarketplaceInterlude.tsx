@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, ChevronLeft, ChevronRight, Scissors, Star, Sparkles } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Scissors, Sparkles } from 'lucide-react';
 import { ClothPost, User } from '../types';
-import { getRatingQuality } from '../utils/marketplaceRanking';
 
 interface MarketplaceInterludeProps {
   posts: ClothPost[];
@@ -14,41 +13,30 @@ interface MarketplaceInterludeProps {
 export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ posts, users, isDarkMode, onSelectSeller }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
-  const ratedSellers = useMemo(() => {
-    const bySeller = new Map<string, { user: User; ratingTotal: number; ratingCount: number; post: ClothPost }>();
-
-    posts.forEach(post => {
-      const user = userById.get(post.authorId);
-      if (!user || (user.role !== 'tailor' && user.role !== 'fabric_seller')) return;
-      const existing = bySeller.get(user.id) || { user, ratingTotal: 0, ratingCount: 0, post };
-      const ratingCount = Number.isFinite(post.ratingCount) ? Math.max(0, post.ratingCount || 0) : 0;
-      const rating = Number.isFinite(post.rating) ? Math.min(5, Math.max(0, post.rating || 0)) : 0;
-      existing.ratingTotal += rating * ratingCount;
-      existing.ratingCount += ratingCount;
-      if ((post.ratingCount || 0) > (existing.post.ratingCount || 0)) existing.post = post;
-      bySeller.set(user.id, existing);
-    });
-
-    return Array.from(bySeller.values())
-      .sort((a, b) => getRatingQuality(b.ratingTotal / Math.max(1, b.ratingCount), b.ratingCount)
-        - getRatingQuality(a.ratingTotal / Math.max(1, a.ratingCount), a.ratingCount)
-        || b.ratingCount - a.ratingCount)
-      .slice(0, 5);
+  const featuredSellers = useMemo(() => {
+    const bySeller = new Map<string, { user: User; post: ClothPost }>();
+    [...posts]
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+      .forEach(post => {
+        const user = userById.get(post.authorId);
+        if (!user || user.isBlocked || (user.role !== 'tailor' && user.role !== 'fabric_seller')) return;
+        if (!bySeller.has(user.id)) bySeller.set(user.id, { user, post });
+      });
+    return Array.from(bySeller.values()).slice(0, 5);
   }, [posts, userById]);
 
   useEffect(() => {
-    if (ratedSellers.length < 2) return;
-    const timer = window.setInterval(() => setActiveIndex(index => (index + 1) % ratedSellers.length), 5200);
+    if (featuredSellers.length < 2) return;
+    const timer = window.setInterval(() => setActiveIndex(index => (index + 1) % featuredSellers.length), 5200);
     return () => window.clearInterval(timer);
-  }, [ratedSellers.length]);
+  }, [featuredSellers.length]);
 
   useEffect(() => {
-    if (activeIndex >= ratedSellers.length) setActiveIndex(0);
-  }, [activeIndex, ratedSellers.length]);
+    if (activeIndex >= featuredSellers.length) setActiveIndex(0);
+  }, [activeIndex, featuredSellers.length]);
 
-  if (ratedSellers.length === 0) return null;
-  const active = ratedSellers[activeIndex];
-  const averageRating = active.ratingCount ? active.ratingTotal / active.ratingCount : null;
+  if (featuredSellers.length === 0) return null;
+  const active = featuredSellers[activeIndex];
 
   return (
     <motion.section
@@ -69,10 +57,10 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
             A pause for the hands behind the craft.
           </h2>
           <p className={`mt-3 max-w-lg text-sm leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-            You have seen the latest cloths. Now meet the makers whose detail, finish, and fit keep clients coming back.
+            You have seen the latest pieces. Now meet the makers behind the work.
           </p>
           <div className="mt-5 flex items-center gap-2">
-            {ratedSellers.map((seller, index) => (
+            {featuredSellers.map((seller, index) => (
               <button key={seller.user.id} type="button" aria-label={`Show ${seller.user.name}`} onClick={() => setActiveIndex(index)} className={`h-1.5 rounded-full transition-all ${index === activeIndex ? 'w-8 bg-amber-400' : 'w-2 bg-amber-500/30 hover:bg-amber-400/70'}`} />
             ))}
           </div>
@@ -90,14 +78,14 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
                   {active.user.avatarUrl ? <img src={active.user.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-amber-400/60" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400/15 text-xs font-bold text-amber-300">{active.user.name.slice(0, 2).toUpperCase()}</span>}
                   <div className="min-w-0"><p className="truncate text-sm font-bold">{active.user.shopName || active.user.name}</p><p className="truncate text-[10px] capitalize text-amber-400">{active.user.role.replace('_', ' ')}</p></div>
                 </button>
-                <div className="flex items-center gap-1 text-xs font-bold text-amber-400"><Star className="h-3.5 w-3.5 fill-current" />{averageRating === null ? 'New' : averageRating.toFixed(1)}</div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">Recent work</span>
               </div>
               <p className={`mt-5 line-clamp-2 font-serif text-xl font-bold ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{active.post.title}</p>
-              <p className={`mt-1 line-clamp-2 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{active.user.bio || 'Known for careful finishing and considered detail.'}</p>
+              <p className={`mt-1 line-clamp-2 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{active.user.bio || "Explore this seller's latest published work."}</p>
               <button type="button" onClick={() => onSelectSeller(active.user)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 transition hover:gap-2.5">Visit atelier <ArrowRight className="h-3.5 w-3.5" /></button>
             </div>
           </div>
-          {ratedSellers.length > 1 && <div className="absolute bottom-3 right-3 flex gap-1"><button type="button" aria-label="Previous rated seller" onClick={() => setActiveIndex(index => (index - 1 + ratedSellers.length) % ratedSellers.length)} className="rounded-full border border-amber-500/30 p-1.5 text-amber-400 hover:bg-amber-500/10"><ChevronLeft className="h-3.5 w-3.5" /></button><button type="button" aria-label="Next rated seller" onClick={() => setActiveIndex(index => (index + 1) % ratedSellers.length)} className="rounded-full border border-amber-500/30 p-1.5 text-amber-400 hover:bg-amber-500/10"><ChevronRight className="h-3.5 w-3.5" /></button></div>}
+          {featuredSellers.length > 1 && <div className="absolute bottom-3 right-3 flex gap-1"><button type="button" aria-label="Previous featured maker" onClick={() => setActiveIndex(index => (index - 1 + featuredSellers.length) % featuredSellers.length)} className="rounded-full border border-amber-500/30 p-1.5 text-amber-400 hover:bg-amber-500/10"><ChevronLeft className="h-3.5 w-3.5" /></button><button type="button" aria-label="Next featured maker" onClick={() => setActiveIndex(index => (index + 1) % featuredSellers.length)} className="rounded-full border border-amber-500/30 p-1.5 text-amber-400 hover:bg-amber-500/10"><ChevronRight className="h-3.5 w-3.5" /></button></div>}
         </motion.div>
       </div>
       <Sparkles className="pointer-events-none absolute right-6 top-5 h-4 w-4 text-amber-400/40" />

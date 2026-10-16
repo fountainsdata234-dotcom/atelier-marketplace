@@ -174,7 +174,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
           throw new Error('Choose JPEG, PNG, WebP, or GIF images.');
         }
-        if (file.size > 15 * 1024 * 1024) throw new Error(`${file.name} exceeds the 15 MB image limit.`);
+        if (file.size > 8 * 1024 * 1024) throw new Error(`${file.name} exceeds the 8 MB image limit.`);
         const result = await compressAndGenerateImageLink(file);
         if (!result.blob) throw new Error('Please sign in again before uploading an image.');
         uploadedAssets.push(await api.uploadListingImage(result.blob, `${Date.now()}-${file.name}`));
@@ -284,7 +284,6 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         saves: createdPost.saves || [],
         rating: createdPost.rating || 0,
         ratingCount: createdPost.ratingCount || 0,
-        ratingsByUser: createdPost.ratingsByUser || {},
       } as ClothPost;
       storageService.savePosts([normalizedPost, ...cachedPosts.filter(item => item.id !== createdPost.id)]);
       setSellerListings(current => [normalizedPost, ...current.filter(item => item.id !== normalizedPost.id)]);
@@ -721,7 +720,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                       <label htmlFor="tailor-file-input" className="flex cursor-pointer flex-col items-center justify-center">
                         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400"><ImageIcon className="h-6 w-6" /></div>
                         <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? 'Processing and securely uploading…' : 'Upload a product image'}</span>
-                        <span className="mt-1 text-[10px] text-neutral-500">Add up to 8 JPEG, PNG, WebP, or GIF images, 15 MB each. Optimized images and thumbnails are generated on the server.</span>
+                        <span className="mt-1 text-[10px] text-neutral-500">Add up to 8 JPEG, PNG, WebP, or GIF images, 8 MB each. Optimized images and thumbnails are generated on the server.</span>
                       </label>
                     </div>
                     {imageAssets.length > 0 && <div className="grid grid-cols-4 gap-2">{imageAssets.map((asset, index) => (

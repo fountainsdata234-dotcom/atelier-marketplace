@@ -2,7 +2,7 @@ import React, { lazy } from 'react';
 import { motion } from 'motion/react';
 import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, Zap, Flame, Trophy, TrendingUp, MapPin } from 'lucide-react';
 import { AdminPromoPlan, ClothPost, User, UserRole } from '../types';
-import { getTopTailors, rankTrendingPosts } from '../utils/marketplaceRanking';
+import { getTopTailors, isNewSeller, rankTrendingPosts } from '../utils/marketplaceRanking';
 import { storageService } from '../services/storage';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 
@@ -131,11 +131,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [failedFeaturedPostId, setFailedFeaturedPostId] = React.useState<string | null>(null);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
-  const searchHistory = React.useMemo(() => storageService.getSearchHistory(currentUser?.id || 'guest'), [currentUser?.id]);
-  const trendingPosts = React.useMemo(
-    () => rankTrendingPosts(posts, users, storageService.getDiscoveryEvents(), currentUser?.id, searchHistory, Date.now()),
-    [posts, users, currentUser?.id, searchHistory],
-  );
+  const trendingPosts = React.useMemo(() => {
+    const scope = storageService.getRecommendationScope(currentUser?.id);
+    if (!storageService.getRecommendationPreferences(scope).enabled) {
+      return rankTrendingPosts(posts, users, [], currentUser?.id, [], Date.now());
+    }
+    const sessionId = scope.startsWith('session:') ? scope.slice('session:'.length) : '';
+    const events = storageService.getDiscoveryEvents().filter(event =>
+      currentUser ? event.userId === currentUser.id : !event.userId && event.sessionId === sessionId,
+    );
+    return rankTrendingPosts(posts, users, events, currentUser?.id, [], Date.now());
+  }, [posts, users, currentUser?.id]);
   const hottestPosts = React.useMemo(() => trendingPosts.filter(post => post.imageUrl).slice(0, 6), [trendingPosts]);
   const lastWeekHits = React.useMemo(() => {
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -143,7 +149,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       .filter(post => Number.isFinite(Date.parse(post.createdAt)) && Date.parse(post.createdAt) > oneWeekAgo)
       .slice(0, 6);
   }, [trendingPosts]);
-  const topTailors = React.useMemo(() => getTopTailors(posts, users, currentUser, Date.now())
+  const topTailors = React.useMemo(() => getTopTailors(posts, users, Date.now())
     .filter(seller => posts.some(post => post.authorId === seller.id && post.imageUrl?.trim()))
     .slice(0, 6), [posts, users, currentUser]);
   const featuredPost = React.useMemo(() => {
@@ -161,7 +167,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     .filter(user => Number.isFinite(user.location?.lat) && Number.isFinite(user.location?.lng))
     .map(user => {
       const userPosts = posts.filter(post => post.authorId === user.id);
-      return { ...user, distanceKm: null, postCount: userPosts.length, rating: userPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / Math.max(userPosts.length, 1) };
+      return { ...user, distanceKm: null, postCount: userPosts.length };
     }), [posts, users]);
 
   React.useEffect(() => {
@@ -361,7 +367,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 imageUrl: post.imageUrl,
                 post,
                 tag: 'Trending',
-                metric: `${(post.likes?.length || 0) + (post.saves?.length || 0) + (post.ratingCount || 0)} live signals`,
+                metric: `${(post.likes?.length || 0) + (post.saves?.length || 0)} likes and saves`,
                 location: post.authorLocation ? `${post.authorLocation.city}, ${post.authorLocation.country}` : undefined,
                 accent: 'from-orange-400/35 via-amber-500/20 to-transparent',
               }))}
@@ -399,8 +405,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-amber-300">
                 <Trophy className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Promoted tailors</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">New &amp; growing ateliers</span>
               </div>
+              <p className="mt-2 text-xs text-neutral-400">New sellers receive rotating discovery spots. Reviews, featured placement, and listing tags do not certify professional skill.</p>
             </div>
             <LandingTrendCarousel
               label="Featured tailor and fabric seller profiles"
@@ -409,17 +416,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               onSelectSeller={onSelectSeller}
               items={topTailors.map(seller => {
                 const sellerPosts = posts.filter(post => post.authorId === seller.id);
-                const avgRating = sellerPosts.length ? sellerPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / sellerPosts.length : 0;
                 const featuredImage = sellerPosts.find(post => post.imageUrl?.trim())?.imageUrl;
                 const sellerLocation = seller.location ? `${seller.location.city}, ${seller.location.country}` : 'Global atelier';
                 return {
                   id: seller.id,
                   title: seller.shopName || seller.name,
-                  subtitle: `${seller.role === 'fabric_seller' ? 'Fabric merchant' : 'Tailor'} • Avg rating ${avgRating.toFixed(1)}/5`,
+                  subtitle: `${seller.role === 'fabric_seller' ? 'Fabric merchant' : 'Tailor'}${isNewSeller(seller) ? ' · New seller' : ''}`,
                   imageUrl: featuredImage,
                   seller,
-                  tag: seller.isPromoted ? 'Featured' : 'Popular',
-                  metric: `${seller.followers.length} followers`,
+                  tag: seller.isPromoted ? 'Sponsored' : isNewSeller(seller) ? 'New seller' : 'Atelier',
+                  metric: `${sellerPosts.filter(post => !post.deletedAt && (post.status === undefined || post.status === 'published')).length} portfolio pieces`,
                   location: sellerLocation,
                   accent: 'from-fuchsia-500/30 via-purple-500/20 to-transparent',
                 };
@@ -466,7 +472,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span>Direct WhatsApp & In-App order channel</span>
+                <span>Direct WhatsApp & In-App enquiry channel</span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
@@ -541,7 +547,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </span>
             </div>
             <p className={`text-sm mb-4 leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Discover master craftsmen in your city or anywhere in the world. Filter by country, state, or GPS proximity, like posts, save high-resolution garment inspirations, and order bespoke cuts.
+              Discover master craftsmen in your city or anywhere in the world. Filter by country, state, or GPS proximity, like posts, save high-resolution garment inspirations, and discuss bespoke cuts directly with sellers.
             </p>
             <ul className={`text-xs space-y-2 mb-6 ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
               <li className="flex items-center gap-2">

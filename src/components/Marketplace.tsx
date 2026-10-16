@@ -1,14 +1,14 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, MapPin, Filter, Star, Heart, Bookmark, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ShieldCheck, ChevronLeft, ChevronRight, TrendingUp, Flame, Trophy, Zap } from 'lucide-react';
-import { ClothPost, CountryGeo, DiscoveryEvent, DiscoveryEventType, User, UserLocation } from '../types';
+import { Search, MapPin, Filter, Star, Heart, Bookmark, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ChevronLeft, ChevronRight, TrendingUp, Flame, Trophy, Zap, EyeOff } from 'lucide-react';
+import { ClothPost, CountryGeo, DiscoveryEvent, MarketplaceFeedView, MarketplaceSort, MarketplaceTrendCategory, MarketplaceTrendingPage, RecommendationEventType, RecommendationPreferences, User, UserLocation } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
-import { calculateFeedScore, getRatingQuality, rankTrendingPosts } from '../utils/marketplaceRanking';
+import { getTopTailors, rankMarketplaceListings } from '../utils/marketplaceRanking';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 interface MarketplaceProps {
@@ -36,6 +36,17 @@ const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: num
   return Math.round(earthRadiusKm * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)));
 };
 
+const getLikeCount = (post: ClothPost) => post.likeCount ?? post.likes.length;
+const getSaveCount = (post: ClothPost) => post.saveCount ?? post.saves.length;
+const TREND_CATEGORY_LABELS: Record<MarketplaceTrendCategory, string> = {
+  TRENDING_NOW: 'Trending Now',
+  RISING: 'Rising',
+  POPULAR: 'Popular',
+  NEW_NOTICED: 'New & Noticed',
+  HIGHLY_RATED: 'Highly Rated',
+  MOST_VIEWED: 'Most Viewed',
+};
+
 export const Marketplace: React.FC<MarketplaceProps> = ({
   posts,
   postsLoadError,
@@ -53,24 +64,240 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 }) => {
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchPosts, setSearchPosts] = useState<ClothPost[] | null>(null);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const stored = sessionStorage.getItem('atelier_recent_marketplace_searches_v1');
+      const parsed: unknown = stored ? JSON.parse(stored) : [];
+      return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string').slice(0, 6) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeFeedView, setActiveFeedView] = useState<MarketplaceFeedView>('for-you');
+  const [sortOrder, setSortOrder] = useState<MarketplaceSort>('relevance');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [minimumPriceFilter, setMinimumPriceFilter] = useState('');
+  const [maximumPriceFilter, setMaximumPriceFilter] = useState('');
+  const [currencyFilter, setCurrencyFilter] = useState('');
+  const [materialFilter, setMaterialFilter] = useState('');
+  const [colourFilter, setColourFilter] = useState('');
+  const [sizeFilter, setSizeFilter] = useState('');
+  const [fulfilmentFilter, setFulfilmentFilter] = useState('');
+  const [availabilityFilter, setAvailabilityFilter] = useState('');
+  const [feedPosts, setFeedPosts] = useState<ClothPost[]>([]);
+  const [feedCursor, setFeedCursor] = useState<string | null>(null);
+  const [feedHasMore, setFeedHasMore] = useState(false);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [feedLoadingMore, setFeedLoadingMore] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [feedRetry, setFeedRetry] = useState(0);
+  const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const [failedPostImageUrls, setFailedPostImageUrls] = useState<Record<string, string>>({});
-  const sourcePosts = searchQuery.trim().length >= 2 && searchPosts !== null ? searchPosts : posts;
-  const handlePostImageError = (post: ClothPost) => {
-    setFailedPostImageUrls(current => ({ ...current, [post.id]: post.imageUrl }));
+  const recommendationScope = useMemo(() => storageService.getRecommendationScope(currentUser?.id), [currentUser?.id]);
+  const [recommendationPreferences, setRecommendationPreferences] = useState<RecommendationPreferences>(
+    () => storageService.getRecommendationPreferences(storageService.getRecommendationScope(currentUser?.id)),
+  );
+  const [recommendationEvents, setRecommendationEvents] = useState<DiscoveryEvent[]>(
+    () => storageService.getRecommendationEvents(storageService.getRecommendationScope(currentUser?.id)),
+  );
+  const [recommendationNotice, setRecommendationNotice] = useState<string | null>(null);
+  const [categoryPreferenceInput, setCategoryPreferenceInput] = useState('');
+  const [stylePreferenceInput, setStylePreferenceInput] = useState('');
+  const [minimumPriceInput, setMinimumPriceInput] = useState('');
+  const [maximumPriceInput, setMaximumPriceInput] = useState('');
+  const [currencyPreferenceInput, setCurrencyPreferenceInput] = useState('');
+  const [countryPreferenceInput, setCountryPreferenceInput] = useState('');
+  const [statePreferenceInput, setStatePreferenceInput] = useState('');
+  const [recommendationRevision, setRecommendationRevision] = useState(0);
+  const hasLoadedServerFeed = useRef(false);
+  const actionLocks = useRef(new Set<string>());
+  const feedGeneration = useRef(0);
+  const handlePostImageError = (post: ClothPost, failedSource?: string) => {
+    const source = failedSource || post.imageAssets?.[0]?.thumbnailUrl || post.imageAssets?.[0]?.url || post.imageUrl;
+    setFailedPostImageUrls(current => ({ ...current, [post.id]: source }));
+  };
+  const refreshRecommendationSignals = () => {
+    setRecommendationEvents(storageService.getRecommendationEvents(recommendationScope));
+    setRecommendationRevision(value => value + 1);
+  };
+  const recordRecommendationSignal = (listingId: string, eventType: RecommendationEventType, reason?: string) => {
+    const listing = feedPosts.find(post => post.id === listingId);
+    storageService.recordRecommendationEvent(listingId, eventType, recommendationScope, listing, reason);
+    refreshRecommendationSignals();
+  };
+  const saveRecommendationSettings = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const minimum = minimumPriceInput.trim() ? Number(minimumPriceInput) : null;
+    const maximum = maximumPriceInput.trim() ? Number(maximumPriceInput) : null;
+    if ((minimum !== null && (!Number.isFinite(minimum) || minimum < 0))
+      || (maximum !== null && (!Number.isFinite(maximum) || maximum < 0))
+      || (minimum !== null && maximum !== null && minimum > maximum)
+      || ((minimum !== null || maximum !== null) && !currencyPreferenceInput.trim())) {
+      setRecommendationNotice('Enter a valid price range and its currency, with the minimum no greater than the maximum.');
+      return;
+    }
+    const splitList = (value: string) => Array.from(new Set(value.split(',').map(item => item.trim()).filter(Boolean))).slice(0, 20);
+    const next: RecommendationPreferences = {
+      ...recommendationPreferences,
+      categories: splitList(categoryPreferenceInput),
+      styles: splitList(stylePreferenceInput),
+      minimumPrice: minimum,
+      maximumPrice: maximum,
+      currency: currencyPreferenceInput.trim().toUpperCase().slice(0, 3),
+      country: countryPreferenceInput.trim().slice(0, 80),
+      state: statePreferenceInput.trim().slice(0, 80),
+    };
+    storageService.saveRecommendationPreferences(recommendationScope, next);
+    setRecommendationPreferences(next);
+    if (currentUser) {
+      try {
+        await api.saveRecommendationPreferences(next);
+        setRecommendationNotice(next.enabled
+          ? 'Your preferences are saved to your account and will shape For You recommendations.'
+          : 'Preferences saved. Personalization remains off until you enable it.');
+      } catch (error) {
+        setRecommendationNotice(`Preferences are saved on this device, but account sync failed: ${error instanceof Error ? error.message : 'try again later.'}`);
+      }
+    } else {
+      setRecommendationNotice(next.enabled
+        ? 'Your preferences are saved on this device and will shape the For You feed.'
+        : 'Preferences saved. Personalization remains off until you enable it.');
+    }
+  };
+  const setRecommendationEnabled = async (enabled: boolean) => {
+    const next = { ...recommendationPreferences, enabled };
+    storageService.saveRecommendationPreferences(recommendationScope, next);
+    setRecommendationPreferences(next);
+    if (!enabled) {
+      setRecommendationEvents([]);
+      setRecommendationNotice('Personalization is off. Your local recommendation activity was cleared.');
+    } else {
+      setRecommendationNotice('Personalization is on. Recommendation activity stays on this device for up to 180 days.');
+    }
+    if (currentUser) {
+      try {
+        await api.saveRecommendationPreferences(next);
+      } catch (error) {
+        setRecommendationNotice(`Your choice is saved on this device, but account sync failed: ${error instanceof Error ? error.message : 'try again later.'}`);
+      }
+    }
+  };
+  const resetRecommendations = async () => {
+    storageService.resetRecommendationData(recommendationScope);
+    const defaults = storageService.getRecommendationPreferences(recommendationScope);
+    setRecommendationPreferences(defaults);
+    setRecommendationEvents([]);
+    setCategoryPreferenceInput('');
+    setStylePreferenceInput('');
+    setMinimumPriceInput('');
+    setMaximumPriceInput('');
+    setCurrencyPreferenceInput('');
+    setCountryPreferenceInput('');
+    setStatePreferenceInput('');
+    setRecommendationNotice('Your recommendation preferences and local activity were reset.');
+    if (currentUser) {
+      try {
+        await api.resetRecommendationPreferences();
+      } catch (error) {
+        setRecommendationNotice(`Local recommendation data was reset, but account data could not be cleared: ${error instanceof Error ? error.message : 'try again later.'}`);
+      }
+    }
+  };
+  useEffect(() => {
+    const preferences = storageService.getRecommendationPreferences(recommendationScope);
+    setRecommendationPreferences(preferences);
+    setRecommendationEvents(storageService.getRecommendationEvents(recommendationScope));
+    setCategoryPreferenceInput(preferences.categories.join(', '));
+    setStylePreferenceInput(preferences.styles.join(', '));
+    setMinimumPriceInput(preferences.minimumPrice === null ? '' : String(preferences.minimumPrice));
+    setMaximumPriceInput(preferences.maximumPrice === null ? '' : String(preferences.maximumPrice));
+    setCurrencyPreferenceInput(preferences.currency);
+    setCountryPreferenceInput(preferences.country);
+    setStatePreferenceInput(preferences.state);
+  }, [recommendationScope]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+    void api.getRecommendationPreferences().then(({ preferences }) => {
+      if (cancelled || !preferences) return;
+      storageService.saveRecommendationPreferences(recommendationScope, preferences);
+      setRecommendationPreferences(preferences);
+      setCategoryPreferenceInput(preferences.categories.join(', '));
+      setStylePreferenceInput(preferences.styles.join(', '));
+      setMinimumPriceInput(preferences.minimumPrice === null ? '' : String(preferences.minimumPrice));
+      setMaximumPriceInput(preferences.maximumPrice === null ? '' : String(preferences.maximumPrice));
+      setCurrencyPreferenceInput(preferences.currency);
+      setCountryPreferenceInput(preferences.country);
+      setStatePreferenceInput(preferences.state);
+    }).catch(error => {
+      if (!cancelled) {
+        console.warn('Account recommendation preferences could not be loaded.', error);
+        setRecommendationNotice('Account preferences are temporarily unavailable; this device’s saved settings are still in use.');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [currentUser?.id, recommendationScope]);
+
+  useEffect(() => {
+    const update = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== recommendationScope) return;
+      setRecommendationPreferences(storageService.getRecommendationPreferences(recommendationScope));
+      setRecommendationEvents(storageService.getRecommendationEvents(recommendationScope));
+      setRecommendationRevision(value => value + 1);
+    };
+    window.addEventListener('atelier_recommendations_updated', update);
+    return () => window.removeEventListener('atelier_recommendations_updated', update);
+  }, [recommendationScope]);
+
+  const [showAllTrending, setShowAllTrending] = useState(false);
+  const [activeTrendCategory, setActiveTrendCategory] = useState<MarketplaceTrendCategory>('TRENDING_NOW');
+  const [trendingPage, setTrendingPage] = useState<MarketplaceTrendingPage | null>(null);
+  const [trendingLoading, setTrendingLoading] = useState(true);
+  const [trendingError, setTrendingError] = useState<string | null>(null);
+  const seenPostIdsRef = useRef(new Set<string>());
+  const seenImpressionIdsRef = useRef(new Set<string>());
+  const trendScrollRef = useRef<HTMLDivElement | null>(null);
+  const marketplaceRootRef = useRef<HTMLDivElement | null>(null);
+  const locationDataRequestRef = useRef<Promise<CountryGeo[]> | null>(null);
+  const [trendingRetry, setTrendingRetry] = useState(0);
+
+  const trendScores = useMemo(() => new Map(
+    (trendingPage?.items || []).map(post => [post.id, {
+      score: post.trendScore || 0,
+      confidence: post.trendConfidence || 0,
+    }]),
+  ), [trendingPage]);
+  const sourcePosts = useMemo(() => {
+    if (activeFeedView !== 'for-you' || sortOrder !== 'relevance') return feedPosts;
+    return rankMarketplaceListings(feedPosts, users, recommendationEvents, recommendationPreferences, {
+      search: searchQuery,
+      categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
+      trendScores,
+    });
+  }, [feedPosts, users, recommendationEvents, recommendationPreferences, activeFeedView, sortOrder, searchQuery, selectedCategory, trendScores, recommendationRevision]);
+  const getPostImageSource = (post: ClothPost) => {
+    const thumbnail = post.imageAssets?.[0]?.thumbnailUrl;
+    const original = post.imageAssets?.[0]?.url || post.imageUrl;
+    return thumbnail && failedPostImageUrls[post.id] === thumbnail ? original : thumbnail || original;
   };
   const sellerPosts = useMemo(() => sourcePosts
     .filter(post => (post.status === undefined || (post.status === 'published' && (post.moderationStatus === undefined || post.moderationStatus === 'approved')))
       && !post.deletedAt
+      && post.availability !== 'unavailable'
+      && post.status !== 'sold_out'
+      && !post.isBlocked
       && (post.authorRole === 'tailor' || post.authorRole === 'fabric_seller')
-      && post.imageUrl?.trim() && failedPostImageUrls[post.id] !== post.imageUrl)
+      && post.imageUrl?.trim()
+      && failedPostImageUrls[post.id] !== post.imageUrl
+      && failedPostImageUrls[post.id] !== post.imageAssets?.[0]?.url)
     .map(post => {
       const author = users.find(user => user.id === post.authorId);
       return {
         ...post,
         title: post.title || 'Untitled atelier post',
         description: post.description || '',
-        authorName: author?.name || post.authorName || 'Atelier Member',
+        authorName: author?.shopName || author?.name || post.authorName || 'Atelier Member',
         authorHandle: author?.handle || post.authorHandle || '@atelier_member',
         authorAvatar: author?.avatarUrl || post.authorAvatar,
         authorWhatsapp: author?.whatsappNumber || post.authorWhatsapp || author?.phone || '',
@@ -79,15 +306,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         tags: Array.isArray(post.tags) ? post.tags : [],
         likes: Array.isArray(post.likes) ? post.likes : [],
         saves: Array.isArray(post.saves) ? post.saves : [],
-        ratingsByUser: post.ratingsByUser || {},
         rating: Number(post.rating) || 0,
         ratingCount: Number(post.ratingCount) || 0,
       };
     }), [sourcePosts, users, failedPostImageUrls]);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
-  const followedSellerIds = useMemo(() => new Set(
-    users.filter(user => currentUser && user.followers?.includes(currentUser.id)).map(user => user.id),
-  ), [users, currentUser?.id]);
   const tailorPosts = sellerPosts;
   const formatLocation = (location?: Partial<UserLocation>) => [location?.city, location?.state, location?.country].filter(Boolean).join(', ');
   const [selectedTag, setSelectedTag] = useState<string>('all');
@@ -102,35 +325,104 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
   const [activeCarouselIndex, setActiveCarouselIndex] = useState<number>(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [visiblePostsCount, setVisiblePostsCount] = useState<number>(10);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [focusIndex, setFocusIndex] = useState(0);
-  const [showAllTrending, setShowAllTrending] = useState(false);
-  const [discoveryEvents, setDiscoveryEvents] = useState<DiscoveryEvent[]>(() => storageService.getDiscoveryEvents());
-  const [searchHistory, setSearchHistory] = useState<string[]>(() => storageService.getSearchHistory(currentUser?.id));
-  const seenPostIdsRef = useRef(new Set<string>());
-  const trendScrollRef = useRef<HTMLDivElement | null>(null);
-  const locationDataRequestRef = useRef<Promise<CountryGeo[]> | null>(null);
 
   useEffect(() => {
-    const term = searchQuery.trim();
-    if (term.length < 2) {
-      setSearchPosts(null);
-      return;
-    }
+    if (!hasLoadedServerFeed.current && posts.length > 0) setFeedPosts(posts.slice(0, 16));
+  }, [posts]);
+
+  useEffect(() => {
+    const generation = ++feedGeneration.current;
     let cancelled = false;
-    setSearchPosts(null);
+    setFeedLoading(true);
+    setFeedLoadingMore(false);
+    setFeedError(null);
+    setFeedPosts([]);
+    setFeedCursor(null);
+    setFeedHasMore(false);
     const timer = window.setTimeout(() => {
-      void api.getPosts(term).then(result => {
-        if (!cancelled) setSearchPosts(result);
-      }).catch(() => {
-        if (!cancelled) setSearchPosts(null);
+      void api.getMarketplaceFeed({
+        view: activeFeedView,
+        sort: sortOrder,
+        search: searchQuery.trim() || undefined,
+        categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
+        tag: selectedTag === 'all' ? undefined : selectedTag,
+        minimumPrice: minimumPriceFilter === '' ? undefined : Number(minimumPriceFilter),
+        maximumPrice: maximumPriceFilter === '' ? undefined : Number(maximumPriceFilter),
+        currency: currencyFilter.trim().toUpperCase() || undefined,
+        material: materialFilter.trim() || undefined,
+        colour: colourFilter.trim() || undefined,
+        size: sizeFilter.trim() || undefined,
+        fulfilment: fulfilmentFilter ? fulfilmentFilter as 'ready_made' | 'made_to_order' : undefined,
+        availability: availabilityFilter ? availabilityFilter as 'available' | 'made_to_order' | 'limited' : undefined,
+        country: filterCountry === 'all' ? undefined : filterCountry,
+        state: filterState === 'all' ? undefined : filterState,
+        city: filterCity === 'all' ? undefined : filterCity,
+        limit: 16,
+      }).then(page => {
+        if (cancelled || generation !== feedGeneration.current) return;
+        hasLoadedServerFeed.current = true;
+        setFeedPosts(page.items);
+        setFeedCursor(page.nextCursor);
+        setFeedHasMore(page.hasMore);
+        if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
+      }).catch(error => {
+        if (!cancelled && generation === feedGeneration.current) setFeedError(error instanceof Error ? error.message : 'Marketplace listings could not be loaded.');
+      }).finally(() => {
+        if (!cancelled && generation === feedGeneration.current) setFeedLoading(false);
       });
-    }, 300);
+    }, searchQuery.trim() ? 300 : 0);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [searchQuery]);
+  }, [activeFeedView, sortOrder, searchQuery, selectedCategory, selectedTag, minimumPriceFilter, maximumPriceFilter, currencyFilter, materialFilter, colourFilter, sizeFilter, fulfilmentFilter, availabilityFilter, filterCountry, filterState, filterCity, feedRetry, currentUser?.id]);
+
+  const loadMoreListings = async () => {
+    if (!feedHasMore || !feedCursor || feedLoadingMore) return;
+    const generation = feedGeneration.current;
+    setFeedLoadingMore(true);
+    setFeedError(null);
+    try {
+      const page = await api.getMarketplaceFeed({
+        view: activeFeedView,
+        sort: sortOrder,
+        search: searchQuery.trim() || undefined,
+        categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
+        tag: selectedTag === 'all' ? undefined : selectedTag,
+        minimumPrice: minimumPriceFilter === '' ? undefined : Number(minimumPriceFilter),
+        maximumPrice: maximumPriceFilter === '' ? undefined : Number(maximumPriceFilter),
+        currency: currencyFilter.trim().toUpperCase() || undefined,
+        material: materialFilter.trim() || undefined,
+        colour: colourFilter.trim() || undefined,
+        size: sizeFilter.trim() || undefined,
+        fulfilment: fulfilmentFilter ? fulfilmentFilter as 'ready_made' | 'made_to_order' : undefined,
+        availability: availabilityFilter ? availabilityFilter as 'available' | 'made_to_order' | 'limited' : undefined,
+        country: filterCountry === 'all' ? undefined : filterCountry,
+        state: filterState === 'all' ? undefined : filterState,
+        city: filterCity === 'all' ? undefined : filterCity,
+        cursor: feedCursor,
+        limit: 16,
+      });
+      if (generation !== feedGeneration.current) return;
+      setFeedPosts(current => {
+        const ids = new Set(current.map(post => post.id));
+        return [...current, ...page.items.filter(post => {
+          if (ids.has(post.id)) return false;
+          ids.add(post.id);
+          return true;
+        })];
+      });
+      setFeedCursor(page.nextCursor);
+      setFeedHasMore(page.hasMore);
+      if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
+    } catch (error) {
+      if (generation === feedGeneration.current) setFeedError(error instanceof Error ? error.message : 'More listings could not be loaded.');
+    } finally {
+      if (generation === feedGeneration.current) setFeedLoadingMore(false);
+    }
+  };
 
   const loadLocationFilters = () => {
     setShowLocationFilters(true);
@@ -149,84 +441,75 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       .finally(() => setIsLoadingLocationFilters(false));
   };
 
-  useEffect(() => {
-    setSearchHistory(storageService.getSearchHistory(currentUser?.id));
-  }, [currentUser?.id]);
-
-  useEffect(() => {
-    const term = searchQuery.trim();
-    if (term.length < 2) return;
-    const timer = window.setTimeout(() => {
-      storageService.recordSearchTerm(term, currentUser?.id);
-      setSearchHistory(storageService.getSearchHistory(currentUser?.id));
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [searchQuery, currentUser?.id]);
-
   // Extract unique tags across all posts
   const allTags = useMemo(() => {
-    const tagsSet = new Set<string>();
-    sellerPosts.forEach(p => p.tags.forEach(t => tagsSet.add(t.toLowerCase())));
-    return Array.from(tagsSet);
+    const tagsByLowercase = new Map<string, string>();
+    sellerPosts.forEach(post => post.tags.forEach(tag => {
+      const normalized = tag.trim();
+      if (normalized) tagsByLowercase.set(normalized.toLowerCase(), normalized);
+    }));
+    return Array.from(tagsByLowercase.values());
   }, [sellerPosts]);
+  const categories = useMemo(() => Array.from(new Set(sellerPosts.map(post => post.categoryId).filter((category): category is string => Boolean(category)))).sort(), [sellerPosts]);
+  const hasActiveFeedFilters = Boolean(searchQuery.trim()
+    || selectedCategory !== 'all'
+    || selectedTag !== 'all'
+    || minimumPriceFilter
+    || maximumPriceFilter
+    || materialFilter
+    || colourFilter
+    || sizeFilter
+    || fulfilmentFilter
+    || availabilityFilter
+    || filterCountry !== 'all'
+    || filterState !== 'all'
+    || filterCity !== 'all'
+    || nearMeActive
+    || recommendationPreferences.enabled
+    || recommendationPreferences.categories.length > 0
+    || recommendationPreferences.styles.length > 0
+    || recommendationPreferences.minimumPrice !== null
+    || recommendationPreferences.maximumPrice !== null
+    || Boolean(recommendationPreferences.country)
+    || Boolean(recommendationPreferences.state));
 
   const carouselPosts = useMemo(() => {
-    return tailorPosts
-      .filter(post => !userById.get(post.authorId)?.isBlocked)
-      .sort((a, b) => {
-        const authorA = userById.get(a.authorId);
-        const authorB = userById.get(b.authorId);
-        const ageA = Math.max(0, Date.now() - new Date(a.createdAt).getTime());
-        const ageB = Math.max(0, Date.now() - new Date(b.createdAt).getTime());
-        const scoreA = (a.isPromoted || authorA?.isPromoted ? 100000 : 0) + getRatingQuality(a.rating, a.ratingCount) * 100 + Math.min(a.likes.length, 100) + Math.min(a.saves.length, 100) * 1.5 + Math.exp(-ageA / (30 * 86_400_000)) * 10;
-        const scoreB = (b.isPromoted || authorB?.isPromoted ? 100000 : 0) + getRatingQuality(b.rating, b.ratingCount) * 100 + Math.min(b.likes.length, 100) + Math.min(b.saves.length, 100) * 1.5 + Math.exp(-ageB / (30 * 86_400_000)) * 10;
-        return scoreB - scoreA;
-      })
+    return rankMarketplaceListings(tailorPosts, users, recommendationEvents, recommendationPreferences, { trendScores })
       .slice(0, 8);
-  }, [tailorPosts, userById]);
+  }, [tailorPosts, users, recommendationEvents, recommendationPreferences, trendScores, recommendationRevision]);
 
-  const trendingPosts = useMemo(() => {
-    const candidates = tailorPosts.filter(post => !userById.get(post.authorId)?.isBlocked);
-    return rankTrendingPosts(candidates, users, discoveryEvents, currentUser?.id, searchHistory)
-      .slice(0, showAllTrending ? 12 : 7);
-  }, [tailorPosts, userById, users, discoveryEvents, currentUser?.id, searchHistory, showAllTrending]);
+  const trendingPosts = useMemo(
+    () => (trendingPage?.items || []).slice(0, showAllTrending ? 12 : 7),
+    [trendingPage, showAllTrending],
+  );
+  const activeTrendCategoryLabel = TREND_CATEGORY_LABELS[activeTrendCategory];
 
   const lastWeekHits = useMemo(() => {
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return [...tailorPosts]
       .filter(post => !userById.get(post.authorId)?.isBlocked)
       .filter(post => Number.isFinite(Date.parse(post.createdAt)) && Date.parse(post.createdAt) >= weekAgo)
-      .sort((a, b) => ((b.likes?.length ?? 0) + (b.saves?.length ?? 0) + (b.ratingCount ?? 0)) - ((a.likes?.length ?? 0) + (a.saves?.length ?? 0) + (a.ratingCount ?? 0)))
+      .sort((a, b) => (getLikeCount(b) + getSaveCount(b)) - (getLikeCount(a) + getSaveCount(a)))
       .slice(0, 3);
   }, [tailorPosts, userById]);
 
   const topTailors = useMemo(() => {
-    return users
-      .filter(user => user.role === 'tailor' || user.role === 'fabric_seller')
-      .filter(user => tailorPosts.some(post => post.authorId === user.id && post.imageUrl?.trim()))
-      .map(seller => {
-        const sellerPosts = tailorPosts.filter(post => post.authorId === seller.id);
-        const engagement = sellerPosts.reduce((sum, post) => sum + (post.likes?.length ?? 0) * 2 + (post.saves?.length ?? 0) * 3 + (post.ratingCount ?? 0), 0);
-        const avgRating = sellerPosts.length ? sellerPosts.reduce((sum, post) => sum + (post.rating || 0), 0) / sellerPosts.length : 0;
-        const localBoost = currentUser && seller.location?.city && currentUser.location?.city && seller.location.city.toLowerCase() === currentUser.location.city.toLowerCase() ? 24 : 0;
-        const followedBoost = currentUser && seller.followers?.includes(currentUser.id) ? 30 : 0;
-        return { seller, score: engagement + avgRating * 35 + localBoost + followedBoost + (seller.isPromoted ? 18 : 0) };
-      })
-      .sort((a, b) => b.score - a.score)
-      .map(item => item.seller)
-      .slice(0, 3);
-  }, [users, tailorPosts, currentUser]);
+    return getTopTailors(tailorPosts, users).slice(0, 3);
+  }, [users, tailorPosts]);
 
   const smartMarketplaceHighlights = useMemo(() => [
     {
-      title: 'MOST SEARCHED',
+      title: (trendingPage?.fallback ? 'NEW LISTINGS' : activeTrendCategoryLabel).toUpperCase(),
       icon: Flame,
       accent: 'text-orange-300 border-orange-500/25 bg-orange-500/10',
       items: trendingPosts.slice(0, 3).map(post => ({
         id: post.id,
+        listingId: post.id,
+        sellerId: post.authorId,
         title: post.title,
-        subtitle: `${post.authorName} · ${post.likes.length + post.saves.length} live signals`,
+        subtitle: trendingPage?.fallback ? `${post.authorName} · New listing` : `${post.authorName} · Recent customer interest`,
         imageUrl: post.imageUrl,
+        isPromoted: post.isPromoted,
       })),
     },
     {
@@ -235,37 +518,71 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       accent: 'text-sky-300 border-sky-500/25 bg-sky-500/10',
       items: lastWeekHits.map(post => ({
         id: post.id,
+        listingId: post.id,
+        sellerId: post.authorId,
         title: post.title,
         subtitle: `${post.authorName} · ${(post.tags && post.tags[0]) || 'new release'}`,
         imageUrl: post.imageUrl,
+        isPromoted: post.isPromoted,
       })),
     },
     {
-      title: 'TOP TAILORS',
+      title: 'ARTISAN DISCOVERY',
       icon: Trophy,
       accent: 'text-violet-300 border-violet-500/25 bg-violet-500/10',
       items: topTailors.map(seller => ({
         id: seller.id,
+        listingId: undefined,
+        sellerId: undefined,
         title: seller.shopName || seller.name,
-        subtitle: `${seller.role === 'fabric_seller' ? 'Fabric seller' : 'Tailor'} · ${(seller.followers?.length ?? 0)} followers`,
+        subtitle: `${seller.role === 'fabric_seller' ? 'Fabric seller' : 'Tailor'} · ${tailorPosts.filter(post => post.authorId === seller.id).length} portfolio pieces`,
         imageUrl: tailorPosts.find(post => post.authorId === seller.id && post.imageUrl?.trim())?.imageUrl || '',
+        isPromoted: seller.isPromoted,
       })),
     },
-  ], [trendingPosts, lastWeekHits, topTailors, tailorPosts]);
+  ], [trendingPosts, lastWeekHits, topTailors, tailorPosts, activeTrendCategoryLabel, trendingPage?.fallback]);
 
+  const rememberSearch = (value: string) => {
+    const query = value.trim().replace(/\s+/g, ' ').slice(0, 80);
+    if (query.length < 2) return;
+    const recent = [query, ...recentSearches.filter(item => item.toLowerCase() !== query.toLowerCase())].slice(0, 6);
+    setRecentSearches(recent);
+    try {
+      sessionStorage.setItem('atelier_recent_marketplace_searches_v1', JSON.stringify(recent));
+    } catch (error) {
+      console.warn('Unable to retain recent marketplace searches for this session.', error);
+    }
+  };
   const searchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return [];
-    const suggestions = new Map<string, { label: string; type: 'seller' | 'post' | 'tag'; user?: User; post?: ClothPost }>();
+    const suggestions = new Map<string, { label: string; type: 'seller' | 'post' | 'tag' | 'recent'; user?: User; post?: ClothPost }>();
+    if (!query) {
+      recentSearches.forEach(term => suggestions.set(`recent-${term}`, { label: term, type: 'recent' }));
+      return Array.from(suggestions.values()).slice(0, 6);
+    }
     tailorPosts.forEach(post => {
       if (post.title.toLowerCase().includes(query)) suggestions.set(`post-${post.id}`, { label: post.title, type: 'post', post });
       post.tags.forEach(tag => { if (tag.toLowerCase().includes(query)) suggestions.set(`tag-${tag}`, { label: tag, type: 'tag' }); });
     });
-    users.filter(user => user.role === 'tailor' || user.role === 'fabric_seller').forEach(user => {
+    users.filter(user => !user.isBlocked && (user.role === 'tailor' || user.role === 'fabric_seller')).forEach(user => {
       [user.name, user.shopName || '', user.handle].forEach(value => { if (value && value.toLowerCase().includes(query)) suggestions.set(`seller-${user.id}`, { label: user.name, type: 'seller', user }); });
     });
     return Array.from(suggestions.values()).slice(0, 8);
-  }, [tailorPosts, searchQuery, users]);
+  }, [tailorPosts, searchQuery, users, recentSearches]);
+
+  const selectSearchSuggestion = (suggestion: (typeof searchSuggestions)[number]) => {
+    if (suggestion.type === 'recent') {
+      setSearchQuery(suggestion.label);
+      rememberSearch(suggestion.label);
+    } else if (suggestion.user) onSelectSeller(suggestion.user);
+    else if (suggestion.post) openListing(suggestion.post);
+    else {
+      setSearchQuery(suggestion.label);
+      rememberSearch(suggestion.label);
+    }
+    setIsSearchFocused(false);
+    setActiveSuggestionIndex(-1);
+  };
 
   // Filter and sort posts
   const filteredPosts = useMemo(() => {
@@ -275,24 +592,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       if (author?.isBlocked) return false;
 
       // Search Query filter (matches author name, handle, title, description, tags)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesAuthor = post.authorName.toLowerCase().includes(q) || post.authorHandle.toLowerCase().includes(q);
-        const matchesTitle = post.title.toLowerCase().includes(q);
-        const matchesDesc = post.description.toLowerCase().includes(q);
-        const matchesTags = post.tags.some(t => t.toLowerCase().includes(q));
-        if (!matchesAuthor && !matchesTitle && !matchesDesc && !matchesTags) {
-          return false;
-        }
-      }
-
-      // Tag filter
-      if (selectedTag !== 'all') {
-        if (!post.tags.some(t => t.toLowerCase() === selectedTag.toLowerCase())) {
-          return false;
-        }
-      }
-
       // Location filters
       if (!matchesLocationFilter(post.authorLocation, filterCountry, filterState, filterCity)) {
         return false;
@@ -302,7 +601,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     });
 
     // Sorting: Promoted posts first, or distance if Near Me is active
-    if (nearMeActive && userCoords) {
+    if (nearMeActive && userCoords && !searchQuery.trim()) {
       result.sort((a, b) => {
         const distA = a.authorLocation.lat && a.authorLocation.lng
           ? calculateDistanceKm(userCoords.lat, userCoords.lng, a.authorLocation.lat, a.authorLocation.lng)
@@ -312,21 +611,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           : 99999;
         return distA - distB;
       });
-    } else {
-      result.sort((a, b) => {
-        const scoreA = calculateFeedScore(a, userById.get(a.authorId), Date.now());
-        const scoreB = calculateFeedScore(b, userById.get(b.authorId), Date.now());
-        if (followedSellerIds.has(a.authorId) !== followedSellerIds.has(b.authorId)) return followedSellerIds.has(a.authorId) ? -1 : 1;
-        if (a.isPromoted && !b.isPromoted) return -1;
-        if (!a.isPromoted && b.isPromoted) return 1;
-        return scoreB - scoreA || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
     }
 
     return result;
-  }, [tailorPosts, users, userById, followedSellerIds, searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
+  }, [tailorPosts, userById, filterCountry, filterState, filterCity, nearMeActive, userCoords, searchQuery]);
 
-  const visiblePosts = filteredPosts.slice(0, visiblePostsCount);
+  const visiblePosts = filteredPosts;
 
   const getGreeting = (userName: string | null | undefined) => {
     const hour = new Date().getHours();
@@ -335,31 +625,30 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   };
 
   useEffect(() => {
-    setVisiblePostsCount(10);
-  }, [searchQuery, selectedTag, filterCountry, filterState, filterCity, nearMeActive, userCoords]);
-
-  useEffect(() => {
-    const onScroll = () => {
-      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 350;
-      if (nearBottom && visiblePostsCount < filteredPosts.length) {
-        setVisiblePostsCount(prev => Math.min(prev + 10, filteredPosts.length));
-      }
-    };
-
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [filteredPosts.length, visiblePostsCount]);
-
-  useEffect(() => {
     if (carouselPosts.length < 2) return;
     const timer = window.setInterval(() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length), 4500);
     return () => window.clearInterval(timer);
   }, [carouselPosts.length]);
 
   useEffect(() => {
-    if (!currentUser) return;
-    api.getDiscoveryEvents().then(setDiscoveryEvents).catch(() => undefined);
-  }, [currentUser?.id]);
+    let cancelled = false;
+    setTrendingLoading(true);
+    setTrendingError(null);
+    api.getMarketplaceTrending({
+      category: activeTrendCategory,
+      limit: showAllTrending ? 12 : 7,
+    }).then(page => {
+      if (!cancelled) setTrendingPage(page);
+    }).catch(error => {
+      if (!cancelled) {
+        setTrendingPage(null);
+        setTrendingError(error instanceof Error ? error.message : 'Trending listings could not be loaded.');
+      }
+    }).finally(() => {
+      if (!cancelled) setTrendingLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [activeTrendCategory, showAllTrending, trendingRetry]);
 
   useEffect(() => {
     const node = trendScrollRef.current;
@@ -389,12 +678,58 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [trendingPosts]);
 
   useEffect(() => {
-    visiblePosts.slice(0, 10).forEach(post => {
-      if (seenPostIdsRef.current.has(post.id)) return;
-      seenPostIdsRef.current.add(post.id);
-      recordEvent(post.id, 'VIEW');
-    });
-  }, [visiblePosts]);
+    const root = marketplaceRootRef.current;
+    if (!root || typeof IntersectionObserver === 'undefined') return;
+    const timers = new Map<string, number>();
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        const listingId = (entry.target as HTMLElement).dataset.marketplaceListingId;
+        if (!listingId) return;
+        const sellerId = (entry.target as HTMLElement).dataset.marketplaceSellerId;
+        if (currentUser?.id && currentUser.id === sellerId) return;
+
+        if (entry.intersectionRatio >= 0.25 && !seenImpressionIdsRef.current.has(listingId)) {
+          seenImpressionIdsRef.current.add(listingId);
+          const feedPosition = visiblePosts.findIndex(post => post.id === listingId);
+          const trendPosition = trendingPosts.findIndex(post => post.id === listingId);
+          const fromSearch = searchQuery.trim().length >= 2;
+          const feedName = fromSearch
+            ? 'search'
+            : selectedCategory !== 'all' ? 'category' : trendPosition >= 0 ? 'trending' : 'for_you';
+          const rankedPosition = Math.max(1, (trendPosition >= 0 ? trendPosition : feedPosition) + 1);
+          const recommendationReason = visiblePosts.find(post => post.id === listingId)?.recommendationReason;
+          recordRecommendationSignal(listingId, 'IMPRESSION', recommendationReason);
+          void recordTrendEvent(listingId, 'IMPRESSION', sellerId, {
+            feedName,
+            rankedPosition,
+            reasonCode: recommendationReason || '',
+          });
+        }
+        if (entry.intersectionRatio >= 0.5) {
+          if (seenPostIdsRef.current.has(listingId) || timers.has(listingId)) return;
+          const timer = window.setTimeout(() => {
+            seenPostIdsRef.current.add(listingId);
+            timers.delete(listingId);
+            recordRecommendationSignal(listingId, 'VIEW', visiblePosts.find(post => post.id === listingId)?.recommendationReason);
+            void recordTrendEvent(listingId, 'VIEW');
+          }, 2000);
+          timers.set(listingId, timer);
+        } else {
+          const timer = timers.get(listingId);
+          if (timer !== undefined) {
+            window.clearTimeout(timer);
+            timers.delete(listingId);
+          }
+        }
+      });
+    }, { threshold: [0.25, 0.5] });
+    const cards = root.querySelectorAll<HTMLElement>('[data-marketplace-listing-id]');
+    cards.forEach(card => observer.observe(card));
+    return () => {
+      observer.disconnect();
+      timers.forEach(timer => window.clearTimeout(timer));
+    };
+  }, [visiblePosts, currentUser?.id, trendingPosts, activeCarouselIndex, smartMarketplaceHighlights, recommendationScope, searchQuery, selectedCategory]);
 
   // Request browser geolocation for Near Me proximity filtering
   const handleEnableLocation = () => {
@@ -421,15 +756,40 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     );
   };
 
-  const recordEvent = (itemId: string, eventType: DiscoveryEventType) => {
-    const userId = currentUser?.id;
-    storageService.recordDiscoveryEvent(itemId, eventType, userId);
-    setDiscoveryEvents(storageService.getDiscoveryEvents());
-    if (!userId) return;
-    const sessionId = sessionStorage.getItem('atelier_session_id') || `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    sessionStorage.setItem('atelier_session_id', sessionId);
-    void api.recordDiscoveryEvent(itemId, eventType, sessionId);
-  };
+  function recordTrendEvent(
+    listingId: string,
+    eventType: 'IMPRESSION' | 'VIEW' | 'SHARE' | 'ENQUIRY' | 'HIDE',
+    sellerId?: string,
+    recommendation?: {
+      feedName: 'for_you' | 'trending' | 'category' | 'search';
+      rankedPosition: number;
+      reasonCode?: string;
+    },
+  ) {
+    if (currentUser?.id && currentUser.id === sellerId) return;
+    void api.recordMarketplaceEvent(listingId, eventType, recommendation).catch(error => {
+      console.error(`Unable to record marketplace ${eventType.toLowerCase()} event.`, error);
+    });
+  }
+
+  function recordSearchEvent(
+    eventType: 'impression' | 'click' | 'save' | 'enquiry',
+    listingId?: string,
+    resultCount?: number,
+  ) {
+    const query = searchQuery.trim();
+    if (query.length < 2) return;
+    void api.recordMarketplaceSearchEvent(query, eventType, listingId, resultCount).catch(error => {
+      console.error(`Unable to record marketplace search ${eventType}.`, error);
+    });
+  }
+
+  function openListing(post: ClothPost) {
+    recordRecommendationSignal(post.id, 'VIEW');
+    recordTrendEvent(post.id, 'VIEW', post.authorId);
+    recordSearchEvent('click', post.id);
+    onSelectPost(post);
+  }
 
   // Handle Like
   const handleLike = (postId: string) => {
@@ -437,50 +797,43 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       onOpenAuth();
       return;
     }
+    if (actionLocks.current.has(postId)) return;
+    actionLocks.current.add(postId);
+    setPendingActions(new Set(actionLocks.current));
 
-    const updated = storageService.toggleLikePost(postId, currentUser.id);
+    const previousPost = feedPosts.find(post => post.id === postId);
+    const wasLiked = Boolean(previousPost?.likes.includes(currentUser.id));
+    storageService.toggleLikePost(postId, currentUser.id);
+    setFeedPosts(current => current.map(post => {
+      if (post.id !== postId) return post;
+      const likes = post.likes.filter(userId => userId !== currentUser.id);
+      if (!wasLiked) likes.push(currentUser.id);
+      return { ...post, likes, likeCount: Math.max(0, (post.likeCount ?? post.likes.length) + (wasLiked ? -1 : 1)) };
+    }));
     window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
 
     api.toggleLike(postId)
       .then(result => {
-        const post = storageService.getPosts().find(item => item.id === postId);
-        if (!post) return;
-        const likes = post.likes.filter(userId => userId !== currentUser.id);
+        const likes = feedPosts.find(item => item.id === postId)?.likes.filter(userId => userId !== currentUser.id) || [];
         if (result.isLiked) likes.push(currentUser.id);
+        setFeedPosts(current => current.map(post => post.id === postId
+          ? { ...post, likes, likeCount: result.likesCount }
+          : post));
         storageService.reconcilePostEngagement(postId, { likes });
-        if (result.isLiked) recordEvent(postId, 'LIKE');
+        if (result.isLiked && !wasLiked) recordRecommendationSignal(postId, 'LIKE');
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
       .catch(error => {
         setLocationStatus(error.message);
         storageService.toggleLikePost(postId, currentUser.id);
-        window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
-      });
-  };
-
-  const handleRate = (postId: string, rating: number) => {
-    if (!currentUser) {
-      onOpenAuth();
-      return;
-    }
-    const previousPost = storageService.getPosts().find(post => post.id === postId);
-    const previousEngagement = previousPost ? {
-      rating: previousPost.rating || 0,
-      ratingCount: previousPost.ratingCount || 0,
-      ratingsByUser: { ...(previousPost.ratingsByUser || {}) },
-    } : null;
-    const localResult = storageService.ratePost(postId, currentUser.id, rating);
-    if (localResult) window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
-    api.ratePost(postId, rating)
-      .then(result => {
-        storageService.reconcilePostEngagement(postId, { rating: result.rating, ratingCount: result.ratingCount, ratingsByUser: result.ratingsByUser });
-        recordEvent(postId, 'RATING');
+        setFeedPosts(current => current.map(post => post.id === postId
+          ? { ...post, likes: previousPost?.likes || [], likeCount: previousPost?.likeCount ?? previousPost?.likes.length ?? 0 }
+          : post));
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
-      .catch(error => {
-        setLocationStatus(error.message);
-        if (previousEngagement) storageService.reconcilePostEngagement(postId, previousEngagement);
-        window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      .finally(() => {
+        actionLocks.current.delete(postId);
+        setPendingActions(new Set(actionLocks.current));
       });
   };
 
@@ -490,24 +843,40 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       onOpenAuth();
       return;
     }
+    if (actionLocks.current.has(post.id)) return;
+    actionLocks.current.add(post.id);
+    setPendingActions(new Set(actionLocks.current));
 
+    const previousPost = feedPosts.find(item => item.id === post.id);
+    const wasSaved = Boolean(previousPost?.saves.includes(currentUser.id));
     const previousSavedPhoto = storageService.getSavedPhotos().find(photo => photo.postId === post.id);
     const result = storageService.toggleSavePost(post.id, currentUser.id);
     if (result.isSaved) storageService.addSavedPhoto({ url: post.imageUrl, title: post.title, postId: post.id });
+    setFeedPosts(current => current.map(item => {
+      if (item.id !== post.id) return item;
+      const saves = item.saves.filter(userId => userId !== currentUser.id);
+      if (!wasSaved) saves.push(currentUser.id);
+      return { ...item, saves, saveCount: Math.max(0, (item.saveCount ?? item.saves.length) + (wasSaved ? -1 : 1)) };
+    }));
     window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
 
     api.toggleSave(post.id)
       .then(serverResult => {
-        const savedPost = storageService.getPosts().find(item => item.id === post.id);
-        const saves = savedPost?.saves.filter(userId => userId !== currentUser.id) || [];
+        const saves = feedPosts.find(item => item.id === post.id)?.saves.filter(userId => userId !== currentUser.id) || [];
         if (serverResult.isSaved) saves.push(currentUser.id);
+        setFeedPosts(current => current.map(item => item.id === post.id
+          ? { ...item, saves, saveCount: serverResult.savesCount }
+          : item));
         storageService.reconcilePostEngagement(post.id, { saves });
+        if (serverResult.isSaved && !wasSaved) {
+          recordRecommendationSignal(post.id, 'SAVE');
+          recordSearchEvent('save', post.id);
+        }
         const savedPhotos = storageService.getSavedPhotos();
         if (!serverResult.isSaved) {
           const saved = savedPhotos.find(photo => photo.postId === post.id);
           if (saved) storageService.removeSavedPhoto(saved.id);
         }
-        if (serverResult.isSaved) recordEvent(post.id, 'SAVE');
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
       .catch(error => {
@@ -519,10 +888,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         } else if (previousSavedPhoto) {
           storageService.addSavedPhoto({ url: previousSavedPhoto.url, title: previousSavedPhoto.title, postId: previousSavedPhoto.postId });
         }
+        setFeedPosts(current => current.map(item => item.id === post.id
+          ? { ...item, saves: previousPost?.saves || [], saveCount: previousPost?.saveCount ?? previousPost?.saves.length ?? 0 }
+          : item));
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
+      })
+      .finally(() => {
+        actionLocks.current.delete(post.id);
+        setPendingActions(new Set(actionLocks.current));
       });
-
-    void downloadImage(post.imageUrl, post.title);
   };
 
   const downloadImage = async (imageUrl: string, title: string) => {
@@ -564,7 +938,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                                                                                                                     
     const url = getWhatsAppUrl(post);
     if (!url) return;
-    recordEvent(post.id, 'ENQUIRY');
+    recordTrendEvent(post.id, 'ENQUIRY', post.authorId);
+    recordSearchEvent('enquiry', post.id);
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
@@ -574,7 +949,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   );
 
   return (
-    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+    <div ref={marketplaceRootRef} className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       {/* Top Header & Search Bar */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-amber-500/15 pb-6">
         <div>
@@ -596,8 +971,40 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by tailor name, tags (e.g. Silk, Kaftan), or fabric..."
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setActiveSuggestionIndex(-1);
+            }}
+            placeholder="Search fabrics, garments, tags, or descriptions..."
+            role="combobox"
+            aria-label="Search marketplace listings"
+            aria-autocomplete="list"
+            aria-expanded={isSearchFocused && searchSuggestions.length > 0}
+            aria-controls="marketplace-search-suggestions"
+            aria-activedescendant={activeSuggestionIndex >= 0 ? `marketplace-search-option-${activeSuggestionIndex}` : undefined}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                if (activeSuggestionIndex >= 0 && searchSuggestions[activeSuggestionIndex]) {
+                  selectSearchSuggestion(searchSuggestions[activeSuggestionIndex]);
+                } else {
+                  rememberSearch(searchQuery);
+                  setIsSearchFocused(false);
+                }
+                return;
+              }
+              if (!searchSuggestions.length) return;
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                const direction = event.key === 'ArrowDown' ? 1 : -1;
+                setActiveSuggestionIndex(index => index < 0
+                  ? (direction > 0 ? 0 : searchSuggestions.length - 1)
+                  : (index + direction + searchSuggestions.length) % searchSuggestions.length);
+              } else if (event.key === 'Escape') {
+                setIsSearchFocused(false);
+                setActiveSuggestionIndex(-1);
+              }
+            }}
             className={`w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border transition-all focus:outline-none focus:border-amber-500 ${
               isDarkMode
                 ? 'bg-neutral-900/60 border-neutral-700 text-white placeholder-neutral-500'
@@ -607,27 +1014,29 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             onBlur={() => window.setTimeout(() => setIsSearchFocused(false), 150)}
           />
           {isSearchFocused && searchSuggestions.length > 0 && (
-            <div className={`absolute z-30 top-full left-0 right-0 mt-2 rounded-xl border shadow-xl overflow-hidden ${isDarkMode ? 'bg-neutral-900 border-neutral-700' : 'bg-white border-neutral-200'}`}>
+            <div id="marketplace-search-suggestions" role="listbox" aria-label="Marketplace search suggestions" className={`absolute z-30 top-full left-0 right-0 mt-2 rounded-xl border shadow-xl overflow-hidden ${isDarkMode ? 'bg-neutral-900 border-neutral-700' : 'bg-white border-neutral-200'}`}>
               {searchSuggestions.map(suggestion => (
                 <button
                   key={`${suggestion.type}-${suggestion.label}`}
                   type="button"
-                  onMouseDown={() => {
-                    if (suggestion.user) onSelectSeller(suggestion.user);
-                    else if (suggestion.post) onSelectPost(suggestion.post);
-                    else setSearchQuery(suggestion.label);
-                  }}
+                  id={`marketplace-search-option-${searchSuggestions.indexOf(suggestion)}`}
+                  role="option"
+                  aria-selected={activeSuggestionIndex === searchSuggestions.indexOf(suggestion)}
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => selectSearchSuggestion(suggestion)}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs hover:bg-amber-500/10"
                 >
                   {suggestion.user?.avatarUrl ? <img src={suggestion.user.avatarUrl} alt={suggestion.user.name || 'Seller avatar'} className="h-9 w-9 rounded-lg object-cover" /> : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span> : suggestion.post ? <img src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg bg-neutral-950 object-contain" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
-                  <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? 'Collection piece' : 'Category'}</small></span>
+                  <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.type === 'recent' ? 'Recent search · this session' : suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? (suggestion.post?.isPromoted ? 'Sponsored listing' : 'Marketplace listing') : 'Category'}</small></span>
                 </button>
               ))}
             </div>
           )}
           {searchQuery && (
             <button
+              type="button"
               onClick={() => setSearchQuery('')}
+              aria-label="Clear marketplace search"
               className="absolute right-3 top-2.5 text-xs text-neutral-500 hover:text-white"
             >
               Clear
@@ -635,6 +1044,188 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           )}
         </div>
       </div>
+
+      <section aria-label="Marketplace discovery views" className={`rounded-2xl border p-3 sm:p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>
+        <div role="tablist" aria-label="Browse marketplace listings" className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]">
+          {([
+            ['for-you', 'For You'],
+            ['all', 'All listings'],
+            ['clothing', 'Clothing'],
+            ['fabrics', 'Fabrics'],
+            ['tailors', 'Tailors'],
+          ] as const).map(([view, label], index, tabs) => (
+            <button
+              key={view}
+              id={`marketplace-tab-${view}`}
+              type="button"
+              role="tab"
+              aria-selected={activeFeedView === view}
+              aria-controls="marketplace-feed-panel"
+              tabIndex={activeFeedView === view ? 0 : -1}
+              onClick={() => setActiveFeedView(view)}
+              onKeyDown={event => {
+                const offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+                const targetIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + offset + tabs.length) % tabs.length;
+                if (!offset && event.key !== 'Home' && event.key !== 'End') return;
+                event.preventDefault();
+                const target = tabs[targetIndex][0];
+                setActiveFeedView(target);
+                document.getElementById(`marketplace-tab-${target}`)?.focus();
+              }}
+              className={`shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+                activeFeedView === view
+                  ? 'border-amber-400 bg-amber-400 text-neutral-950'
+                  : isDarkMode
+                    ? 'border-neutral-700 text-neutral-300 hover:border-amber-400/60'
+                    : 'border-neutral-300 text-neutral-700 hover:border-amber-500'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className={`text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
+            {activeFeedView === 'for-you'
+              ? 'An optional, privacy-conscious mix of eligible listings. Personalization is off until you enable it; sponsored listings stay labeled.'
+              : activeFeedView === 'tailors'
+                ? 'Explore published work from tailor profiles.'
+                : activeFeedView === 'fabrics'
+                  ? 'Browse fabric listings with material and price-unit details.'
+                  : activeFeedView === 'clothing'
+                    ? 'Browse garments, including ready-made and made-to-order pieces.'
+                    : 'Browse clothing, fabrics, and tailor portfolios in clearly labeled cards.'}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <label className="sr-only" htmlFor="marketplace-category">Filter by category</label>
+            <input
+              id="marketplace-category"
+              type="search"
+              value={selectedCategory === 'all' ? '' : selectedCategory}
+              onChange={event => setSelectedCategory(event.target.value.trim() || 'all')}
+              list="marketplace-category-options"
+              placeholder="All categories"
+              autoComplete="off"
+              className={`min-h-10 rounded-lg border px-3 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-100' : 'border-neutral-300 bg-white text-neutral-800'}`}
+            />
+            <datalist id="marketplace-category-options">
+              {categories.map(category => <option key={category} value={category} />)}
+            </datalist>
+            <label className="sr-only" htmlFor="marketplace-sort">Sort listings</label>
+            <select
+              id="marketplace-sort"
+              value={sortOrder}
+              onChange={event => setSortOrder(event.target.value as MarketplaceSort)}
+              className={`min-h-10 rounded-lg border px-3 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-100' : 'border-neutral-300 bg-white text-neutral-800'}`}
+            >
+              <option value="relevance">Relevance</option>
+              <option value="newest">Newest</option>
+              <option value="price_asc">Price: low to high</option>
+              <option value="price_desc">Price: high to low</option>
+              <option value="rating">Top rated</option>
+              <option value="popularity">Popularity</option>
+            </select>
+          </div>
+        </div>
+      </section>
+      <details className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>
+        <summary className="cursor-pointer text-sm font-semibold text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+          More search filters
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            Minimum price
+            <input type="number" min="0" step="any" value={minimumPriceFilter} onChange={event => setMinimumPriceFilter(event.target.value)} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+          </label>
+          <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            Maximum price
+            <input type="number" min="0" step="any" value={maximumPriceFilter} onChange={event => setMaximumPriceFilter(event.target.value)} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+          </label>
+          <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            Currency (required for price)
+            <input value={currencyFilter} maxLength={8} onChange={event => setCurrencyFilter(event.target.value.replace(/[^a-z]/gi, '').toUpperCase())} placeholder="NGN" className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+          </label>
+          <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            Material
+            <input value={materialFilter} onChange={event => setMaterialFilter(event.target.value)} placeholder="Cotton, linen..." className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+          </label>
+          <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            Colour
+            <input value={colourFilter} onChange={event => setColourFilter(event.target.value)} placeholder="Black, indigo..." className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+          </label>
+          <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            Size
+            <input value={sizeFilter} onChange={event => setSizeFilter(event.target.value)} placeholder="M, 12, XL..." className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+          </label>
+          <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            Clothing fulfilment
+            <select value={fulfilmentFilter} onChange={event => setFulfilmentFilter(event.target.value)} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`}>
+              <option value="">Any</option><option value="ready_made">Ready-made</option><option value="made_to_order">Made to order</option>
+            </select>
+          </label>
+          <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+            Availability
+            <select value={availabilityFilter} onChange={event => setAvailabilityFilter(event.target.value)} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`}>
+              <option value="">Any</option><option value="available">Available</option><option value="limited">Limited stock</option><option value="made_to_order">Made to order</option>
+            </select>
+          </label>
+        </div>
+        <p className={`mt-3 text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>
+          A place in your search (for example, “in Aba”) prioritizes matching seller locations but can include other areas; use the location filter to restrict results. Delivery availability is not inferred. Verified rating filters are unavailable because eligible rating-confidence data is not yet part of the feed.
+        </p>
+      </details>
+      {activeFeedView === 'for-you' && <details className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>
+        <summary className="cursor-pointer text-sm font-semibold text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+          For You preferences and privacy
+        </summary>
+        <form onSubmit={saveRecommendationSettings} className="mt-4 space-y-4">
+          <label className={`flex items-start gap-3 text-xs ${isDarkMode ? 'text-neutral-200' : 'text-neutral-700'}`}>
+            <input
+              type="checkbox"
+              checked={recommendationPreferences.enabled}
+              onChange={event => setRecommendationEnabled(event.target.checked)}
+              className="mt-0.5 accent-amber-400"
+            />
+            <span><strong>Use my activity to personalize this feed</strong><span className="mt-1 block text-neutral-500">Off by default. If enabled, recent listing interactions are stored on this device for up to 180 days. Anonymous preferences last for this browser session. No sensitive attributes are inferred.</span></span>
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              Preferred categories (comma separated)
+              <input value={categoryPreferenceInput} onChange={event => setCategoryPreferenceInput(event.target.value)} placeholder="Clothing, Fabric" className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+            </label>
+            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              Preferred styles or materials (comma separated)
+              <input value={stylePreferenceInput} onChange={event => setStylePreferenceInput(event.target.value)} placeholder="Senator, linen, Ankara" className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+            </label>
+            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              Minimum price
+              <input type="number" min="0" step="any" value={minimumPriceInput} onChange={event => setMinimumPriceInput(event.target.value)} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+            </label>
+            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              Maximum price
+              <input type="number" min="0" step="any" value={maximumPriceInput} onChange={event => setMaximumPriceInput(event.target.value)} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+            </label>
+            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              Price currency (required with a price range)
+              <input value={currencyPreferenceInput} onChange={event => setCurrencyPreferenceInput(event.target.value.replace(/[^a-z]/gi, '').toUpperCase().slice(0, 3))} maxLength={3} placeholder="USD" className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+            </label>
+            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              Preferred country (optional)
+              <input value={countryPreferenceInput} onChange={event => setCountryPreferenceInput(event.target.value)} maxLength={80} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+            </label>
+            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+              Preferred state or region (optional)
+              <input value={statePreferenceInput} onChange={event => setStatePreferenceInput(event.target.value)} maxLength={80} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
+            </label>
+          </div>
+          <p className={`text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>The current feed uses selected preferences, recent marketplace trend scores where available, listing freshness, and listing completeness. Verified rating-confidence and seller-reliability signals are not available to this ranker and are not guessed. Recent listings receive limited exploration slots; this is not a claim that they have had fewer impressions.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="submit" className="min-h-10 rounded-lg bg-amber-400 px-4 text-xs font-bold text-neutral-950 hover:bg-amber-300">Save preferences</button>
+            <button type="button" onClick={resetRecommendations} className={`min-h-10 rounded-lg border px-4 text-xs font-semibold ${isDarkMode ? 'border-neutral-700 text-neutral-200 hover:border-amber-400' : 'border-neutral-300 text-neutral-700 hover:border-amber-500'}`}>Reset preferences and activity</button>
+            {recommendationNotice && <span role="status" className="text-xs text-neutral-500">{recommendationNotice}</span>}
+          </div>
+        </form>
+      </details>}
 
       {/* Randomized picture carousel with promoted posts weighted more often */}
       {carouselPosts.length > 0 && (
@@ -653,7 +1244,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
           <div className="relative overflow-hidden rounded-[2rem] border border-amber-500/30 bg-neutral-950 shadow-[0_30px_80px_rgba(0,0,0,0.4)]">
             {(() => {
-              const post = carouselPosts[activeCarouselIndex];
+              const post = carouselPosts[activeCarouselIndex % carouselPosts.length];
               return (
                 <motion.div
                   key={post.id}
@@ -662,8 +1253,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   transition={{ duration: 0.45 }}
                   className="relative aspect-[10/13] min-h-[320px] bg-neutral-950 sm:aspect-[16/7] sm:min-h-[320px]"
                 >
-                  <button type="button" onClick={() => onSelectPost(post)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-pointer">
-                    <img src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-contain brightness-110 saturate-110" loading="eager" onError={() => handlePostImageError(post)} />
+                  <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-pointer">
+                    <img src={getPostImageSource(post)} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-contain brightness-110 saturate-110" loading="eager" onError={() => handlePostImageError(post, getPostImageSource(post))} />
                   </button>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.12),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.02)_25%,rgba(0,0,0,0.16)_55%,rgba(0,0,0,0.64)_100%)] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.14),transparent_30%),linear-gradient(90deg,rgba(0,0,0,0.72),rgba(0,0,0,0.3)_55%,rgba(0,0,0,0.04))]" />
 
@@ -675,8 +1266,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         </span>
                       )}
                       <span className="rounded-full border border-white/20 bg-black/35 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-amber-100 backdrop-blur-sm sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.2em]">
-                        {post.authorRole === 'tailor' ? 'Bespoke Tailor' : 'Fabric Merchant'}
+                        {post.listingType === 'FABRIC' ? 'Fabric' : post.listingType === 'TAILOR_PORTFOLIO' ? 'Tailor portfolio' : 'Clothing'}
                       </span>
+                      {post.isPromoted && <span className="rounded-full border border-amber-300/40 bg-amber-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-amber-100 backdrop-blur-sm">Sponsored</span>}
                     </div>
 
                     <button type="button" onClick={() => {
@@ -720,13 +1312,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       <div className="mt-4 flex flex-col gap-2 sm:mt-5 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-neutral-200 sm:gap-2 sm:text-[11px]">
                           <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
-                            <span className="text-neutral-400">Likes</span> {post.likes.length}
+                            <span className="text-neutral-400">Likes</span> {getLikeCount(post)}
                           </span>
                           <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
-                            <span className="text-neutral-400">Saves</span> {post.saves.length}
+                            <span className="text-neutral-400">Saves</span> {getSaveCount(post)}
                           </span>
                           <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
-                            <span className="text-neutral-400">Rating</span> {post.rating ? post.rating.toFixed(1) : 'New'}
+                            <span className="text-neutral-400">Rating</span>{' '}
+                            {post.ratingCount
+                              ? `${(post.rating || 0).toFixed(1)} · ${post.ratingCount} review${post.ratingCount === 1 ? '' : 's'}`
+                              : 'No reviews yet'}
                           </span>
                         </div>
 
@@ -762,19 +1357,53 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </section>
       )}
 
-      {trendingPosts.length > 0 && (
+      {(trendingPosts.length > 0 || trendingLoading || trendingError) && (
         <section className="space-y-3">
-          <div className="flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-400" /><h2 className="text-sm font-semibold tracking-wide uppercase text-emerald-400 font-mono">Trending Craft</h2><span className="text-[11px] text-neutral-400">Latest quality and engagement signals</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-sm font-semibold tracking-wide uppercase text-emerald-400 font-mono">{activeTrendCategoryLabel} · Craft</h2>
+              <span className="text-[11px] text-neutral-400">
+                {trendingPage?.fallback ? 'New listings shown until there is enough qualified activity' : 'Recent activity adjusted for exposure and confidence'}
+              </span>
+            </div>
+            <label className="sr-only" htmlFor="marketplace-trend-category">Trending category</label>
+            <select
+              id="marketplace-trend-category"
+              value={activeTrendCategory}
+              onChange={event => {
+                setActiveTrendCategory(event.target.value as MarketplaceTrendCategory);
+                setShowAllTrending(false);
+              }}
+              className={`min-h-9 rounded-lg border px-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-100' : 'border-neutral-300 bg-white text-neutral-800'}`}
+            >
+              <option value="TRENDING_NOW">Trending Now</option>
+              <option value="RISING">Rising</option>
+              <option value="POPULAR">Popular</option>
+              <option value="NEW_NOTICED">New &amp; Noticed</option>
+              <option value="HIGHLY_RATED">Highly Rated</option>
+              <option value="MOST_VIEWED">Most Viewed</option>
+            </select>
+          </div>
+          {trendingError && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200" role="status">
+              <span>{trendingError}</span>
+              <button type="button" onClick={() => setTrendingRetry(value => value + 1)} className="font-semibold underline underline-offset-2">Retry</button>
+            </div>
+          )}
+          {trendingPage?.fallbackMessage && <p className="text-xs text-neutral-400">{trendingPage.fallbackMessage}</p>}
+          {trendingLoading && <p className="text-xs text-neutral-400" role="status">Refreshing qualified trend signals…</p>}
           <div ref={trendScrollRef} className="flex gap-3 overflow-x-auto pb-3 scroll-smooth snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {trendingPosts.map((post, index) => {
               const isFocused = index === focusIndex;
               return (
                 <button
                   key={post.id}
+                  data-marketplace-listing-id={post.id}
+                  data-marketplace-seller-id={post.authorId}
                   type="button"
                   onClick={() => {
-                    recordEvent(post.id, 'VIEW');
-                    onSelectPost(post);
+                    openListing(post);
                   }}
                   aria-label={`Explore ${post.title}`}
                   className="group relative min-w-[260px] max-w-[320px] flex-1 shrink-0 snap-center overflow-hidden rounded-[1.5rem] border bg-neutral-900/70 text-left transition-all duration-300 ease-out"
@@ -787,12 +1416,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   }}
                 >
                   <div className="relative overflow-hidden">
-                    <img src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" onError={() => handlePostImageError(post)} />
+                    <img src={getPostImageSource(post)} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" onError={() => handlePostImageError(post, getPostImageSource(post))} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                    {post.isPromoted && <span className="absolute left-2 top-2 rounded bg-amber-500 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Sponsored</span>}
                     <div className="absolute bottom-0 left-0 right-0 p-3">
                       <p className="text-xs font-semibold truncate text-white">{post.title}</p>
-                      <p className="mt-1 text-[10px] text-neutral-200">{post.authorName} · {post.likes.length + post.saves.length} signals</p>
-                      {post.rating ? <span className="mt-1 flex items-center gap-1 text-[10px] text-amber-400"><Star className="h-3 w-3 fill-current" /> {post.rating.toFixed(1)}</span> : <span className="mt-1 block text-[10px] text-emerald-400">Rising now</span>}
+                      <p className="mt-1 text-[10px] text-neutral-200">{post.authorName} · {getLikeCount(post) + getSaveCount(post)} signals</p>
+                      {post.ratingCount
+                        ? <span className="mt-1 flex items-center gap-1 text-[10px] text-amber-400"><Star className="h-3 w-3 fill-current" /> {post.rating?.toFixed(1)} · {post.ratingCount} review{post.ratingCount === 1 ? '' : 's'}</span>
+                        : <span className="mt-1 block text-[10px] text-neutral-300">No reviews yet</span>}
                     </div>
                   </div>
                 </button>
@@ -950,8 +1582,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         )}
       </section>
 
-      {/* Posts Feed Grid */}
-      {filteredPosts.length === 0 ? (
+      <section id="marketplace-feed-panel" role="tabpanel" aria-labelledby={`marketplace-tab-${activeFeedView}`} className="space-y-5">
+      {/* Server-paginated listings feed */}
+      {feedLoading && filteredPosts.length === 0 ? (
+        <div aria-label="Loading listings" aria-busy="true" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className={`overflow-hidden rounded-3xl border ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white'}`}>
+              <div className="aspect-[4/3] animate-pulse bg-neutral-700/30" />
+              <div className="space-y-3 p-4">
+                <div className="h-3 w-1/3 animate-pulse rounded bg-neutral-700/30" />
+                <div className="h-5 w-3/4 animate-pulse rounded bg-neutral-700/30" />
+                <div className="h-3 w-full animate-pulse rounded bg-neutral-700/30" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredPosts.length === 0 ? (
         <div className={`text-center py-16 px-6 rounded-3xl border ${
           isDarkMode ? 'bg-[#121316]/50 border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'
         }`}>
@@ -960,9 +1606,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </div>
 
           <h3 className="text-2xl font-serif font-bold mb-2">
-            {postsLoadError
+            {postsLoadError || feedError
               ? 'The atelier feed could not be reached'
-              : sellerPosts.length > 0
+              : hasActiveFeedFilters || sellerPosts.length > 0
                 ? 'No pieces match this view'
                 : currentUser?.role === 'tailor'
                   ? 'Your first collection is waiting to be shared'
@@ -972,10 +1618,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </h3>
 
           <p className={`text-xs max-w-md mx-auto mb-6 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-            {postsLoadError
-              ? 'Your saved listings are safe. Check your connection and try loading the feed again.'
-              : sellerPosts.length > 0
-                ? 'Try clearing your search, category, or location filters to see more listings.'
+            {postsLoadError || feedError
+              ? (feedError || 'Your saved listings are safe. Check your connection and try loading the feed again.')
+              : hasActiveFeedFilters || sellerPosts.length > 0
+                ? 'Adjust your search, category, location, or For You preferences to see more listings.'
                 : currentUser?.role === 'tailor'
                   ? 'Publish garments, pricing, and fabric details for buyers to discover.'
                   : currentUser?.role === 'fabric_seller'
@@ -984,20 +1630,33 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            {postsLoadError ? (
+            {postsLoadError || feedError ? (
               <button
                 type="button"
-                onClick={onRetryLoad}
+                onClick={() => {
+                  onRetryLoad();
+                  setFeedRetry(value => value + 1);
+                }}
                 className="rounded-xl bg-amber-400 px-5 py-2.5 text-xs font-semibold text-neutral-950 transition hover:bg-amber-300"
               >
                 Retry loading listings
               </button>
-            ) : sellerPosts.length > 0 ? (
+            ) : hasActiveFeedFilters || sellerPosts.length > 0 ? (
               <button
                 type="button"
                 onClick={() => {
                   setSearchQuery('');
+                  setSelectedCategory('all');
                   setSelectedTag('all');
+                  setSortOrder('relevance');
+                  setMinimumPriceFilter('');
+                  setMaximumPriceFilter('');
+                  setCurrencyFilter('');
+                  setMaterialFilter('');
+                  setColourFilter('');
+                  setSizeFilter('');
+                  setFulfilmentFilter('');
+                  setAvailabilityFilter('');
                   setFilterCountry('all');
                   setFilterState('all');
                   setFilterCity('all');
@@ -1023,6 +1682,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 {currentUser ? 'Join as Tailor / Fabric Seller' : 'Register as Tailor / Fabric Merchant to Post'}
               </button>
             )}
+            {activeFeedView === 'for-you' && hasActiveFeedFilters && <button
+              type="button"
+              onClick={resetRecommendations}
+              className="rounded-xl border border-amber-500/40 px-5 py-2.5 text-xs font-semibold text-amber-500 transition hover:bg-amber-500/10"
+            >
+              Reset For You preferences
+            </button>}
           </div>
         </div>
       ) : (
@@ -1030,31 +1696,39 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           {visiblePosts.map((post, postIndex) => {
             const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
             const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
+            const likeCount = post.likeCount ?? post.likes.length;
+            const saveCount = post.saveCount ?? post.saves.length;
+            const details = (post.listingDetails || {}) as Record<string, unknown>;
+            const priceMin = post.priceMin ?? (post.pricing?.basic || null);
+            const priceMax = post.priceMax ?? priceMin;
+            const currency = post.currency || post.pricing?.currency || post.authorLocation.currency || 'USD';
+            const priceLabel = priceMin === null
+              ? 'Price on enquiry'
+              : `${currency} ${Number(priceMin).toLocaleString()}${priceMax !== null && priceMax !== priceMin ? ` – ${currency} ${Number(priceMax).toLocaleString()}` : ''}${typeof details.priceUnit === 'string' ? ` / ${details.priceUnit}` : ''}`;
+            const locationLabel = formatLocation(post.authorLocation);
+            const listingTypeLabel = post.listingType === 'FABRIC'
+              ? 'Fabric'
+              : post.listingType === 'TAILOR_PORTFOLIO'
+                ? 'Tailor portfolio'
+                : 'Clothing';
 
             // Distance calculation if userCoords present
             const distanceKm = userCoords && post.authorLocation.lat && post.authorLocation.lng
               ? calculateDistanceKm(userCoords.lat, userCoords.lng, post.authorLocation.lat, post.authorLocation.lng)
               : null;
-            const userRating = currentUser ? (post.ratingsByUser?.[currentUser.id] || 0) : (post.rating || 0);
 
             return (
               <React.Fragment key={post.id}>
               <motion.article
+                data-marketplace-listing-id={post.id}
+                data-marketplace-seller-id={post.authorId}
                 layout
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                role="link"
-                tabIndex={0}
-                aria-label={`View ${post.title} by ${post.authorName}`}
                 onClick={(event) => {
                   if ((event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
-                  onSelectPost(post);
-                }}
-                onKeyDown={(event) => {
-                  if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
-                  event.preventDefault();
-                  onSelectPost(post);
+                  openListing(post);
                 }}
                 className={`marketplace-card feed-card-wave mb-3 break-inside-avoid rounded-[1.5rem] border overflow-hidden transition-all group flex flex-col justify-between ${
                   isDarkMode
@@ -1078,10 +1752,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         </span>
                         {post.isPromoted && (
                           <span
-                            title="Featured Atelier"
+                            title="Paid placement"
                             className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 uppercase tracking-tighter ring-1 ring-amber-500/25"
                           >
-                            👘 Featured
+                            Sponsored
                           </span>
                         )}
                       </div>
@@ -1089,13 +1763,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         <span className="font-semibold uppercase tracking-[0.12em] text-amber-500">{getRoleLabel(post.authorRole)}</span>
                         <span>{post.authorHandle}</span>
                       </div>
-                      <div className="flex items-center gap-1 text-[10px] text-neutral-400">
-                        <MapPin className="w-2.5 h-2.5 text-amber-500" />
-                        <span>{formatLocation(post.authorLocation)}</span>
-                        {distanceKm !== null && (
-                          <span className="text-amber-400 font-mono">({distanceKm} km away)</span>
-                        )}
-                      </div>
+                      {(locationLabel || distanceKm !== null) && (
+                        <div className="flex items-center gap-1 text-[10px] text-neutral-400">
+                          <MapPin className="w-2.5 h-2.5 text-amber-500" />
+                          {locationLabel && <span>{locationLabel}</span>}
+                          {distanceKm !== null && <span className="text-amber-400 font-mono">({distanceKm} km away)</span>}
+                        </div>
+                      )}
+                      {post.searchLocationHint && (
+                        <span className={`block text-[10px] ${post.searchLocationMatch ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {post.searchLocationMatch
+                            ? `Matches ${post.searchLocationHint}`
+                            : locationLabel
+                              ? `Outside ${post.searchLocationHint} · ask about delivery`
+                              : 'Seller location not provided · ask about delivery'}
+                        </span>
+                      )}
                     </div>
                   </button>
 
@@ -1110,7 +1793,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         </button>
                       ) : null;
                     })()}
-                    <button onClick={() => onSharePost(post)} title="Share garment post" className="p-1.5 rounded-lg text-neutral-400 hover:text-amber-400 hover:bg-neutral-800/50 transition-colors">
+                    <button type="button" onClick={() => { recordTrendEvent(post.id, 'SHARE', post.authorId); onSharePost(post); }} title="Share listing" aria-label={`Share ${post.title}`} className="p-1.5 rounded-lg text-neutral-400 hover:text-amber-400 hover:bg-neutral-800/50 transition-colors">
                       <Share2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -1119,7 +1802,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 {/* Garment Image with High-Res Zoom / Save */}
                 <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
                   <img
-                    src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl}
+                    src={getPostImageSource(post)}
                     alt={post.title}
                     className="block h-auto w-full cursor-pointer object-contain brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
                     referrerPolicy="no-referrer"
@@ -1127,21 +1810,36 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     decoding="async"
                     draggable={false}
                     onContextMenu={(event) => event.preventDefault()}
-                    onClick={() => onSelectPost(post)}
-                    onError={() => handlePostImageError(post)}
+                    onClick={() => openListing(post)}
+                    onError={() => handlePostImageError(post, getPostImageSource(post))}
                   />
 
                   {/* Top image overlay badges */}
                   <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold backdrop-blur-md bg-black/60 text-white border border-white/10">
-                      {post.authorRole === 'tailor' ? 'Bespoke Tailoring' : 'Fine Fabric Material'}
+                      {listingTypeLabel}
                     </span>
+                    {post.categoryId && <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold capitalize backdrop-blur-md bg-black/60 text-white border border-white/10">{post.categoryId.replace(/[-_]/g, ' ')}</span>}
                   </div>
+                  {post.imageAssets && post.imageAssets.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => openListing(post)}
+                      className="absolute bottom-2.5 left-2.5 rounded-md bg-black/70 px-2 py-1 text-[10px] font-semibold text-white hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                      aria-label={`View ${post.imageAssets.length} photos for ${post.title}`}
+                    >
+                      {post.imageAssets.length} photos · View gallery
+                    </button>
+                  )}
 
-                  {/* Save Picture Action overlay */}
+                  {/* Save listing */}
                   <button
+                    type="button"
                     onClick={() => handleSave(post)}
-                    title="Save High-Res Picture"
+                    disabled={pendingActions.has(post.id)}
+                  aria-pressed={isSaved}
+                    aria-label={`${isSaved ? 'Remove saved listing' : 'Save listing'}: ${post.title}`}
+                    title={isSaved ? 'Remove from saved listings' : 'Save listing'}
                     className={`absolute top-2.5 right-2.5 p-2 rounded-xl backdrop-blur-md transition-all ${
                       isSaved
                         ? 'bg-amber-500 text-neutral-950 font-bold shadow'
@@ -1150,6 +1848,36 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   >
                     <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-neutral-950' : ''}`} />
                   </button>
+                  {activeFeedView === 'for-you' && recommendationPreferences.enabled && <button
+                    type="button"
+                    onClick={() => {
+                      recordRecommendationSignal(post.id, 'NOT_INTERESTED');
+                      if (!currentUser) {
+                        setRecommendationNotice('We will avoid this listing on this device and adjust its category and style signals.');
+                        return;
+                      }
+                      setPendingActions(current => new Set(current).add(`feedback-${post.id}`));
+                      void api.setRecommendationFeedback(post.id, 'not_interested', true)
+                        .then(() => {
+                          setFeedPosts(current => current.filter(item => item.id !== post.id));
+                          setRecommendationNotice('This listing is hidden from your recommendations for 30 days.');
+                        })
+                        .catch(error => {
+                          setRecommendationNotice(`This device will avoid the listing, but account feedback could not be saved: ${error instanceof Error ? error.message : 'try again later.'}`);
+                        })
+                        .finally(() => setPendingActions(current => {
+                          const next = new Set(current);
+                          next.delete(`feedback-${post.id}`);
+                          return next;
+                        }));
+                    }}
+                    disabled={pendingActions.has(`feedback-${post.id}`)}
+                    aria-label={`Show me fewer listings like ${post.title}`}
+                    title="Not interested"
+                    className="absolute right-2.5 top-14 rounded-xl border border-white/20 bg-black/70 p-2 text-white backdrop-blur-md hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  >
+                    <EyeOff className="h-4 w-4" />
+                  </button>}
 
                   {/* Quick Preview trigger */}
                   <div className="absolute bottom-2.5 right-2.5 flex gap-1.5 opacity-0 transition-opacity group-hover/img:opacity-100">
@@ -1175,6 +1903,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     </p>
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={() => openListing(post)}
+                    className="min-h-9 rounded-lg border border-amber-500/30 px-3 text-left text-[11px] font-semibold text-amber-400 hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  >
+                    View listing details and gallery
+                  </button>
+
                   {/* Tags */}
                   {post.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
@@ -1192,30 +1928,41 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   {/* Seller price / negotiable state */}
                   <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-800/80 bg-neutral-900/30 p-2 text-[11px]">
                     <span className="text-[9px] uppercase font-bold tracking-wider text-amber-500/80">
-                      Seller Price
+                      Price
                     </span>
-                    <span className="text-right text-neutral-400">{post.pricing.basic > 0 ? `${post.pricing.currency || post.authorLocation.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable'}</span>
+                    <span className="text-right text-neutral-200">{priceLabel}</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-neutral-400">
+                    <span className="capitalize">{post.availability === 'made_to_order' ? 'Made to order' : post.availability === 'limited' ? 'Limited availability' : 'Available'}</span>
+                    {typeof post.stockQuantity === 'number' && <span>{post.stockQuantity} in stock</span>}
+                    {typeof details.leadTimeDays === 'number' && <span>{details.leadTimeDays} day lead time</span>}
+                    {details.fulfilment === 'ready_made' && <span>Ready-made</span>}
+                    {details.fulfilment === 'made_to_order' && <span>Made to order</span>}
+                    {typeof details.material === 'string' && <span>{details.material}</span>}
+                    {typeof details.colour === 'string' && <span>{details.colour}</span>}
+                    {Array.isArray(details.sizes) && details.sizes.length > 0 && <span>Sizes: {details.sizes.slice(0, 4).join(', ')}</span>}
+                    {Array.isArray(details.customizationOptions) && details.customizationOptions.length > 0 && <span>Customization available</span>}
                   </div>
 
                   <div className="flex items-center justify-between pt-0 text-[10px] font-mono text-neutral-400">
                     <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                    <span>{post.saves.length} Saves</span>
+                    <span>{saveCount} Saves</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2">
-                    <div className="flex items-center gap-0.5" aria-label="Rate this cloth from one to five stars">
-                      {[1, 2, 3, 4, 5].map(star => (
-                        <button key={star} type="button" onClick={() => handleRate(post.id, star)} className="rounded p-0.5 text-neutral-600 transition hover:scale-110 hover:text-amber-400" aria-label={`Rate ${star} out of 5`} title={`Rate ${star} out of 5`}>
-                          <Star className={`h-3.5 w-3.5 ${userRating >= star ? 'fill-amber-400 text-amber-400' : ''}`} />
-                        </button>
-                      ))}
-                      {post.ratingCount ? <span className="ml-1 text-[10px] text-amber-400">{(post.rating || 0).toFixed(1)} ({post.ratingCount})</span> : null}
-                    </div>
+                    <span className="text-[10px] text-neutral-500">Firsthand feedback is shown on the listing page</span>
+                    <button type="button" onClick={() => openListing(post)} className="text-[10px] font-semibold text-amber-500 hover:text-amber-300">Read reviews</button>
                   </div>
+                  {activeFeedView === 'for-you' && post.recommendationReason && <p className="text-[10px] text-neutral-500">Why this appears: {post.recommendationReason}</p>}
                 </div>
 
                 {/* Footer: Like Counter and WhatsApp Contact */}
                 <div className="flex items-center justify-between gap-2 border-t border-neutral-800/60 bg-neutral-900/20 px-3 py-2">
                   <button
+                    type="button"
+                    disabled={pendingActions.has(post.id)}
+                    aria-label={`${isLiked ? 'Unlike' : 'Like'} ${post.title}`}
+                    aria-pressed={isLiked}
                     onClick={() => handleLike(post.id)}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isLiked
@@ -1224,7 +1971,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     }`}
                   >
                     <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-400' : ''}`} />
-                    <span>{post.likes.length}</span>
+                    <span>{likeCount}</span>
                   </button>
 
                   {getWhatsAppUrl(post) ? <button type="button" onClick={() => openWhatsApp(post)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500" title="Contact seller on WhatsApp"><Phone className="h-3.5 w-3.5" /><span>WhatsApp</span></button> : <span className="text-[10px] text-neutral-500">WhatsApp unavailable</span>}
@@ -1252,17 +1999,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                           </div>
                           <div className="space-y-2">
                             {block.items.length > 0 ? block.items.map(item => (
-                              <button key={`${block.title}-${item.id}`} type="button" onClick={() => {
+                              <button key={`${block.title}-${item.id}`} type="button" data-marketplace-listing-id={item.listingId} data-marketplace-seller-id={item.sellerId} onClick={() => {
                                 const internalPost = tailorPosts.find(post => post.id === item.id);
-                                if (internalPost) onSelectPost(internalPost);
+                                if (internalPost) openListing(internalPost);
                                 else if (item.title && item.imageUrl) {
                                   const seller = users.find(user => user.id === item.id);
                                   if (seller) onSelectSeller(seller);
                                 }
                               }} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-black/15 p-2 text-left transition hover:border-white/20 hover:bg-black/20">
-                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl bg-neutral-950 object-contain" loading="lazy" onError={() => { const failedPost = tailorPosts.find(post => post.imageUrl === item.imageUrl); if (failedPost) handlePostImageError(failedPost); }} /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-[10px] uppercase tracking-[0.12em] text-white/80">Live</div>}
+                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl bg-neutral-950 object-contain" loading="lazy" onError={() => { const failedPost = tailorPosts.find(post => post.imageUrl === item.imageUrl); if (failedPost) handlePostImageError(failedPost, item.imageUrl); }} /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-[10px] uppercase tracking-[0.12em] text-white/80">Live</div>}
                                 <span className="min-w-0">
                                   <strong className="block truncate text-xs text-white">{item.title}</strong>
+                                  {item.isPromoted && <small className="mt-0.5 block text-[9px] font-bold uppercase tracking-wider text-amber-300">Sponsored</small>}
                                   <small className="mt-1 block truncate text-[10px] text-neutral-300">{item.subtitle}</small>
                                 </span>
                               </button>
@@ -1286,6 +2034,29 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           })}
         </div>
       )}
+
+      {feedError && filteredPosts.length > 0 && (
+        <div role="alert" className="flex flex-col items-start justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-200 sm:flex-row sm:items-center">
+          <span>{feedError}</span>
+          <button type="button" onClick={() => void loadMoreListings()} className="rounded-lg border border-red-300/40 px-3 py-2 font-semibold hover:bg-red-500/20">
+            Retry loading more
+          </button>
+        </div>
+      )}
+
+      {feedHasMore && (
+        <div className="flex justify-center pb-3">
+          <button
+            type="button"
+            onClick={() => void loadMoreListings()}
+            disabled={feedLoadingMore}
+            className="min-h-11 rounded-xl border border-amber-500/40 bg-amber-500/10 px-6 py-3 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          >
+            {feedLoadingMore ? 'Loading more listings…' : 'Load more listings'}
+          </button>
+        </div>
+      )}
+      </section>
 
     </div>
   );

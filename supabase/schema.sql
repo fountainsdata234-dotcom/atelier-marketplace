@@ -51,18 +51,55 @@ create table if not exists public.posts (
   price_min numeric(18, 2) check (price_min is null or price_min >= 0),
   price_max numeric(18, 2) check (price_max is null or price_max >= 0),
   deleted_at timestamptz,
-  search_document tsvector generated always as (
-    setweight(to_tsvector('simple', coalesce(title, '')), 'A')
-    || setweight(to_tsvector('simple', coalesce(description, '')), 'B')
-    || setweight(to_tsvector('simple', coalesce(array_to_string(tags, ' '), '')), 'C')
-    || to_tsvector('simple', coalesce(category_id, '') || ' ' || coalesce(listing_type, '') || ' ' || coalesce(listing_details::text, ''))
-  ) stored,
+  search_document tsvector,
   is_promoted boolean not null default false,
   is_blocked boolean not null default false,
+  like_count integer not null default 0,
+  save_count integer not null default 0,
+  rating_count integer not null default 0,
+  rating_sum numeric(18, 3) not null default 0,
+  rating_average numeric(4, 2) not null default 0,
+  popularity_score numeric(18, 3) not null default 0,
   check (price_max is null or price_min is null or price_max >= price_min),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create or replace function public.refresh_post_search_document()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.search_document :=
+    setweight(to_tsvector('simple'::regconfig, coalesce(new.title, '')), 'A')
+    || setweight(to_tsvector('simple'::regconfig, coalesce(new.description, '')), 'B')
+    || setweight(to_tsvector('simple'::regconfig, coalesce(array_to_string(new.tags, ' '), '')), 'C')
+    || to_tsvector(
+      'simple'::regconfig,
+      coalesce(new.category_id, '') || ' ' || coalesce(new.listing_type, '')
+        || ' ' || coalesce(new.listing_details::text, '')
+    );
+  return new;
+end;
+$$;
+
+drop trigger if exists posts_search_document_refresh on public.posts;
+create trigger posts_search_document_refresh
+before insert or update of title, description, tags, category_id, listing_type, listing_details
+on public.posts
+for each row execute function public.refresh_post_search_document();
+
+update public.posts
+set search_document =
+  setweight(to_tsvector('simple'::regconfig, coalesce(title, '')), 'A')
+  || setweight(to_tsvector('simple'::regconfig, coalesce(description, '')), 'B')
+  || setweight(to_tsvector('simple'::regconfig, coalesce(array_to_string(tags, ' '), '')), 'C')
+  || to_tsvector(
+    'simple'::regconfig,
+    coalesce(category_id, '') || ' ' || coalesce(listing_type, '')
+      || ' ' || coalesce(listing_details::text, '')
+  );
 
 create table if not exists public.listing_changes (
   id bigint generated always as identity primary key,
@@ -115,6 +152,85 @@ create table if not exists public.ratings (
   updated_at timestamptz not null default now(),
   primary key (post_id, user_id)
 );
+
+create or replace function public.refresh_post_reaction_counts()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_post_id uuid;
+  delta integer;
+begin
+  target_post_id := case when tg_op = 'DELETE' then old.post_id else new.post_id end;
+  delta := case when tg_op = 'DELETE' then -1 else 1 end;
+
+  if tg_table_name = 'post_likes' then
+    update public.posts
+    set like_count = greatest(0, like_count + delta),
+        popularity_score = greatest(0, popularity_score + delta)
+    where id = target_post_id;
+  else
+    update public.posts
+    set save_count = greatest(0, save_count + delta),
+        popularity_score = greatest(0, popularity_score + (delta * 1.5))
+    where id = target_post_id;
+  end if;
+
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end;
+$$;
+
+create or replace function public.refresh_post_rating_summary()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.posts
+    set rating_sum = rating_sum + new.rating,
+        rating_average = round((rating_sum + new.rating) / (rating_count + 1), 2),
+        rating_count = rating_count + 1
+    where id = new.post_id;
+    return new;
+  elsif tg_op = 'DELETE' then
+    update public.posts
+    set rating_sum = greatest(0, rating_sum - old.rating),
+        rating_average = case
+          when rating_count > 1 then round((rating_sum - old.rating) / (rating_count - 1), 2)
+          else 0
+        end,
+        rating_count = greatest(0, rating_count - 1)
+    where id = old.post_id;
+    return old;
+  end if;
+
+  update public.posts
+  set rating_sum = rating_sum + new.rating - old.rating,
+      rating_average = round((rating_sum + new.rating - old.rating) / nullif(rating_count, 0), 2)
+  where id = new.post_id and rating_count > 0;
+  return new;
+end;
+$$;
+
+drop trigger if exists post_likes_feed_counts on public.post_likes;
+create trigger post_likes_feed_counts
+after insert or delete on public.post_likes
+for each row execute function public.refresh_post_reaction_counts();
+
+drop trigger if exists post_saves_feed_counts on public.post_saves;
+create trigger post_saves_feed_counts
+after insert or delete on public.post_saves
+for each row execute function public.refresh_post_reaction_counts();
+
+drop trigger if exists ratings_feed_summary on public.ratings;
+create trigger ratings_feed_summary
+after insert or update of rating or delete on public.ratings
+for each row execute function public.refresh_post_rating_summary();
 
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
@@ -171,7 +287,7 @@ create table if not exists public.discovery_events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.profiles(id) on delete cascade,
   item_id text not null,
-  event_type text not null check (event_type in ('VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'ADD_TO_CART', 'PURCHASE', 'RATING')),
+  event_type text not null check (event_type in ('VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'RATING')),
   timestamp timestamptz not null default now(),
   session_id text not null
 );
@@ -332,8 +448,11 @@ create policy "Notifications can be updated by owner or admin"
   on public.notifications for update using (user_id = auth.uid() or public.is_admin())
   with check (user_id = auth.uid() or public.is_admin());
 
-create policy "Discovery events are insertable by authenticated users"
-  on public.discovery_events for insert with check (user_id is null or user_id = auth.uid());
+create policy "Personal discovery events exclude commerce claims"
+  on public.discovery_events for insert with check (
+    user_id = auth.uid()
+    and event_type in ('VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'RATING')
+  );
 
 create policy "Discovery events are readable by owner or admin"
   on public.discovery_events for select using (user_id = auth.uid() or public.is_admin());
@@ -353,6 +472,20 @@ create index if not exists posts_listing_feed_idx on public.posts (published_at 
   where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and not is_blocked;
 create index if not exists posts_search_document_idx on public.posts using gin (search_document);
 create index if not exists posts_owner_status_idx on public.posts (author_id, updated_at desc) where deleted_at is null;
+create index if not exists posts_marketplace_newest_idx on public.posts (published_at desc, id desc)
+  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
+create index if not exists posts_marketplace_category_idx on public.posts (category_id, published_at desc, id desc)
+  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
+create index if not exists posts_marketplace_price_asc_idx on public.posts (price_min asc nulls last, published_at desc, id desc)
+  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
+create index if not exists posts_marketplace_price_desc_idx on public.posts (price_min desc nulls last, published_at desc, id desc)
+  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
+create index if not exists posts_marketplace_rating_idx on public.posts (rating_average desc, published_at desc, id desc)
+  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
+create index if not exists posts_marketplace_popularity_idx on public.posts (popularity_score desc, published_at desc, id desc)
+  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
+create index if not exists posts_marketplace_relevance_idx on public.posts (is_promoted desc, popularity_score desc, published_at desc, id desc)
+  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
 create index if not exists listing_reports_open_idx on public.listing_reports (created_at desc) where status = 'open';
 create index if not exists messages_sender_idx on public.messages(sender_id, timestamp);
 create index if not exists messages_recipient_idx on public.messages(recipient_id, timestamp);

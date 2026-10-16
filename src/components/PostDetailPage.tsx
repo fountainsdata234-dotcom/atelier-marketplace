@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, MapPin, MessageCircle, Share2, Star, Flag } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MapPin, MessageCircle, Share2, Flag } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
+import { MarketplaceReviews } from './MarketplaceReviews';
 
 interface PostDetailPageProps {
   post: ClothPost | null;
   posts: ClothPost[];
   users: User[];
+  currentUser: User | null;
+  onOpenAuth: () => void;
   isDarkMode: boolean;
   onBack: () => void;
   onSelectPost: (post: ClothPost) => void;
@@ -21,6 +24,8 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
   post,
   posts,
   users,
+  currentUser,
+  onOpenAuth,
   isDarkMode,
   onBack,
   onSelectPost,
@@ -126,7 +131,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
             {post.listingType && <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">{post.listingType.replace('_', ' ')}{post.categoryId ? ` · ${post.categoryId}` : ''}</p>}
             <h1 className="mt-2 font-serif text-2xl font-bold sm:text-3xl">{post.title}</h1>
             <div className={`mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs ${muted}`}>
-              <span>{post.ratingCount ? <><Star className="mr-1 inline h-3.5 w-3.5 fill-amber-400 text-amber-400" />{post.rating?.toFixed(1)} ({post.ratingCount})</> : 'Not rated yet'}</span>
+              <span>Firsthand feedback is shown below</span>
               {location && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-amber-500" />{location}</span>}
             </div>
             <p className={`mt-5 whitespace-pre-line text-sm leading-relaxed ${muted}`}>{post.description || 'Contact the seller for details about this piece.'}</p>
@@ -165,6 +170,8 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
           </div>}
         </aside>
       </section>
+
+      <MarketplaceReviews type="listing" targetId={post.id} currentUser={currentUser} onOpenAuth={onOpenAuth} isDarkMode={isDarkMode} />
 
       {fromOtherSellers.length > 0 && <section className="mt-10">
         <div className="mb-4 flex items-end justify-between gap-3 border-b border-amber-500/15 pb-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Selected by shared tags</p><h2 className="mt-1 font-serif text-2xl font-bold">Related pieces</h2></div><span className={`text-xs ${muted}`}>{fromOtherSellers.length} match{fromOtherSellers.length === 1 ? '' : 'es'}</span></div>

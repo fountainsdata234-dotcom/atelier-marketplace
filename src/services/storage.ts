@@ -1,4 +1,4 @@
-import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, SellerCollection, UserRole, FabricRequest, FabricRequestStatus, DiscoveryEvent, DiscoveryEventType, AppNotification } from '../types';
+import { User, ClothPost, AdminPromoPlan, DirectMessage, BroadcastMessage, SavedPhoto, SellerCollection, UserRole, FabricRequest, FabricRequestStatus, DiscoveryEvent, DiscoveryEventType, AppNotification, RecommendationPreferences, RecommendationEventType } from '../types';
 
 const STORAGE_KEYS = {
   USERS: 'atelier_users_v2',
@@ -15,14 +15,30 @@ const STORAGE_KEYS = {
   DISCOVERY_EVENTS: 'atelier_discovery_events_v1',
   SEARCH_HISTORY: 'atelier_search_history_v1',
   NOTIFICATIONS: 'atelier_notifications_v1',
+  REVIEW_RATING_CACHE_MIGRATION: 'atelier_review_rating_cache_migration_v1',
 };
+
+const DEFAULT_RECOMMENDATION_PREFERENCES: RecommendationPreferences = {
+  enabled: false,
+  categories: [],
+  styles: [],
+  minimumPrice: null,
+  maximumPrice: null,
+  currency: '',
+  country: '',
+  state: '',
+};
+const RECOMMENDATION_PREFERENCES_KEY = 'atelier_recommendation_preferences_v1';
+const RECOMMENDATION_EVENTS_KEY = 'atelier_recommendation_events_v1';
+const RECOMMENDATION_RETENTION_MS = 180 * 86_400_000;
+const RECOMMENDATION_EVENT_LIMIT = 500;
 
 const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
   {
     id: 'promo-1',
     caption: 'Atelier Spotlight Boost',
     timeRange: '7 Days Active',
-    description: 'Feature your bespoke designs at the top of the marketplace carousel with the verified golden Atelier badge.',
+    description: 'Feature your bespoke designs at the top of the marketplace carousel with a golden Atelier feature badge.',
     amount: 25,
     currency: 'USD',
     whatsappNumber: '+2348000000001',
@@ -46,7 +62,7 @@ const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
     id: 'promo-3',
     caption: 'Couture Enterprise Suite',
     timeRange: '90 Days VIP',
-    description: 'Full carousel lock, direct WhatsApp VIP lead generation, featured banner in buyer digests, and verified atelier insignia.',
+    description: 'Full carousel placement, direct WhatsApp lead generation, featured banner in buyer digests, and an Atelier feature insignia.',
     amount: 190,
     currency: 'USD',
     whatsappNumber: '+2348000000001',
@@ -156,6 +172,8 @@ export const storageService = {
 
   recordDiscoveryEvent(itemId: string, eventType: DiscoveryEventType, userId?: string): void {
     try {
+      const scope = this.getRecommendationScope(userId);
+      if (!this.getRecommendationPreferences(scope).enabled) return;
       const stored = localStorage.getItem(STORAGE_KEYS.DISCOVERY_EVENTS);
       const events: DiscoveryEvent[] = stored ? JSON.parse(stored) : [];
       events.push({
@@ -163,16 +181,118 @@ export const storageService = {
         eventType,
         userId,
         timestamp: new Date().toISOString(),
-        sessionId: sessionStorage.getItem('atelier_session_id') || (() => {
-          const id = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          sessionStorage.setItem('atelier_session_id', id);
-          return id;
-        })(),
+        sessionId: scope.startsWith('session:') ? scope.slice('session:'.length) : sessionStorage.getItem('atelier_session_id') || '',
       });
       localStorage.setItem(STORAGE_KEYS.DISCOVERY_EVENTS, JSON.stringify(events.slice(-5000)));
     } catch {
       // Discovery signals are optional and must never block browsing.
     }
+  },
+
+  getRecommendationScope(userId?: string): string {
+    if (userId) return `user:${userId}`;
+    let sessionId = sessionStorage.getItem('atelier_recommendation_session_id');
+    if (!sessionId) {
+      sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      sessionStorage.setItem('atelier_recommendation_session_id', sessionId);
+    }
+    return `session:${sessionId}`;
+  },
+
+  getRecommendationPreferences(scope: string): RecommendationPreferences {
+    try {
+      const storage = scope.startsWith('session:') ? sessionStorage : localStorage;
+      const raw = storage.getItem(`${RECOMMENDATION_PREFERENCES_KEY}:${scope}`);
+      if (!raw) return { ...DEFAULT_RECOMMENDATION_PREFERENCES };
+      const value = JSON.parse(raw) as Partial<RecommendationPreferences>;
+      return {
+        enabled: value.enabled === true,
+        categories: Array.isArray(value.categories) ? value.categories.filter(item => typeof item === 'string').slice(0, 20) : [],
+        styles: Array.isArray(value.styles) ? value.styles.filter(item => typeof item === 'string').slice(0, 20) : [],
+        minimumPrice: typeof value.minimumPrice === 'number' && Number.isFinite(value.minimumPrice) && value.minimumPrice >= 0 ? value.minimumPrice : null,
+        maximumPrice: typeof value.maximumPrice === 'number' && Number.isFinite(value.maximumPrice) && value.maximumPrice >= 0 ? value.maximumPrice : null,
+        currency: typeof value.currency === 'string' ? value.currency.slice(0, 3).toUpperCase() : '',
+        country: typeof value.country === 'string' ? value.country.slice(0, 80) : '',
+        state: typeof value.state === 'string' ? value.state.slice(0, 80) : '',
+      };
+    } catch {
+      return { ...DEFAULT_RECOMMENDATION_PREFERENCES };
+    }
+  },
+
+  saveRecommendationPreferences(scope: string, preferences: RecommendationPreferences): void {
+    const storage = scope.startsWith('session:') ? sessionStorage : localStorage;
+    storage.setItem(`${RECOMMENDATION_PREFERENCES_KEY}:${scope}`, JSON.stringify(preferences));
+    if (!preferences.enabled) {
+      storage.removeItem(`${RECOMMENDATION_EVENTS_KEY}:${scope}`);
+      try {
+        const legacyEvents: DiscoveryEvent[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.DISCOVERY_EVENTS) || '[]');
+        const owner = scope.startsWith('user:') ? scope.slice('user:'.length) : undefined;
+        const session = scope.startsWith('session:') ? scope.slice('session:'.length) : undefined;
+        localStorage.setItem(STORAGE_KEYS.DISCOVERY_EVENTS, JSON.stringify(legacyEvents.filter(event =>
+          owner ? event.userId !== owner : event.sessionId !== session,
+        )));
+      } catch {
+        localStorage.removeItem(STORAGE_KEYS.DISCOVERY_EVENTS);
+      }
+    }
+    window.dispatchEvent(new CustomEvent('atelier_recommendations_updated', { detail: scope }));
+  },
+
+  getRecommendationEvents(scope: string): DiscoveryEvent[] {
+    try {
+      const storage = scope.startsWith('session:') ? sessionStorage : localStorage;
+      const stored = storage.getItem(`${RECOMMENDATION_EVENTS_KEY}:${scope}`);
+      if (!stored) return [];
+      const cutoff = Date.now() - RECOMMENDATION_RETENTION_MS;
+      const events = (JSON.parse(stored) as DiscoveryEvent[]).filter(event => {
+        const timestamp = Date.parse(event.timestamp);
+        return typeof event.itemId === 'string'
+          && Number.isFinite(timestamp)
+          && timestamp >= cutoff
+          && ['IMPRESSION', 'VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'HIDE', 'DISMISS', 'NOT_INTERESTED'].includes(event.eventType);
+      }).slice(-RECOMMENDATION_EVENT_LIMIT);
+      return events;
+    } catch {
+      return [];
+    }
+  },
+
+  recordRecommendationEvent(
+    itemId: string,
+    eventType: RecommendationEventType,
+    scope: string,
+    listing?: Pick<ClothPost, 'categoryId' | 'listingType' | 'tags'>,
+    recommendationReason?: string,
+  ): void {
+    if (!itemId || !this.getRecommendationPreferences(scope).enabled) return;
+    const storage = scope.startsWith('session:') ? sessionStorage : localStorage;
+    const key = `${RECOMMENDATION_EVENTS_KEY}:${scope}`;
+    const events = this.getRecommendationEvents(scope);
+    const now = Date.now();
+    const deduplicationWindow = eventType === 'VIEW' ? 30 * 60_000 : 5 * 60_000;
+    const isDuplicate = events.some(event =>
+      event.itemId === itemId
+      && event.eventType === eventType
+      && now - Date.parse(event.timestamp) < deduplicationWindow,
+    );
+    if (isDuplicate) return;
+    events.push({
+      itemId,
+      eventType,
+      timestamp: new Date(now).toISOString(),
+      sessionId: scope,
+      categoryId: listing?.categoryId,
+      listingType: listing?.listingType,
+      tags: listing?.tags?.slice(0, 20),
+      recommendationReason: recommendationReason?.slice(0, 120),
+    });
+    storage.setItem(key, JSON.stringify(events.slice(-RECOMMENDATION_EVENT_LIMIT)));
+    window.dispatchEvent(new CustomEvent('atelier_recommendations_updated', { detail: scope }));
+  },
+
+  resetRecommendationData(scope: string): void {
+    this.saveRecommendationPreferences(scope, { ...DEFAULT_RECOMMENDATION_PREFERENCES });
   },
 
   getDiscoveryEvents(): DiscoveryEvent[] {
@@ -385,6 +505,8 @@ export const storageService = {
         localStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
       }
     }
+    localStorage.removeItem(`${RECOMMENDATION_PREFERENCES_KEY}:user:${id}`);
+    localStorage.removeItem(`${RECOMMENDATION_EVENTS_KEY}:user:${id}`);
     if (deletingCurrentUser) {
       localStorage.removeItem(STORAGE_KEYS.SAVED_PHOTOS);
       localStorage.removeItem(STORAGE_KEYS.COLLECTION_PACKAGES);
@@ -468,6 +590,20 @@ export const storageService = {
   // POSTS
   getPosts(): ClothPost[] {
     try {
+      if (localStorage.getItem(STORAGE_KEYS.REVIEW_RATING_CACHE_MIGRATION) !== 'complete') {
+        const stored = localStorage.getItem(STORAGE_KEYS.POSTS);
+        if (stored) {
+          const legacyPosts = JSON.parse(stored) as ClothPost[];
+          if (!Array.isArray(legacyPosts)) throw new Error('Stored listing cache has an invalid format.');
+          localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(legacyPosts.map(post => ({
+            ...post,
+            rating: 0,
+            ratingCount: 0,
+            ratingsByUser: undefined,
+          }))));
+        }
+        localStorage.setItem(STORAGE_KEYS.REVIEW_RATING_CACHE_MIGRATION, 'complete');
+      }
       const data = localStorage.getItem(STORAGE_KEYS.POSTS);
       return data ? JSON.parse(data) : [];
     } catch {
@@ -539,7 +675,6 @@ export const storageService = {
       id: `post-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       likes: [],
       saves: [],
-      ratingsByUser: {},
       rating: 0,
       ratingCount: 0,
       createdAt: new Date().toISOString()
@@ -583,20 +718,6 @@ export const storageService = {
     return { likesCount: post.likes.length, isLiked };
   },
 
-  ratePost(postId: string, userId: string, rating: number): { rating: number; ratingCount: number } | null {
-    const posts = this.getPosts();
-    const post = posts.find(item => item.id === postId);
-    if (!post || rating < 1 || rating > 5) return null;
-    const ratingsByUser = post.ratingsByUser || {};
-    ratingsByUser[userId] = rating;
-    const values = Object.values(ratingsByUser) as number[];
-    post.ratingsByUser = ratingsByUser;
-    post.ratingCount = values.length;
-    post.rating = values.reduce((sum, value) => sum + value, 0) / values.length;
-    this.savePosts(posts);
-    return { rating: post.rating, ratingCount: post.ratingCount };
-  },
-
   toggleSavePost(postId: string, userId: string): { savesCount: number; isSaved: boolean } {
     const posts = this.getPosts();
     const post = posts.find(p => p.id === postId);
@@ -615,7 +736,7 @@ export const storageService = {
     return { savesCount: post.saves.length, isSaved };
   },
 
-  reconcilePostEngagement(postId: string, updates: Partial<Pick<ClothPost, 'likes' | 'saves' | 'rating' | 'ratingCount' | 'ratingsByUser'>>): void {
+  reconcilePostEngagement(postId: string, updates: Partial<Pick<ClothPost, 'likes' | 'saves' | 'rating' | 'ratingCount'>>): void {
     const posts = this.getPosts();
     const post = posts.find(item => item.id === postId);
     if (!post) return;

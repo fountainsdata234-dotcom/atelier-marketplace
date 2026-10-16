@@ -9,7 +9,6 @@ import { getScatterOffsetsForLocations } from '../utils/globe';
 export type GlobeArtisan = User & {
   distanceKm: number | null;
   postCount: number;
-  rating: number;
 };
 
 interface ArtisanGlobe3DProps {

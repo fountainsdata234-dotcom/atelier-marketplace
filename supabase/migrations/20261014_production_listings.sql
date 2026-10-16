@@ -14,13 +14,7 @@ alter table public.posts
   add column if not exists price_min numeric(18, 2),
   add column if not exists price_max numeric(18, 2),
   add column if not exists deleted_at timestamptz,
-  add column if not exists search_document tsvector
-    generated always as (
-      setweight(to_tsvector('simple', coalesce(title, '')), 'A')
-      || setweight(to_tsvector('simple', coalesce(description, '')), 'B')
-      || setweight(to_tsvector('simple', coalesce(array_to_string(tags, ' '), '')), 'C')
-      || to_tsvector('simple', coalesce(category_id, '') || ' ' || coalesce(listing_type, '') || ' ' || coalesce(listing_details::text, ''))
-    ) stored;
+  add column if not exists search_document tsvector;
 
 update public.posts
 set listing_type = case
@@ -76,6 +70,42 @@ end $$;
 
 alter table public.posts alter column status set default 'draft';
 alter table public.posts alter column moderation_status set default 'pending';
+
+create or replace function public.refresh_post_search_document()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.search_document :=
+    setweight(to_tsvector('simple'::regconfig, coalesce(new.title, '')), 'A')
+    || setweight(to_tsvector('simple'::regconfig, coalesce(new.description, '')), 'B')
+    || setweight(to_tsvector('simple'::regconfig, coalesce(array_to_string(new.tags, ' '), '')), 'C')
+    || to_tsvector(
+      'simple'::regconfig,
+      coalesce(new.category_id, '') || ' ' || coalesce(new.listing_type, '')
+        || ' ' || coalesce(new.listing_details::text, '')
+    );
+  return new;
+end;
+$$;
+
+drop trigger if exists posts_search_document_refresh on public.posts;
+create trigger posts_search_document_refresh
+before insert or update of title, description, tags, category_id, listing_type, listing_details
+on public.posts
+for each row execute function public.refresh_post_search_document();
+
+update public.posts
+set search_document =
+  setweight(to_tsvector('simple'::regconfig, coalesce(title, '')), 'A')
+  || setweight(to_tsvector('simple'::regconfig, coalesce(description, '')), 'B')
+  || setweight(to_tsvector('simple'::regconfig, coalesce(array_to_string(tags, ' '), '')), 'C')
+  || to_tsvector(
+    'simple'::regconfig,
+    coalesce(category_id, '') || ' ' || coalesce(listing_type, '')
+      || ' ' || coalesce(listing_details::text, '')
+  );
 
 create table if not exists public.listing_changes (
   id bigint generated always as identity primary key,

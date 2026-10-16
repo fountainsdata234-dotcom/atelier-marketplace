@@ -10,6 +10,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { adminAuth, firebaseAdminEnabled, firestore } from './firebaseAdmin.js';
 import type { UserRole } from '../src/types.js';
+import { parseMarketplaceSearch } from '../src/utils/marketplaceSearch.js';
 import {
   createBroadcast,
   createDiscoveryEvent,
@@ -30,6 +31,38 @@ import {
   getPost,
   getPostInteractions,
   getPosts,
+  getMarketplacePostsPage,
+  getMarketplaceTrendingPage,
+  getMarketplaceViewerInteractions,
+  getMarketplaceReviewSummaries,
+  getMarketplaceReviews,
+  getSellerReviewSummaries,
+  submitMarketplaceReview,
+  getReviewModerationQueue,
+  moderateMarketplaceReview,
+  respondToMarketplaceReview,
+  toggleReviewHelpful,
+  reportMarketplaceReview,
+  createMarketplaceReviewAppeal,
+  resolveMarketplaceReviewAppeal,
+  updateReviewReport,
+  consumeMarketplaceAbuseLimit,
+  getMarketplaceBlockedSellerIds,
+  getMarketplaceUserPreferences,
+  resetMarketplacePersonalization,
+  saveMarketplaceUserPreferences,
+  setMarketplaceRecommendationFeedback,
+  recordMarketplaceRecommendationImpression,
+  setMarketplaceUserBlock,
+  setMarketplaceAccountBlock,
+  getMarketplaceAbuseFlags,
+  resolveMarketplaceAbuseFlag,
+  recordMarketplaceEngagementEvent,
+  recordMarketplaceSearchAuditEvent,
+  refreshMarketplaceTrends,
+  type MarketplaceEngagementEventType,
+  type MarketplaceTrendCategory,
+  type MarketplaceCursor,
   getSellerListings,
   getProfile,
   getProfileByEmail,
@@ -46,7 +79,6 @@ import {
   savePromoPlans,
   toggleFollow,
   savePushToken,
-  setRating,
   supabaseDataEnabled,
   toggleLike,
   toggleSave,
@@ -62,6 +94,7 @@ import {
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
+app.disable('x-powered-by');
 if (!supabaseDataEnabled) {
   throw new Error('Supabase server credentials are required to start the Atelier API.');
 }
@@ -87,7 +120,7 @@ function isLocalNetworkOrigin(origin: string) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 },
+  limits: { fileSize: 8 * 1024 * 1024 },
 });
 
 app.use(cors({
@@ -97,7 +130,8 @@ app.use(cors({
       return;
     }
 
-    if (allowedOrigins.includes(origin) || isLocalNetworkOrigin(origin)) {
+    if (allowedOrigins.includes(origin)
+      || (process.env.NODE_ENV !== 'production' && isLocalNetworkOrigin(origin))) {
       callback(null, true);
       return;
     }
@@ -106,6 +140,13 @@ app.use(cors({
   },
   credentials: true,
 }));
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 app.use(express.json({ limit: '1mb' }));
 
 interface AuthenticatedRequest extends Request {
@@ -118,15 +159,17 @@ interface StoredMessage {
   [key: string]: unknown;
 }
 
-const DISCOVERY_EVENT_TYPES = new Set(['VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY', 'ADD_TO_CART', 'PURCHASE', 'RATING']);
+const DISCOVERY_EVENT_TYPES = new Set(['VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY']);
 const PUBLIC_CACHE_TTL_MS = 60_000;
 const WEB_APP_URL = process.env.APP_URL?.trim() || 'https://fabrilux-atelier.vercel.app';
 let postsCache: { expiresAt: number; value: unknown } | null = null;
 let usersCache: { expiresAt: number; value: unknown } | null = null;
+const marketplaceFeedCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 function invalidatePublicCaches() {
   postsCache = null;
   usersCache = null;
+  marketplaceFeedCache.clear();
 }
 
 async function deleteSupabaseAccount(uid: string) {
@@ -155,6 +198,41 @@ async function writeProfile(uid: string, values: Record<string, unknown>) {
 
 function pushTokenDocumentId(token: string) {
   return createHash('sha256').update(token).digest('hex');
+}
+
+function currencyMinorUnitMultiplier(currency: string): number | null {
+  if (!/^[A-Z]{3}$/.test(currency)) return null;
+  try {
+    const fractionDigits = new Intl.NumberFormat('en', {
+      style: 'currency',
+      currency,
+    }).resolvedOptions().maximumFractionDigits;
+    return 10 ** (fractionDigits ?? 2);
+  } catch {
+    return null;
+  }
+}
+
+function serializeRecommendationPreferences(values: Record<string, unknown> | null) {
+  if (!values) return null;
+  const currency = String(values.currency || '').trim().toUpperCase();
+  const multiplier = currencyMinorUnitMultiplier(currency) || 100;
+  const minorToAmount = (value: unknown) => {
+    const minor = typeof value === 'number' ? value
+      : typeof value === 'string' && /^\d+$/.test(value) ? Number(value)
+      : Number.NaN;
+    return Number.isSafeInteger(minor) ? minor / multiplier : null;
+  };
+  return {
+    enabled: values.consented_to_personalization === true,
+    categories: Array.isArray(values.preferred_categories) ? values.preferred_categories : [],
+    styles: Array.isArray(values.preferred_styles) ? values.preferred_styles : [],
+    minimumPrice: minorToAmount(values.minimum_price_minor),
+    maximumPrice: minorToAmount(values.maximum_price_minor),
+    currency,
+    country: String(values.preferred_country || ''),
+    state: String(values.preferred_region || ''),
+  };
 }
 
 async function sendTopicPush(topic: string, title: string, body: string, url: string, type: string) {
@@ -254,6 +332,14 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextF
   }
 }
 
+function optionalAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.headers.authorization) {
+    next();
+    return;
+  }
+  void requireAuth(req, res, next);
+}
+
 function requireActiveAccount(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (req.authUser?.blocked) {
     res.status(403).json({ error: 'This account is blocked. Publishing and messaging are disabled until an administrator unblocks it.' });
@@ -263,6 +349,10 @@ function requireActiveAccount(req: AuthenticatedRequest, res: Response, next: Ne
 }
 
 function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (req.authUser?.blocked) {
+    res.status(403).json({ error: 'Blocked accounts cannot access administrator tools.' });
+    return;
+  }
   if (!req.authUser?.admin) {
     res.status(403).json({ error: 'Administrator access required.' });
     return;
@@ -277,6 +367,54 @@ function requireSuperAdmin(req: AuthenticatedRequest, res: Response, next: NextF
     return;
   }
   next();
+}
+
+function requireAbuseLimit(action: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    void enforceAbuseLimit(req as AuthenticatedRequest, res, action)
+      .then(allowed => {
+        if (allowed) next();
+      })
+      .catch(next);
+  };
+}
+
+async function enforceAbuseLimit(
+  req: AuthenticatedRequest,
+  res: Response,
+  action: string,
+  targetId?: string,
+): Promise<boolean> {
+  const allowed = await consumeMarketplaceAbuseLimit({
+    action,
+    actorId: req.authUser!.uid,
+    targetId,
+  });
+  if (!allowed) {
+    res.status(429).json({ error: 'This action is temporarily limited. Please try again later.' });
+    return false;
+  }
+  return true;
+}
+
+function reviewRoute(handler: (req: AuthenticatedRequest, res: Response) => Promise<void>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    void handler(req as AuthenticatedRequest, res).catch(error => {
+      const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+      const message = error instanceof Error ? error.message : 'Review request failed.';
+      if (code === '42501') {
+        res.status(403).json({ error: message });
+      } else if (code === '22023') {
+        res.status(400).json({ error: message });
+      } else if (code === '23505') {
+        res.status(409).json({ error: 'A matching review, report, or appeal already exists.' });
+      } else if (code === 'P0002') {
+        res.status(404).json({ error: message });
+      } else {
+        next(error);
+      }
+    });
+  };
 }
 
 function snakeToCamel<T>(value: T): T {
@@ -622,7 +760,7 @@ app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest,
   res.status(204).send();
 });
 
-app.post('/api/upload', requireAuth, upload.single('image'), async (req: AuthenticatedRequest, res) => {
+app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('image_upload'), upload.single('image'), async (req: AuthenticatedRequest, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'No image file was provided.' });
     return;
@@ -651,8 +789,8 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
     const [optimizedBuffer, thumbnailBuffer] = await Promise.all([
       sharp(req.file.buffer, { limitInputPixels: 40_000_000 })
         .rotate()
-        .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+        .resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 78, progressive: true, mozjpeg: true })
         .toBuffer(),
       sharp(req.file.buffer, { limitInputPixels: 40_000_000 })
         .rotate()
@@ -661,7 +799,8 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
         .toBuffer(),
     ]);
 
-    const fileName = `${Date.now()}-${createHash('sha256').update(req.file.buffer).digest('hex').slice(0, 12)}`;
+    const fileName = `v1-${createHash('sha256').update(req.file.buffer).digest('hex')}`;
+    const optimizedMetadata = await sharp(optimizedBuffer).metadata();
     const [original, thumbnail] = await Promise.all([
       uploadImage(req.authUser!.uid, safeFolder, `${fileName}.jpg`, optimizedBuffer, 'image/jpeg'),
       uploadImage(req.authUser!.uid, safeFolder, `${fileName}-thumb.jpg`, thumbnailBuffer, 'image/jpeg'),
@@ -670,8 +809,8 @@ app.post('/api/upload', requireAuth, upload.single('image'), async (req: Authent
       url: original.url,
       thumbnailUrl: thumbnail.url,
       publicId: original.path,
-      width: metadata.width,
-      height: metadata.height,
+      width: optimizedMetadata.width,
+      height: optimizedMetadata.height,
       mimeType: 'image/jpeg',
     });
   } catch (error) {
@@ -768,6 +907,7 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
     res.status(404).json({ error: 'User profile not found.' });
     return;
   }
+  if (!await enforceAbuseLimit(req, res, 'profile_write', uid)) return;
   const existingRole = existing.role;
   if (existingRole === 'admin' && req.authUser?.email?.trim().toLowerCase() !== 'fountainsdata234@gmail.com') {
     res.status(403).json({ error: 'Only the Super Admin can change administrator access.' });
@@ -893,7 +1033,8 @@ app.delete('/api/admin/admins/:uid', requireAuth, requireSuperAdmin, async (req:
   res.status(204).send();
 });
 
-app.put('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.put('/api/profile', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  if (!await enforceAbuseLimit(req, res, 'profile_write', req.authUser!.uid)) return;
   const profile = buildProfileUpdate(req.body || {});
   const existingProfile = await readProfile(req.authUser!.uid);
   if (existingProfile) delete profile.role;
@@ -1003,11 +1144,9 @@ app.get('/api/posts', async (req, res) => {
 
     let posts: Array<Record<string, unknown> & { id: string; isBlocked?: boolean }>;
     if (supabaseDataEnabled) {
-      const rows = await getPosts(24, search || undefined);
-      const enriched = await Promise.all(rows.map(async row => {
+      const rows = await getPosts(16, search || undefined);
+      posts = rows.map(row => {
         const author = row.author as Record<string, unknown> || {};
-        const interactions = await getPostInteractions(String(row.id));
-        const ratings = Object.values(interactions.ratings).map(value => Number(value));
         const normalized = snakeToCamel({ ...row, author }) as Record<string, unknown>;
         return {
           ...normalized,
@@ -1020,17 +1159,17 @@ app.get('/api/posts', async (req, res) => {
           authorIsBlocked: author.is_blocked === true || author.isBlocked === true,
           authorWhatsapp: author.whatsapp_number || author.whatsappNumber || '',
           isBlocked: normalized.isBlocked === true,
-          likes: interactions.likes,
-          saves: interactions.saves,
-          rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : 0,
-          ratingCount: ratings.length,
-          ratingsByUser: interactions.ratings,
+          likes: [],
+          saves: [],
+          likeCount: Number(normalized.likeCount) || 0,
+          saveCount: Number(normalized.saveCount) || 0,
+          rating: Number(normalized.ratingAverage) || 0,
+          ratingCount: Number(normalized.ratingCount) || 0,
           imageAlt: typeof normalized.imageAlt === 'string' ? normalized.imageAlt.trim() : undefined,
         };
-      }));
-      posts = enriched.filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
+      }).filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
     } else {
-      const snapshot = await firestore.collection('posts').orderBy('createdAt', 'desc').limit(24).get();
+      const snapshot = await firestore.collection('posts').orderBy('createdAt', 'desc').limit(16).get();
       const authorIds = [...new Set(snapshot.docs.map(doc => String(doc.data().authorId || '')).filter(Boolean))];
       const authorRefs = authorIds.map(uid => firestore.collection('profiles').doc(uid));
       const authorSnapshots = authorRefs.length > 0 ? await firestore.getAll(...authorRefs) : [];
@@ -1049,7 +1188,7 @@ app.get('/api/posts', async (req, res) => {
           authorIsBlocked: author.isBlocked === true, authorWhatsapp: author.whatsappNumber || '', isBlocked: data.isBlocked === true,
           likes: likesSnapshot.docs.map(item => item.id), saves: savesSnapshot.docs.map(item => item.id),
           rating: validRatings.length ? validRatings.reduce((sum, item) => sum + item.rating, 0) / validRatings.length : 0,
-          ratingCount: validRatings.length, ratingsByUser: Object.fromEntries(validRatings.map(item => [item.userId, item.rating])),
+          ratingCount: validRatings.length,
           imageAlt: typeof data.imageAlt === 'string' ? data.imageAlt.trim() : undefined,
         };
       }))).filter(post => post.isBlocked !== true && post.authorIsBlocked !== true);
@@ -1059,6 +1198,407 @@ app.get('/api/posts', async (req, res) => {
   } catch (error) {
     console.error('Unable to load marketplace posts', error);
     res.status(503).json({ error: 'Marketplace data is temporarily unavailable. Please try again shortly.' });
+  }
+});
+
+const MARKETPLACE_VIEWS = new Set(['all', 'clothing', 'fabrics', 'tailors', 'for-you']);
+const MARKETPLACE_SORTS = new Set(['relevance', 'newest', 'price_asc', 'price_desc', 'rating', 'popularity']);
+const MARKETPLACE_CURSOR_FIELDS: Record<string, string[]> = {
+  relevance: ['is_promoted', 'popularity_score', 'published_at', 'id'],
+  newest: ['published_at', 'id'],
+  price_asc: ['price_min', 'published_at', 'id'],
+  price_desc: ['price_min', 'published_at', 'id'],
+  rating: ['rating_average', 'published_at', 'id'],
+  popularity: ['popularity_score', 'published_at', 'id'],
+};
+
+function decodeMarketplaceCursor(encoded: unknown, sort: string, rankedSearch = false): MarketplaceCursor | undefined {
+  if (encoded === undefined) return undefined;
+  if (typeof encoded !== 'string' || encoded.length > 2048) throw new Error('Invalid marketplace pagination cursor.');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  } catch {
+    throw new Error('Invalid marketplace pagination cursor.');
+  }
+  if (!parsed || typeof parsed !== 'object') throw new Error('Invalid marketplace pagination cursor.');
+  const cursor = parsed as Partial<MarketplaceCursor>;
+  const fields = rankedSearch && sort === 'relevance' ? ['search_score', 'id'] : MARKETPLACE_CURSOR_FIELDS[sort];
+  if (cursor.sort !== sort || !Array.isArray(cursor.values) || cursor.values.length !== fields.length) {
+    throw new Error('Invalid marketplace pagination cursor.');
+  }
+
+  const values = cursor.values;
+  const valid = values.every((value, index) => {
+    const field = fields[index];
+    if (field === 'id') return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+    if (field === 'published_at') return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
+    if (field === 'is_promoted') return typeof value === 'boolean';
+    if (field === 'search_score') return typeof value === 'number' && Number.isFinite(value);
+    if (field === 'price_min') return value === null || (typeof value === 'number' && Number.isFinite(value));
+    return typeof value === 'number' && Number.isFinite(value);
+  });
+  if (!valid) throw new Error('Invalid marketplace pagination cursor.');
+  return cursor as MarketplaceCursor;
+}
+
+app.get('/api/marketplace/feed', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const view = typeof req.query.view === 'string' ? req.query.view : 'for-you';
+  const sort = typeof req.query.sort === 'string' ? req.query.sort : (view === 'for-you' ? 'relevance' : 'newest');
+  if (!MARKETPLACE_VIEWS.has(view) || !MARKETPLACE_SORTS.has(sort)) {
+    res.status(400).json({ error: 'Choose a valid marketplace view and sort order.' });
+    return;
+  }
+
+  const limitValue = typeof req.query.limit === 'string' ? Number(req.query.limit) : 24;
+  if (!Number.isInteger(limitValue) || limitValue < 1 || limitValue > 48) {
+    res.status(400).json({ error: 'Marketplace page size must be between 1 and 48.' });
+    return;
+  }
+
+  const search = typeof req.query.search === 'string' ? listingText(req.query.search, 80) : '';
+  if (parseMarketplaceSearch(search).termGroups.length > 20) {
+    res.status(400).json({ error: 'Shorten the search query to 20 searchable terms or fewer.' });
+    return;
+  }
+  const rankedSearch = Boolean(search && sort === 'relevance');
+  let cursor: MarketplaceCursor | undefined;
+  try {
+    cursor = decodeMarketplaceCursor(req.query.cursor, sort, rankedSearch);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid marketplace pagination cursor.' });
+    return;
+  }
+
+  const categoryId = typeof req.query.categoryId === 'string' ? listingText(req.query.categoryId, 80) : '';
+  const tag = typeof req.query.tag === 'string' ? listingText(req.query.tag, 48) : '';
+  const country = typeof req.query.country === 'string' ? listingText(req.query.country, 80) : '';
+  const state = typeof req.query.state === 'string' ? listingText(req.query.state, 80) : '';
+  const city = typeof req.query.city === 'string' ? listingText(req.query.city, 80) : '';
+  const minimumPrice = req.query.minimumPrice === undefined ? undefined : Number(req.query.minimumPrice);
+  const maximumPrice = req.query.maximumPrice === undefined ? undefined : Number(req.query.maximumPrice);
+  if ((minimumPrice !== undefined && (!Number.isFinite(minimumPrice) || minimumPrice < 0))
+    || (maximumPrice !== undefined && (!Number.isFinite(maximumPrice) || maximumPrice < 0))
+    || (minimumPrice !== undefined && maximumPrice !== undefined && minimumPrice > maximumPrice)) {
+    res.status(400).json({ error: 'Enter a valid marketplace price range.' });
+    return;
+  }
+  const currency = listingText(req.query.currency, 8).toUpperCase();
+  if ((minimumPrice !== undefined || maximumPrice !== undefined) && !/^[A-Z]{3,8}$/.test(currency)) {
+    res.status(400).json({ error: 'Choose a currency when filtering by price.' });
+    return;
+  }
+  const material = listingText(req.query.material, 80);
+  const colour = listingText(req.query.colour, 80);
+  const size = listingText(req.query.size, 24);
+  const fulfilment = typeof req.query.fulfilment === 'string' && ['ready_made', 'made_to_order'].includes(req.query.fulfilment) ? req.query.fulfilment : '';
+  const availability = typeof req.query.availability === 'string' && ['available', 'made_to_order', 'limited'].includes(req.query.availability) ? req.query.availability : '';
+  if ((req.query.fulfilment !== undefined && !fulfilment) || (req.query.availability !== undefined && !availability)) {
+    res.status(400).json({ error: 'Choose a valid availability or fulfilment filter.' });
+    return;
+  }
+  const locationHint = parseMarketplaceSearch(search).locationHint;
+  const cacheKey = JSON.stringify({ view, sort, search, categoryId, tag, country, state, city, minimumPrice, maximumPrice, currency, material, colour, size, fulfilment, availability, cursor, limitValue });
+  const cached = req.authUser ? undefined : marketplaceFeedCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    res.json(cached.value);
+    return;
+  }
+
+  try {
+    const { rows, hasMore, nextSearchCursor } = await getMarketplacePostsPage({
+      view,
+      sort,
+      search: search || undefined,
+      locationHint: locationHint || undefined,
+      categoryId: categoryId || undefined,
+      tag: tag || undefined,
+      country: country || undefined,
+      state: state || undefined,
+      city: city || undefined,
+      minimumPrice,
+      maximumPrice,
+      currency: currency || undefined,
+      material: material || undefined,
+      colour: colour || undefined,
+      size: size || undefined,
+      fulfilment: fulfilment || undefined,
+      availability: availability || undefined,
+      viewerId: req.authUser?.uid,
+      cursor,
+      limit: limitValue,
+    });
+    const postIds = rows.map(row => String(row.id));
+    const sellerIds = rows.map(row => String(row.author_id || '')).filter(Boolean);
+    const [interactions, listingReviews, sellerReviews] = await Promise.all([
+      getMarketplaceViewerInteractions(postIds, req.authUser?.uid),
+      getMarketplaceReviewSummaries('listing', postIds),
+      getMarketplaceReviewSummaries('seller', sellerIds),
+    ]);
+    const items = rows.map(row => {
+      const author = row.author as Record<string, unknown> || {};
+      const post = snakeToCamel(row) as Record<string, unknown>;
+      const id = String(post.id);
+      const listingReview = listingReviews.get(id);
+      const sellerReview = sellerReviews.get(String(post.authorId || ''));
+      return {
+        ...post,
+        id,
+        title: String(post.title || 'Untitled atelier listing'),
+        authorId: String(post.authorId || ''),
+        authorName: String(author.shop_name || author.name || 'Atelier Member'),
+        authorRole: author.role === 'fabric_seller' ? 'fabric_seller' : 'tailor',
+        authorHandle: String(author.handle || '@atelier_member'),
+        authorAvatar: String(author.avatar_url || ''),
+        authorLocation: author.location || {},
+        authorWhatsapp: String(author.whatsapp_number || ''),
+        isPromoted: post.isPromoted === true || author.is_promoted === true,
+        likes: interactions.likes.has(id) && req.authUser ? [req.authUser.uid] : [],
+        saves: interactions.saves.has(id) && req.authUser ? [req.authUser.uid] : [],
+        likeCount: Number(post.likeCount) || 0,
+        saveCount: Number(post.saveCount) || 0,
+        rating: Number(listingReview?.average) || 0,
+        ratingCount: Number(listingReview?.count) || 0,
+        confidenceAdjustedRating: listingReview?.confidenceAdjustedRating ?? null,
+        sellerRating: Number(sellerReview?.average) || 0,
+        sellerReviewCount: Number(sellerReview?.count) || 0,
+        sellerConfidenceAdjustedRating: sellerReview?.confidenceAdjustedRating ?? null,
+        trendScore: Number(post.trendScore) || 0,
+        trendConfidence: Number(post.trendConfidence) || 0,
+        searchLocationMatch: post.searchLocationMatch === true,
+        searchLocationHint: rankedSearch ? locationHint || undefined : undefined,
+        imageAlt: typeof post.imageAlt === 'string' ? post.imageAlt.trim() : '',
+      };
+    });
+    const lastRow = rows[rows.length - 1];
+    const nextCursor = rankedSearch && nextSearchCursor
+      ? Buffer.from(JSON.stringify(nextSearchCursor)).toString('base64url')
+      : hasMore && lastRow
+      ? Buffer.from(JSON.stringify({
+          sort,
+          values: MARKETPLACE_CURSOR_FIELDS[sort].map(field => {
+            const value = lastRow[field];
+            return value === undefined ? null : value;
+          }),
+        })).toString('base64url')
+      : null;
+    const result = { items, nextCursor, hasMore };
+    if (!req.authUser) {
+      if (marketplaceFeedCache.size >= 100) {
+        const oldestKey = marketplaceFeedCache.keys().next().value;
+        if (oldestKey) marketplaceFeedCache.delete(oldestKey);
+      }
+      marketplaceFeedCache.set(cacheKey, { expiresAt: Date.now() + 30_000, value: result });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('Unable to load paginated marketplace feed.', error);
+    res.status(503).json({ error: 'Marketplace listings could not be loaded right now. Please retry.' });
+  }
+});
+
+const MARKETPLACE_TREND_CATEGORIES = new Set<MarketplaceTrendCategory>([
+  'TRENDING_NOW', 'RISING', 'POPULAR', 'NEW_NOTICED', 'HIGHLY_RATED', 'MOST_VIEWED',
+]);
+const MARKETPLACE_TREND_SCOPES = new Set(['global', 'region', 'category', 'style']);
+const SERVER_RECORDED_ENGAGEMENT_TYPES = new Set<MarketplaceEngagementEventType>([
+  'IMPRESSION', 'VIEW', 'SHARE', 'ENQUIRY', 'HIDE',
+]);
+
+app.get('/api/marketplace/trending', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const category = typeof req.query.category === 'string' ? req.query.category : 'TRENDING_NOW';
+  const scopeType = typeof req.query.scopeType === 'string' ? req.query.scopeType : 'global';
+  const rawScopeValue = typeof req.query.scopeValue === 'string' ? req.query.scopeValue : '';
+  const scopeValue = scopeType === 'global' ? 'global' : listingText(rawScopeValue, 80).toLowerCase();
+  const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 12;
+
+  if (!MARKETPLACE_TREND_CATEGORIES.has(category as MarketplaceTrendCategory)
+    || !MARKETPLACE_TREND_SCOPES.has(scopeType)
+    || (scopeType !== 'global' && !scopeValue)
+    || (scopeType === 'global' && rawScopeValue && rawScopeValue !== 'global')
+    || !Number.isInteger(limit) || limit < 1 || limit > 48) {
+    res.status(400).json({ error: 'Choose a valid trend category, scope, and page size.' });
+    return;
+  }
+
+  try {
+    const result = await getMarketplaceTrendingPage({
+      category: category as MarketplaceTrendCategory,
+      scopeType: scopeType as 'global' | 'region' | 'category' | 'style',
+      scopeValue,
+      limit,
+      viewerId: req.authUser?.uid,
+    });
+    const postIds = result.rows.map(row => String(row.id));
+    const sellerIds = result.rows.map(row => String(row.author_id || '')).filter(Boolean);
+    const [interactions, listingReviews, sellerReviews] = await Promise.all([
+      getMarketplaceViewerInteractions(postIds, req.authUser?.uid),
+      getMarketplaceReviewSummaries('listing', postIds),
+      getMarketplaceReviewSummaries('seller', sellerIds),
+    ]);
+    const items = result.rows.map(row => {
+      const author = row.author as Record<string, unknown> || {};
+      const post = snakeToCamel(row) as Record<string, unknown>;
+      const id = String(post.id);
+      const listingReview = listingReviews.get(id);
+      const sellerReview = sellerReviews.get(String(post.authorId || ''));
+      return {
+        ...post,
+        id,
+        title: String(post.title || 'Untitled atelier listing'),
+        authorId: String(post.authorId || ''),
+        authorName: String(author.shop_name || author.name || 'Atelier Member'),
+        authorRole: author.role === 'fabric_seller' ? 'fabric_seller' : 'tailor',
+        authorHandle: String(author.handle || '@atelier_member'),
+        authorAvatar: String(author.avatar_url || ''),
+        authorLocation: author.location || {},
+        authorWhatsapp: String(author.whatsapp_number || ''),
+        isPromoted: post.isPromoted === true || author.is_promoted === true,
+        likes: interactions.likes.has(id) && req.authUser ? [req.authUser.uid] : [],
+        saves: interactions.saves.has(id) && req.authUser ? [req.authUser.uid] : [],
+        likeCount: Number(post.likeCount) || 0,
+        saveCount: Number(post.saveCount) || 0,
+        rating: Number(listingReview?.average) || 0,
+        ratingCount: Number(listingReview?.count) || 0,
+        confidenceAdjustedRating: listingReview?.confidenceAdjustedRating ?? null,
+        sellerRating: Number(sellerReview?.average) || 0,
+        sellerReviewCount: Number(sellerReview?.count) || 0,
+        sellerConfidenceAdjustedRating: sellerReview?.confidenceAdjustedRating ?? null,
+        trendScore: Number(post.trendScore) || 0,
+        trendConfidence: Number(post.trendConfidence) || 0,
+      };
+    });
+    res.json({
+      items,
+      category,
+      scopeType,
+      scopeValue,
+      fallback: result.fallback,
+      fallbackMessage: result.fallback
+        ? 'Not enough qualified recent activity yet. Showing the newest eligible listings without labeling them as trending.'
+        : null,
+      computedAt: result.computedAt,
+    });
+  } catch (error) {
+    console.error('Unable to load marketplace trends.', error);
+    res.status(503).json({ error: 'Marketplace trends could not be loaded right now. Please retry.' });
+  }
+});
+
+app.post('/api/marketplace/events', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const listingId = typeof req.body?.listingId === 'string' ? req.body.listingId.trim() : '';
+  const eventType = typeof req.body?.eventType === 'string' ? req.body.eventType : '';
+  const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.trim() : '';
+  const recommendation = req.body?.recommendation;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(listingId)
+    || !SERVER_RECORDED_ENGAGEMENT_TYPES.has(eventType as MarketplaceEngagementEventType)
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessionId)) {
+    res.status(400).json({ error: 'A valid listing, supported event, and session are required.' });
+    return;
+  }
+  if (eventType === 'IMPRESSION'
+    && (!recommendation || typeof recommendation !== 'object'
+      || !['for_you', 'trending', 'category', 'search'].includes(recommendation.feedName)
+      || !Number.isInteger(recommendation.rankedPosition)
+      || recommendation.rankedPosition < 1 || recommendation.rankedPosition > 10000
+      || (recommendation.reasonCode !== undefined
+        && (typeof recommendation.reasonCode !== 'string' || recommendation.reasonCode.length > 80)))) {
+    res.status(400).json({ error: 'A recommendation impression requires valid feed, position and reason metadata.' });
+    return;
+  }
+  if (eventType !== 'IMPRESSION' && recommendation !== undefined) {
+    res.status(400).json({ error: 'Recommendation metadata is only valid for impression events.' });
+    return;
+  }
+  if (/\b(bot|crawler|spider|headlesschrome|scrapy|curl|wget)\b/i.test(req.get('user-agent') || '')) {
+    res.status(204).send();
+    return;
+  }
+  if (eventType === 'HIDE' && !req.authUser) {
+    res.status(401).json({ error: 'Sign in to hide a listing.' });
+    return;
+  }
+  if (req.authUser) {
+    const profile = await getProfile(req.authUser.uid);
+    if (!profile || profile.is_blocked === true) {
+      res.status(403).json({ error: 'This account cannot record marketplace activity.' });
+      return;
+    }
+  }
+
+  const sessionHash = createHash('sha256').update(`marketplace-session:${sessionId}`).digest('hex');
+  try {
+    const outcome = eventType === 'IMPRESSION'
+      ? await recordMarketplaceRecommendationImpression({
+          listingId,
+          userId: req.authUser?.uid || null,
+          sessionHash,
+          feedName: recommendation.feedName,
+          rankedPosition: recommendation.rankedPosition,
+          reasonCode: recommendation.reasonCode,
+        })
+      : await recordMarketplaceEngagementEvent({
+          listingId,
+          eventType: eventType as MarketplaceEngagementEventType,
+          actorId: req.authUser?.uid || null,
+          sessionHash,
+        });
+    if (outcome === 'rate_limited') {
+      res.status(429).json({ error: 'Too many marketplace events. Please try again shortly.' });
+      return;
+    }
+    if (outcome === 'ineligible') {
+      res.status(404).json({ error: 'That listing is not currently eligible for marketplace activity.' });
+      return;
+    }
+    res.status(outcome === 'recorded' ? 201 : 200).json({ recorded: outcome === 'recorded' });
+  } catch (error) {
+    console.error('Unable to record marketplace activity.', error);
+    res.status(503).json({ error: 'Marketplace activity could not be recorded.' });
+  }
+});
+
+app.post('/api/marketplace/search-events', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const searchText = listingText(req.body?.searchText, 80);
+  const eventType = typeof req.body?.eventType === 'string' ? req.body.eventType : '';
+  const listingId = typeof req.body?.listingId === 'string' ? req.body.listingId.trim() : '';
+  const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.trim() : '';
+  const resultCount = req.body?.resultCount;
+  const validListingId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(listingId);
+  const validSessionId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessionId);
+  const validEvent = ['impression', 'click', 'save', 'enquiry'].includes(eventType);
+  const validResultCount = Number.isInteger(resultCount) && resultCount >= 0 && resultCount <= 10000;
+  if (searchText.length < 2 || !validEvent || !validSessionId
+    || (eventType === 'impression' && (!validResultCount || listingId))
+    || (eventType !== 'impression' && (!validListingId || resultCount !== undefined))) {
+    res.status(400).json({ error: 'A valid search term, event, session, and event details are required.' });
+    return;
+  }
+  if (/\b(bot|crawler|spider|headlesschrome|scrapy|curl|wget)\b/i.test(req.get('user-agent') || '')) {
+    res.status(204).send();
+    return;
+  }
+  if (req.authUser) {
+    const profile = await getProfile(req.authUser.uid);
+    if (!profile || profile.is_blocked === true) {
+      res.status(403).json({ error: 'This account cannot record marketplace activity.' });
+      return;
+    }
+  }
+
+  const sessionHash = createHash('sha256').update(`marketplace-search-session:${sessionId}`).digest('hex');
+  try {
+    await recordMarketplaceSearchAuditEvent({
+      searchText,
+      eventType: eventType as 'impression' | 'click' | 'save' | 'enquiry',
+      sessionHash,
+      ...(validListingId ? { listingId } : {}),
+      ...(eventType === 'impression' ? { resultCount: resultCount as number } : {}),
+    });
+    res.status(201).json({ recorded: true });
+  } catch (error) {
+    console.error('Unable to record marketplace search analytics.', error);
+    res.status(503).json({ error: 'Search activity could not be recorded.' });
   }
 });
 
@@ -1083,19 +1623,17 @@ app.get('/api/users', async (_req, res) => {
     if (supabaseDataEnabled) {
       const profiles = await getUsers();
       const users = profiles.map(profile => {
-        const email = String(profile.email || '');
-        const role = profile.role === 'admin' ? 'admin' : ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? String(profile.role) : 'buyer';
-        const name = String(profile.name || email.split('@')[0] || 'Atelier Member');
+        const role = ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? String(profile.role) : 'buyer';
+        const name = String(profile.name || 'Atelier Member');
         return {
-          id: String(profile.id), email, name, role: role as UserRole,
-          phone: String(profile.phone || ''), countryCode: String(profile.country_code || ''),
+          id: String(profile.id), email: '', name, role: role as UserRole,
+          phone: '', countryCode: '',
           location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
           whatsappNumber: String(profile.whatsapp_number || ''), shopName: String(profile.shop_name || ''), bio: String(profile.bio || ''),
           handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
           avatarUrl: String(profile.avatar_url || ''), isPromoted: profile.is_promoted === true, isBlocked: profile.is_blocked === true,
-          isWarned: profile.is_warned === true, warningNote: String(profile.warning_note || ''), followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
-          createdAt: String(profile.created_at || new Date().toISOString()), isSuperAdmin: profile.is_super_admin === true,
-          addedByEmail: String(profile.added_by_email || ''),
+          followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
+          createdAt: String(profile.created_at || new Date().toISOString()),
         };
       });
       usersCache = { expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS, value: users };
@@ -1123,19 +1661,14 @@ app.get('/api/users', async (_req, res) => {
     }));
     const users = userRecords.map(authUser => {
       const profile = profiles.get(authUser.uid) || {};
-      const claims = (authUser.customClaims || {}) as Record<string, unknown>;
-      const isAdmin = profile.role === 'admin'
-        || authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com'
-        || claims.admin === true
-        || claims.role === 'admin';
-      const role = isAdmin ? 'admin' : ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? profile.role : 'buyer';
+      const role = ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? profile.role : 'buyer';
       const name = String(profile.name || authUser.displayName || authUser.email?.split('@')[0] || 'Atelier Member');
       return {
         id: authUser.uid,
-        email: authUser.email || '',
+        email: '',
         name,
         role,
-        phone: String(profile.phone || authUser.phoneNumber || ''),
+        phone: '',
         countryCode: String(profile.countryCode || ''),
         location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
         whatsappNumber: String(profile.whatsappNumber || ''),
@@ -1145,19 +1678,81 @@ app.get('/api/users', async (_req, res) => {
         avatarUrl: String(profile.avatarUrl || authUser.photoURL || ''),
         isPromoted: profile.isPromoted === true,
         isBlocked: profile.isBlocked === true || authUser.disabled === true,
-        isWarned: profile.isWarned === true,
-        warningNote: String(profile.warningNote || ''),
         followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
         createdAt: String(profile.createdAt || authUser.metadata.creationTime || new Date().toISOString()),
-        isSuperAdmin: isAdmin && authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com',
-        addedByEmail: String(profile.addedByEmail || ''),
       };
     });
+
     usersCache = { expiresAt: Date.now() + PUBLIC_CACHE_TTL_MS, value: users };
     res.json(users);
   } catch (error) {
     console.error('Unable to load registered users', error);
     res.status(503).json({ error: 'Registered-user data is temporarily unavailable. Please try again shortly.' });
+  }
+});
+
+app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseDataEnabled) {
+      const [profileSnapshot, authUsers] = await Promise.all([
+        firestore.collection('profiles').get(),
+        listAllAuthUsers(),
+      ]);
+      const profiles = new Map(profileSnapshot.docs.map(doc => [doc.id, doc.data() as Record<string, unknown>]));
+      res.json(authUsers.map(authUser => {
+        const profile = profiles.get(authUser.uid) || {};
+        const claims = (authUser.customClaims || {}) as Record<string, unknown>;
+        const isSuperAdmin = authUser.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com';
+        const name = String(profile.name || authUser.displayName || authUser.email?.split('@')[0] || 'Atelier Member');
+        return {
+          id: authUser.uid,
+          email: authUser.email || '',
+          name,
+          role: profile.role === 'admin' || isSuperAdmin || claims.admin === true || claims.role === 'admin'
+            ? 'admin'
+            : ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? profile.role : 'buyer',
+          phone: String(profile.phone || authUser.phoneNumber || ''),
+          countryCode: String(profile.countryCode || ''),
+          location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
+          whatsappNumber: String(profile.whatsappNumber || ''),
+          shopName: String(profile.shopName || ''),
+          bio: String(profile.bio || ''),
+          handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
+          avatarUrl: String(profile.avatarUrl || authUser.photoURL || ''),
+          isPromoted: profile.isPromoted === true,
+          isBlocked: profile.isBlocked === true || authUser.disabled === true,
+          isWarned: profile.isWarned === true,
+          warningNote: String(profile.warningNote || ''),
+          followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
+          createdAt: String(profile.createdAt || authUser.metadata.creationTime || new Date().toISOString()),
+          isSuperAdmin,
+          addedByEmail: String(profile.addedByEmail || ''),
+        };
+      }));
+      return;
+    }
+    const profiles = await getUsers(true);
+    const users = profiles.map(profile => {
+      const email = String(profile.email || '');
+      const name = String(profile.name || email.split('@')[0] || 'Atelier Member');
+      const role = profile.role === 'admin' ? 'admin' : ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? String(profile.role) : 'buyer';
+      return {
+        id: String(profile.id), email, name, role: role as UserRole,
+        phone: String(profile.phone || ''), countryCode: String(profile.country_code || ''),
+        location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
+        whatsappNumber: String(profile.whatsapp_number || ''), shopName: String(profile.shop_name || ''), bio: String(profile.bio || ''),
+        handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
+        avatarUrl: String(profile.avatar_url || ''), isPromoted: profile.is_promoted === true, isBlocked: profile.is_blocked === true,
+        isWarned: profile.is_warned === true, warningNote: String(profile.warning_note || ''),
+        followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
+        createdAt: String(profile.created_at || new Date().toISOString()), isSuperAdmin: profile.is_super_admin === true,
+        addedByEmail: String(profile.added_by_email || ''),
+      };
+    });
+    res.json(users);
+  } catch (error) {
+    console.error('Unable to load administrator user data', error);
+    res.status(503).json({ error: 'Administrator user data is temporarily unavailable. Please try again shortly.' });
   }
 });
 
@@ -1191,6 +1786,149 @@ app.post('/api/users/:uid/follow', requireAuth, async (req: AuthenticatedRequest
   });
   invalidatePublicCaches();
   res.json(updated);
+});
+
+app.get('/api/me/blocked-sellers', requireAuth, async (req: AuthenticatedRequest, res) => {
+  res.json(await getMarketplaceBlockedSellerIds(req.authUser!.uid));
+});
+
+app.get('/api/me/recommendation-preferences', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  if (!supabaseDataEnabled) {
+    res.status(503).json({ error: 'Account-level recommendation preferences require the Supabase data service.' });
+    return;
+  }
+  try {
+    const preferences = await getMarketplaceUserPreferences(req.authUser!.uid);
+    res.json({ preferences: serializeRecommendationPreferences(preferences) });
+  } catch (error) {
+    console.error('Unable to load recommendation preferences.', error);
+    res.status(503).json({ error: 'Recommendation preferences could not be loaded.' });
+  }
+});
+
+app.put('/api/me/recommendation-preferences', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  if (!supabaseDataEnabled) {
+    res.status(503).json({ error: 'Account-level recommendation preferences require the Supabase data service.' });
+    return;
+  }
+  const input = req.body?.preferences;
+  if (!input || typeof input !== 'object' || Array.isArray(input)
+    || typeof input.enabled !== 'boolean'
+    || !Array.isArray(input.categories) || !Array.isArray(input.styles)
+    || input.categories.length > 20 || input.styles.length > 20
+    || [...input.categories, ...input.styles].some(value => typeof value !== 'string' || !value.trim() || value.trim().length > 80)
+    || (input.minimumPrice !== null && (!Number.isFinite(input.minimumPrice) || input.minimumPrice < 0))
+    || (input.maximumPrice !== null && (!Number.isFinite(input.maximumPrice) || input.maximumPrice < 0))) {
+    res.status(400).json({ error: 'Choose valid recommendation preferences and price bounds.' });
+    return;
+  }
+  const currency = typeof input.currency === 'string' ? input.currency.trim().toUpperCase() : '';
+  const multiplier = currencyMinorUnitMultiplier(currency);
+  if (((input.minimumPrice !== null || input.maximumPrice !== null) && multiplier === null)
+    || (input.minimumPrice !== null && input.maximumPrice !== null && input.minimumPrice > input.maximumPrice)) {
+    res.status(400).json({ error: 'Choose a valid currency and a price range where the minimum does not exceed the maximum.' });
+    return;
+  }
+  const toMinor = (value: unknown) => typeof value === 'number' && multiplier !== null
+    ? Math.round(value * multiplier)
+    : null;
+  const minimumPriceMinor = toMinor(input.minimumPrice);
+  const maximumPriceMinor = toMinor(input.maximumPrice);
+  if ((input.minimumPrice !== null && !Number.isSafeInteger(minimumPriceMinor))
+    || (input.maximumPrice !== null && !Number.isSafeInteger(maximumPriceMinor))) {
+    res.status(400).json({ error: 'Enter prices within the supported currency range.' });
+    return;
+  }
+  try {
+    await saveMarketplaceUserPreferences(req.authUser!.uid, {
+      enabled: input.enabled,
+      categories: input.categories,
+      styles: input.styles,
+      minimumPriceMinor,
+      maximumPriceMinor,
+      currency: currency || null,
+      country: typeof input.country === 'string' ? input.country.trim().slice(0, 80) : '',
+      state: typeof input.state === 'string' ? input.state.trim().slice(0, 80) : '',
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Unable to save recommendation preferences.', error);
+    res.status(503).json({ error: 'Recommendation preferences could not be saved.' });
+  }
+});
+
+app.delete('/api/me/recommendation-preferences', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  if (!supabaseDataEnabled) {
+    res.status(503).json({ error: 'Account-level recommendation preferences require the Supabase data service.' });
+    return;
+  }
+  try {
+    await resetMarketplacePersonalization(req.authUser!.uid);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Unable to reset recommendation preferences.', error);
+    res.status(503).json({ error: 'Recommendation preferences could not be reset.' });
+  }
+});
+
+app.put('/api/me/recommendation-feedback/:listingId', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const listingId = req.params.listingId;
+  const interactionType = req.body?.interactionType;
+  const active = req.body?.active;
+  const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.trim() : '';
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 500) : '';
+  if (!isUuid(listingId) || !['hide', 'dismiss', 'not_interested'].includes(interactionType)
+    || typeof active !== 'boolean' || !isUuid(sessionId)) {
+    res.status(400).json({ error: 'Choose a valid listing and recommendation feedback action.' });
+    return;
+  }
+  if (!supabaseDataEnabled) {
+    res.status(503).json({ error: 'Account-level recommendation feedback requires the Supabase data service.' });
+    return;
+  }
+  if (!await enforceAbuseLimit(req, res, 'recommendation_feedback', listingId)) return;
+  try {
+    const result = await setMarketplaceRecommendationFeedback({
+      userId: req.authUser!.uid,
+      listingId,
+      interactionType,
+      active,
+      sessionHash: createHash('sha256').update(`marketplace-session:${sessionId}`).digest('hex'),
+      reason,
+    });
+    if (result === 'rate_limited') {
+      res.status(429).json({ error: 'Recommendation feedback is temporarily limited. Please try again later.' });
+      return;
+    }
+    if (result === 'ineligible') {
+      res.status(404).json({ error: 'That listing is no longer available for recommendation feedback.' });
+      return;
+    }
+    invalidatePublicCaches();
+    res.json({ ok: true, active: result === 'hidden' });
+  } catch (error) {
+    console.error('Unable to update recommendation feedback.', error);
+    res.status(503).json({ error: 'Recommendation feedback could not be saved.' });
+  }
+});
+
+app.put('/api/me/blocked-sellers/:sellerId', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const sellerId = req.params.sellerId;
+  if (!isUuid(sellerId) || sellerId === req.authUser!.uid || typeof req.body?.blocked !== 'boolean') {
+    res.status(400).json({ error: 'Choose a valid seller and block action.' });
+    return;
+  }
+  const outcome = await setMarketplaceUserBlock({
+    actorId: req.authUser!.uid,
+    blockedUserId: sellerId,
+    blocked: req.body.blocked,
+  });
+  if (outcome === 'rate_limited') {
+    res.status(429).json({ error: 'Too many block-list changes. Please try again later.' });
+    return;
+  }
+  marketplaceFeedCache.clear();
+  res.json({ blocked: outcome === 'blocked' });
 });
 
 app.get('/api/discovery-events', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -1235,7 +1973,6 @@ app.get('/api/listings/mine', requireAuth, async (req: AuthenticatedRequest, res
     const listings = await getSellerListings(req.authUser!.uid);
     const enriched = await Promise.all(listings.map(async listing => {
       const interactions = await getPostInteractions(String(listing.id));
-      const ratings = Object.values(interactions.ratings).map(Number);
       const author = listing.author as Record<string, unknown> || {};
       return {
         ...snakeToCamel(listing),
@@ -1248,9 +1985,8 @@ app.get('/api/listings/mine', requireAuth, async (req: AuthenticatedRequest, res
         authorWhatsapp: author.whatsapp_number || '',
         likes: interactions.likes,
         saves: interactions.saves,
-        rating: ratings.length ? ratings.reduce((sum, value) => sum + value, 0) / ratings.length : 0,
-        ratingCount: ratings.length,
-        ratingsByUser: interactions.ratings,
+        rating: Number(listing.rating_average) || 0,
+        ratingCount: Number(listing.rating_count) || 0,
       };
     }));
     res.json(enriched);
@@ -1280,11 +2016,17 @@ app.get('/api/admin/listing-reports', requireAuth, requireAdmin, async (_req, re
 
 app.patch('/api/admin/listing-reports/:reportId', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   const status = req.body?.status;
-  if (status !== 'reviewed' && status !== 'dismissed') {
-    res.status(400).json({ error: 'Choose reviewed or dismissed.' });
+  const reason = listingText(req.body?.reason, 1000);
+  if (!isUuid(req.params.reportId) || (status !== 'reviewed' && status !== 'dismissed') || reason.length < 5) {
+    res.status(400).json({ error: 'Choose a valid report decision and provide a reason of at least 5 characters.' });
     return;
   }
-  await updateListingReport(req.params.reportId, status);
+  await updateListingReport({
+    reportId: req.params.reportId,
+    status,
+    actorId: req.authUser!.uid,
+    reason,
+  });
   res.status(204).send();
 });
 
@@ -1301,6 +2043,7 @@ app.post('/api/posts', requireAuth, requireActiveAccount, async (req: Authentica
     res.status(400).json({ error: validation.error });
     return;
   }
+  if (!await enforceAbuseLimit(req, res, 'listing_write')) return;
   const intent = input.intent === 'draft' ? 'draft' : 'pending_review';
   const timestamp = new Date().toISOString();
   const post = {
@@ -1342,6 +2085,7 @@ app.put('/api/posts/:postId', requireAuth, requireActiveAccount, async (req: Aut
     res.status(400).json({ error: validation.error });
     return;
   }
+  if (!await enforceAbuseLimit(req, res, 'listing_write', req.params.postId)) return;
   const timestamp = new Date().toISOString();
   const nextStatus = req.body?.intent === 'draft' ? 'draft' : 'pending_review';
   const values = {
@@ -1373,6 +2117,7 @@ app.patch('/api/posts/:postId/status', requireAuth, requireActiveAccount, async 
     res.status(403).json({ error: 'You can only manage your own listings.' });
     return;
   }
+  if (!await enforceAbuseLimit(req, res, 'listing_write', req.params.postId)) return;
   const action = req.body?.action;
   const timestamp = new Date().toISOString();
   let values: Record<string, unknown>;
@@ -1432,7 +2177,7 @@ app.patch('/api/admin/listings/:listingId/moderation', requireAuth, requireAdmin
   res.json(snakeToCamel(updated));
 });
 
-app.post('/api/posts/:postId/report', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/posts/:postId/report', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
   const listing = await getPost(req.params.postId);
   if (!listing || listing.status !== 'published' || listing.moderation_status !== 'approved') {
     res.status(404).json({ error: 'That published listing could not be found.' });
@@ -1444,6 +2189,7 @@ app.post('/api/posts/:postId/report', requireAuth, async (req: AuthenticatedRequ
     res.status(400).json({ error: 'Choose a valid report reason.' });
     return;
   }
+  if (!await enforceAbuseLimit(req, res, 'listing_report', req.params.postId)) return;
   try {
     await createListingReport(req.params.postId, req.authUser!.uid, reason, details);
     res.status(201).json({ ok: true });
@@ -1456,33 +2202,287 @@ app.post('/api/posts/:postId/report', requireAuth, async (req: AuthenticatedRequ
   }
 });
 
-app.post('/api/posts/:postId/rating', requireAuth, async (req: AuthenticatedRequest, res) => {
-  const rating = Number(req.body?.rating);
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    res.status(400).json({ error: 'Rating must be an integer from 1 to 5.' });
+const REVIEW_TYPES = new Set(['listing', 'seller']);
+const REVIEW_CATEGORY_KEYS = new Set(['quality', 'communication', 'accuracy', 'timeliness', 'value']);
+const REVIEW_REPORT_REASONS = new Set(['harassment', 'personal_information', 'spam', 'conflict_of_interest', 'policy_violation', 'other']);
+const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+app.post('/api/sellers/review-summaries', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const sellerIds: string[] = Array.isArray(req.body?.sellerIds)
+    ? req.body.sellerIds.filter((id: unknown): id is string => typeof id === 'string').slice(0, 50)
+    : [];
+  if (sellerIds.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
+    res.status(400).json({ error: 'Seller identifiers are invalid.' });
     return;
   }
-  const post = await getPost(req.params.postId);
-  if (!post || (supabaseDataEnabled && (post.status !== 'published' || post.moderation_status !== 'approved' || post.deleted_at))) {
-    res.status(404).json({ error: 'That published marketplace listing no longer exists.' });
+  try {
+    res.json(await getSellerReviewSummaries(sellerIds));
+  } catch (error) {
+    console.error('Unable to load seller review summaries.', error);
+    res.status(503).json({ error: 'Seller review summaries could not be loaded.' });
+  }
+});
+
+app.get('/api/reviews/:type/:targetId', optionalAuth, reviewRoute(async (req, res) => {
+  const type = req.params.type;
+  if (!REVIEW_TYPES.has(type) || !isUuid(req.params.targetId)) {
+    res.status(400).json({ error: 'Choose a valid review type and target.' });
     return;
   }
-  if (supabaseDataEnabled) {
-    const result = await setRating(req.params.postId, req.authUser!.uid, rating);
-    invalidatePublicCaches();
-    res.json(result);
-    return;
+  let cursor: { createdAt: string; id: string } | undefined;
+  if (req.query.cursor !== undefined) {
+    const encodedCursor = typeof req.query.cursor === 'string' ? req.query.cursor : '';
+    if (!/^[A-Za-z0-9_-]{1,512}$/.test(encodedCursor)) {
+      res.status(400).json({ error: 'Review page cursor is invalid.' });
+      return;
+    }
+    try {
+      const decoded = JSON.parse(Buffer.from(encodedCursor, 'base64url').toString('utf8')) as Record<string, unknown>;
+      const createdAt = typeof decoded.createdAt === 'string' ? Date.parse(decoded.createdAt) : Number.NaN;
+      if (!isUuid(String(decoded.id)) || !Number.isFinite(createdAt)) throw new Error('Invalid cursor values.');
+      cursor = { createdAt: new Date(createdAt).toISOString(), id: String(decoded.id) };
+    } catch {
+      res.status(400).json({ error: 'Review page cursor is invalid.' });
+      return;
+    }
   }
-  const postRef = firestore.collection('posts').doc(req.params.postId);
-  const ratingRef = postRef.collection('ratings').doc(req.authUser!.uid);
-  await firestore.runTransaction(async (transaction: Transaction) => {
-    transaction.set(ratingRef, { rating, updatedAt: FieldValue.serverTimestamp() });
-    transaction.set(postRef, { updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  if (type === 'listing') {
+    const listing = await getPost(req.params.targetId);
+    const author = listing?.author as Record<string, unknown> | undefined;
+    if (!listing || !['CLOTHING', 'FABRIC'].includes(String(listing.listing_type))
+      || listing.status !== 'published'
+      || listing.moderation_status !== 'approved'
+      || listing.deleted_at
+      || listing.is_blocked
+      || listing.availability === 'unavailable'
+      || listing.availability === 'sold_out'
+      || author?.is_blocked) {
+      res.status(404).json({ error: 'That public listing could not be found.' });
+      return;
+    }
+  } else {
+    const seller = await getProfile(req.params.targetId);
+    if (!seller || !['tailor', 'fabric_seller'].includes(String(seller.role))
+      || seller.is_blocked === true || seller.isBlocked === true) {
+      res.status(404).json({ error: 'That public seller profile could not be found.' });
+      return;
+    }
+  }
+  const result = await getMarketplaceReviews({
+    type: type as 'listing' | 'seller',
+    targetId: req.params.targetId,
+    viewerId: req.authUser?.uid,
+    cursor,
   });
-  const ratingsSnapshot = await postRef.collection('ratings').get();
-  const validRatings = ratingsSnapshot.docs.map(doc => ({ userId: doc.id, rating: Number(doc.data().rating) })).filter(item => item.rating >= 1 && item.rating <= 5);
+  res.json(snakeToCamel(result));
+}));
+
+app.post('/api/reviews/:type/:targetId', requireAuth, requireActiveAccount, reviewRoute(async (req, res) => {
+  const type = req.params.type;
+  const rating = Number(req.body?.rating);
+  if (!REVIEW_TYPES.has(type) || !isUuid(req.params.targetId) || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+    res.status(400).json({ error: 'Choose a valid review type and a whole-star rating from 1 to 5.' });
+    return;
+  }
+  if (req.body?.firsthandAttested !== true) {
+    res.status(400).json({ error: 'Confirm that this feedback is based on your firsthand experience.' });
+    return;
+  }
+  const reviewText = listingText(req.body?.reviewText, 4000);
+  const inputCategories = req.body?.categoryBreakdown;
+  if (inputCategories !== undefined && (!inputCategories || typeof inputCategories !== 'object' || Array.isArray(inputCategories)
+    || Object.keys(inputCategories).length > REVIEW_CATEGORY_KEYS.size
+    || Object.entries(inputCategories).some(([key, value]) => !REVIEW_CATEGORY_KEYS.has(key) || !Number.isInteger(value) || Number(value) < 1 || Number(value) > 5))) {
+    res.status(400).json({ error: 'Review category ratings must be whole stars from 1 to 5.' });
+    return;
+  }
+  const contextListingId = typeof req.body?.contextListingId === 'string' ? req.body.contextListingId : undefined;
+  if (contextListingId && !isUuid(contextListingId)) {
+    res.status(400).json({ error: 'Choose a valid context listing.' });
+    return;
+  }
+  if (!await enforceAbuseLimit(req, res, 'review_write', req.params.targetId)) return;
+  const review = await submitMarketplaceReview({
+    type: type as 'listing' | 'seller',
+    targetId: req.params.targetId,
+    reviewerId: req.authUser!.uid,
+    rating,
+    reviewText,
+    categoryBreakdown: (inputCategories || {}) as Record<string, number>,
+    contextListingId,
+  });
   invalidatePublicCaches();
-  res.json({ rating: validRatings.length ? validRatings.reduce((sum, item) => sum + item.rating, 0) / validRatings.length : 0, ratingCount: validRatings.length, ratingsByUser: Object.fromEntries(validRatings.map(item => [item.userId, item.rating])) });
+  res.status(201).json(snakeToCamel(review));
+}));
+
+app.post('/api/reviews/:type/:reviewId/response', requireAuth, requireActiveAccount, reviewRoute(async (req, res) => {
+  if (!REVIEW_TYPES.has(req.params.type) || !isUuid(req.params.reviewId)) {
+    res.status(400).json({ error: 'Choose a valid review type and review.' });
+    return;
+  }
+  const response = listingText(req.body?.response, 2000);
+  if (response.length < 2) {
+    res.status(400).json({ error: 'Enter a response of at least 2 characters.' });
+    return;
+  }
+  await respondToMarketplaceReview({
+    type: req.params.type as 'listing' | 'seller',
+    reviewId: req.params.reviewId,
+    sellerId: req.authUser!.uid,
+    response,
+  });
+  res.json({ ok: true });
+}));
+
+app.post('/api/reviews/:type/:reviewId/helpful', requireAuth, requireActiveAccount, reviewRoute(async (req, res) => {
+  if (!REVIEW_TYPES.has(req.params.type) || !isUuid(req.params.reviewId)) {
+    res.status(400).json({ error: 'Choose a valid review type and review.' });
+    return;
+  }
+  if (!await enforceAbuseLimit(req, res, 'review_helpful', req.params.reviewId)) return;
+  const result = await toggleReviewHelpful({
+    type: req.params.type as 'listing' | 'seller',
+    reviewId: req.params.reviewId,
+    voterId: req.authUser!.uid,
+  });
+  res.json(result);
+}));
+
+app.post('/api/reviews/:type/:reviewId/reports', requireAuth, requireActiveAccount, reviewRoute(async (req, res) => {
+  if (!REVIEW_TYPES.has(req.params.type) || !isUuid(req.params.reviewId) || !REVIEW_REPORT_REASONS.has(req.body?.reason)) {
+    res.status(400).json({ error: 'Choose a valid review type and report reason.' });
+    return;
+  }
+  if (!await enforceAbuseLimit(req, res, 'review_report', req.params.reviewId)) return;
+  await reportMarketplaceReview({
+    type: req.params.type as 'listing' | 'seller',
+    reviewId: req.params.reviewId,
+    reporterId: req.authUser!.uid,
+    reason: req.body.reason,
+    details: listingText(req.body?.details, 1000),
+  });
+  res.status(201).json({ ok: true });
+}));
+
+app.post('/api/reviews/:type/:reviewId/appeals', requireAuth, requireActiveAccount, reviewRoute(async (req, res) => {
+  if (!REVIEW_TYPES.has(req.params.type) || !isUuid(req.params.reviewId)) {
+    res.status(400).json({ error: 'Choose a valid review type and review.' });
+    return;
+  }
+  const reason = listingText(req.body?.reason, 1000);
+  if (reason.length < 10) {
+    res.status(400).json({ error: 'Please provide at least 10 characters explaining your appeal.' });
+    return;
+  }
+  if (!await enforceAbuseLimit(req, res, 'review_appeal', req.params.reviewId)) return;
+  await createMarketplaceReviewAppeal({
+    type: req.params.type as 'listing' | 'seller',
+    reviewId: req.params.reviewId,
+    reviewerId: req.authUser!.uid,
+    reason,
+  });
+  res.status(201).json({ ok: true });
+}));
+
+app.get('/api/admin/reviews', requireAuth, requireAdmin, reviewRoute(async (_req, res) => {
+  res.json(snakeToCamel(await getReviewModerationQueue()));
+}));
+
+app.patch('/api/admin/reviews/:type/:reviewId', requireAuth, requireAdmin, reviewRoute(async (req, res) => {
+  if (!REVIEW_TYPES.has(req.params.type) || !isUuid(req.params.reviewId) || !['published', 'rejected', 'removed'].includes(req.body?.decision)) {
+    res.status(400).json({ error: 'Choose a valid review type and moderation decision.' });
+    return;
+  }
+  const reason = listingText(req.body?.reason, 1000);
+  if (reason.length < 5) {
+    res.status(400).json({ error: 'A moderation reason of at least 5 characters is required.' });
+    return;
+  }
+  await moderateMarketplaceReview({
+    type: req.params.type as 'listing' | 'seller',
+    reviewId: req.params.reviewId,
+    actorId: req.authUser!.uid,
+    decision: req.body.decision,
+    reason,
+  });
+  invalidatePublicCaches();
+  res.json({ ok: true });
+}));
+
+app.patch('/api/admin/review-appeals/:appealId', requireAuth, requireAdmin, reviewRoute(async (req, res) => {
+  if (!isUuid(req.params.appealId) || !['upheld', 'overturned'].includes(req.body?.decision)) {
+    res.status(400).json({ error: 'Choose upheld or overturned for the appeal decision.' });
+    return;
+  }
+  const reason = listingText(req.body?.reason, 1000);
+  if (reason.length < 5) {
+    res.status(400).json({ error: 'An appeal decision reason of at least 5 characters is required.' });
+    return;
+  }
+  await resolveMarketplaceReviewAppeal({
+    appealId: req.params.appealId,
+    actorId: req.authUser!.uid,
+    decision: req.body.decision,
+    reason,
+  });
+  invalidatePublicCaches();
+  res.json({ ok: true });
+}));
+
+app.patch('/api/admin/review-reports/:reportId', requireAuth, requireAdmin, reviewRoute(async (req, res) => {
+  if (!isUuid(req.params.reportId) || !['reviewed', 'dismissed'].includes(req.body?.decision)) {
+    res.status(400).json({ error: 'Choose reviewed or dismissed for the report decision.' });
+    return;
+  }
+  const reason = listingText(req.body?.reason, 1000);
+  if (reason.length < 5) {
+    res.status(400).json({ error: 'A report resolution reason of at least 5 characters is required.' });
+    return;
+  }
+  await updateReviewReport({
+    reportId: req.params.reportId,
+    actorId: req.authUser!.uid,
+    status: req.body.decision,
+    resolutionNote: reason,
+  });
+  res.json({ ok: true });
+}));
+
+app.get('/api/admin/abuse-flags', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    res.json(snakeToCamel(await getMarketplaceAbuseFlags()));
+  } catch (error) {
+    console.error('Unable to load marketplace abuse flags.', error);
+    res.status(503).json({ error: 'Marketplace abuse flags could not be loaded.' });
+  }
+});
+
+app.patch('/api/admin/abuse-flags/:flagId', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const flagId = Number(req.params.flagId);
+  const status = req.body?.status;
+  const reason = listingText(req.body?.reason, 1000);
+  if (!Number.isSafeInteger(flagId) || flagId < 1
+    || !['investigating', 'resolved', 'dismissed'].includes(status)
+    || reason.length < 5) {
+    res.status(400).json({ error: 'Choose a valid abuse flag, status, and resolution reason.' });
+    return;
+  }
+  try {
+    await resolveMarketplaceAbuseFlag({
+      flagId,
+      actorId: req.authUser!.uid,
+      status: status as 'investigating' | 'resolved' | 'dismissed',
+      reason,
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Unable to resolve marketplace abuse flag.', error);
+    res.status(503).json({ error: 'Marketplace abuse flag could not be updated.' });
+  }
+});
+
+app.post('/api/posts/:postId/rating', requireAuth, async (req: AuthenticatedRequest, res) => {
+  res.status(410).json({ error: 'Star-only ratings are retired. Please submit a firsthand review instead.' });
 });
 
 app.get('/api/messages', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -1568,6 +2568,21 @@ app.post('/api/messages', requireAuth, requireActiveAccount, async (req: Authent
     res.status(403).json({ error: 'This seller is currently unavailable for messaging.' });
     return;
   }
+  let enquiryListingId = '';
+  if (supabaseDataEnabled && typeof input.postId === 'string' && input.postId.trim()) {
+    enquiryListingId = input.postId.trim();
+    const listing = await getPost(enquiryListingId);
+    if (!listing
+      || listing.author_id !== input.recipientId
+      || listing.status !== 'published'
+      || listing.moderation_status !== 'approved'
+      || listing.deleted_at
+      || listing.is_blocked
+      || !['CLOTHING', 'FABRIC'].includes(String(listing.listing_type))) {
+      res.status(400).json({ error: 'The selected listing is not available for this enquiry.' });
+      return;
+    }
+  }
   const message = {
     sender_id: req.authUser!.uid, sender_name: String(input.senderName || '').slice(0, 120), sender_role: String(input.senderRole || 'buyer'),
     recipient_id: input.recipientId, recipient_name: String(input.recipientName || '').slice(0, 120),
@@ -1576,6 +2591,21 @@ app.post('/api/messages', requireAuth, requireActiveAccount, async (req: Authent
   };
   if (supabaseDataEnabled) {
     const created = await createMessage(message);
+    if (enquiryListingId) {
+      const sessionHash = createHash('sha256')
+        .update(`marketplace-message:${req.authUser!.uid}:${enquiryListingId}`)
+        .digest('hex');
+      try {
+        await recordMarketplaceEngagementEvent({
+          listingId: enquiryListingId,
+          eventType: 'ENQUIRY',
+          actorId: req.authUser!.uid,
+          sessionHash,
+        });
+      } catch (error) {
+        console.error('Unable to record listing enquiry after a message was sent.', error);
+      }
+    }
     void sendTopicPush(`user_${message.recipient_id}`, `New message from ${message.sender_name}`, message.content.slice(0, 180), '/', 'message');
     res.status(201).json({ id: created.id, ...message, senderId: message.sender_id, recipientId: message.recipient_id, isRead: false });
     return;
@@ -1622,13 +2652,14 @@ app.post('/api/admin/broadcast', requireAuth, requireAdmin, async (req: Authenti
   res.status(201).json({ id: `broadcast-${Date.now()}`, sender: String(req.body?.sender || 'Atelier Administration'), target, title, body, createdAt });
 });
 
-app.post('/api/posts/:postId/like', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/posts/:postId/like', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
   if (supabaseDataEnabled) {
     const listing = await getPost(req.params.postId);
     if (!listing || listing.status !== 'published' || listing.moderation_status !== 'approved' || listing.deleted_at) {
       res.status(404).json({ error: 'That published listing no longer exists.' });
       return;
     }
+    if (!await enforceAbuseLimit(req, res, 'like', req.params.postId)) return;
     const result = await toggleLike(req.params.postId, req.authUser!.uid);
     invalidatePublicCaches();
     res.json(result);
@@ -1651,13 +2682,14 @@ app.post('/api/posts/:postId/like', requireAuth, async (req: AuthenticatedReques
   res.json({ isLiked: result, likesCount: likesSnapshot.size });
 });
 
-app.post('/api/posts/:postId/save', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/posts/:postId/save', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res: Response) => {
   if (supabaseDataEnabled) {
     const listing = await getPost(req.params.postId);
     if (!listing || listing.status !== 'published' || listing.moderation_status !== 'approved' || listing.deleted_at) {
       res.status(404).json({ error: 'That published listing no longer exists.' });
       return;
     }
+    if (!await enforceAbuseLimit(req, res, 'save', req.params.postId)) return;
     const result = await toggleSave(req.params.postId, req.authUser!.uid);
     invalidatePublicCaches();
     res.json(result);
@@ -1848,8 +2880,21 @@ app.patch('/api/fabric-requests/:requestId/status', requireAuth, async (req: Aut
 });
 
 app.post('/api/admin/users/:uid/block', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
-  const blocked = Boolean(req.body?.blocked);
+  if (typeof req.body?.blocked !== 'boolean') {
+    res.status(400).json({ error: 'Choose whether the account should be blocked.' });
+    return;
+  }
+  const blocked = req.body.blocked;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (reason.length < 5 || reason.length > 1000) {
+    res.status(400).json({ error: 'Provide an enforcement reason between 5 and 1000 characters.' });
+    return;
+  }
   if (supabaseDataEnabled) {
+    if (req.params.uid === req.authUser!.uid) {
+      res.status(400).json({ error: 'You cannot block your own account.' });
+      return;
+    }
     const profile = await readProfile(req.params.uid);
     const targetRole = profile?.role;
     const isSuperAdmin = req.authUser?.email?.trim().toLowerCase() === 'fountainsdata234@gmail.com';
@@ -1865,9 +2910,19 @@ app.post('/api/admin/users/:uid/block', requireAuth, requireAdmin, async (req: A
       res.status(403).json({ error: 'Customer accounts cannot be blocked.' });
       return;
     }
-    await writeProfile(req.params.uid, { isBlocked: blocked, updatedAt: new Date().toISOString() });
+    if (!await enforceAbuseLimit(req, res, 'admin_account_enforcement', req.params.uid)) return;
+    await setMarketplaceAccountBlock({
+      actorId: req.authUser!.uid,
+      targetId: req.params.uid,
+      blocked,
+      reason,
+    });
     invalidatePublicCaches();
     res.json({ ok: true, blocked });
+    return;
+  }
+  if (req.params.uid === req.authUser!.uid) {
+    res.status(400).json({ error: 'You cannot block your own account.' });
     return;
   }
   const profileRef = firestore.collection('profiles').doc(req.params.uid);
@@ -1882,7 +2937,12 @@ app.post('/api/admin/users/:uid/block', requireAuth, requireAdmin, async (req: A
     res.status(403).json({ error: 'Customer accounts cannot be blocked.' });
     return;
   }
-  await profileRef.set({ isBlocked: blocked, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await profileRef.set({
+    isBlocked: blocked,
+    updatedAt: FieldValue.serverTimestamp(),
+    enforcementReason: reason,
+    enforcementActorId: req.authUser!.uid,
+  }, { merge: true });
   await adminAuth.updateUser(req.params.uid, { disabled: blocked });
   res.json({ ok: true, blocked });
 });
@@ -1941,7 +3001,7 @@ app.delete('/api/admin/sellers/:uid', requireAuth, requireAdmin, async (req: Aut
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-    res.status(413).json({ error: 'Images must be 15 MB or smaller.' });
+    res.status(413).json({ error: 'Images must be 8 MB or smaller.' });
     return;
   }
   console.error('API error', error);
@@ -1950,4 +3010,14 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(port, () => {
   console.log(`Atelier API listening on http://localhost:${port}`);
+  const refreshTrends = async () => {
+    try {
+      await refreshMarketplaceTrends();
+    } catch (error) {
+      console.error('Unable to refresh marketplace trend snapshots.', error);
+    }
+  };
+  void refreshTrends();
+  const trendRefreshTimer = setInterval(() => { void refreshTrends(); }, 10 * 60 * 1000);
+  trendRefreshTimer.unref();
 });

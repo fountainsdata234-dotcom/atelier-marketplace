@@ -68,7 +68,6 @@ const normalizeMarketplacePosts = (remotePosts: ClothPost[]): ClothPost[] => rem
   likes: Array.isArray(post.likes) ? post.likes : [],
   saves: Array.isArray(post.saves) ? post.saves : [],
   tags: Array.isArray(post.tags) ? post.tags : [],
-  ratingsByUser: post.ratingsByUser || {},
   rating: Number(post.rating) || 0,
   ratingCount: Number(post.ratingCount) || 0,
   authorLocation: post.authorLocation || { country: '', state: '', city: '' },
@@ -428,6 +427,30 @@ export default function App() {
     };
   }, [currentUser?.id, currentView, directMessageOpen]);
 
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    let cancelled = false;
+    void api.getAdminUsers().then(adminUsers => {
+      if (cancelled) return;
+      setUsers(adminUsers);
+      storageService.saveUsers(adminUsers.map(user => ({
+        ...user,
+        email: '',
+        phone: '',
+        countryCode: '',
+        isWarned: undefined,
+        warningNote: undefined,
+        isSuperAdmin: undefined,
+        addedByEmail: undefined,
+      })));
+    }).catch(error => {
+      console.warn('Administrator user data could not be refreshed.', error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, currentUser?.role]);
+
   const handleInstallApp = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
@@ -479,7 +502,7 @@ export default function App() {
       setPromoPlans(storageService.getPromoPlans());
       setBroadcasts(storageService.getBroadcasts());
       try {
-        const usersRequest = api.getUsers();
+        const usersRequest = currentUser?.role === 'admin' ? api.getAdminUsers() : api.getUsers();
         const postsRequest = api.getPosts();
         const plansRequest = api.getPromoPlans();
         let remotePosts: ClothPost[] | null = null;
@@ -523,7 +546,19 @@ export default function App() {
               followers: Array.isArray(remoteUser.followers) && remoteUser.followers.length > 0 ? remoteUser.followers : localUser.followers,
             };
           });
-          storageService.saveUsers(mergedUsers);
+          const usersToPersist = currentUser?.role === 'admin'
+            ? mergedUsers.map(user => ({
+              ...user,
+              email: '',
+              phone: '',
+              countryCode: '',
+              isWarned: undefined,
+              warningNote: undefined,
+              isSuperAdmin: undefined,
+              addedByEmail: undefined,
+            }))
+            : mergedUsers;
+          storageService.saveUsers(usersToPersist);
           setUsers(mergedUsers);
         }
 
@@ -585,7 +620,7 @@ export default function App() {
       if (document.visibilityState === 'visible' && marketplaceViews.includes(currentView)) {
         void refreshAllData(false);
       }
-    }, 180_000);
+    }, 300_000);
     return () => window.clearInterval(refreshTimer);
   }, [currentView]);
 
@@ -690,7 +725,7 @@ export default function App() {
     );
     if (!contactUrl) return;
     storageService.recordDiscoveryEvent(post.id, 'ENQUIRY', currentUser?.id);
-    if (currentUser) void api.recordDiscoveryEvent(post.id, 'ENQUIRY', sessionStorage.getItem('atelier_session_id') || 'app-session');
+    storageService.recordRecommendationEvent(post.id, 'ENQUIRY', storageService.getRecommendationScope(currentUser?.id), post);
     window.open(contactUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -716,7 +751,7 @@ export default function App() {
 
   const handleRecordPostView = (post: ClothPost) => {
     storageService.recordDiscoveryEvent(post.id, 'VIEW', currentUser?.id);
-    if (currentUser) void api.recordDiscoveryEvent(post.id, 'VIEW', sessionStorage.getItem('atelier_session_id') || 'app-session');
+    storageService.recordRecommendationEvent(post.id, 'VIEW', storageService.getRecommendationScope(currentUser?.id), post);
   };
 
   // Trigger Social Share Modal
@@ -762,7 +797,7 @@ export default function App() {
 
   const handleSharePost = (post: ClothPost) => {
     storageService.recordDiscoveryEvent(post.id, 'SHARE', currentUser?.id);
-    if (currentUser) void api.recordDiscoveryEvent(post.id, 'SHARE', sessionStorage.getItem('atelier_session_id') || 'app-session');
+    storageService.recordRecommendationEvent(post.id, 'SHARE', storageService.getRecommendationScope(currentUser?.id), post);
     setSocialShareHandle(post.authorHandle);
     setSocialShareName(`${post.title} by ${post.authorName}`);
     setSocialShareUrl(buildPostShareUrl(window.location.origin, post.authorHandle, post.id));
@@ -908,6 +943,8 @@ export default function App() {
                 post={posts.find(post => post.id === selectedPostId) || null}
                 posts={posts}
                 users={users}
+                currentUser={currentUser}
+                onOpenAuth={() => handleOpenAuthWithRole('buyer')}
                 isDarkMode={isDarkMode}
                 onBack={() => {
                   navigateToView('marketplace');
@@ -963,7 +1000,7 @@ export default function App() {
 
           {currentView === 'seller' && sharedSeller && (
             <motion.div key="seller" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }}>
-              <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} isDarkMode={isDarkMode} onBack={() => navigateToView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} onSelectPost={handleSelectPost} />
+              <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} onOpenAuth={() => handleOpenAuthWithRole('buyer')} isDarkMode={isDarkMode} onBack={() => navigateToView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} onSelectPost={handleSelectPost} />
             </motion.div>
           )}
 

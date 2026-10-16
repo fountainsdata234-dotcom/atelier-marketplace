@@ -278,7 +278,7 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
                       "Measurement guide?"
                     </button>
                     <button
-                      onClick={() => handleSendMessage('Hello! I would like to order a bespoke cut with premium Italian fabric.')}
+                      onClick={() => handleSendMessage('Hello! I would like to discuss a bespoke cut with premium Italian fabric.')}
                       className="px-2.5 py-1 rounded-full text-[11px] bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-neutral-700"
                     >
                       "Order bespoke cut"
