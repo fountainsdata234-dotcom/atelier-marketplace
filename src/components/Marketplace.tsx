@@ -1522,20 +1522,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
             {/* City Selector */}
             {filterState !== 'all' && (
-              <select
-                value={filterCity}
-                onChange={(e) => setFilterCity(e.target.value)}
+              <input
+                type="text"
+                value={filterCity === 'all' ? '' : filterCity}
+                onChange={(e) => setFilterCity(e.target.value.trim() || 'all')}
+                placeholder="Filter by city"
+                aria-label="Filter listings by city"
                 className="px-2.5 py-1.5 rounded-lg bg-neutral-800/80 border border-neutral-700 text-xs text-neutral-200 focus:outline-none focus:border-amber-500"
-              >
-                <option value="all">All Cities</option>
-                {worldCountries.find(c => c.name === filterCountry)
-                  ?.states.find(s => s.name === filterState)
-                  ?.cities.map((city) => (
-                    <option key={city} value={city}>
-                      {city}
-                    </option>
-                  ))}
-              </select>
+              />
             )}
 
             {(filterCountry !== 'all' || filterState !== 'all' || filterCity !== 'all' || nearMeActive) && (

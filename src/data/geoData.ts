@@ -1,5 +1,5 @@
 import type { CountryGeo } from '../types';
-import * as countryStateCity from 'country-state-city';
+import { Country, State } from 'country-state-city';
 
 const fallbackWorldCountries: CountryGeo[] = [
   {
@@ -48,19 +48,8 @@ const fallbackWorldCountries: CountryGeo[] = [
 
 const locationCoordinateCache = new Map<string, { lat: number; lng: number }>();
 
-const normalizeCityNames = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => typeof item === 'string' ? item : item?.name)
-    .filter((name): name is string => Boolean(name && name.trim()));
-};
-
 const buildWorldCountries = (): CountryGeo[] => {
-  const countryApi = (countryStateCity as any)?.Country;
-  const stateApi = (countryStateCity as any)?.State;
-  const cityApi = (countryStateCity as any)?.City;
-
-  const countries = typeof countryApi?.getAllCountries === 'function' ? countryApi.getAllCountries() : [];
+  const countries = Country.getAllCountries();
   if (!Array.isArray(countries) || countries.length === 0) {
     return fallbackWorldCountries;
   }
@@ -68,27 +57,20 @@ const buildWorldCountries = (): CountryGeo[] => {
   return countries
     .filter((country: any) => country && country.name)
     .map((country: any) => {
-      const stateList = typeof stateApi?.getStatesOfCountry === 'function'
-        ? stateApi.getStatesOfCountry(country.isoCode)
-        : [];
+      const stateList = State.getStatesOfCountry(country.isoCode);
 
       const states = (Array.isArray(stateList) ? stateList : []).map((state: any) => {
-        const cityList = typeof cityApi?.getCitiesOfState === 'function'
-          ? cityApi.getCitiesOfState(country.isoCode, state.isoCode)
-          : [];
-
-        const cityNames = normalizeCityNames(cityList).slice(0, 40);
         const stateName = state?.name || 'Unknown State';
         return {
           name: stateName,
           code: state?.isoCode || stateName,
-          cities: cityNames.length > 0 ? cityNames : ['Main City']
+          cities: [],
         };
       });
 
       const normalizedStates = states.length > 0
         ? states
-        : [{ name: 'Main Region', code: 'main', cities: [country.capital || country.name || 'Main City'] }];
+        : [{ name: 'Main Region', code: 'main', cities: [] }];
 
       return {
         name: country.name,
@@ -123,22 +105,10 @@ export function resolveLocationCoordinates(countryCode: string, stateCode: strin
   const cached = locationCoordinateCache.get(cacheKey);
   if (cached) return cached;
 
-  const countryApi = (countryStateCity as any)?.Country;
-  const stateApi = (countryStateCity as any)?.State;
-  const cityApi = (countryStateCity as any)?.City;
-
   try {
-    const country = typeof countryApi?.getCountryByCode === 'function' ? countryApi.getCountryByCode(countryCode) : null;
-    const state = typeof stateApi?.getStateByCodeAndCountry === 'function'
-      ? stateApi.getStateByCodeAndCountry(stateCode, countryCode)
-      : null;
-    const cities = typeof cityApi?.getCitiesOfState === 'function' && state
-      ? cityApi.getCitiesOfState(countryCode, stateCode)
-      : [];
-    const city = Array.isArray(cities)
-      ? cities.find((item: any) => String(item?.name || '').toLowerCase() === cityName.trim().toLowerCase())
-      : null;
-    const source = city || state || country;
+    const country = Country.getCountryByCode(countryCode);
+    const state = State.getStateByCodeAndCountry(stateCode, countryCode);
+    const source = state || country;
     const lat = Number(source?.latitude);
     const lng = Number(source?.longitude);
     const coordinates = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : fallback;

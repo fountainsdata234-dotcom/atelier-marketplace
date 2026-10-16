@@ -355,10 +355,15 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             <option value="all">All states / provinces</option>
             {selectedCountry?.states.map((state) => <option key={state.code} value={state.code}>{state.name}</option>)}
           </select>
-          <select value={filterCity} onChange={(event) => { setFilterCity(event.target.value); setSelectedArtisanId(null); }} disabled={!selectedState} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
-            <option value="all">All cities</option>
-            {selectedState?.cities.map((city) => <option key={city} value={city}>{city}</option>)}
-          </select>
+          <input
+            type="text"
+            value={filterCity === 'all' ? '' : filterCity}
+            onChange={(event) => { setFilterCity(event.target.value.trim() || 'all'); setSelectedArtisanId(null); }}
+            disabled={!selectedState}
+            placeholder="Filter by city"
+            aria-label="Filter sellers by city"
+            className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50"
+          />
           <label className="sr-only" htmlFor="seller-specialization">Filter by specialization</label>
           <select id="seller-specialization" value={specializationFilter} onChange={event => setSpecializationFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
             <option value="all">All specializations</option>

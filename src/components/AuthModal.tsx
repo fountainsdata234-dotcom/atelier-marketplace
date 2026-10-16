@@ -101,7 +101,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const selectedCountry = worldCountries.find(c => c.code === selectedCountryCode) || worldCountries[0];
   const states = selectedCountry.states;
   const currentStateObj = states.find(s => s.code === selectedStateCode) || null;
-  const cities = currentStateObj ? currentStateObj.cities : [];
   const CURRENCY_OPTIONS = ['NGN', 'USD', 'EUR', 'GBP', 'ZAR', 'KES', 'GHS', 'EGP', 'MAD', 'AED', 'CAD', 'CHF', 'XOF'];
 
   useEffect(() => {
@@ -140,12 +139,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       || state.code?.toLowerCase().includes(term);
   });
 
-  const filteredCities = cities.filter((city) => {
-    const term = citySearch.trim().toLowerCase();
-    if (!term) return true;
-    return city.toLowerCase().includes(term);
-  });
-
   const restoreAutoCountry = (overrideCode?: string) => {
     const nextCountryCode = overrideCode || detectedCountryCode || 'NG';
     const fallbackCountry = worldCountries.find((country) => country.code === nextCountryCode) || worldCountries[0];
@@ -182,17 +175,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     if (currentStateObj) {
       setStateSearch(currentStateObj.name);
-      setSelectedCityName((prevCity) => {
-        if (prevCity && currentStateObj.cities.includes(prevCity)) {
-          return prevCity;
-        }
-        return currentStateObj.cities[0] || '';
-      });
       return;
     }
 
     setStateSearch('');
-    setSelectedCityName('');
   }, [currentStateObj]);
 
   useEffect(() => {
@@ -327,7 +313,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError('Password must be at least 8 characters long and contain a capital letter and a period.');
       return;
     }
-    if (!currentStateObj || !selectedCityName || !cities.includes(selectedCityName)) {
+    if (!currentStateObj || !selectedCityName.trim()) {
       setError('Please select both your state and city so nearby discovery can work correctly.');
       return;
     }
@@ -683,6 +669,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       } else {
                         setSelectedStateCode('');
                       }
+                      setSelectedCityName('');
+                      setCitySearch('');
                     }}
                     onClear={() => {
                       const fallbackCountry = worldCountries.find((country) => country.code === selectedCountryCode) || worldCountries[0];
@@ -703,12 +691,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={citySearch}
                     onChange={(nextValue) => {
                       setCitySearch(nextValue);
-                      const match = cities.find((city) => city.toLowerCase() === nextValue.trim().toLowerCase());
-                      if (match) {
-                        setSelectedCityName(match);
-                      } else {
-                        setSelectedCityName('');
-                      }
+                      setSelectedCityName(nextValue.trim());
                     }}
                     onClear={() => {
                       const fallbackCountry = worldCountries.find((country) => country.code === selectedCountryCode) || worldCountries[0];
@@ -717,7 +700,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setCitySearch(fallbackCity);
                       setSelectedCityName(fallbackCity);
                     }}
-                    options={filteredCities}
+                    options={[]}
                     placeholder="Search city"
                     listId="city-search-list"
                     required
