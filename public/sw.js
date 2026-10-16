@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabsattire-v10';
+const CACHE_NAME = 'fabsattire-v11';
 const APP_SHELL = ['/index.html', '/manifest.webmanifest'];
 
 const isStaticAssetRequest = (url) => {
@@ -73,7 +73,9 @@ self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
 
-  const isPublicDataRequest = ['/api/users', '/api/posts', '/api/promo-plans'].includes(requestUrl.pathname);
+  const isPublicDataRequest = ['/api/users', '/api/posts', '/api/promo-plans'].includes(requestUrl.pathname)
+    || (!event.request.headers.has('Authorization')
+      && ['/api/marketplace/feed', '/api/marketplace/trending'].includes(requestUrl.pathname));
   if (isPublicDataRequest) {
     event.respondWith(
       (async () => {

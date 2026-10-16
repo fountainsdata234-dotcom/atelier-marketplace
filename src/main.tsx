@@ -53,13 +53,6 @@ const registerServiceWorker = async () => {
   if (!('serviceWorker' in navigator)) return;
 
   try {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.map((registration) => registration.unregister()));
-  } catch (error) {
-    console.warn('Service worker cleanup failed', error);
-  }
-
-  try {
     await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   } catch (error) {
     console.warn('Service worker registration failed', error);

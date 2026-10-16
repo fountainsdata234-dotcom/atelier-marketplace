@@ -44,6 +44,7 @@ const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
 };
 
 const PATH_BY_VIEW: Record<string, string> = Object.fromEntries(Object.entries(PUBLIC_VIEW_BY_PATH).map(([path, view]) => [view, path]));
+const MARKETPLACE_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 const hasPasswordResetQuery = () => {
   const params = new URLSearchParams(window.location.search);
@@ -477,9 +478,7 @@ export default function App() {
 
   const handlePageRefresh = () => {
     setIsRefreshing(true);
-    void refreshAllData(true).finally(() => {
-      window.location.reload();
-    });
+    void refreshAllData(false).finally(() => setIsRefreshing(false));
   };
 
   const refreshAllData = async (showLoader = true) => {
@@ -629,17 +628,20 @@ export default function App() {
     const hasCachedPosts = storageService.getPosts().length > 0;
     void refreshAllData(!hasCachedPosts && posts.length === 0);
     const refreshTimer = window.setInterval(() => {
-      if (document.visibilityState === 'visible' && marketplaceViews.includes(currentView)) {
+      if (document.visibilityState === 'visible'
+        && marketplaceViews.includes(currentView)
+        && Date.now() - lastDataRefreshStartedAt.current >= MARKETPLACE_AUTO_REFRESH_INTERVAL_MS) {
         void refreshAllData(false);
       }
-    }, 300_000);
+    }, MARKETPLACE_AUTO_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(refreshTimer);
   }, [currentView]);
 
   useEffect(() => {
     const handleVisibility = () => {
       const isEligibleView = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
-      if (isEligibleView) {
+      if (isEligibleView
+        && Date.now() - lastDataRefreshStartedAt.current >= MARKETPLACE_AUTO_REFRESH_INTERVAL_MS) {
         void refreshAllData(false);
       }
     };

@@ -90,6 +90,7 @@ import {
   uploadImage,
   updateProfile,
   upsertProfile,
+  type ProfileRecord,
 } from './supabaseData.js';
 
 const app = express();
@@ -1369,11 +1370,25 @@ app.get('/api/marketplace/feed', optionalAuth, async (req: AuthenticatedRequest,
     });
     const postIds = rows.map(row => String(row.id));
     const sellerIds = rows.map(row => String(row.author_id || '')).filter(Boolean);
-    const [interactions, listingReviews, sellerReviews] = await Promise.all([
+    const [interactionResult, listingReviewResult, sellerReviewResult] = await Promise.allSettled([
       getMarketplaceViewerInteractions(postIds, req.authUser?.uid),
       getMarketplaceReviewSummaries('listing', postIds),
       getMarketplaceReviewSummaries('seller', sellerIds),
     ]);
+    const interactions = interactionResult.status === 'fulfilled'
+      ? interactionResult.value
+      : { likes: new Set<string>(), saves: new Set<string>() };
+    const listingReviews = listingReviewResult.status === 'fulfilled' ? listingReviewResult.value : new Map<string, ProfileRecord>();
+    const sellerReviews = sellerReviewResult.status === 'fulfilled' ? sellerReviewResult.value : new Map<string, ProfileRecord>();
+    if (interactionResult.status === 'rejected'
+      || listingReviewResult.status === 'rejected'
+      || sellerReviewResult.status === 'rejected') {
+      console.warn('Marketplace feed enrichment is temporarily unavailable; returning listings without some account or review details.', {
+        interactions: interactionResult.status === 'rejected' ? interactionResult.reason : undefined,
+        listingReviews: listingReviewResult.status === 'rejected' ? listingReviewResult.reason : undefined,
+        sellerReviews: sellerReviewResult.status === 'rejected' ? sellerReviewResult.reason : undefined,
+      });
+    }
     const items = rows.map(row => {
       const author = row.author as Record<string, unknown> || {};
       const post = snakeToCamel(row) as Record<string, unknown>;
@@ -1470,11 +1485,25 @@ app.get('/api/marketplace/trending', optionalAuth, async (req: AuthenticatedRequ
     });
     const postIds = result.rows.map(row => String(row.id));
     const sellerIds = result.rows.map(row => String(row.author_id || '')).filter(Boolean);
-    const [interactions, listingReviews, sellerReviews] = await Promise.all([
+    const [interactionResult, listingReviewResult, sellerReviewResult] = await Promise.allSettled([
       getMarketplaceViewerInteractions(postIds, req.authUser?.uid),
       getMarketplaceReviewSummaries('listing', postIds),
       getMarketplaceReviewSummaries('seller', sellerIds),
     ]);
+    const interactions = interactionResult.status === 'fulfilled'
+      ? interactionResult.value
+      : { likes: new Set<string>(), saves: new Set<string>() };
+    const listingReviews = listingReviewResult.status === 'fulfilled' ? listingReviewResult.value : new Map<string, ProfileRecord>();
+    const sellerReviews = sellerReviewResult.status === 'fulfilled' ? sellerReviewResult.value : new Map<string, ProfileRecord>();
+    if (interactionResult.status === 'rejected'
+      || listingReviewResult.status === 'rejected'
+      || sellerReviewResult.status === 'rejected') {
+      console.warn('Marketplace trend enrichment is temporarily unavailable; returning listings without some account or review details.', {
+        interactions: interactionResult.status === 'rejected' ? interactionResult.reason : undefined,
+        listingReviews: listingReviewResult.status === 'rejected' ? listingReviewResult.reason : undefined,
+        sellerReviews: sellerReviewResult.status === 'rejected' ? sellerReviewResult.reason : undefined,
+      });
+    }
     const items = result.rows.map(row => {
       const author = row.author as Record<string, unknown> || {};
       const post = snakeToCamel(row) as Record<string, unknown>;
