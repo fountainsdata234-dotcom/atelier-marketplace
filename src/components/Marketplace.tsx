@@ -276,10 +276,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       trendScores,
     });
   }, [feedPosts, users, recommendationEvents, recommendationPreferences, activeFeedView, sortOrder, searchQuery, selectedCategory, trendScores, recommendationRevision]);
-  const getPostImageSource = (post: ClothPost) => {
+  const getPostImageSource = (post: ClothPost): string | undefined => {
     const thumbnail = post.imageAssets?.[0]?.thumbnailUrl;
     const original = post.imageAssets?.[0]?.url || post.imageUrl;
-    return thumbnail && failedPostImageUrls[post.id] === thumbnail ? original : thumbnail || original;
+    if (thumbnail && failedPostImageUrls[post.id] !== thumbnail) return thumbnail;
+    if (original && failedPostImageUrls[post.id] !== original) return original;
+    return undefined;
   };
   const sellerPosts = useMemo(() => sourcePosts
     .filter(post => (post.status === undefined || (post.status === 'published' && (post.moderationStatus === undefined || post.moderationStatus === 'approved')))
@@ -288,9 +290,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       && post.status !== 'sold_out'
       && !post.isBlocked
       && (post.authorRole === 'tailor' || post.authorRole === 'fabric_seller')
-      && post.imageUrl?.trim()
-      && failedPostImageUrls[post.id] !== post.imageUrl
-      && failedPostImageUrls[post.id] !== post.imageAssets?.[0]?.url)
+      && Boolean(post.imageAssets?.some(asset => asset.url.trim()) || post.imageUrl?.trim()))
     .map(post => {
       const author = users.find(user => user.id === post.authorId);
       return {
@@ -1711,6 +1711,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               : post.listingType === 'TAILOR_PORTFOLIO'
                 ? 'Tailor portfolio'
                 : 'Clothing';
+            const postImageSource = getPostImageSource(post);
 
             // Distance calculation if userCoords present
             const distanceKm = userCoords && post.authorLocation.lat && post.authorLocation.lng
@@ -1801,18 +1802,29 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
                 {/* Garment Image with High-Res Zoom / Save */}
                 <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
-                  <img
-                    src={getPostImageSource(post)}
-                    alt={post.title}
-                    className="block h-auto w-full cursor-pointer object-contain brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                    decoding="async"
-                    draggable={false}
-                    onContextMenu={(event) => event.preventDefault()}
-                    onClick={() => openListing(post)}
-                    onError={() => handlePostImageError(post, getPostImageSource(post))}
-                  />
+                  {postImageSource ? (
+                    <img
+                      src={postImageSource}
+                      alt={post.title}
+                      className="block h-auto w-full cursor-pointer object-contain brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
+                      referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
+                      draggable={false}
+                      onContextMenu={(event) => event.preventDefault()}
+                      onClick={() => openListing(post)}
+                      onError={() => handlePostImageError(post, postImageSource)}
+                    />
+                  ) : (
+                    <div
+                      role="img"
+                      aria-label={`Image unavailable for ${post.title}`}
+                      className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-neutral-900/80 text-neutral-500"
+                    >
+                      <Scissors aria-hidden="true" className="h-8 w-8 text-amber-500/70" />
+                      <span className="text-xs">Listing image unavailable</span>
+                    </div>
+                  )}
 
                   {/* Top image overlay badges */}
                   <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
