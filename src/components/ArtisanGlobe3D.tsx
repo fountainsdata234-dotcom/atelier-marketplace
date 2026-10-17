@@ -309,6 +309,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
   const [zoomDistance, setZoomDistance] = useState(8.2);
   const [isEarthReady, setIsEarthReady] = useState(false);
   const [isWebGlUnavailable, setIsWebGlUnavailable] = useState(false);
+  const [failedAvatarIds, setFailedAvatarIds] = useState<Set<string>>(() => new Set());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const readyTimerRef = useRef<number | null>(null);
@@ -389,13 +390,16 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
       {!isEarthReady && !isWebGlUnavailable && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#10151b]/90 px-5 text-center" role="status" aria-live="polite"><span className="h-10 w-10 animate-spin rounded-full border-2 border-amber-300/25 border-t-amber-300" /><strong className="text-sm text-white">Mapping artisan locations</strong><span className="text-xs text-neutral-300">Loading the Earth and placing makers on the map.</span></div>}
       <div className="globe-legend" aria-hidden="true">
         <span><Scissors /> Tailors</span>
+        <span><i className="globe-legend-fabric-dot" /> Fabric sellers</span>
         <span className="globe-legend-zoom">{zoomDistance < 5.8 ? 'Profiles in view' : 'Zoom to reveal profiles'}</span>
       </div>
       {selectedArtisan && (
         <div className="globe-selected-card">
           <button type="button" className="globe-selected-close" onClick={onCloseArtisan} aria-label="Clear selected artisan"><X /></button>
           <button type="button" className="globe-selected-avatar" onClick={() => onOpenArtisan(selectedArtisan)} aria-label={`View ${selectedArtisan.name}'s profile`}>
-            {selectedArtisan.avatarUrl ? <img src={selectedArtisan.avatarUrl} alt="" /> : selectedArtisan.name.slice(0, 1).toUpperCase()}
+            {selectedArtisan.avatarUrl && !failedAvatarIds.has(selectedArtisan.id)
+              ? <img src={selectedArtisan.avatarUrl} alt="" onError={() => setFailedAvatarIds(current => new Set(current).add(selectedArtisan.id))} />
+              : selectedArtisan.name.slice(0, 1).toUpperCase()}
           </button>
           <div className="globe-selected-copy">
             <span>{selectedArtisan.role === 'tailor' ? 'Tailor' : 'Fabric seller'}</span>

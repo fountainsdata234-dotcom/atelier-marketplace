@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { findExactArtisanMatch, getScatterOffsetsForLocations, getSearchSuggestions } from './globe';
+import { findExactArtisanMatch, getScatterOffsetsForLocations, getSearchSuggestions, hasValidGlobeCoordinates } from './globe';
 
 describe('globe helpers', () => {
+  it('accepts valid world coordinates, including zero, and rejects missing or out-of-range coordinates', () => {
+    expect(hasValidGlobeCoordinates({ lat: 0, lng: 0 })).toBe(true);
+    expect(hasValidGlobeCoordinates({ lat: 90, lng: 180 })).toBe(true);
+    expect(hasValidGlobeCoordinates({ lat: 91, lng: 0 })).toBe(false);
+    expect(hasValidGlobeCoordinates({ lat: 0, lng: -181 })).toBe(false);
+    expect(hasValidGlobeCoordinates({ lat: undefined, lng: 10 })).toBe(false);
+    expect(hasValidGlobeCoordinates(undefined)).toBe(false);
+  });
+
   it('keeps nearby seller markers from overlapping one another', () => {
     const points = Array.from({ length: 5 }, () => ({ lat: 6.5244, lng: 3.3792 }));
     const offsets = getScatterOffsetsForLocations(points, 0.18);

@@ -2,9 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
-import { getSearchSuggestions } from '../utils/globe';
+import { getSearchSuggestions, hasValidGlobeCoordinates } from '../utils/globe';
 import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
-import { ArtisanGlobe3D } from './ArtisanGlobe3D';
+import { ArtisanGlobe3D, type GlobeArtisan } from './ArtisanGlobe3D';
 import { api } from '../services/api';
 
 type SellerReviewSummary = {
@@ -124,6 +124,31 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
       });
   }, [currentUser, posts, users]);
 
+  const globeArtisans = useMemo(() => {
+    const postCounts = new Map<string, number>();
+    posts.forEach((post) => {
+      if (post.deletedAt || post.isBlocked
+        || (post.status !== undefined && post.status !== 'published')
+        || (post.moderationStatus !== undefined && post.moderationStatus !== 'approved')
+        || post.availability === 'unavailable' || post.status === 'sold_out') return;
+      postCounts.set(post.authorId, (postCounts.get(post.authorId) ?? 0) + 1);
+    });
+
+    return users.flatMap((user): GlobeArtisan[] => {
+      if (user.isBlocked
+        || !user.name.trim() && !user.shopName?.trim()
+        || (user.role !== 'tailor' && user.role !== 'fabric_seller')
+        || !hasValidGlobeCoordinates(user.location)) return [];
+      return [{
+        ...user,
+        distanceKm: currentUser && hasValidGlobeCoordinates(currentUser.location)
+          ? calculateDistanceKm(currentUser.location.lat, currentUser.location.lng, user.location.lat, user.location.lng)
+          : null,
+        postCount: postCounts.get(user.id) ?? 0,
+      }];
+    });
+  }, [currentUser, posts, users]);
+
   const [nearMeOnly, setNearMeOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
@@ -224,7 +249,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     return matchesSearch && matchesSpecialization && matchesServiceType && matchesRating && matchesPrice && matchesAvailability;
   });
   const selectedGlobeArtisan = selectedArtisanId
-    ? filteredArtisans.find((artisan) => artisan.id === selectedArtisanId) ?? null
+    ? globeArtisans.find((artisan) => artisan.id === selectedArtisanId) ?? null
     : null;
   const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
 
@@ -245,7 +270,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-500">Artisan network</p>
             <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight">Find a tailor</h1>
             <p className={`mt-2 max-w-2xl text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Search for a tailor, then select a match to reveal their location on the interactive globe.
+              Explore seller locations on the globe, or search to focus on a tailor.
             </p>
           </div>
 
@@ -374,14 +399,12 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           <div className="artisan-globe-panel-header">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Live artisan signal</p>
-              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} on the globe` : 'Search for a tailor and select a match to show them here'}</p>
+              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} on the globe` : 'All located sellers are shown. Select a marker or search for a tailor.'}</p>
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>
           <ArtisanGlobe3D
-            artisans={selectedGlobeArtisan && Number.isFinite(selectedGlobeArtisan.location.lat) && Number.isFinite(selectedGlobeArtisan.location.lng)
-              ? [selectedGlobeArtisan]
-              : []}
+            artisans={globeArtisans}
             selectedArtisanId={selectedArtisanId}
             onSelectArtisan={(artisan) => setSelectedArtisanId(artisan.id)}
             onOpenArtisan={onSelectArtisan}

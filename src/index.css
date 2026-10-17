@@ -483,6 +483,7 @@
 .globe-legend { position: absolute; z-index: 3; bottom: 0.9rem; left: 1rem; display: flex; flex-wrap: wrap; gap: 0.7rem; color: rgba(255, 237, 213, 0.72); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.55rem; letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
 .globe-legend span { display: inline-flex; align-items: center; gap: 0.28rem; }
 .globe-legend svg { width: 0.72rem; height: 0.72rem; color: #f6bd78; }
+.globe-legend-fabric-dot { width: 0.48rem; height: 0.48rem; border-radius: 50%; background: #5b7cff; }
 .globe-legend-zoom { color: rgba(165, 243, 252, 0.62); }
 
 .globe-selected-card { position: absolute; z-index: 3; right: 1rem; bottom: 1rem; display: flex; align-items: center; gap: 0.55rem; width: min(19rem, calc(100% - 2rem)); border: 1px solid rgba(255, 219, 177, 0.28); border-radius: 0.85rem; background: rgba(8, 22, 30, 0.9); padding: 0.6rem; box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.28); backdrop-filter: blur(14px); }

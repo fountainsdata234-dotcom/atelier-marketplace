@@ -12,6 +12,15 @@ export type GlobeSearchCandidate = {
   };
 };
 
+export const hasValidGlobeCoordinates = (
+  location: { lat?: number; lng?: number } | null | undefined,
+): location is { lat: number; lng: number } => {
+  if (!location) return false;
+  const { lat, lng } = location;
+  return typeof lat === 'number' && Number.isFinite(lat) && lat >= -90 && lat <= 90
+    && typeof lng === 'number' && Number.isFinite(lng) && lng >= -180 && lng <= 180;
+};
+
 const getTangentBasis = (latitude: number, longitude: number) => {
   const lat = (latitude * Math.PI) / 180;
   const lon = (longitude * Math.PI) / 180;
