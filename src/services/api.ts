@@ -35,6 +35,11 @@ function isCacheablePublicRead(path: string, method: string, token: string | nul
     || /^\/api\/reviews\/(?:listing|seller)\/[0-9a-f-]+(?:\?.*)?$/i.test(path);
 }
 
+function isPublicMarketplaceRead(path: string, method: string) {
+  return method === 'GET'
+    && (path.startsWith('/api/marketplace/feed?') || path.startsWith('/api/marketplace/trending?'));
+}
+
 function publicReadCacheTtl(path: string) {
   if (path.startsWith('/api/marketplace/trending?')) return 120_000;
   if (path.startsWith('/api/marketplace/feed?') || path === '/api/posts') return 30_000;
@@ -120,6 +125,10 @@ async function performRequest<T>(
       await new Promise<void>(resolve => window.setTimeout(resolve, GET_RETRY_DELAYS_MS[retryAttempt]));
       return performRequest<T>(path, options, token, hasRetried, retryAttempt + 1);
     }
+    if (token && isPublicMarketplaceRead(path, method)) {
+      console.warn('Authenticated marketplace read failed; retrying for public listings without account-specific details.', error);
+      return performRequest<T>(path, options, null, hasRetried);
+    }
     throw error;
   } finally {
     window.clearTimeout(timeout);
@@ -135,6 +144,12 @@ async function performRequest<T>(
       && retryAttempt < GET_RETRY_DELAYS_MS.length) {
       await new Promise<void>(resolve => window.setTimeout(resolve, GET_RETRY_DELAYS_MS[retryAttempt]));
       return performRequest<T>(path, options, token, hasRetried, retryAttempt + 1);
+    }
+    if ([502, 503, 504].includes(response.status)
+      && token
+      && isPublicMarketplaceRead(path, method)) {
+      console.warn('Authenticated marketplace read returned a temporary server error; retrying for public listings without account-specific details.', requestError);
+      return performRequest<T>(path, options, null, hasRetried);
     }
     throw requestError;
   }
