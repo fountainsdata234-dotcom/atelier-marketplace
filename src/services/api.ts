@@ -55,7 +55,9 @@ function invalidatePublicReadCache(path: string) {
 
 async function request<T>(path: string, options: RequestInit = {}, hasRetried = false) {
   const method = (options.method || 'GET').toUpperCase();
-  const isPublicRead = method === 'GET' && ['/api/posts', '/api/users', '/api/promo-plans'].includes(path);
+  const isPublicRead = method === 'GET'
+    && (['/api/posts', '/api/users', '/api/promo-plans'].includes(path)
+      || isPublicMarketplaceRead(path, method));
   const token = isPublicRead ? null : await getAuthTokenForRequest();
   if (path.startsWith('/api/messages') && !token) {
     throw new Error('Authentication is required for messages.');
@@ -282,10 +284,20 @@ export const api = {
       rankedPosition: number;
       reasonCode?: string;
     },
-  ) => request<{ recorded: boolean }>('/api/marketplace/events', {
-    method: 'POST',
-    body: JSON.stringify({ listingId, eventType, recommendation, sessionId: getMarketplaceSessionId() }),
-  }),
+  ) => {
+    const body = JSON.stringify({ listingId, eventType, recommendation, sessionId: getMarketplaceSessionId() });
+    if (eventType === 'IMPRESSION' && typeof navigator.sendBeacon === 'function') {
+      const queued = navigator.sendBeacon(
+        `${API_URL}/api/marketplace/events`,
+        new Blob([body], { type: 'application/json' }),
+      );
+      return Promise.resolve({ recorded: queued });
+    }
+    return request<{ recorded: boolean }>('/api/marketplace/events', {
+      method: 'POST',
+      body,
+    });
+  },
   recordMarketplaceSearchEvent: (
     searchText: string,
     eventType: 'impression' | 'click' | 'save' | 'enquiry',
