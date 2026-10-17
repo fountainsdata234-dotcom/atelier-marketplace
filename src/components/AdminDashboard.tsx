@@ -5,6 +5,7 @@ import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, Marke
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
+import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -61,7 +62,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (activeTab !== 'moderation') return;
     void api.getListingsForModeration()
       .then(setModerationListings)
-      .catch(error => setModerationStatus(error instanceof Error ? error.message : 'Moderation queue could not be loaded.'));
+      .catch(error => setModerationStatus(safeCustomerErrorMessage(error, "We couldn't load the moderation queue. Please try again.")));
   }, [activeTab]);
 
   useEffect(() => {
@@ -69,14 +70,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAbuseQueueStatus(null);
     void api.getMarketplaceAbuseFlags()
       .then(setAbuseFlags)
-      .catch(error => setAbuseQueueStatus(error instanceof Error ? error.message : 'Abuse signals could not be loaded.'));
+      .catch(error => setAbuseQueueStatus(safeCustomerErrorMessage(error, "We couldn't load the activity queue. Please try again.")));
   }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'reports') return;
     void api.getListingReports()
       .then(setListingReports)
-      .catch(error => setReportStatus(error instanceof Error ? error.message : 'Reports could not be loaded.'));
+      .catch(error => setReportStatus(safeCustomerErrorMessage(error, "We couldn't load reports. Please try again.")));
   }, [activeTab]);
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setReviewQueueStatus(null);
     void api.getReviewModerationQueue()
       .then(setReviewQueue)
-      .catch(error => setReviewQueueStatus(error instanceof Error ? error.message : 'Review queue could not be loaded.'));
+      .catch(error => setReviewQueueStatus(safeCustomerErrorMessage(error, "We couldn't load the review queue. Please try again.")));
   }, [activeTab]);
 
   const moderateListing = async (listing: ClothPost, decision: 'approve' | 'reject') => {
@@ -94,7 +95,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setModerationListings(current => current.filter(item => item.id !== listing.id));
       setModerationStatus(decision === 'approve' ? 'Listing approved and published.' : 'Listing rejected; the seller can edit and resubmit it.');
     } catch (error) {
-      setModerationStatus(error instanceof Error ? error.message : 'The moderation decision could not be saved.');
+      setModerationStatus(safeCustomerErrorMessage(error, "The moderation decision couldn't be saved. Please try again."));
     }
   };
 
@@ -106,7 +107,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setListingReports(current => current.filter(item => item.id !== report.id));
       setReportStatus(status === 'reviewed' ? 'Report marked as reviewed.' : 'Report dismissed.');
     } catch (error) {
-      setReportStatus(error instanceof Error ? error.message : 'The report could not be updated.');
+      setReportStatus(safeCustomerErrorMessage(error, "The report couldn't be updated. Please try again."));
     }
   };
 
@@ -119,7 +120,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setReviewQueue(current => current.filter(entry => entry.id !== item.id));
       setReviewQueueStatus('Review moderation decision saved.');
     } catch (error) {
-      setReviewQueueStatus(error instanceof Error ? error.message : 'The review decision could not be saved.');
+      setReviewQueueStatus(safeCustomerErrorMessage(error, "The review decision couldn't be saved. Please try again."));
     }
   };
 
@@ -135,7 +136,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setReviewQueue(current => current.filter(entry => entry.id !== item.id));
       setReviewQueueStatus('Review trust case resolved and recorded.');
     } catch (error) {
-      setReviewQueueStatus(error instanceof Error ? error.message : 'The review trust case could not be resolved.');
+      setReviewQueueStatus(safeCustomerErrorMessage(error, "The review report couldn't be resolved. Please try again."));
     }
   };
 
@@ -147,7 +148,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       await api.moderateMarketplaceReview(item.reviewType, item.reviewId, 'removed', reason.trim());
       setReviewQueueStatus('Reported review removed and moderation decision recorded. Resolve the report separately.');
     } catch (error) {
-      setReviewQueueStatus(error instanceof Error ? error.message : 'The reported review could not be removed.');
+      setReviewQueueStatus(safeCustomerErrorMessage(error, "The reported review couldn't be removed. Please try again."));
     }
   };
 
@@ -162,7 +163,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAbuseFlags(current => current.filter(item => item.id !== flag.id));
       setAbuseQueueStatus(status === 'investigating' ? 'Signal marked for investigation.' : 'Signal review decision recorded.');
     } catch (error) {
-      setAbuseQueueStatus(error instanceof Error ? error.message : 'The abuse signal could not be updated.');
+      setAbuseQueueStatus(safeCustomerErrorMessage(error, "The activity report couldn't be updated. Please try again."));
     }
   };
 
@@ -215,7 +216,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAdminStatus(`${added.email || newAdminEmail} is now an administrator.`);
       setNewAdminEmail('');
     } catch (error) {
-      setAdminStatus(error instanceof Error ? error.message : 'Administrator access could not be granted.');
+      setAdminStatus(safeCustomerErrorMessage(error, "Administrator access couldn't be granted. Please try again."));
     }
   };
 
@@ -229,9 +230,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       void api.removeAdmin(adminId)
         .then(() => {
           const res = storageService.deleteSecondaryAdmin(adminId, currentUser);
-          setAdminStatus(res.message);
+          setAdminStatus(safeCustomerErrorMessage(new Error(res.message), 'The administrator account was updated.'));
         })
-        .catch(error => setAdminStatus(error instanceof Error ? error.message : 'Administrator access could not be removed.'));
+        .catch(error => setAdminStatus(safeCustomerErrorMessage(error, "Administrator access couldn't be removed. Please try again.")));
     }
   };
 
@@ -245,7 +246,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       storageService.updateUser(admin.id, { isBlocked: blocked });
       setAdminStatus(`${admin.name || admin.email} has been ${blocked ? 'blocked' : 'unblocked'}.`);
     } catch (error) {
-      setAdminStatus(error instanceof Error ? error.message : 'Administrator access could not be updated.');
+      setAdminStatus(safeCustomerErrorMessage(error, "Administrator access couldn't be updated. Please try again."));
     }
   };
 
@@ -272,7 +273,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAdminStatus(`${tailor.name} has been ${updated ? 'blocked' : 'unblocked'}.`);
     } catch (error) {
       storageService.updateUser(tailor.id, { isBlocked: !updated });
-      setAdminStatus(error instanceof Error ? error.message : 'The account restriction could not be updated.');
+      setAdminStatus(safeCustomerErrorMessage(error, "The account restriction couldn't be updated. Please try again."));
     }
   };
 
@@ -284,7 +285,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setDeletedSellerIds(ids => [...ids, tailor.id]);
       setAdminStatus(`${tailor.shopName || tailor.name} and all linked account data were permanently deleted.`);
     } catch (error) {
-      setAdminStatus(error instanceof Error ? error.message : 'The seller account could not be deleted.');
+      setAdminStatus(safeCustomerErrorMessage(error, "The seller account couldn't be deleted. Please try again."));
     }
   };
 
@@ -299,11 +300,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (draft === null) return;
 
     const result = storageService.warnUser(tailor.id, draft);
-    setAdminStatus(result.message);
+    setAdminStatus(safeCustomerErrorMessage(new Error(result.message), 'The seller was notified.'));
     try {
       await api.updateUserProfile(tailor.id, { isWarned: true, warningNote: draft.trim().slice(0, 500) });
     } catch (error) {
-      setAdminStatus(error instanceof Error ? error.message : 'The warning could not be delivered to the server.');
+      setAdminStatus(safeCustomerErrorMessage(error, "The warning couldn't be sent. Please try again."));
     }
   };
 
@@ -327,7 +328,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         body: broadcastBody.trim(),
       });
     } catch (error) {
-      setBroadcastSentMsg(error instanceof Error ? error.message : 'Broadcast saved locally but could not reach recipient inboxes.');
+      setBroadcastSentMsg(safeCustomerErrorMessage(error, "The announcement couldn't be sent. Please try again."));
       return;
     }
 
@@ -353,7 +354,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       window.dispatchEvent(new CustomEvent('atelier_plans_updated'));
       setPlanSaveStatus('Promotion templates saved and updated live across all seller dashboards.');
     } catch (error) {
-      setPlanSaveStatus(error instanceof Error ? error.message : 'Plans saved on this device but could not sync to the server.');
+      setPlanSaveStatus(safeCustomerErrorMessage(error, "The promotion plans couldn't be saved. Please try again."));
     }
     setTimeout(() => setPlanSaveStatus(null), 4000);
   };
@@ -371,7 +372,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAdminStatus('Post deleted from the marketplace.');
     } catch (error) {
       storageService.savePosts(cachedPosts);
-      setAdminStatus(error instanceof Error ? error.message : 'The post could not be deleted.');
+      setAdminStatus(safeCustomerErrorMessage(error, "The listing couldn't be deleted. Please try again."));
     }
   };
 

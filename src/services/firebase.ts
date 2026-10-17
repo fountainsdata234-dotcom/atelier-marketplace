@@ -17,6 +17,7 @@ import { User, UserRole } from '../types';
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
 import { compressImageBlob } from '../utils/imageProgram';
+import { customerMessageForHttpError } from '../utils/customerMessages';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -186,12 +187,12 @@ export async function uploadUserImage(file: Blob, userId: string, folder: 'profi
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || 'Image upload failed.');
+    throw new Error(customerMessageForHttpError(response.status, body.error, '/api/upload', body.code));
   }
 
   const data = await response.json() as { url?: string };
   if (!data.url) {
-    throw new Error('Image upload did not return a valid URL.');
+    throw new Error("We couldn't finish uploading your image. Please try again.");
   }
 
   return data.url;

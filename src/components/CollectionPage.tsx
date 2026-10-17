@@ -4,6 +4,7 @@ import { SavedPhoto, SellerCollection, User } from '../types';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/firebase';
 import { api } from '../services/api';
+import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 interface CollectionUploadItem {
   id: string;
@@ -162,7 +163,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
         });
         setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'done', url: uploadedUrl } : entry));
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Upload failed.';
+        const message = safeCustomerErrorMessage(error, "We couldn't upload this image. Please try again.");
         setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'error', error: message } : entry));
         setCollectionStatus(message);
       }
@@ -202,7 +203,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
       setUploadQueue([]);
       setCollectionStatus('Collection published to your storefront.');
     } catch (error) {
-      setCollectionStatus(error instanceof Error ? error.message : 'The collection could not be published.');
+      setCollectionStatus(safeCustomerErrorMessage(error, "We couldn't publish this collection. Please try again."));
     }
   };
 

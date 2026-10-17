@@ -245,6 +245,7 @@ export interface MarketplaceReviewsPage {
   hasMore: boolean;
   nextCursor: string | null;
   ownReview: MarketplaceReview | null;
+  reviewSubmissionsEnabled?: boolean;
 }
 
 export interface MarketplaceReviewQueueItem {

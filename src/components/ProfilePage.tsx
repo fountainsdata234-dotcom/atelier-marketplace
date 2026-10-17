@@ -6,6 +6,7 @@ import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/firebase';
 import { getAuthUserId, signOutAuth } from '../services/auth';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
+import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 interface ProfilePageProps {
   currentUser: User;
@@ -23,6 +24,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   });
   const [status, setStatus] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
+  const [avatarImageFailed, setAvatarImageFailed] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
@@ -35,9 +37,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
     try {
       const uploadedUrl = await uploadUserImage(file, userId, 'profiles', `avatar-${Date.now()}.jpg`);
       setAvatarUrl(uploadedUrl);
+      setAvatarImageFailed(false);
       setStatus('Profile picture ready. Save your profile to publish it.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Profile picture upload failed.');
+      setStatus(safeCustomerErrorMessage(error, "We couldn't upload your profile picture. Please try again."));
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -87,7 +90,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
       await signOutAuth();
       onLogout();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Your account could not be deleted. Please try again.');
+      setStatus(safeCustomerErrorMessage(error, "Your account couldn't be deleted. Please try again."));
       setIsDeletingAccount(false);
     }
   };
@@ -100,7 +103,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
         <div className="flex flex-col gap-5 border-b border-neutral-800/60 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="relative">
-              {avatarUrl ? <img src={avatarUrl} alt="Profile" className="h-16 w-16 rounded-2xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-xl font-black text-neutral-950">{getProfileInitials(form.name || currentUser.name)}</div>}
+              {avatarUrl && !avatarImageFailed ? <img src={avatarUrl} alt="Profile" onError={() => setAvatarImageFailed(true)} className="h-16 w-16 rounded-2xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-xl font-black text-neutral-950">{getProfileInitials(form.name || currentUser.name)}</div>}
               <label className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-amber-300 bg-amber-400 text-neutral-950 shadow-lg" title="Change profile picture">
                 <Camera className="h-4 w-4" />
                 <input type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploadingAvatar} className="hidden" />

@@ -10,6 +10,7 @@ import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
 import { rankMarketplaceListings } from '../utils/marketplaceRanking';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
+import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { SearchableLocationField } from './SearchableLocationField';
 
 interface MarketplaceProps {
@@ -93,6 +94,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [feedError, setFeedError] = useState<string | null>(null);
   const [feedRetry, setFeedRetry] = useState(0);
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
+  const [downloadMessage, setDownloadMessage] = useState<{ listingId: string; message: string } | null>(null);
   const reportedAnalyticsFailures = useRef(new Set<string>());
   const analyticsRetryAfter = useRef(0);
   const impressionRequestInFlight = useRef(false);
@@ -163,7 +165,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           ? 'Your preferences are saved to your account and will shape For You recommendations.'
           : 'Preferences saved. Personalization remains off until you enable it.');
       } catch (error) {
-        setRecommendationNotice(`Preferences are saved on this device, but account sync failed: ${error instanceof Error ? error.message : 'try again later.'}`);
+        setRecommendationNotice(`Preferences are saved on this device, but account sync could not be completed: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
       }
     } else {
       setRecommendationNotice(next.enabled
@@ -185,7 +187,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       try {
         await api.saveRecommendationPreferences(next);
       } catch (error) {
-        setRecommendationNotice(`Your choice is saved on this device, but account sync failed: ${error instanceof Error ? error.message : 'try again later.'}`);
+        setRecommendationNotice(`Your choice is saved on this device, but account sync could not be completed: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
       }
     }
   };
@@ -206,7 +208,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       try {
         await api.resetRecommendationPreferences();
       } catch (error) {
-        setRecommendationNotice(`Local recommendation data was reset, but account data could not be cleared: ${error instanceof Error ? error.message : 'try again later.'}`);
+        setRecommendationNotice(`Your settings were reset on this device, but account settings could not be cleared: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
       }
     }
   };
@@ -388,7 +390,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         setFeedHasMore(page.hasMore);
         if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
       }).catch(error => {
-        if (!cancelled && generation === feedGeneration.current) setFeedError(error instanceof Error ? error.message : 'Marketplace listings could not be loaded.');
+        if (!cancelled && generation === feedGeneration.current) setFeedError(safeCustomerErrorMessage(error, "We couldn't load listings. Please try again."));
       }).finally(() => {
         if (!cancelled && generation === feedGeneration.current) setFeedLoading(false);
       });
@@ -438,7 +440,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       setFeedHasMore(page.hasMore);
       if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
     } catch (error) {
-      if (generation === feedGeneration.current) setFeedError(error instanceof Error ? error.message : 'More listings could not be loaded.');
+      if (generation === feedGeneration.current) setFeedError(safeCustomerErrorMessage(error, "We couldn't load more listings. Please try again."));
     } finally {
       if (generation === feedGeneration.current) setFeedLoadingMore(false);
     }
@@ -606,9 +608,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       if (!cancelled) setTrendingPage(page);
     }).catch(error => {
       if (!cancelled) {
-        const reason = error instanceof Error ? error.message : 'Trending listings could not be loaded.';
+        const reason = safeCustomerErrorMessage(error, "We couldn't load popular listings. Please try again.");
         setTrendingPage(current => current?.category === activeTrendCategory && !current.fallback ? current : null);
-        setTrendingError(`${reason} No listings are labelled as trending without verified trend data.`);
+        setTrendingError(reason);
       }
     }).finally(() => {
       if (!cancelled) setTrendingLoading(false);
@@ -719,10 +721,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       analyticsRetryAfter.current = Date.now() + 60_000;
       if (reportedAnalyticsFailures.current.has(eventType)) return;
       reportedAnalyticsFailures.current.add(eventType);
-      console.warn(
-        `Marketplace ${eventType.toLowerCase()} analytics are temporarily unavailable; listing discovery is unaffected.`,
-        error,
-      );
+      if (import.meta.env.DEV) console.warn(`Marketplace ${eventType.toLowerCase()} activity could not be recorded.`, error);
     }).finally(() => {
       if (isImpression) impressionRequestInFlight.current = false;
     });
@@ -740,7 +739,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       analyticsRetryAfter.current = Date.now() + 60_000;
       if (reportedAnalyticsFailures.current.has(`search-${eventType}`)) return;
       reportedAnalyticsFailures.current.add(`search-${eventType}`);
-      console.warn(`Marketplace search ${eventType} analytics are temporarily unavailable; search results are unaffected.`, error);
+      if (import.meta.env.DEV) console.warn(`Marketplace search ${eventType} activity could not be recorded.`, error);
     });
   }
 
@@ -784,7 +783,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
       .catch(error => {
-        setLocationStatus(error.message);
+        setLocationStatus(safeCustomerErrorMessage(error, "We couldn't update your saved listings. Please try again."));
         storageService.toggleLikePost(postId, currentUser.id);
         setFeedPosts(current => current.map(post => post.id === postId
           ? { ...post, likes: previousPost?.likes || [], likeCount: previousPost?.likeCount ?? previousPost?.likes.length ?? 0 }
@@ -840,7 +839,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
       .catch(error => {
-        setLocationStatus(error.message);
+        setLocationStatus(safeCustomerErrorMessage(error, "We couldn't update your saved listings. Please try again."));
         storageService.toggleSavePost(post.id, currentUser.id);
         if (result.isSaved) {
           const saved = storageService.getSavedPhotos().find(photo => photo.postId === post.id);
@@ -859,27 +858,25 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       });
   };
 
-  const downloadImage = async (imageUrl: string, title: string) => {
-    const filename = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_garment'}.jpg`;
+  const downloadImage = async (post: ClothPost) => {
+    setDownloadMessage(null);
     try {
-      const response = await fetch(imageUrl, { mode: 'cors' });
-      if (!response.ok) throw new Error('Image download failed');
-      const blobUrl = URL.createObjectURL(await response.blob());
+      const blob = await api.downloadMarketplaceImage(post.id);
+      const slug = post.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_garment';
+      const extension = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : blob.type === 'image/avif' ? 'avif' : 'jpg';
+      const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = filename;
+      link.download = `${slug}.${extension}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      const link = document.createElement('a');
-      link.href = imageUrl;
-      link.download = filename;
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (error) {
+      setDownloadMessage({
+        listingId: post.id,
+        message: safeCustomerErrorMessage(error, "We couldn't download this image. Please try again."),
+      });
     }
   };
 
@@ -986,7 +983,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   onClick={() => selectSearchSuggestion(suggestion)}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-xs hover:bg-amber-500/10"
                 >
-                  {suggestion.user?.avatarUrl ? <img src={suggestion.user.avatarUrl} alt={suggestion.user.name || 'Seller avatar'} className="h-9 w-9 rounded-lg object-cover" /> : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span> : suggestion.post ? <img src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg bg-neutral-950 object-contain" /> : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
+                  {suggestion.user?.avatarUrl && !failedAvatarUrls.has(suggestion.user.avatarUrl)
+                    ? <img src={suggestion.user.avatarUrl} alt={suggestion.user.name || 'Seller avatar'} onError={() => setFailedAvatarUrls(current => new Set(current).add(suggestion.user!.avatarUrl!))} className="h-9 w-9 rounded-lg object-cover" />
+                    : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span>
+                      : suggestion.post ? <img src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg bg-neutral-950 object-contain" />
+                        : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
                   <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.type === 'recent' ? 'Recent search · this session' : suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? (suggestion.post?.isPromoted ? 'Sponsored listing' : 'Marketplace listing') : 'Category'}</small></span>
                 </button>
               ))}
@@ -1250,7 +1251,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </section>
       )}
 
-      {(trendingPosts.length > 0 || trendingLoading || trendingError || Boolean(activeTrendingPage)) && (
+      {(trendingPosts.length > 0 || trendingLoading || trendingError) && (
         <section className={`overflow-hidden rounded-[1.75rem] border ${isDarkMode ? 'border-orange-400/20 bg-[#13110f]' : 'border-orange-300/50 bg-[#fffaf3] shadow-sm'}`}>
           <div className={`flex flex-col gap-4 border-b p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 ${isDarkMode ? 'border-white/10 bg-gradient-to-r from-orange-950/50 via-neutral-950 to-neutral-950' : 'border-orange-200 bg-gradient-to-r from-orange-100 via-white to-amber-50'}`}>
             <div className="flex items-center gap-3">
@@ -1261,15 +1262,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className={`text-base font-black uppercase tracking-[0.12em] sm:text-lg ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{activeTrendCategoryLabel}</h2>
                   <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-orange-400">
-                    {activeTrendCategory === 'HIGHLY_RATED' ? 'Review-ranked' : 'Activity-ranked'}
+                    {activeTrendCategory === 'HIGHLY_RATED' ? 'Customer reviews' : 'Popular picks'}
                   </span>
                 </div>
-                <p className={`mt-1 text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Ranked from current marketplace trend and rating signals. Listings appear here only when they meet the selected category&apos;s signal threshold.</p>
-                {activeTrendingPage?.computedAt && !Number.isNaN(Date.parse(activeTrendingPage.computedAt)) && (
-                  <p className={`mt-1 text-[10px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-500'}`}>
-                    Snapshot updated {new Date(activeTrendingPage.computedAt).toLocaleString()}
-                  </p>
-                )}
+                <p className={`mt-1 text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                  {activeTrendCategory === 'HIGHLY_RATED' ? 'Explore pieces customers have rated highly.' : 'A fresh look at pieces shoppers are exploring.'}
+                </p>
               </div>
             </div>
             <div role="group" aria-label="Trend category" className="flex flex-wrap gap-2">
@@ -1301,12 +1299,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               <button type="button" onClick={() => setTrendingRetry(value => value + 1)} className="font-semibold underline underline-offset-2">Retry</button>
             </div>
           )}
-          {activeTrendingPage?.fallback && (
-            <p className={`mx-4 mt-4 rounded-xl border px-4 py-3 text-xs sm:mx-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40 text-neutral-400' : 'border-neutral-200 bg-white text-neutral-600'}`}>
-              Verified trend signals are still building. New listings remain in the regular marketplace feed and won’t be labelled as trending.
-            </p>
-          )}
-          {trendingLoading && <p className="px-4 pt-4 text-xs text-neutral-400 sm:px-5" role="status">Refreshing qualified trend signals…</p>}
+          {trendingLoading && <p className="px-4 pt-4 text-xs text-neutral-400 sm:px-5" role="status">Loading popular pieces…</p>}
           {trendingPosts.length > 0 && (
             <div id="marketplace-trends-list" className="marketplace-masonry scroll-mt-24 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">
               {trendingPosts.map((post, index) => {
@@ -1379,7 +1372,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         <span className={`text-right ${isDarkMode ? 'text-neutral-200' : 'text-neutral-800'}`}>{price === null ? 'Price on enquiry' : `${currency} ${Number(price).toLocaleString()}`}</span>
                       </div>
                       <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2 text-[10px] text-neutral-500">
-                        <span className="inline-flex items-center gap-1"><TrendingUp className="h-3 w-3 text-orange-400" />{activeTrendCategory === 'HIGHLY_RATED' ? 'Review-ranked' : 'Activity-ranked'}</span>
+                        <span className="inline-flex items-center gap-1"><TrendingUp className="h-3 w-3 text-orange-400" />{activeTrendCategory === 'HIGHLY_RATED' ? 'Customer reviews' : 'Popular now'}</span>
                         {post.ratingCount > 0 && <span className="inline-flex items-center gap-1 text-amber-500"><Star className="h-3 w-3 fill-current" />{post.rating?.toFixed(1)} · {post.ratingCount}</span>}
                       </div>
                     </div>
@@ -1397,7 +1390,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           )}
           {!trendingLoading && !trendingError && trendingPosts.length === 0 && !activeTrendingPage?.fallback && (
             <p className={`m-4 rounded-xl border px-4 py-5 text-center text-xs sm:m-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40 text-neutral-400' : 'border-neutral-200 bg-white text-neutral-600'}`}>
-              No qualified trend signals for this category yet. Listings are available in the regular feed.
+              Popular items will appear here as more customers explore Fabrilux Atelier.
             </p>
           )}
           {(showAllTrending ? trendingPosts.length > 7 : trendingPosts.length >= 7) && (
@@ -1867,7 +1860,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                           setRecommendationNotice('This listing is hidden from your recommendations for 30 days.');
                         })
                         .catch(error => {
-                          setRecommendationNotice(`This device will avoid the listing, but account feedback could not be saved: ${error instanceof Error ? error.message : 'try again later.'}`);
+                          setRecommendationNotice(`This device will avoid the listing, but your account preference could not be saved: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
                         })
                         .finally(() => setPendingActions(current => {
                           const next = new Set(current);
@@ -1886,7 +1879,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   {/* Quick Preview trigger */}
                   <div className="absolute bottom-2.5 right-2.5 flex gap-1.5 opacity-0 transition-opacity group-hover/img:opacity-100">
                     <button
-                      onClick={() => void downloadImage(post.imageUrl, post.title)}
+                      type="button"
+                      onClick={() => void downloadImage(post)}
                       title="Download image to device"
                       className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-black/70 hover:bg-black text-amber-300 border border-amber-500/30 flex items-center gap-1"
                     >
@@ -1895,6 +1889,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     </button>
                   </div>
                 </div>
+                {downloadMessage?.listingId === post.id && (
+                  <p role="alert" className="border-t border-red-500/20 px-3 py-2 text-xs text-red-400">
+                    {downloadMessage.message}
+                  </p>
+                )}
 
                 {/* Post Body: Title, Description, Tags, Custom Pricing */}
                 <div className="flex-1 space-y-2 p-3">

@@ -5,6 +5,7 @@ import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { getRatingQuality } from '../utils/marketplaceRanking';
 import { MarketplaceReviews } from './MarketplaceReviews';
 import { api } from '../services/api';
+import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 const SELLER_ATELIER_IMAGE = 'https://res.cloudinary.com/auwy7fil/image/upload/f_auto,q_auto,w_1200/v1790415437/ChatGPT_Image_Sep_26_2026_10_19_39_AM.png';
 
@@ -37,6 +38,8 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
   const [isBlocked, setIsBlocked] = useState(false);
   const [isSavingBlock, setIsSavingBlock] = useState(false);
   const [blockError, setBlockError] = useState('');
+  const [avatarUnavailable, setAvatarUnavailable] = useState(false);
+  useEffect(() => setAvatarUnavailable(false), [seller.avatarUrl]);
   const collectionTags = useMemo(() => {
     const tagsByKey = new Map<string, string>();
     allSellerPosts.forEach(post => (Array.isArray(post.tags) ? post.tags : []).forEach(tag => {
@@ -90,7 +93,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
       const result = await api.setSellerBlocked(seller.id, !isBlocked);
       setIsBlocked(result.blocked);
     } catch (error) {
-      setBlockError(error instanceof Error ? error.message : 'The seller block setting could not be changed.');
+      setBlockError(safeCustomerErrorMessage(error, "This seller couldn't be blocked. Please try again."));
     } finally {
       setIsSavingBlock(false);
     }
@@ -118,7 +121,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
           <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full border border-amber-300/10 bg-amber-400/5" />
           <div className="relative flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-center gap-4">
-              {seller.avatarUrl ? <img src={seller.avatarUrl} alt={seller.name} loading="lazy" decoding="async" className="h-20 w-20 rounded-2xl object-cover ring-2 ring-amber-400/60" /> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-2xl font-black text-neutral-950">{getProfileInitials(seller.name)}</div>}
+              {seller.avatarUrl && !avatarUnavailable ? <img src={seller.avatarUrl} alt={seller.name} loading="lazy" decoding="async" onError={() => setAvatarUnavailable(true)} className="h-20 w-20 rounded-2xl object-cover ring-2 ring-amber-400/60" /> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-2xl font-black text-neutral-950">{getProfileInitials(seller.name)}</div>}
               <div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-300">Atelier storefront</p><h1 className="mt-1 text-3xl font-serif font-bold text-white sm:text-4xl">{seller.name}</h1><p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">{getRoleLabel(seller.role)}</p><p className="text-xs text-amber-100/70">{seller.handle}{seller.shopName ? ` · ${seller.shopName}` : ''}</p></div>
             </div>
             <div className="flex flex-wrap gap-2">

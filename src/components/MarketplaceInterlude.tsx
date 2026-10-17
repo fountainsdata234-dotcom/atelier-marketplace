@@ -12,6 +12,7 @@ interface MarketplaceInterludeProps {
 
 export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ posts, users, isDarkMode, onSelectSeller }) => {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [failedAvatarUrls, setFailedAvatarUrls] = useState<Set<string>>(() => new Set());
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
   const featuredSellers = useMemo(() => {
     const bySeller = new Map<string, { user: User; post: ClothPost }>();
@@ -37,6 +38,7 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
 
   if (featuredSellers.length === 0) return null;
   const active = featuredSellers[activeIndex];
+  const activeAvatarUrl = active.user.avatarUrl;
 
   return (
     <motion.section
@@ -75,7 +77,7 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
             <div className="min-w-0 flex-1 p-4 sm:p-5">
               <div className="flex items-start justify-between gap-2">
                 <button type="button" onClick={() => onSelectSeller(active.user)} aria-label={`Visit ${active.user.shopName || active.user.name}`} className="flex min-w-0 items-center gap-2 text-left">
-                  {active.user.avatarUrl ? <img src={active.user.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-amber-400/60" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400/15 text-xs font-bold text-amber-300">{active.user.name.slice(0, 2).toUpperCase()}</span>}
+                  {activeAvatarUrl && !failedAvatarUrls.has(activeAvatarUrl) ? <img src={activeAvatarUrl} alt="" onError={() => setFailedAvatarUrls(urls => new Set(urls).add(activeAvatarUrl))} className="h-9 w-9 rounded-full object-cover ring-1 ring-amber-400/60" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400/15 text-xs font-bold text-amber-300">{active.user.name.slice(0, 2).toUpperCase()}</span>}
                   <div className="min-w-0"><p className="truncate text-sm font-bold">{active.user.shopName || active.user.name}</p><p className="truncate text-[10px] capitalize text-amber-400">{active.user.role.replace('_', ' ')}</p></div>
                 </button>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">Recent work</span>

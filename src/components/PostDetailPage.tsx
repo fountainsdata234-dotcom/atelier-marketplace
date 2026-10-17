@@ -4,6 +4,7 @@ import { ClothPost, User } from '../types';
 import { getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
 import { MarketplaceReviews } from './MarketplaceReviews';
+import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 interface PostDetailPageProps {
   post: ClothPost | null;
@@ -39,7 +40,9 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
   const [reportReason, setReportReason] = useState('Misleading content');
   const [reportDetails, setReportDetails] = useState('');
   const [reportMessage, setReportMessage] = useState<string | null>(null);
+  const [sellerAvatarUnavailable, setSellerAvatarUnavailable] = useState(false);
   const seller = users.find(user => user.id === post?.authorId);
+  useEffect(() => setSellerAvatarUnavailable(false), [seller?.avatarUrl]);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
   const postTags = useMemo(() => new Set((post?.tags || []).map(tag => tag.trim().toLowerCase()).filter(Boolean)), [post?.tags]);
   const visiblePosts = useMemo(() => posts.filter(item =>
@@ -94,7 +97,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
       setIsReporting(false);
       setReportDetails('');
     } catch (error) {
-      setReportMessage(error instanceof Error ? error.message : 'Your report could not be submitted.');
+      setReportMessage(safeCustomerErrorMessage(error, "Your report couldn't be submitted. Please try again."));
     }
   };
 
@@ -161,7 +164,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
 
           {seller && <div className={`rounded-2xl border p-4 ${surface}`}>
             <button type="button" onClick={() => onSelectSeller(seller)} className="flex w-full items-center gap-3 text-left">
-              {seller.avatarUrl ? <img src={seller.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover" /> : <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/15 text-sm font-bold text-amber-500">{seller.name.slice(0, 2).toUpperCase()}</span>}
+              {seller.avatarUrl && !sellerAvatarUnavailable ? <img src={seller.avatarUrl} alt="" onError={() => setSellerAvatarUnavailable(true)} className="h-11 w-11 rounded-full object-cover" /> : <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/15 text-sm font-bold text-amber-500">{seller.name.slice(0, 2).toUpperCase()}</span>}
               <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{seller.shopName || seller.name}</strong><small className={`mt-0.5 block truncate text-[10px] ${muted}`}>{seller.handle} · {getRoleLabel(seller.role)}</small></span>
               <ArrowRight className="h-4 w-4 shrink-0 text-amber-500" />
             </button>

@@ -201,7 +201,7 @@ export const getAuthErrorMessage = (error: unknown) => {
     return 'Enter a valid email address, for example name@example.com.';
   }
   if (code === 'signup_disabled' || /signups? (are )?disabled/.test(normalizedMessage)) {
-    return 'New account creation is temporarily disabled. Please contact FABSATTIRE support.';
+    return 'New account creation is temporarily unavailable. Please try again later.';
   }
   if (/email not confirmed|email_not_confirmed/.test(`${code} ${normalizedMessage}`)) {
     return 'Confirm your email using the link we sent, then sign in again.';
@@ -221,9 +221,9 @@ export const getAuthErrorMessage = (error: unknown) => {
   };
   if (code && supabaseMessages[code]) return supabaseMessages[code];
   if (/unsupported provider|provider is not enabled/i.test(message)) {
-    return 'Google sign-in is not enabled in Supabase yet. Enable Google under Authentication > Providers and add your OAuth client credentials.';
+    return 'Google sign-in is temporarily unavailable. Sign in with your email and password or try again later.';
   }
   if (/password|credential/i.test(message) && message.length < 160) return message;
   if (/captcha/i.test(message)) return 'The sign-up security check could not be completed. Refresh the page and try again.';
-  return 'Authentication failed. Check your details and try again.';
+  return "We couldn't sign you in. Check your details and try again.";
 };

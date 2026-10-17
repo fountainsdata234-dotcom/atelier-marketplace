@@ -1,6 +1,7 @@
 import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences } from '../types';
 
 import { getAuthToken, isSupabaseAuthReady } from './auth';
+import { customerMessageForHttpError, customerMessageForNetworkError, safeCustomerErrorMessage } from '../utils/customerMessages';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 const PUBLIC_READ_CACHE_TTL_MS = 60_000;
@@ -58,15 +59,20 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
   const isPublicRead = method === 'GET'
     && (['/api/posts', '/api/users', '/api/promo-plans'].includes(path)
       || isPublicMarketplaceRead(path, method));
-  const token = isPublicRead ? null : await getAuthTokenForRequest();
+  let token: string | null;
+  try {
+    token = isPublicRead ? null : await getAuthTokenForRequest();
+  } catch (error) {
+    throw new Error(safeCustomerErrorMessage(error, 'Please sign in again to continue.'));
+  }
   if (path.startsWith('/api/messages') && !token) {
-    throw new Error('Authentication is required for messages.');
+    throw new Error('Please sign in to view your messages.');
   }
   if (path.startsWith('/api/notifications') && !token) {
-    throw new Error('Authentication is required for notifications.');
+    throw new Error('Please sign in to view your notifications.');
   }
   if (path === '/api/profile' && !token) {
-    throw new Error('Authentication is not ready.');
+    throw new Error('Please sign in again to continue.');
   }
   const cacheable = isCacheablePublicRead(path, method, token);
   if (cacheable) {
@@ -88,7 +94,7 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
       })
       .catch(error => {
         if (!cached) throw error;
-        console.warn('Public API read failed; showing the last successful response while the service recovers.', error);
+        if (import.meta.env.DEV) console.warn('Public marketplace data could not be refreshed.', error);
         return cached.value as T;
       })
       .finally(() => inFlightPublicReads.delete(path));
@@ -120,18 +126,15 @@ async function performRequest<T>(
       },
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      error = new Error('The server took too long to respond.');
-    }
     if (method === 'GET' && retryAttempt < GET_RETRY_DELAYS_MS.length && navigator.onLine) {
       await new Promise<void>(resolve => window.setTimeout(resolve, GET_RETRY_DELAYS_MS[retryAttempt]));
       return performRequest<T>(path, options, token, hasRetried, retryAttempt + 1);
     }
     if (token && isPublicMarketplaceRead(path, method)) {
-      console.warn('Authenticated marketplace read failed; retrying for public listings without account-specific details.', error);
+      if (import.meta.env.DEV) console.warn('Retrying public marketplace data without account-specific details.', error);
       return performRequest<T>(path, options, null, hasRetried);
     }
-    throw error;
+    throw new Error(customerMessageForNetworkError(error));
   } finally {
     window.clearTimeout(timeout);
   }
@@ -140,7 +143,7 @@ async function performRequest<T>(
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    const requestError = new Error(body.error || 'The server request failed.');
+    const requestError = new Error(customerMessageForHttpError(response.status, body.error, path, body.code));
     if ([502, 503, 504].includes(response.status)
       && method === 'GET'
       && retryAttempt < GET_RETRY_DELAYS_MS.length) {
@@ -150,7 +153,7 @@ async function performRequest<T>(
     if ([502, 503, 504].includes(response.status)
       && token
       && isPublicMarketplaceRead(path, method)) {
-      console.warn('Authenticated marketplace read returned a temporary server error; retrying for public listings without account-specific details.', requestError);
+      if (import.meta.env.DEV) console.warn('Retrying public marketplace data without account-specific details.', requestError);
       return performRequest<T>(path, options, null, hasRetried);
     }
     throw requestError;
@@ -181,6 +184,24 @@ export const api = {
       if (value !== undefined && value !== '') params.set(key, String(value));
     });
     return request<MarketplaceFeedPage>(`/api/marketplace/feed?${params.toString()}`);
+  },
+  downloadMarketplaceImage: async (listingId: string): Promise<Blob> => {
+    const path = `/api/marketplace/listings/${encodeURIComponent(listingId)}/image-download`;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}${path}`, { credentials: 'omit', signal: controller.signal });
+    } catch (error) {
+      throw new Error(safeCustomerErrorMessage(error, "We couldn't download this image. Please try again."));
+    } finally {
+      window.clearTimeout(timeout);
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(customerMessageForHttpError(response.status, body.error, path, body.code));
+    }
+    return response.blob();
   },
   getMarketplaceTrending: (query: MarketplaceTrendingQuery) => {
     const params = new URLSearchParams();
@@ -323,10 +344,10 @@ export const api = {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.error || 'Image upload failed.');
+      throw new Error(customerMessageForHttpError(response.status, body.error, '/api/upload', body.code));
     }
     const asset = await response.json() as ListingImageAsset;
-    if (!asset.url || !asset.thumbnailUrl) throw new Error('The image service did not return a complete image asset.');
+    if (!asset.url || !asset.thumbnailUrl) throw new Error("We couldn't finish uploading your image. Please try again.");
     return asset;
   },
   deletePost: (postId: string) => request<void>(`/api/posts/${postId}`, { method: 'DELETE' }),

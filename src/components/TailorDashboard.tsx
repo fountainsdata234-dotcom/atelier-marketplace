@@ -6,6 +6,7 @@ import { compressAndGenerateImageLink, ProcessedImageResult } from '../utils/ima
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
+import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 interface TailorDashboardProps {
   currentUser: User;
@@ -47,6 +48,8 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [fulfilment, setFulfilment] = useState<'ready_made' | 'made_to_order'>('ready_made');
   const [editingListingId, setEditingListingId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const currentAvatarUrl = currentUser.avatarUrl && failedAvatarUrl !== currentUser.avatarUrl ? currentUser.avatarUrl : null;
   const [sellerListings, setSellerListings] = useState<ClothPost[]>(() => posts.filter(post => post.authorId === currentUser.id));
   const [imageAssets, setImageAssets] = useState<ListingImageAsset[]>([]);
 
@@ -187,7 +190,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     } catch (err: any) {
       setPostStatus({
         type: 'error',
-        message: err.message || 'Failed to process image through compression program.'
+        message: safeCustomerErrorMessage(err, "We couldn't prepare this image. Please try another file.")
       });
     } finally {
       setIsProcessingImage(false);
@@ -288,7 +291,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       storageService.savePosts([normalizedPost, ...cachedPosts.filter(item => item.id !== createdPost.id)]);
       setSellerListings(current => [normalizedPost, ...current.filter(item => item.id !== normalizedPost.id)]);
     } catch (error) {
-      setPostStatus({ type: 'error', message: error instanceof Error ? error.message : 'Failed to publish post.' });
+      setPostStatus({ type: 'error', message: safeCustomerErrorMessage(error, "We couldn't publish this listing. Please try again.") });
       return;
     }
 
@@ -320,7 +323,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       setPostStatus({ type: 'success', message: 'Post removed from the marketplace.' });
     } catch (error) {
       if (cachedPosts.some(post => post.id === postId)) storageService.savePosts(cachedPosts);
-      setPostStatus({ type: 'error', message: error instanceof Error ? error.message : 'The post could not be deleted.' });
+      setPostStatus({ type: 'error', message: safeCustomerErrorMessage(error, "We couldn't delete this listing. Please try again.") });
     }
   };
 
@@ -370,7 +373,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
           : `Listing ${action === 'pause' ? 'paused' : 'archived'}.`;
       setPostStatus({ type: 'success', message });
     } catch (error) {
-      setPostStatus({ type: 'error', message: error instanceof Error ? error.message : 'The listing status could not be changed.' });
+      setPostStatus({ type: 'error', message: safeCustomerErrorMessage(error, "We couldn't update this listing. Please try again.") });
     }
   };
 
@@ -444,7 +447,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
           <div className="flex items-start gap-4">
             <div className="relative">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 border border-amber-300/60 flex items-center justify-center font-serif text-2xl font-bold text-neutral-950 overflow-hidden">
-                {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt={currentUser.name} className="h-full w-full object-cover" /> : getProfileInitials(currentUser.name)}
+                {currentAvatarUrl ? <img src={currentAvatarUrl} alt={currentUser.name} onError={() => setFailedAvatarUrl(currentAvatarUrl)} className="h-full w-full object-cover" /> : getProfileInitials(currentUser.name)}
               </div>
               {currentUser.isPromoted && (
                 <div

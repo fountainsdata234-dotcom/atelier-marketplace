@@ -422,13 +422,17 @@ function reviewRoute(handler: (req: AuthenticatedRequest, res: Response) => Prom
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
       const message = error instanceof Error ? error.message : 'Review request failed.';
       if (code === '42501') {
-        res.status(403).json({ error: message });
+        res.status(403).json({ error: "You don't have permission to perform this action.", code: 'FORBIDDEN' });
       } else if (code === '22023') {
-        res.status(400).json({ error: message });
+        const safeMessage = message === 'Review submission limit reached. Try again tomorrow.'
+          || message === 'The 14-day review edit window has ended'
+          ? message
+          : 'Please check your review details and try again.';
+        res.status(400).json({ error: safeMessage, code: 'INVALID_REVIEW' });
       } else if (code === '23505') {
-        res.status(409).json({ error: 'A matching review, report, or appeal already exists.' });
+        res.status(409).json({ error: 'A matching review, report, or appeal already exists.', code: 'ALREADY_EXISTS' });
       } else if (code === 'P0002') {
-        res.status(404).json({ error: message });
+        res.status(404).json({ error: 'This review or listing is no longer available.', code: 'NOT_FOUND' });
       } else {
         next(error);
       }
@@ -1504,6 +1508,107 @@ const SERVER_RECORDED_ENGAGEMENT_TYPES = new Set<MarketplaceEngagementEventType>
   'IMPRESSION', 'VIEW', 'SHARE', 'ENQUIRY', 'HIDE',
 ]);
 
+app.get('/api/marketplace/listings/:listingId/image-download', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  if (!isUuid(req.params.listingId)) {
+    res.status(400).json({ error: 'Choose a valid listing.', code: 'INVALID_LISTING' });
+    return;
+  }
+
+  try {
+    const listing = await getPost(req.params.listingId);
+    const author = listing?.author as Record<string, unknown> | undefined;
+    if (!listing || !['CLOTHING', 'FABRIC'].includes(String(listing.listing_type))
+      || listing.status !== 'published'
+      || listing.moderation_status !== 'approved'
+      || listing.deleted_at
+      || listing.is_blocked
+      || listing.availability === 'unavailable'
+      || listing.availability === 'sold_out'
+      || author?.is_blocked) {
+      res.status(404).json({ error: 'This listing is no longer available.', code: 'LISTING_NOT_FOUND' });
+      return;
+    }
+
+    const imageUrl = typeof listing.image_url === 'string' ? listing.image_url : '';
+    let source: URL;
+    try {
+      source = new URL(imageUrl);
+    } catch {
+      res.status(404).json({ error: 'This image is no longer available.', code: 'IMAGE_NOT_FOUND' });
+      return;
+    }
+    const supabaseHost = new URL(process.env.SUPABASE_URL!).hostname;
+    const trustedStorageUrl = source.protocol === 'https:'
+      && source.hostname === supabaseHost
+      && source.pathname.startsWith('/storage/v1/object/public/uploads/');
+    const trustedCloudinaryUrl = source.protocol === 'https:'
+      && source.hostname === 'res.cloudinary.com'
+      && /^\/[a-z0-9_-]+\/image\/upload\//i.test(source.pathname);
+    if ((!trustedStorageUrl && !trustedCloudinaryUrl) || source.username || source.password || source.port) {
+      res.status(404).json({ error: 'This image is no longer available.', code: 'IMAGE_NOT_FOUND' });
+      return;
+    }
+
+    const upstream = await fetch(source, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
+    if (!upstream.ok) {
+      res.status(upstream.status === 404 ? 404 : 503).json({
+        error: upstream.status === 404 ? 'This image is no longer available.' : "We couldn't download this image. Please try again.",
+        code: upstream.status === 404 ? 'IMAGE_NOT_FOUND' : 'IMAGE_DOWNLOAD_UNAVAILABLE',
+      });
+      return;
+    }
+    const contentType = upstream.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() || '';
+    const contentLength = Number(upstream.headers.get('content-length') || 0);
+    if (!/^image\/(?:jpeg|png|webp|avif|gif)$/.test(contentType)
+      || (contentLength > 20 * 1024 * 1024)) {
+      res.status(415).json({ error: 'This image cannot be downloaded. Please try another listing.', code: 'IMAGE_FORMAT_UNAVAILABLE' });
+      return;
+    }
+    const reader = upstream.body?.getReader();
+    if (!reader) {
+      res.status(503).json({ error: "We couldn't download this image. Please try again.", code: 'IMAGE_DOWNLOAD_UNAVAILABLE' });
+      return;
+    }
+    const imageChunks: Buffer[] = [];
+    let imageLength = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      imageLength += value.byteLength;
+      if (imageLength > 20 * 1024 * 1024) {
+        await reader.cancel();
+        res.status(413).json({ error: 'This image is too large to download.', code: 'IMAGE_TOO_LARGE' });
+        return;
+      }
+      imageChunks.push(Buffer.from(value));
+    }
+    const image = Buffer.concat(imageChunks, imageLength);
+    if (!image.length) {
+      res.status(413).json({ error: 'This image is too large to download.', code: 'IMAGE_TOO_LARGE' });
+      return;
+    }
+
+    const title = String(listing.title || 'atelier_piece')
+      .normalize('NFKD')
+      .replace(/[^a-zA-Z0-9_-]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 80) || 'atelier_piece';
+    const extension = contentType === 'image/png' ? 'png'
+      : contentType === 'image/webp' ? 'webp'
+        : contentType === 'image/avif' ? 'avif'
+          : contentType === 'image/gif' ? 'gif' : 'jpg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', image.length);
+    res.setHeader('Content-Disposition', `attachment; filename="${title}.${extension}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(image);
+  } catch (error) {
+    console.error('Marketplace image download failed.', error);
+    res.status(503).json({ error: "We couldn't download this image. Please try again.", code: 'IMAGE_DOWNLOAD_UNAVAILABLE' });
+  }
+});
+
 app.get('/api/marketplace/trending', optionalAuth, async (req: AuthenticatedRequest, res) => {
   const category = typeof req.query.category === 'string' ? req.query.category : 'TRENDING_NOW';
   const scopeType = typeof req.query.scopeType === 'string' ? req.query.scopeType : 'global';
@@ -1685,7 +1790,10 @@ app.post('/api/marketplace/events', optionalAuth, async (req: AuthenticatedReque
     res.status(outcome === 'recorded' ? 201 : 200).json({ recorded: outcome === 'recorded' });
   } catch (error) {
     console.error('Unable to record marketplace activity.', error);
-    res.status(503).json({ error: 'Marketplace activity could not be recorded.' });
+    res.status(503).json({
+      error: 'Marketplace activity is temporarily unavailable.',
+      code: 'MARKETPLACE_ACTIVITY_UNAVAILABLE',
+    });
   }
 });
 
@@ -2333,6 +2441,7 @@ app.post('/api/posts/:postId/report', requireAuth, requireActiveAccount, async (
   }
 });
 
+const REVIEW_SUBMISSIONS_ENABLED = false;
 const REVIEW_TYPES = new Set(['listing', 'seller']);
 const REVIEW_CATEGORY_KEYS = new Set(['quality', 'communication', 'accuracy', 'timeliness', 'value']);
 const REVIEW_REPORT_REASONS = new Set(['harassment', 'personal_information', 'spam', 'conflict_of_interest', 'policy_violation', 'other']);
@@ -2405,10 +2514,17 @@ app.get('/api/reviews/:type/:targetId', optionalAuth, reviewRoute(async (req, re
     viewerId: req.authUser?.uid,
     cursor,
   });
-  res.json(snakeToCamel(result));
+  res.json({ ...snakeToCamel(result), reviewSubmissionsEnabled: REVIEW_SUBMISSIONS_ENABLED });
 }));
 
 app.post('/api/reviews/:type/:targetId', requireAuth, requireActiveAccount, reviewRoute(async (req, res) => {
+  if (!REVIEW_SUBMISSIONS_ENABLED) {
+    res.status(503).json({
+      error: 'Review submissions are temporarily unavailable. Please check back later.',
+      code: 'REVIEW_SUBMISSIONS_UNAVAILABLE',
+    });
+    return;
+  }
   const type = req.params.type;
   const rating = Number(req.body?.rating);
   if (!REVIEW_TYPES.has(type) || !isUuid(req.params.targetId) || !Number.isInteger(rating) || rating < 1 || rating > 5) {
@@ -3132,11 +3248,11 @@ app.delete('/api/admin/sellers/:uid', requireAuth, requireAdmin, async (req: Aut
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-    res.status(413).json({ error: 'Images must be 8 MB or smaller.' });
+    res.status(413).json({ error: 'Images must be 8 MB or smaller.', code: 'IMAGE_TOO_LARGE' });
     return;
   }
   console.error('API error', error);
-  res.status(500).json({ error: 'Internal server error.' });
+  res.status(500).json({ error: 'Something went wrong. Please try again shortly.', code: 'INTERNAL_ERROR' });
 });
 
 app.listen(port, () => {

@@ -33,6 +33,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const isSeller = currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const avatarUrl = currentUser?.avatarUrl && failedAvatarUrl !== currentUser.avatarUrl ? currentUser.avatarUrl : null;
   const navigate = (view: string) => {
     onNavigate(view);
     setMobileMenuOpen(false);
@@ -205,8 +207,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
                 className="flex items-center gap-2 py-1 px-2.5 rounded-xl border border-neutral-700/60 bg-neutral-800/40 hover:border-amber-500/40 cursor-pointer transition-colors"
               >
-                {currentUser.avatarUrl ? (
-                  <img src={currentUser.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover border border-amber-500/60" />
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" onError={() => setFailedAvatarUrl(avatarUrl)} className="w-7 h-7 rounded-full object-cover border border-amber-500/60" />
                 ) : (
                   <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center font-bold text-xs">
                     {currentUser.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}
@@ -257,7 +259,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}>
             {currentUser && (
               <button type="button" onClick={() => navigate('profile')} className="mb-2 flex w-full items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-left">
-                {currentUser.avatarUrl ? <img src={currentUser.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-xs font-bold text-amber-300">{currentUser.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span>}
+                {avatarUrl ? <img src={avatarUrl} alt="" onError={() => setFailedAvatarUrl(avatarUrl)} className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-xs font-bold text-amber-300">{currentUser.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span>}
                 <span className="min-w-0"><strong className="block truncate text-sm">{currentUser.name}</strong><small className="block text-[10px] capitalize text-amber-400">{currentUser.isSuperAdmin ? 'Super Admin' : currentUser.role.replace('_', ' ')}</small></span>
               </button>
             )}

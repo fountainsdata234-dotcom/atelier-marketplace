@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Flag, Star, ThumbsUp } from 'lucide-react';
 import type { MarketplaceReview, MarketplaceReviewType, MarketplaceReviewsPage, User } from '../types';
 import { api } from '../services/api';
+import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 interface MarketplaceReviewsProps {
   type: MarketplaceReviewType;
@@ -59,7 +60,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
       setRating(result.ownReview?.rating || 0);
       setReviewText(result.ownReview?.reviewText || '');
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Reviews could not be loaded.');
+      setError(safeCustomerErrorMessage(loadError, 'Reviews could not be loaded. Please try again.'));
     } finally {
       if (append) setLoadingMore(false);
       else setLoading(false);
@@ -96,7 +97,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
       setMessage('Your feedback was submitted for moderation. It will appear publicly after approval.');
       await load();
     } catch (submitError) {
-      setMessage(submitError instanceof Error ? submitError.message : 'Your review could not be submitted.');
+      setMessage(safeCustomerErrorMessage(submitError, "Your review couldn't be submitted. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -111,7 +112,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
       await api.toggleReviewHelpful(type, review.id);
       await load();
     } catch (voteError) {
-      setMessage(voteError instanceof Error ? voteError.message : 'The helpful vote could not be saved.');
+      setMessage(safeCustomerErrorMessage(voteError, "Your vote couldn't be saved. Please try again."));
     }
   };
 
@@ -128,7 +129,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
       setReportingReviewId(null);
       setReportDetails('');
     } catch (reportError) {
-      setMessage(reportError instanceof Error ? reportError.message : 'The review report could not be submitted.');
+      setMessage(safeCustomerErrorMessage(reportError, "Your report couldn't be submitted. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -142,7 +143,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
       await load();
       setMessage('Your response has been posted.');
     } catch (responseError) {
-      setMessage(responseError instanceof Error ? responseError.message : 'Your response could not be posted.');
+      setMessage(safeCustomerErrorMessage(responseError, "Your response couldn't be posted. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -157,7 +158,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
       await api.appealMarketplaceReview(type, ownReview.id, reason.trim());
       setMessage('Your appeal was submitted for independent review.');
     } catch (appealError) {
-      setMessage(appealError instanceof Error ? appealError.message : 'Your appeal could not be submitted.');
+      setMessage(safeCustomerErrorMessage(appealError, "Your appeal couldn't be submitted. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -189,7 +190,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
         })}
       </div> : !loading && <p className={`mt-4 text-sm ${muted}`}>No reviews yet.</p>}
 
-      {currentUser && editable && <form onSubmit={submitReview} className="mt-5 space-y-3 border-t border-neutral-700/30 pt-5">
+      {page?.reviewSubmissionsEnabled && currentUser && editable && <form onSubmit={submitReview} className="mt-5 space-y-3 border-t border-neutral-700/30 pt-5">
         <h3 className="text-sm font-semibold">{ownReview ? 'Edit your feedback' : 'Share your firsthand experience'}</h3>
         <div role="group" aria-label="Rating from 1 to 5 stars" className="flex gap-1">
           {[1, 2, 3, 4, 5].map(stars => <button key={stars} type="button" aria-label={`${stars} star${stars === 1 ? '' : 's'}`} aria-pressed={rating === stars} onClick={() => setRating(stars)} className="rounded p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
@@ -205,7 +206,9 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
         </label>
         <button type="submit" disabled={busy || !rating || !attested} className="rounded-lg bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Submitting…' : ownReview ? 'Resubmit for moderation' : 'Submit review'}</button>
       </form>}
-      {!currentUser && <button type="button" onClick={onOpenAuth} className="mt-5 rounded-lg bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950">Sign in to leave firsthand feedback</button>}
+      {!loading && page && !page.reviewSubmissionsEnabled
+        ? <p role="status" className={`mt-5 border-t border-neutral-700/30 pt-5 text-sm ${muted}`}>Review submissions are temporarily unavailable. They will return in a future update.</p>
+        : page?.reviewSubmissionsEnabled && !currentUser && <button type="button" onClick={onOpenAuth} className="mt-5 rounded-lg bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950">Sign in to leave firsthand feedback</button>}
       {ownReview && !editable && <p className={`mt-4 text-xs ${muted}`}>Your review is outside the 14-day editing window.</p>}
       {ownReview?.moderationStatus === 'pending' && <p className="mt-3 text-xs text-amber-500">Your review is awaiting moderation and is not public yet.</p>}
       {ownReview && ['rejected', 'removed'].includes(ownReview.moderationStatus) && <div className="mt-3">
