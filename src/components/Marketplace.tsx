@@ -1,15 +1,16 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, MapPin, Filter, Star, Heart, Bookmark, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ChevronLeft, ChevronRight, TrendingUp, Flame, Trophy, Zap, EyeOff } from 'lucide-react';
+import { Search, MapPin, Filter, Star, Heart, Bookmark, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ChevronRight, TrendingUp, EyeOff, Flame } from 'lucide-react';
 import { ClothPost, CountryGeo, DiscoveryEvent, MarketplaceFeedView, MarketplaceSort, MarketplaceTrendCategory, MarketplaceTrendingPage, RecommendationEventType, RecommendationPreferences, User, UserLocation } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
-import { getTopTailors, rankMarketplaceListings } from '../utils/marketplaceRanking';
+import { rankMarketplaceListings } from '../utils/marketplaceRanking';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
+import { SearchableLocationField } from './SearchableLocationField';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -263,17 +264,17 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [trendingError, setTrendingError] = useState<string | null>(null);
   const seenPostIdsRef = useRef(new Set<string>());
   const seenImpressionIdsRef = useRef(new Set<string>());
-  const trendScrollRef = useRef<HTMLDivElement | null>(null);
   const marketplaceRootRef = useRef<HTMLDivElement | null>(null);
   const locationDataRequestRef = useRef<Promise<CountryGeo[]> | null>(null);
   const [trendingRetry, setTrendingRetry] = useState(0);
+  const activeTrendingPage = trendingPage?.category === activeTrendCategory ? trendingPage : null;
 
   const trendScores = useMemo(() => new Map(
-    (trendingPage?.items || []).map(post => [post.id, {
+    (activeTrendingPage && !activeTrendingPage.fallback ? activeTrendingPage.items : []).map(post => [post.id, {
       score: post.trendScore || 0,
       confidence: post.trendConfidence || 0,
     }]),
-  ), [trendingPage]);
+  ), [activeTrendingPage]);
   const sourcePosts = useMemo(() => {
     if (activeFeedView !== 'for-you' || sortOrder !== 'relevance') return feedPosts;
     return rankMarketplaceListings(feedPosts, users, recommendationEvents, recommendationPreferences, {
@@ -323,16 +324,27 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [filterCountry, setFilterCountry] = useState<string>('all');
   const [filterState, setFilterState] = useState<string>('all');
   const [filterCity, setFilterCity] = useState<string>('all');
+  const [countrySearch, setCountrySearch] = useState('');
+  const [stateSearch, setStateSearch] = useState('');
+  const [citySearch, setCitySearch] = useState('');
   const [worldCountries, setWorldCountries] = useState<CountryGeo[]>([]);
   const [showLocationFilters, setShowLocationFilters] = useState(false);
   const [isLoadingLocationFilters, setIsLoadingLocationFilters] = useState(false);
   const [nearMeActive, setNearMeActive] = useState<boolean>(false);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
-  const [activeCarouselIndex, setActiveCarouselIndex] = useState<number>(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
-  const [focusIndex, setFocusIndex] = useState(0);
+  const selectedFilterCountry = worldCountries.find(country => country.name === filterCountry || country.code === filterCountry);
+  const selectedFilterState = selectedFilterCountry?.states.find(state => state.name === filterState || state.code === filterState);
+  const countryFilterOptions = worldCountries.filter(country => !countrySearch.trim()
+    || country.name.toLowerCase().includes(countrySearch.trim().toLowerCase())
+    || country.code.toLowerCase().includes(countrySearch.trim().toLowerCase())).slice(0, 100);
+  const stateFilterOptions = (selectedFilterCountry?.states || []).filter(state => !stateSearch.trim()
+    || state.name.toLowerCase().includes(stateSearch.trim().toLowerCase())
+    || state.code.toLowerCase().includes(stateSearch.trim().toLowerCase())).slice(0, 100);
+  const cityFilterOptions = (selectedFilterState?.cities || []).filter(city => !citySearch.trim()
+    || city.toLowerCase().includes(citySearch.trim().toLowerCase())).slice(0, 100);
 
   useEffect(() => {
     if (!hasLoadedServerFeed.current && posts.length > 0) setFeedPosts(posts.slice(0, 16));
@@ -480,74 +492,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     || Boolean(recommendationPreferences.country)
     || Boolean(recommendationPreferences.state));
 
-  const carouselPosts = useMemo(() => {
-    return rankMarketplaceListings(tailorPosts, users, recommendationEvents, recommendationPreferences, { trendScores })
-      .slice(0, 8);
-  }, [tailorPosts, users, recommendationEvents, recommendationPreferences, trendScores, recommendationRevision]);
-
   const trendingPosts = useMemo(
-    () => (trendingPage?.items || []).slice(0, showAllTrending ? 12 : 7),
-    [trendingPage, showAllTrending],
+    () => (activeTrendingPage && !activeTrendingPage.fallback ? activeTrendingPage.items : []).slice(0, showAllTrending ? 48 : 7),
+    [activeTrendingPage, showAllTrending],
   );
   const activeTrendCategoryLabel = TREND_CATEGORY_LABELS[activeTrendCategory];
-
-  const lastWeekHits = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return [...tailorPosts]
-      .filter(post => !userById.get(post.authorId)?.isBlocked)
-      .filter(post => Number.isFinite(Date.parse(post.createdAt)) && Date.parse(post.createdAt) >= weekAgo)
-      .sort((a, b) => (getLikeCount(b) + getSaveCount(b)) - (getLikeCount(a) + getSaveCount(a)))
-      .slice(0, 3);
-  }, [tailorPosts, userById]);
-
-  const topTailors = useMemo(() => {
-    return getTopTailors(tailorPosts, users).slice(0, 3);
-  }, [users, tailorPosts]);
-
-  const smartMarketplaceHighlights = useMemo(() => [
-    {
-      title: (trendingPage?.fallback ? 'NEW LISTINGS' : activeTrendCategoryLabel).toUpperCase(),
-      icon: Flame,
-      accent: 'text-orange-300 border-orange-500/25 bg-orange-500/10',
-      items: trendingPosts.slice(0, 3).map(post => ({
-        id: post.id,
-        listingId: post.id,
-        sellerId: post.authorId,
-        title: post.title,
-        subtitle: trendingPage?.fallback ? `${post.authorName} · New listing` : `${post.authorName} · Recent customer interest`,
-        imageUrl: post.imageUrl,
-        isPromoted: post.isPromoted,
-      })),
-    },
-    {
-      title: 'LAST WEEK HIT',
-      icon: Zap,
-      accent: 'text-sky-300 border-sky-500/25 bg-sky-500/10',
-      items: lastWeekHits.map(post => ({
-        id: post.id,
-        listingId: post.id,
-        sellerId: post.authorId,
-        title: post.title,
-        subtitle: `${post.authorName} · ${(post.tags && post.tags[0]) || 'new release'}`,
-        imageUrl: post.imageUrl,
-        isPromoted: post.isPromoted,
-      })),
-    },
-    {
-      title: 'ARTISAN DISCOVERY',
-      icon: Trophy,
-      accent: 'text-violet-300 border-violet-500/25 bg-violet-500/10',
-      items: topTailors.map(seller => ({
-        id: seller.id,
-        listingId: undefined,
-        sellerId: undefined,
-        title: seller.shopName || seller.name,
-        subtitle: `${seller.role === 'fabric_seller' ? 'Fabric seller' : 'Tailor'} · ${tailorPosts.filter(post => post.authorId === seller.id).length} portfolio pieces`,
-        imageUrl: tailorPosts.find(post => post.authorId === seller.id && post.imageUrl?.trim())?.imageUrl || '',
-        isPromoted: seller.isPromoted,
-      })),
-    },
-  ], [trendingPosts, lastWeekHits, topTailors, tailorPosts, activeTrendCategoryLabel, trendingPage?.fallback]);
 
   const rememberSearch = (value: string) => {
     const query = value.trim().replace(/\s+/g, ' ').slice(0, 80);
@@ -632,70 +581,30 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   };
 
   useEffect(() => {
-    if (carouselPosts.length < 2) return;
-    const timer = window.setInterval(() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length), 4500);
-    return () => window.clearInterval(timer);
-  }, [carouselPosts.length]);
-
-  useEffect(() => {
     let cancelled = false;
     setTrendingLoading(true);
     setTrendingError(null);
     api.getMarketplaceTrending({
       category: activeTrendCategory,
-      limit: showAllTrending ? 12 : 7,
+      limit: showAllTrending ? 48 : 7,
     }).then(page => {
       if (!cancelled) setTrendingPage(page);
     }).catch(error => {
       if (!cancelled) {
         const reason = error instanceof Error ? error.message : 'Trending listings could not be loaded.';
-        if (posts.length) {
-          setTrendingPage(current => current?.category === activeTrendCategory && !current.fallback
-            ? current
-            : {
-              items: posts.slice(0, showAllTrending ? 12 : 7),
-              category: activeTrendCategory,
-              scopeType: 'global',
-              scopeValue: 'global',
-              fallback: true,
-              fallbackMessage: 'Trending is temporarily unavailable. Showing recent eligible listings instead.',
-              computedAt: null,
-            });
-        }
-        setTrendingError(`${reason} Previously loaded listings remain visible when available.`);
+        setTrendingPage(current => current?.category === activeTrendCategory && !current.fallback ? current : null);
+        setTrendingError(`${reason} No listings are labelled as trending without verified trend data.`);
       }
     }).finally(() => {
       if (!cancelled) setTrendingLoading(false);
     });
     return () => { cancelled = true; };
-  }, [activeTrendCategory, showAllTrending, trendingRetry, posts]);
+  }, [activeTrendCategory, showAllTrending, trendingRetry]);
 
   useEffect(() => {
-    const node = trendScrollRef.current;
-    if (!node || trendingPosts.length === 0) return;
-
-    const handleScroll = () => {
-      const center = node.scrollLeft + node.clientWidth / 2;
-      let nearestIndex = 0;
-      let lowestDistance = Number.POSITIVE_INFINITY;
-
-      Array.from(node.children).forEach((child, index) => {
-        const element = child as HTMLElement;
-        const childCenter = element.offsetLeft + element.offsetWidth / 2;
-        const distance = Math.abs(childCenter - center);
-        if (distance < lowestDistance) {
-          lowestDistance = distance;
-          nearestIndex = index;
-        }
-      });
-
-      setFocusIndex(nearestIndex);
-    };
-
-    handleScroll();
-    node.addEventListener('scroll', handleScroll, { passive: true });
-    return () => node.removeEventListener('scroll', handleScroll);
-  }, [trendingPosts]);
+    if (!showAllTrending || trendingLoading || trendingError) return;
+    document.getElementById('marketplace-trends-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [showAllTrending, trendingLoading, trendingError, activeTrendingPage]);
 
   useEffect(() => {
     const root = marketplaceRootRef.current;
@@ -749,7 +658,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       observer.disconnect();
       timers.forEach(timer => window.clearTimeout(timer));
     };
-  }, [visiblePosts, currentUser?.id, trendingPosts, activeCarouselIndex, smartMarketplaceHighlights, recommendationScope, searchQuery, selectedCategory]);
+  }, [visiblePosts, currentUser?.id, trendingPosts, recommendationScope, searchQuery, selectedCategory]);
 
   // Request browser geolocation for Near Me proximity filtering
   const handleEnableLocation = () => {
@@ -1263,218 +1172,165 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </form>
       </details>}
 
-      {/* Randomized picture carousel with promoted posts weighted more often */}
-      {carouselPosts.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-400/15 text-neutral-950 font-bold text-xs ring-1 ring-amber-500/30">
-                👘
+      {(trendingPosts.length > 0 || trendingLoading || trendingError || Boolean(activeTrendingPage)) && (
+        <section className={`overflow-hidden rounded-[1.75rem] border ${isDarkMode ? 'border-orange-400/20 bg-[#13110f]' : 'border-orange-300/50 bg-[#fffaf3] shadow-sm'}`}>
+          <div className={`flex flex-col gap-4 border-b p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 ${isDarkMode ? 'border-white/10 bg-gradient-to-r from-orange-950/50 via-neutral-950 to-neutral-950' : 'border-orange-200 bg-gradient-to-r from-orange-100 via-white to-amber-50'}`}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-orange-400/30 bg-gradient-to-br from-orange-500/20 to-amber-400/10">
+                <Flame aria-hidden="true" className="trending-flame h-6 w-6 text-orange-400" />
               </div>
-              <h2 className="text-sm font-semibold tracking-wide uppercase text-amber-400 font-mono">
-                Curated atelier picks
-              </h2>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className={`text-base font-black uppercase tracking-[0.12em] sm:text-lg ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{activeTrendCategoryLabel}</h2>
+                  <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-orange-400">
+                    {activeTrendCategory === 'HIGHLY_RATED' ? 'Review-ranked' : 'Activity-ranked'}
+                  </span>
+                </div>
+                <p className={`mt-1 text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Ranked from current marketplace trend and rating signals. Listings appear here only when they meet the selected category&apos;s signal threshold.</p>
+                {activeTrendingPage?.computedAt && !Number.isNaN(Date.parse(activeTrendingPage.computedAt)) && (
+                  <p className={`mt-1 text-[10px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-500'}`}>
+                    Snapshot updated {new Date(activeTrendingPage.computedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
             </div>
-            <span className="text-[11px] text-neutral-400">Selected work from real makers</span>
-          </div>
-
-          <div className="relative overflow-hidden rounded-[2rem] border border-amber-500/30 bg-neutral-950 shadow-[0_30px_80px_rgba(0,0,0,0.4)]">
-            {(() => {
-              const post = carouselPosts[activeCarouselIndex % carouselPosts.length];
-              return (
-                <motion.div
-                  key={post.id}
-                  initial={{ opacity: 0.5, scale: 1.02 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.45 }}
-                  className="relative aspect-[10/13] min-h-[320px] bg-neutral-950 sm:aspect-[16/7] sm:min-h-[320px]"
-                >
-                  <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 h-full w-full cursor-pointer">
-                    <img src={getPostImageSource(post)} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="h-full w-full object-contain brightness-110 saturate-110" loading="eager" onError={() => handlePostImageError(post, getPostImageSource(post))} />
-                  </button>
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.12),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.02)_25%,rgba(0,0,0,0.16)_55%,rgba(0,0,0,0.64)_100%)] sm:bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.14),transparent_30%),linear-gradient(90deg,rgba(0,0,0,0.72),rgba(0,0,0,0.3)_55%,rgba(0,0,0,0.04))]" />
-
-                  <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-6">
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                      {post.isPromoted && (
-                        <span className="rounded-full border border-amber-300/70 bg-amber-400/90 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.18em] text-neutral-950 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.22em]">
-                          Promoted
-                        </span>
-                      )}
-                      <span className="rounded-full border border-white/20 bg-black/35 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.16em] text-amber-100 backdrop-blur-sm sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.2em]">
-                        {post.listingType === 'FABRIC' ? 'Fabric' : post.listingType === 'TAILOR_PORTFOLIO' ? 'Tailor portfolio' : 'Clothing'}
-                      </span>
-                      {post.isPromoted && <span className="rounded-full border border-amber-300/40 bg-amber-500/20 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-amber-100 backdrop-blur-sm">Sponsored</span>}
-                    </div>
-
-                    <button type="button" onClick={() => {
-                      const author = userById.get(post.authorId);
-                      if (author) onSelectSeller(author);
-                    }} aria-label={`View ${post.authorName}'s atelier`} className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/35 px-2 py-1 text-left backdrop-blur-md transition hover:border-amber-300/70">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-neutral-950 sm:h-7 sm:w-7 sm:text-[10px]">
-                        {post.authorName.slice(0, 2).toUpperCase()}
-                      </span>
-                      <span className="text-[10px] font-semibold text-white sm:text-xs">{post.authorName}</span>
-                    </button>
-                  </div>
-
-                  <div className="absolute inset-x-0 bottom-0 p-3 sm:p-6 lg:p-8">
-                    <div className="max-w-3xl rounded-[1.2rem] border border-white/10 bg-black/25 p-3 backdrop-blur-md sm:rounded-[1.5rem] sm:p-5">
-                      <div className="flex flex-wrap items-center gap-1.5 text-[9px] uppercase tracking-[0.18em] text-amber-300 font-semibold sm:gap-2 sm:text-[10px] sm:tracking-[0.22em]">
-                        <span>{formatLocation(post.authorLocation)}</span>
-                        <span className="text-neutral-400">•</span>
-                        <span>{post.pricing.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable price'}</span>
-                      </div>
-
-                      <h2 className="mt-2 text-xl font-serif font-extrabold leading-tight text-white sm:text-2xl lg:text-4xl">
-                        {post.title}
-                      </h2>
-
-                      <p className="mt-2 max-w-2xl text-xs text-neutral-200 sm:text-sm lg:text-base">
-                        {post.description}
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
-                        {post.tags.slice(0, 4).map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[8px] font-medium uppercase tracking-[0.14em] text-amber-200 sm:px-2.5 sm:py-1 sm:text-[10px] sm:tracking-[0.16em]"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="mt-4 flex flex-col gap-2 sm:mt-5 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-neutral-200 sm:gap-2 sm:text-[11px]">
-                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
-                            <span className="text-neutral-400">Likes</span> {getLikeCount(post)}
-                          </span>
-                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
-                            <span className="text-neutral-400">Saves</span> {getSaveCount(post)}
-                          </span>
-                          <span className="rounded-lg border border-neutral-700 bg-neutral-900/70 px-2 py-1 sm:px-2.5 sm:py-1.5">
-                            <span className="text-neutral-400">Rating</span>{' '}
-                            {post.ratingCount
-                              ? `${(post.rating || 0).toFixed(1)} · ${post.ratingCount} review${post.ratingCount === 1 ? '' : 's'}`
-                              : 'No reviews yet'}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-end">
-                          {getWhatsAppUrl(post) ? <button type="button" onClick={() => openWhatsApp(post)} className="rounded-xl bg-emerald-600 px-3 py-2 text-[10px] font-bold text-white transition hover:bg-emerald-500 sm:text-[11px]">WhatsApp seller</button> : <span className="px-2 py-2 text-[10px] text-neutral-500">WhatsApp unavailable</span>}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })()}
-
-            {carouselPosts.length > 1 && (
-              <>
+            <div role="group" aria-label="Trend category" className="flex flex-wrap gap-2">
+              {(Object.entries(TREND_CATEGORY_LABELS) as [MarketplaceTrendCategory, string][]).map(([category, label]) => (
                 <button
-                  onClick={() => setActiveCarouselIndex(index => (index - 1 + carouselPosts.length) % carouselPosts.length)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white transition hover:bg-amber-400 hover:text-neutral-950"
-                  aria-label="Previous runway post"
+                  key={category}
+                  type="button"
+                  aria-pressed={activeTrendCategory === category}
+                  onClick={() => {
+                    setActiveTrendCategory(category);
+                    setShowAllTrending(false);
+                  }}
+                  className={`min-h-9 rounded-full border px-3 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 ${
+                    activeTrendCategory === category
+                      ? 'border-orange-400 bg-orange-400 text-neutral-950'
+                      : isDarkMode
+                        ? 'border-neutral-700 text-neutral-300 hover:border-orange-400/60'
+                        : 'border-neutral-300 text-neutral-700 hover:border-orange-500'
+                  }`}
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  {label}
                 </button>
-                <button
-                  onClick={() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white transition hover:bg-amber-400 hover:text-neutral-950"
-                  aria-label="Next runway post"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </>
-            )}
-          </div>
-        </section>
-      )}
-
-      {(trendingPosts.length > 0 || trendingLoading || trendingError) && (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-              <h2 className="text-sm font-semibold tracking-wide uppercase text-emerald-400 font-mono">{activeTrendCategoryLabel} · Craft</h2>
-              <span className="text-[11px] text-neutral-400">
-                {trendingPage?.fallback ? 'New listings shown until there is enough qualified activity' : 'Recent activity adjusted for exposure and confidence'}
-              </span>
+              ))}
             </div>
-            <label className="sr-only" htmlFor="marketplace-trend-category">Trending category</label>
-            <select
-              id="marketplace-trend-category"
-              value={activeTrendCategory}
-              onChange={event => {
-                setActiveTrendCategory(event.target.value as MarketplaceTrendCategory);
-                setShowAllTrending(false);
-              }}
-              className={`min-h-9 rounded-lg border px-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-100' : 'border-neutral-300 bg-white text-neutral-800'}`}
-            >
-              <option value="TRENDING_NOW">Trending Now</option>
-              <option value="RISING">Rising</option>
-              <option value="POPULAR">Popular</option>
-              <option value="NEW_NOTICED">New &amp; Noticed</option>
-              <option value="HIGHLY_RATED">Highly Rated</option>
-              <option value="MOST_VIEWED">Most Viewed</option>
-            </select>
           </div>
           {trendingError && (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200" role="status">
+            <div className="mx-4 mt-4 flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200 sm:mx-5" role="status">
               <span>{trendingError}</span>
               <button type="button" onClick={() => setTrendingRetry(value => value + 1)} className="font-semibold underline underline-offset-2">Retry</button>
             </div>
           )}
-          {trendingPage?.fallbackMessage && <p className="text-xs text-neutral-400">{trendingPage.fallbackMessage}</p>}
-          {trendingLoading && <p className="text-xs text-neutral-400" role="status">Refreshing qualified trend signals…</p>}
-          <div ref={trendScrollRef} className="flex gap-3 overflow-x-auto pb-3 scroll-smooth snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-            {trendingPosts.map((post, index) => {
-              const isFocused = index === focusIndex;
-              return (
-                <button
-                  key={post.id}
-                  data-marketplace-listing-id={post.id}
-                  data-marketplace-seller-id={post.authorId}
-                  type="button"
-                  onClick={() => {
-                    openListing(post);
-                  }}
-                  aria-label={`Explore ${post.title}`}
-                  className="group relative min-w-[260px] max-w-[320px] flex-1 shrink-0 snap-center overflow-hidden rounded-[1.5rem] border bg-neutral-900/70 text-left transition-all duration-300 ease-out"
-                  style={{
-                    transform: `scale(${isFocused ? 1 : 0.92}) translateY(${isFocused ? '0px' : '12px'})`,
-                    opacity: isFocused ? 1 : 0.45,
-                    filter: isFocused ? 'blur(0px)' : 'blur(0.8px)',
-                    borderColor: isFocused ? 'rgba(251, 191, 36, 0.45)' : 'rgba(255,255,255,0.08)',
-                    boxShadow: isFocused ? '0 30px 70px rgba(251, 191, 36, 0.12)' : '0 8px 24px rgba(0,0,0,0.12)',
-                  }}
-                >
-                  <div className="relative overflow-hidden">
-                    <img src={getPostImageSource(post)} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="h-36 w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" onError={() => handlePostImageError(post, getPostImageSource(post))} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                    {post.isPromoted && <span className="absolute left-2 top-2 rounded bg-amber-500 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Sponsored</span>}
-                    <div className="absolute bottom-0 left-0 right-0 p-3">
-                      <p className="text-xs font-semibold truncate text-white">{post.title}</p>
-                      <p className="mt-1 text-[10px] text-neutral-200">{post.authorName} · {getLikeCount(post) + getSaveCount(post)} signals</p>
-                      {post.ratingCount
-                        ? <span className="mt-1 flex items-center gap-1 text-[10px] text-amber-400"><Star className="h-3 w-3 fill-current" /> {post.rating?.toFixed(1)} · {post.ratingCount} review{post.ratingCount === 1 ? '' : 's'}</span>
-                        : <span className="mt-1 block text-[10px] text-neutral-300">No reviews yet</span>}
+          {activeTrendingPage?.fallback && (
+            <p className={`mx-4 mt-4 rounded-xl border px-4 py-3 text-xs sm:mx-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40 text-neutral-400' : 'border-neutral-200 bg-white text-neutral-600'}`}>
+              Verified trend signals are still building. New listings remain in the regular marketplace feed and won’t be labelled as trending.
+            </p>
+          )}
+          {trendingLoading && <p className="px-4 pt-4 text-xs text-neutral-400 sm:px-5" role="status">Refreshing qualified trend signals…</p>}
+          {trendingPosts.length > 0 && (
+            <div id="marketplace-trends-list" className="marketplace-masonry scroll-mt-24 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">
+              {trendingPosts.map((post, index) => {
+                const imageSource = getPostImageSource(post);
+                const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
+                const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
+                const price = post.priceMin ?? (post.pricing?.basic || null);
+                const currency = post.currency || post.pricing?.currency || post.authorLocation.currency || 'USD';
+                return (
+                  <motion.article
+                    key={post.id}
+                    data-marketplace-listing-id={post.id}
+                    data-marketplace-seller-id={post.authorId}
+                    layout
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, delay: Math.min(index, 5) * 0.04 }}
+                    onClick={event => {
+                      if ((event.target as HTMLElement).closest('button, a')) return;
+                      openListing(post);
+                    }}
+                    className={`marketplace-card feed-card-wave mb-3 break-inside-avoid overflow-hidden rounded-[1.5rem] border transition-all ${
+                      isDarkMode ? 'border-neutral-800/90 bg-[#121316] hover:border-orange-400/50' : 'border-neutral-200/90 bg-white shadow-sm hover:border-orange-400/60'
+                    } ${post.isPromoted ? 'border-amber-400/70 shadow-[0_18px_42px_rgba(251,191,36,0.14)]' : ''}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b border-neutral-800/40 p-3">
+                      <button type="button" onClick={() => {
+                        const author = userById.get(post.authorId);
+                        if (author) onSelectSeller(author);
+                      }} className="flex min-w-0 items-center gap-2.5 text-left">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-500/40 bg-amber-500/20 text-xs font-bold text-amber-400">
+                          {post.authorAvatar && !failedAvatarUrls.has(post.authorAvatar)
+                            ? <img src={post.authorAvatar} alt="" className="h-full w-full object-cover" onError={() => setFailedAvatarUrls(current => new Set(current).add(post.authorAvatar))} />
+                            : post.authorName.charAt(0)}
+                        </span>
+                        <span className="min-w-0">
+                          <span className={`block truncate text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{post.authorName}</span>
+                          <span className="block truncate text-[10px] text-neutral-500">{formatLocation(post.authorLocation)}</span>
+                        </span>
+                      </button>
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-orange-400/25 bg-orange-500/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-orange-400">
+                        <Flame className="h-3 w-3" /> #{index + 1}
+                      </span>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          {trendingPosts.length >= 7 && (
-            <div className="flex justify-center pt-1">
+
+                    <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
+                      {imageSource
+                        ? <img src={imageSource} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="block h-auto w-full object-contain brightness-110 saturate-110" loading="lazy" decoding="async" onError={() => handlePostImageError(post, imageSource)} />
+                        : <div role="img" aria-label={`Image unavailable for ${post.title}`} className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-neutral-900/80 text-neutral-500"><Scissors aria-hidden="true" className="h-8 w-8 text-amber-500/70" /><span className="text-xs">Listing image unavailable</span></div>}
+                      <span className="absolute left-2.5 top-2.5 rounded-md border border-orange-300/30 bg-neutral-950/90 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-orange-200">{activeTrendCategoryLabel}</span>
+                      {post.isPromoted && <span className="absolute right-2.5 top-2.5 rounded-md bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Sponsored</span>}
+                      <button type="button" onClick={() => handleSave(post)} disabled={pendingActions.has(post.id)} aria-pressed={isSaved} aria-label={`${isSaved ? 'Remove saved listing' : 'Save listing'}: ${post.title}`} className={`absolute right-2.5 bottom-2.5 rounded-xl p-2 transition ${isSaved ? 'bg-amber-500 text-neutral-950' : 'border border-white/20 bg-black/70 text-white hover:bg-black'}`}>
+                        <Bookmark className={`h-4 w-4 ${isSaved ? 'fill-neutral-950' : ''}`} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 p-3">
+                      <div>
+                        <h3 className={`font-serif text-base font-bold leading-snug ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{post.title}</h3>
+                        <p className={`mt-1 line-clamp-2 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>{post.description}</p>
+                      </div>
+                      <button type="button" onClick={() => openListing(post)} className="min-h-9 rounded-lg border border-amber-500/30 px-3 text-left text-[11px] font-semibold text-amber-500 hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+                        View listing details and gallery
+                      </button>
+                      {post.tags.length > 0 && <div className="flex flex-wrap gap-1">
+                        {post.tags.slice(0, 3).map(tag => <span key={tag} className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] text-amber-500">#{tag}</span>)}
+                      </div>}
+                      <div className={`flex items-center justify-between gap-2 rounded-xl border p-2 text-[11px] ${isDarkMode ? 'border-neutral-800/80 bg-neutral-900/30' : 'border-neutral-200 bg-neutral-50'}`}>
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-amber-500/80">Price</span>
+                        <span className={`text-right ${isDarkMode ? 'text-neutral-200' : 'text-neutral-800'}`}>{price === null ? 'Price on enquiry' : `${currency} ${Number(price).toLocaleString()}`}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2 text-[10px] text-neutral-500">
+                        <span className="inline-flex items-center gap-1"><TrendingUp className="h-3 w-3 text-orange-400" />{activeTrendCategory === 'HIGHLY_RATED' ? 'Review-ranked' : 'Activity-ranked'}</span>
+                        {post.ratingCount > 0 && <span className="inline-flex items-center gap-1 text-amber-500"><Star className="h-3 w-3 fill-current" />{post.rating?.toFixed(1)} · {post.ratingCount}</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 border-t border-neutral-800/60 bg-neutral-900/20 px-3 py-2">
+                      <button type="button" disabled={pendingActions.has(post.id)} aria-pressed={isLiked} aria-label={`${isLiked ? 'Unlike' : 'Like'} ${post.title}`} onClick={() => handleLike(post.id)} className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${isLiked ? 'border border-red-500/30 bg-red-500/15 text-red-400' : 'bg-neutral-800/40 text-neutral-400 hover:bg-neutral-800 hover:text-red-400'}`}>
+                        <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-400' : ''}`} /><span>{getLikeCount(post)}</span>
+                      </button>
+                      {getWhatsAppUrl(post) ? <button type="button" onClick={() => openWhatsApp(post)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500"><Phone className="h-3.5 w-3.5" /><span>WhatsApp</span></button> : <span className="text-[10px] text-neutral-500">WhatsApp unavailable</span>}
+                    </div>
+                  </motion.article>
+                );
+              })}
+            </div>
+          )}
+          {!trendingLoading && !trendingError && trendingPosts.length === 0 && !activeTrendingPage?.fallback && (
+            <p className={`m-4 rounded-xl border px-4 py-5 text-center text-xs sm:m-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40 text-neutral-400' : 'border-neutral-200 bg-white text-neutral-600'}`}>
+              No qualified trend signals for this category yet. Listings are available in the regular feed.
+            </p>
+          )}
+          {(showAllTrending ? trendingPosts.length > 7 : trendingPosts.length >= 7) && (
+            <div className="flex justify-center px-4 pb-5">
               <button
                 type="button"
+                disabled={trendingLoading}
                 onClick={() => setShowAllTrending(value => !value)}
-                className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-orange-400/30 bg-orange-500/10 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-400 transition hover:border-orange-400 hover:bg-orange-500/20 disabled:cursor-wait disabled:opacity-50"
               >
-                {showAllTrending ? 'Show top 7' : 'See more trending'}
+                {trendingLoading ? 'Loading trends…' : showAllTrending ? 'Show top 7' : 'See all trends'}
                 <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showAllTrending ? 'rotate-90' : ''}`} />
               </button>
             </div>
@@ -1512,55 +1368,69 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </div>
 
           {/* Cascading Location Selectors */}
-          {showLocationFilters && worldCountries.length > 0 && <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* Country Selector */}
-            <select
-              value={filterCountry}
-              onChange={(e) => {
-                setFilterCountry(e.target.value);
+          {showLocationFilters && worldCountries.length > 0 && <div className="grid gap-2 text-xs sm:grid-cols-3">
+            <SearchableLocationField
+              label="Country"
+              value={countrySearch}
+              onChange={value => {
+                setCountrySearch(value);
+                const match = worldCountries.find(country => country.name.toLowerCase() === value.trim().toLowerCase()
+                  || country.code.toLowerCase() === value.trim().toLowerCase());
+                setFilterCountry(match?.name || 'all');
                 setFilterState('all');
                 setFilterCity('all');
+                setStateSearch('');
+                setCitySearch('');
               }}
-              className="px-2.5 py-1.5 rounded-lg bg-neutral-800/80 border border-neutral-700 text-xs text-neutral-200 focus:outline-none focus:border-amber-500"
-            >
-              <option value="all">All Countries</option>
-              {worldCountries.map((c) => (
-                <option key={c.code} value={c.name}>
-                  {c.flag} {c.name}
-                </option>
-              ))}
-            </select>
-
-            {/* State Selector */}
-            {filterCountry !== 'all' && (
-              <select
-                value={filterState}
-                onChange={(e) => {
-                  setFilterState(e.target.value);
-                  setFilterCity('all');
-                }}
-                className="px-2.5 py-1.5 rounded-lg bg-neutral-800/80 border border-neutral-700 text-xs text-neutral-200 focus:outline-none focus:border-amber-500"
-              >
-                <option value="all">All States</option>
-                {worldCountries.find(c => c.name === filterCountry)?.states.map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {/* City Selector */}
-            {filterState !== 'all' && (
-              <input
-                type="text"
-                value={filterCity === 'all' ? '' : filterCity}
-                onChange={(e) => setFilterCity(e.target.value.trim() || 'all')}
-                placeholder="Filter by city"
-                aria-label="Filter listings by city"
-                className="px-2.5 py-1.5 rounded-lg bg-neutral-800/80 border border-neutral-700 text-xs text-neutral-200 focus:outline-none focus:border-amber-500"
-              />
-            )}
+              onClear={() => {
+                setCountrySearch('');
+                setFilterCountry('all');
+                setFilterState('all');
+                setFilterCity('all');
+                setStateSearch('');
+                setCitySearch('');
+              }}
+              options={countryFilterOptions.map(country => country.name)}
+              placeholder="All countries · type to search"
+              listId="marketplace-country-filter"
+            />
+            {selectedFilterCountry && <SearchableLocationField
+              label="State / province"
+              value={stateSearch}
+              onChange={value => {
+                setStateSearch(value);
+                const match = selectedFilterCountry.states.find(state => state.name.toLowerCase() === value.trim().toLowerCase()
+                  || state.code.toLowerCase() === value.trim().toLowerCase());
+                setFilterState(match?.name || 'all');
+                setFilterCity('all');
+                setCitySearch('');
+              }}
+              onClear={() => {
+                setStateSearch('');
+                setFilterState('all');
+                setFilterCity('all');
+                setCitySearch('');
+              }}
+              options={stateFilterOptions.map(state => state.name)}
+              placeholder="All states · type to search"
+              listId="marketplace-state-filter"
+            />}
+            {selectedFilterState && <SearchableLocationField
+              label="City"
+              value={citySearch}
+              onChange={value => {
+                setCitySearch(value);
+                const match = selectedFilterState.cities.find(city => city.toLowerCase() === value.trim().toLowerCase());
+                setFilterCity(match || 'all');
+              }}
+              onClear={() => {
+                setCitySearch('');
+                setFilterCity('all');
+              }}
+              options={cityFilterOptions}
+              placeholder="All cities · type to search"
+              listId="marketplace-city-filter"
+            />}
 
             {(filterCountry !== 'all' || filterState !== 'all' || filterCity !== 'all' || nearMeActive) && (
               <button
@@ -1568,6 +1438,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   setFilterCountry('all');
                   setFilterState('all');
                   setFilterCity('all');
+                  setCountrySearch('');
+                  setStateSearch('');
+                  setCitySearch('');
                   setNearMeActive(false);
                   setLocationStatus(null);
                 }}
@@ -1690,6 +1563,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   setFilterCountry('all');
                   setFilterState('all');
                   setFilterCity('all');
+                  setCountrySearch('');
+                  setStateSearch('');
+                  setCitySearch('');
                   setNearMeActive(false);
                   setUserCoords(null);
                 }}
@@ -2027,53 +1903,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   {getWhatsAppUrl(post) ? <button type="button" onClick={() => openWhatsApp(post)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500" title="Contact seller on WhatsApp"><Phone className="h-3.5 w-3.5" /><span>WhatsApp</span></button> : <span className="text-[10px] text-neutral-500">WhatsApp unavailable</span>}
                 </div>
               </motion.article>
-              {(postIndex === 9 || postIndex === 19) && smartMarketplaceHighlights.length > 0 && (
-                <section className="md:col-span-2 lg:col-span-3 rounded-[2rem] border border-amber-500/20 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.18),_transparent_18%),linear-gradient(135deg,rgba(17,17,17,0.92),rgba(20,24,30,0.96))] p-4 sm:p-5">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Smart discovery</p>
-                      <h2 className="mt-1 font-serif text-2xl font-bold text-white">Marketplace pulse</h2>
-                    </div>
-                    <TrendingUp className="h-5 w-5 text-amber-300" />
-                  </div>
-                  <div className="grid gap-4 lg:grid-cols-3">
-                    {smartMarketplaceHighlights.map((block) => {
-                      const Icon = block.icon;
-                      return (
-                        <div key={block.title} className={`rounded-[1.5rem] border p-3 ${block.accent}`}>
-                          <div className="mb-3 flex items-center justify-between gap-2">
-                            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em]">
-                              <Icon className="h-3.5 w-3.5" />
-                              {block.title}
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            {block.items.length > 0 ? block.items.map(item => (
-                              <button key={`${block.title}-${item.id}`} type="button" data-marketplace-listing-id={item.listingId} data-marketplace-seller-id={item.sellerId} onClick={() => {
-                                const internalPost = tailorPosts.find(post => post.id === item.id);
-                                if (internalPost) openListing(internalPost);
-                                else if (item.title && item.imageUrl) {
-                                  const seller = users.find(user => user.id === item.id);
-                                  if (seller) onSelectSeller(seller);
-                                }
-                              }} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-black/15 p-2 text-left transition hover:border-white/20 hover:bg-black/20">
-                                {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl bg-neutral-950 object-contain" loading="lazy" onError={() => { const failedPost = tailorPosts.find(post => post.imageUrl === item.imageUrl); if (failedPost) handlePostImageError(failedPost, item.imageUrl); }} /> : <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10 text-[10px] uppercase tracking-[0.12em] text-white/80">Live</div>}
-                                <span className="min-w-0">
-                                  <strong className="block truncate text-xs text-white">{item.title}</strong>
-                                  {item.isPromoted && <small className="mt-0.5 block text-[9px] font-bold uppercase tracking-wider text-amber-300">Sponsored</small>}
-                                  <small className="mt-1 block truncate text-[10px] text-neutral-300">{item.subtitle}</small>
-                                </span>
-                              </button>
-                            )) : (
-                              <div className="rounded-2xl border border-dashed border-white/15 p-3 text-[10px] uppercase tracking-[0.18em] text-neutral-300/80">No live signal yet</div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
               {(postIndex + 1) % 12 === 0 && postIndex + 1 < filteredPosts.length && (
                 <div className="md:col-span-2 lg:col-span-3">
                   <MarketplaceInterlude posts={filteredPosts} users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
