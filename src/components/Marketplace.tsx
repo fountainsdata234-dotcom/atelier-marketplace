@@ -94,7 +94,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const reportedAnalyticsFailures = useRef(new Set<string>());
   const analyticsRetryAfter = useRef(0);
+  const impressionRequestInFlight = useRef(false);
   const [failedPostImageUrls, setFailedPostImageUrls] = useState<Record<string, string>>({});
+  const [failedAvatarUrls, setFailedAvatarUrls] = useState<Set<string>>(() => new Set());
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
   const recommendationScope = useMemo(() => storageService.getRecommendationScope(currentUser?.id), [currentUser?.id]);
   const [recommendationPreferences, setRecommendationPreferences] = useState<RecommendationPreferences>(
     () => storageService.getRecommendationPreferences(storageService.getRecommendationScope(currentUser?.id)),
@@ -364,7 +368,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       }).then(page => {
         if (cancelled || generation !== feedGeneration.current) return;
         hasLoadedServerFeed.current = true;
-        setFeedPosts(page.items);
+        setFeedPosts(page.items.length > 0 || hasActiveFeedFilters || postsRef.current.length === 0
+          ? page.items
+          : postsRef.current.slice(0, 16));
         setFeedCursor(page.nextCursor);
         setFeedHasMore(page.hasMore);
         if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
@@ -782,6 +788,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   ) {
     if (currentUser?.id && currentUser.id === sellerId) return;
     if (Date.now() < analyticsRetryAfter.current) return;
+    const isImpression = eventType === 'IMPRESSION';
+    if (isImpression && impressionRequestInFlight.current) return;
+    if (isImpression) impressionRequestInFlight.current = true;
     void api.recordMarketplaceEvent(listingId, eventType, recommendation).catch(error => {
       analyticsRetryAfter.current = Date.now() + 60_000;
       if (reportedAnalyticsFailures.current.has(eventType)) return;
@@ -790,6 +799,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         `Marketplace ${eventType.toLowerCase()} analytics are temporarily unavailable; listing discovery is unaffected.`,
         error,
       );
+    }).finally(() => {
+      if (isImpression) impressionRequestInFlight.current = false;
     });
   }
 
@@ -1731,6 +1742,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 ? 'Tailor portfolio'
                 : 'Clothing';
             const postImageSource = getPostImageSource(post);
+            const authorAvatar = post.authorAvatar;
 
             // Distance calculation if userCoords present
             const distanceKm = userCoords && post.authorLocation.lat && post.authorLocation.lng
@@ -1763,7 +1775,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     if (author) onSelectSeller(author);
                   }} className="flex min-w-0 items-center gap-2.5 text-left">
                     <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-xs flex items-center justify-center overflow-hidden">
-                      {post.authorAvatar ? <img src={post.authorAvatar} alt={`${post.authorName || 'Seller'} avatar`} className="h-full w-full object-cover" /> : post.authorName.charAt(0)}
+                      {authorAvatar && !failedAvatarUrls.has(authorAvatar)
+                        ? <img
+                          src={authorAvatar}
+                          alt={`${post.authorName || 'Seller'} avatar`}
+                          className="h-full w-full object-cover"
+                          onError={() => setFailedAvatarUrls(current => new Set(current).add(authorAvatar))}
+                        />
+                        : post.authorName.charAt(0)}
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">

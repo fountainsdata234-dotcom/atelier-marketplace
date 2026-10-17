@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { MapPin, Navigation, Search, Shirt, Store, Star } from 'lucide-react';
+import { Navigation, Search } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
 import { getSearchSuggestions } from '../utils/globe';
@@ -64,15 +64,14 @@ interface ArtisanDirectoryProps {
   posts: ClothPost[];
   currentUser: User | null;
   onSelectArtisan: (artisan: User) => void;
-  onToggleFollow: (artisan: User) => void;
   isDarkMode: boolean;
 }
 
-export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts, currentUser, onSelectArtisan, onToggleFollow, isDarkMode }) => {
+export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts, currentUser, onSelectArtisan, isDarkMode }) => {
   const artisans = useMemo(() => {
     return users.filter((user) => !user.isBlocked
       && Boolean(user.name.trim() || user.shopName?.trim())
-      && (user.role === 'tailor' || user.role === 'fabric_seller'))
+      && user.role === 'tailor')
       .map((user): DirectorySeller => {
         const userPosts = posts.filter((post) => post.authorId === user.id
           && !post.deletedAt
@@ -131,7 +130,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const [filterCountry, setFilterCountry] = useState(() => getDefaultLocationFilter(currentUser?.location));
   const [filterState, setFilterState] = useState('all');
   const [filterCity, setFilterCity] = useState('all');
-  const [sellerType, setSellerType] = useState<'all' | 'tailor' | 'fabric_seller'>('all');
   const [specializationFilter, setSpecializationFilter] = useState('all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
   const [minimumRatingFilter, setMinimumRatingFilter] = useState(0);
@@ -186,7 +184,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry);
   const selectedState = selectedCountry?.states.find((state) => state.code === filterState);
   const locationArtisans = artisans.filter((artisan) => {
-    if (sellerType !== 'all' && artisan.role !== sellerType) return false;
     const matchesLocation = matchesLocationFilter(
       artisan.location,
       filterCountry === 'all' ? 'all' : (selectedCountry?.name || artisan.location.countryCode || filterCountry),
@@ -226,35 +223,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     const matchesAvailability = availabilityFilter === 'all' || artisan.availability.includes(availabilityFilter);
     return matchesSearch && matchesSpecialization && matchesServiceType && matchesRating && matchesPrice && matchesAvailability;
   });
-  const sortedArtisans = useMemo(() => {
-    const term = searchQuery.trim().toLowerCase();
-    return [...filteredArtisans].sort((a, b) => {
-      const score = (artisan: DirectorySeller) => {
-        const summary = sellerReviews[artisan.id];
-        const haystack = [
-          artisan.name, artisan.shopName || '', artisan.bio || '',
-          ...artisan.specializations,
-          ...artisan.listingTags,
-          ...artisan.availability,
-          ...posts.filter(post => post.authorId === artisan.id).map(post => `${post.title} ${post.description}`),
-        ].join(' ').toLowerCase();
-        const exactMatch = term && `${artisan.name} ${artisan.shopName || ''} ${artisan.handle}`.toLowerCase().includes(term) ? 5 : 0;
-        const queryTerms = term.split(/\s+/).filter(Boolean);
-        const serviceMatch = queryTerms.length
-          ? (queryTerms.filter(word => haystack.includes(word)).length / queryTerms.length) * 4.5
-          : 0;
-        const locationMatch = (filterCity !== 'all' && artisan.location.city.toLowerCase() === filterCity.toLowerCase() ? 3 : 0)
-          + (filterState !== 'all' && artisan.location.state.toLowerCase() === (selectedState?.name || '').toLowerCase() ? 2 : 0)
-          + (filterCountry !== 'all' && (artisan.location.countryCode === filterCountry || artisan.location.country === selectedCountry?.name) ? 1 : 0);
-        const evidence = summary?.count ? Math.min(1, summary.count / 20) * ((summary.confidenceAdjustedRating ?? summary.average) / 5) : 0;
-        const distance = artisan.distanceKm === null ? 0 : 1 / (1 + artisan.distanceKm / 25);
-        const exploration = Date.now() - Date.parse(artisan.createdAt) <= 30 * 86_400_000 ? 0.35 : 0;
-        const portfolioCompleteness = artisan.postCount > 0 ? artisan.portfolioCount / artisan.postCount : 0;
-        return exactMatch + serviceMatch + locationMatch + evidence * 0.5 + distance * 0.25 + exploration + portfolioCompleteness * 0.15;
-      };
-      return score(b) - score(a) || a.id.localeCompare(b.id);
-    });
-  }, [filteredArtisans, searchQuery, sellerReviews, posts, filterCity, filterState, filterCountry, selectedState?.name, selectedCountry?.name]);
+  const selectedGlobeArtisan = selectedArtisanId
+    ? filteredArtisans.find((artisan) => artisan.id === selectedArtisanId) ?? null
+    : null;
   const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
@@ -272,9 +243,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-500">Artisan network</p>
-            <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight">Find a tailor or fabric seller</h1>
+            <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight">Find a tailor</h1>
             <p className={`mt-2 max-w-2xl text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Match your service, materials, portfolio and location. Review feedback and listing activity are evidence to compare, not proof of professional credentials.
+              Search for a tailor, then select a match to reveal their location on the interactive globe.
             </p>
           </div>
 
@@ -300,9 +271,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
                   }
                 }}
                 onBlur={() => window.setTimeout(() => dismissSearch(), 120)}
-                placeholder="Search styles, garments, materials, name, location..."
+                placeholder="Search tailors by name, style, service, or location..."
                 className="min-w-0 bg-transparent text-xs outline-none placeholder:text-neutral-500"
-                aria-label="Search sellers by service, specialization, listing, name, or location"
+                aria-label="Search tailors by service, specialization, listing, name, or location"
               />
               {searchSuggestionsOpen && searchQuery.trim().length > 0 && searchSuggestions.length > 0 && (
                 <div className={`absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-xl border shadow-2xl ${isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'}`}>
@@ -342,11 +313,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
         </div>
 
-        <div className={`mb-6 grid gap-2 rounded-2xl border p-3 sm:grid-cols-2 lg:grid-cols-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-        <label className="sr-only" htmlFor="seller-directory-type">Seller type</label>
-        <select id="seller-directory-type" value={sellerType} onChange={event => setSellerType(event.target.value as typeof sellerType)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
-          <option value="all">Tailors & fabric sellers</option><option value="tailor">Tailors</option><option value="fabric_seller">Fabric sellers</option>
-        </select>
+        <div className={`mb-6 grid gap-2 rounded-2xl border p-3 sm:grid-cols-2 lg:grid-cols-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
         <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedArtisanId(null); }} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
             <option value="all">All countries</option>
             {WORLD_COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
@@ -371,7 +338,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </select>
           <label className="sr-only" htmlFor="seller-service-type">Filter by service type</label>
           <select id="seller-service-type" value={serviceTypeFilter} onChange={event => setServiceTypeFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
-            <option value="all">All services</option><option value="made_to_order">Made to measure / made to order</option><option value="ready_made">Ready-made clothing</option><option value="fabric">Fabric sales</option>
+            <option value="all">All services</option><option value="made_to_order">Made to measure / made to order</option><option value="ready_made">Ready-made clothing</option>
           </select>
           <label className="sr-only" htmlFor="seller-rating-confidence">Minimum confidence-adjusted seller rating</label>
           <select id="seller-rating-confidence" value={minimumRatingFilter} onChange={event => setMinimumRatingFilter(Number(event.target.value))} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
@@ -388,18 +355,14 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         </div>
 
         <p className={`mb-4 text-[10px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>
-          Price filters compare sellers only when their listing currency is consistent. Seller delivery area, response time, identity verification and skill credentials are not currently recorded; profile locations and listing details are shown as provided.
+          Price filters compare tailors only when their listing currency is consistent. Delivery area, response time, identity verification and skill credentials are not currently recorded; profile locations and listing details are shown as provided.
         </p>
         {sellerReviewsError && <p role="status" className="mb-3 text-[11px] text-amber-500">Review summaries are temporarily unavailable; the review rating filter is not being applied.</p>}
         {minimumRatingFilter > 0 && !sellerReviewsLoaded && <p role="status" className="mb-3 text-[11px] text-neutral-500">Loading eligible firsthand review summaries for the selected rating filter…</p>}
-        <div className="mb-6 grid gap-3 md:grid-cols-3">
+        <div className="mb-6 grid gap-3 md:grid-cols-2">
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
             <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Tailors</p>
-            <p className="mt-2 text-2xl font-black text-amber-500">{locationArtisans.filter(artisan => artisan.role === 'tailor').length}</p>
-          </div>
-          <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Fabric sellers</p>
-            <p className="mt-2 text-2xl font-black text-emerald-500">{locationArtisans.filter(artisan => artisan.role === 'fabric_seller').length}</p>
+            <p className="mt-2 text-2xl font-black text-amber-500">{locationArtisans.length}</p>
           </div>
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
             <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Matching this search</p>
@@ -411,12 +374,14 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           <div className="artisan-globe-panel-header">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Live artisan signal</p>
-              <p className="mt-1 text-xs text-orange-50/75">Showing {locationArtisans.length} eligible seller{locationArtisans.length === 1 ? '' : 's'} in the selected region</p>
+              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} on the globe` : 'Search for a tailor and select a match to show them here'}</p>
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>
           <ArtisanGlobe3D
-            artisans={locationArtisans.filter((artisan) => Number.isFinite(artisan.location.lat) && Number.isFinite(artisan.location.lng))}
+            artisans={selectedGlobeArtisan && Number.isFinite(selectedGlobeArtisan.location.lat) && Number.isFinite(selectedGlobeArtisan.location.lng)
+              ? [selectedGlobeArtisan]
+              : []}
             selectedArtisanId={selectedArtisanId}
             onSelectArtisan={(artisan) => setSelectedArtisanId(artisan.id)}
             onOpenArtisan={onSelectArtisan}
@@ -425,68 +390,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           />
         </section>
 
-        <section aria-label="Seller discovery results" className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold">Sellers to compare</h2>
-            <p className="text-[11px] text-neutral-500">Search match and location lead; review confidence is secondary. Sponsored placement does not affect these results.</p>
-          </div>
-          {sortedArtisans.map(artisan => {
-            const review = sellerReviews[artisan.id];
-            const firstPortfolioPost = artisan.latestPost;
-            const isNewSeller = Number.isFinite(Date.parse(artisan.createdAt))
-              && Date.now() - Date.parse(artisan.createdAt) <= 30 * 86_400_000;
-            return (
-              <article key={artisan.id} className={`grid gap-4 rounded-2xl border p-4 sm:grid-cols-[96px_minmax(0,1fr)_auto] ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-white'}`}>
-                <button type="button" onClick={() => onSelectArtisan(artisan)} className="h-24 w-24 overflow-hidden rounded-xl bg-neutral-800 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400" aria-label={`Open ${artisan.shopName || artisan.name} profile`}>
-                  {firstPortfolioPost?.imageAssets?.[0]?.thumbnailUrl || firstPortfolioPost?.imageUrl
-                    ? <img src={firstPortfolioPost.imageAssets?.[0]?.thumbnailUrl || firstPortfolioPost.imageUrl} alt={`${artisan.shopName || artisan.name} portfolio sample`} loading="lazy" className="h-full w-full object-cover" />
-                    : <span className="flex h-full w-full items-center justify-center">{artisan.role === 'tailor' ? <Shirt className="h-8 w-8 text-neutral-500" /> : <Store className="h-8 w-8 text-neutral-500" />}</span>}
-                </button>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="button" onClick={() => onSelectArtisan(artisan)} className="truncate text-left text-base font-semibold hover:text-amber-400">{artisan.shopName || artisan.name}</button>
-                    <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[9px] uppercase tracking-wide text-neutral-400">{artisan.role === 'tailor' ? 'Tailor' : 'Fabric seller'}</span>
-                    {isNewSeller && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold text-emerald-400">New seller</span>}
-                    {artisan.isPromoted && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold text-amber-400">Sponsored</span>}
-                  </div>
-                  <p className="mt-1 flex items-center gap-1 text-[11px] text-neutral-400"><MapPin className="h-3 w-3" />{[artisan.location.city, artisan.location.state, artisan.location.country].filter(Boolean).join(', ') || 'Location not provided'}{artisan.distanceKm !== null ? ` · ${artisan.distanceKm} km away` : ''}</p>
-                  {artisan.bio && <p className="mt-2 line-clamp-2 text-xs text-neutral-400">{artisan.bio}</p>}
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {artisan.specializations.slice(0, 7).map(value => <span key={value} className="rounded-full border border-amber-500/20 bg-amber-500/5 px-2 py-1 text-[10px] text-amber-300">{value}</span>)}
-                    {artisan.specializations.length === 0 && <span className="text-[10px] text-neutral-500">No listing specializations provided</span>}
-                  </div>
-                  <p className="mt-2 text-[10px] text-neutral-500">
-                    {artisan.postCount} eligible listing{artisan.postCount === 1 ? '' : 's'} · {artisan.portfolioCount} portfolio image{artisan.portfolioCount === 1 ? '' : 's'}
-                    {artisan.minimumPrice !== null && artisan.currency ? ` · ${artisan.currency} ${artisan.minimumPrice.toLocaleString()}${artisan.maximumPrice !== null && artisan.maximumPrice !== artisan.minimumPrice ? `–${artisan.maximumPrice.toLocaleString()}` : ''}${artisan.priceUnit ? ` / ${artisan.priceUnit}` : ''}` : ''}
-                    {artisan.leadTimeDays !== null ? ` · Lead time from ${artisan.leadTimeDays} days` : ''}
-                    {artisan.availability.length > 0 ? ` · ${artisan.availability.join(', ').replaceAll('_', ' ')}` : ''}
-                    {artisan.minimumOrder !== null ? ` · Minimum fabric order ${artisan.minimumOrder}${artisan.priceUnit ? ` ${artisan.priceUnit}${artisan.minimumOrder === 1 ? '' : 's'}` : ''}` : ''}
-                  </p>
-                  {searchQuery.trim() && <p className="mt-1 text-[10px] text-emerald-500">
-                    {artisan.specializations.find(value => value.toLowerCase().includes(searchQuery.trim().toLowerCase().split(/\s+/)[0]))
-                      ? `Matching listed specialization: ${artisan.specializations.find(value => value.toLowerCase().includes(searchQuery.trim().toLowerCase().split(/\s+/)[0]))}`
-                      : 'Matches seller or listing details'}
-                  </p>}
-                </div>
-                <div className="flex flex-row items-start gap-2 sm:flex-col">
-                  <div className="rounded-xl border border-neutral-800 px-3 py-2 text-center">
-                    {review && review.count > 0
-                      ? <><p className="inline-flex items-center gap-1 text-sm font-semibold"><Star className="h-3.5 w-3.5 fill-current text-amber-400" />{review.average.toFixed(1)}</p><p className="text-[9px] text-neutral-500">{review.count} firsthand review{review.count === 1 ? '' : 's'}</p></>
-                      : <p className="text-[10px] text-neutral-500">No reviews yet</p>}
-                  </div>
-                  <button type="button" onClick={() => onToggleFollow(artisan)} className={`min-h-10 rounded-xl border px-4 text-xs font-semibold ${currentUser && artisan.followers?.includes(currentUser.id) ? 'border-emerald-500/40 text-emerald-400' : 'border-neutral-700 text-neutral-300 hover:border-amber-400'}`}>
-                    {currentUser && artisan.followers?.includes(currentUser.id) ? 'Following' : 'Follow'}
-                  </button>
-                  <button type="button" onClick={() => onSelectArtisan(artisan)} className="min-h-10 rounded-xl bg-amber-400 px-4 text-xs font-bold text-neutral-950 hover:bg-amber-300">Compare profile</button>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-
-        {filteredArtisans.length === 0 && (
+        {searchQuery.trim().length >= 2 && filteredArtisans.length === 0 && (
           <div className={`mt-4 rounded-2xl border border-dashed p-6 text-center ${isDarkMode ? 'border-neutral-700 text-neutral-400' : 'border-neutral-300 text-neutral-500'}`}>
-            No sellers match these filters. Try a broader location, remove a specialization or rating filter, or switch seller type.
+            No tailors match this search and these filters. Try a broader search or location.
           </div>
         )}
       </div>

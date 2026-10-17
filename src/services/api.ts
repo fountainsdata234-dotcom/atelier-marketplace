@@ -286,16 +286,10 @@ export const api = {
     },
   ) => {
     const body = JSON.stringify({ listingId, eventType, recommendation, sessionId: getMarketplaceSessionId() });
-    if (eventType === 'IMPRESSION' && typeof navigator.sendBeacon === 'function') {
-      const queued = navigator.sendBeacon(
-        `${API_URL}/api/marketplace/events`,
-        new Blob([body], { type: 'application/json' }),
-      );
-      return Promise.resolve({ recorded: queued });
-    }
     return request<{ recorded: boolean }>('/api/marketplace/events', {
       method: 'POST',
       body,
+      keepalive: eventType === 'IMPRESSION',
     });
   },
   recordMarketplaceSearchEvent: (

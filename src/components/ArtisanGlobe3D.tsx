@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { Line, OrbitControls, Stars } from '@react-three/drei';
-import { Scissors, Shirt, X } from 'lucide-react';
+import { Scissors, X } from 'lucide-react';
 import * as THREE from 'three';
 import { User } from '../types';
 import { getScatterOffsetsForLocations } from '../utils/globe';
@@ -389,7 +389,6 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
       {!isEarthReady && !isWebGlUnavailable && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#10151b]/90 px-5 text-center" role="status" aria-live="polite"><span className="h-10 w-10 animate-spin rounded-full border-2 border-amber-300/25 border-t-amber-300" /><strong className="text-sm text-white">Mapping artisan locations</strong><span className="text-xs text-neutral-300">Loading the Earth and placing makers on the map.</span></div>}
       <div className="globe-legend" aria-hidden="true">
         <span><Scissors /> Tailors</span>
-        <span><Shirt /> Fabric sellers</span>
         <span className="globe-legend-zoom">{zoomDistance < 5.8 ? 'Profiles in view' : 'Zoom to reveal profiles'}</span>
       </div>
       {selectedArtisan && (
