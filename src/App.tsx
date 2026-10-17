@@ -639,15 +639,13 @@ export default function App() {
 
   useEffect(() => {
     const handleVisibility = () => {
-      const isEligibleView = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
-      if (isEligibleView
-        && Date.now() - lastDataRefreshStartedAt.current >= MARKETPLACE_AUTO_REFRESH_INTERVAL_MS) {
-        void refreshAllData(false);
+      if (document.visibilityState === 'visible') {
+        lastDataRefreshStartedAt.current = Date.now();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [currentView]);
+  }, []);
 
   // Toggle Theme
   const handleToggleTheme = () => {

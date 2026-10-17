@@ -312,12 +312,9 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const readyTimerRef = useRef<number | null>(null);
-  const fallbackTimerRef = useRef<number | null>(null);
   const selectedArtisan = artisans.find((artisan) => artisan.id === selectedArtisanId) ?? null;
   const markersReadyDelay = Math.min(Math.max(artisans.length - 1, 0) * 24, 720) + 650;
   const handleEarthReady = useCallback(() => {
-    if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = null;
     setIsEarthReady(false);
     if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);
     readyTimerRef.current = window.setTimeout(() => {
@@ -328,7 +325,6 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
 
   useEffect(() => () => {
     if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);
-    if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -351,12 +347,6 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
     setIsEarthReady(false);
     setIsWebGlUnavailable(false);
     if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);
-    if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = window.setTimeout(() => {
-      setIsWebGlUnavailable(true);
-      setIsEarthReady(true);
-      fallbackTimerRef.current = null;
-    }, 12000);
   }, [isMobile]);
 
   return (
@@ -364,8 +354,9 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
       <Canvas
         key={isMobile ? 'mobile' : 'desktop'}
         camera={{ position: [0, 0, 8.2], fov: 34 }}
-        dpr={isMobile ? 1 : 1.2}
-        gl={{ antialias: false, alpha: true, powerPreference: 'low-power' }}
+        dpr={isMobile ? 1 : [1, 1.2]}
+        gl={{ antialias: !isMobile, alpha: true, powerPreference: isMobile ? 'low-power' : 'high-performance' }}
+        fallback={<GlobeFallback artisans={artisans} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
         onCreated={({ gl }) => {
           gl.setClearColor('#000000', 0);
           gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.2));
@@ -374,8 +365,6 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
             setIsWebGlUnavailable(true);
             setIsEarthReady(true);
             if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);
-            if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
-            fallbackTimerRef.current = null;
           });
           gl.domElement.addEventListener('webglcontextrestored', () => {
             setIsWebGlUnavailable(false);
