@@ -2,6 +2,7 @@ import { Component, StrictMode, type ErrorInfo, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import './responsive.css';
 
 declare global {
   interface BeforeInstallPromptEvent extends Event {
