@@ -13,45 +13,22 @@
     min-width: 0;
   }
 
-  main > div > div.relative.z-10.w-full.max-w-7xl {
+  main > div > div.relative.z-10.mx-auto.w-full.max-w-\[90rem\] {
     padding: 1.5rem 0.75rem 2rem;
   }
 
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:first-child {
-    padding-right: 0;
-    padding-left: 0;
-  }
-
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:first-child > div {
-    border-radius: 1.5rem;
-    padding: 1rem;
-  }
-
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:first-child .relative.overflow-hidden.rounded-\[28px\] {
-    padding: 0.75rem;
-  }
-
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:first-child .rounded-\[22px\] {
-    padding: 0.75rem;
-  }
-
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:first-child .relative.h-48 {
-    height: auto;
-    aspect-ratio: 4 / 3;
-  }
-
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:not(:first-child) {
+  main > div > div.relative.z-10.mx-auto.w-full.max-w-\[90rem\] > section:not(:first-child) {
     padding-top: 2rem;
     padding-bottom: 2rem;
   }
 
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:not(:first-child) > div:first-child {
+  main > div > div.relative.z-10.mx-auto.w-full.max-w-\[90rem\] > section:not(:first-child) > div:first-child {
     align-items: flex-start;
     flex-wrap: wrap;
     gap: 0.75rem;
   }
 
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:not(:first-child) > div:first-child > span {
+  main > div > div.relative.z-10.mx-auto.w-full.max-w-\[90rem\] > section:not(:first-child) > div:first-child > span {
     line-height: 1.5;
   }
 
@@ -151,8 +128,8 @@
   }
 
   footer > div > .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.5rem 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem 0.75rem;
   }
 
   footer > div > .grid > div:first-child {
@@ -165,10 +142,6 @@
   footer > div > .grid > div:first-child .font-display {
     font-size: clamp(1rem, 5vw, 1.25rem);
     letter-spacing: 0.04em;
-  }
-
-  footer > div > .grid > div:nth-child(4) {
-    grid-column: 1 / -1;
   }
 
   footer > div > .grid > div:nth-child(4) > div > div {
@@ -215,16 +188,17 @@
 }
 
 @media (max-width: 380px) {
-  main > div > div.relative.z-10.w-full.max-w-7xl {
+  main > div > div.relative.z-10.mx-auto.w-full.max-w-\[90rem\] {
     padding-right: 0.5rem;
     padding-left: 0.5rem;
   }
 
-  main > div > div.relative.z-10.w-full.max-w-7xl > section:first-child > div {
-    padding: 0.75rem;
+  footer > div > .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 0.75rem;
   }
 
-  footer > div > .grid {
-    gap: 1.25rem 0.75rem;
+  footer > div > .grid > div:nth-child(4) {
+    grid-column: 1 / -1;
   }
 }

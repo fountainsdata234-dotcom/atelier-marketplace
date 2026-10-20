@@ -182,15 +182,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     return () => observer.disconnect();
   }, []);
 
+  React.useEffect(() => {
+    if (!shouldLoadGlobe || sellerLocationResolver) return;
+    let isActive = true;
+    void import('../data/geoData').then(({ resolveSellerMapLocation }) => {
+      if (isActive) setSellerLocationResolver(() => resolveSellerMapLocation);
+    }).catch((loadError: unknown) => {
+      console.error('Unable to resolve seller locations for the artisan globe.', loadError);
+    });
+    return () => { isActive = false; };
+  }, [sellerLocationResolver, shouldLoadGlobe]);
+
   return (
-    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-16">
+    <div className="relative z-10 mx-auto w-full max-w-[90rem] px-3 py-6 sm:px-6 sm:py-10 lg:px-8 md:py-16">
       {/* Hero Section */}
-      <section className="mx-auto max-w-6xl px-3 pb-10 pt-6 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-none px-0 pb-8 pt-4 sm:pb-10 sm:pt-6">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="overflow-hidden rounded-[32px] border border-amber-500/20 bg-[#111215] p-4 shadow-2xl shadow-black/30 sm:p-6 lg:p-8"
+          className="w-full"
         >
           <div className="grid items-center gap-8 lg:grid-cols-[1.15fr_0.85fr]">
             <div className="text-center lg:text-left">

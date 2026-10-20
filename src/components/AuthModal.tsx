@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Scissors, ShoppingBag, Shield, MapPin, Phone, Lock, Mail, User as UserIcon, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Chrome } from 'lucide-react';
+import { X, Scissors, ShoppingBag, Shield, MapPin, Phone, Lock, Mail, User as UserIcon, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { User, UserRole, LocationCity, LocationCountry, LocationCurrency, LocationRegion } from '../types';
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import type { CountryCode } from 'libphonenumber-js';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/firebase';
-import { getAuthErrorMessage, resetAuthPassword, signInWithEmail, signInWithGoogle, signOutAuth, signUpWithEmail } from '../services/auth';
+import { getAuthErrorMessage, resetAuthPassword, signInWithEmail, signOutAuth, signUpWithEmail } from '../services/auth';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
 
@@ -394,7 +394,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     accountCreated = true;
 
     if (!signupResult.hasSession) {
-      setSuccessMsg('Your account was created. Sign in with your email and password to continue.');
+      setSuccessMsg('Your account was created, but this Supabase project still requires email confirmation. Turn off Confirm email in the project’s Authentication settings before sign-in can work without confirming your inbox.');
       setPassword('');
       setConfirmPassword('');
       setIsRegistering(false);
@@ -460,18 +460,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       } else {
         setError(getAuthErrorMessage(authError));
       }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await signInWithGoogle();
-    } catch (authError) {
-      setError(getAuthErrorMessage(authError));
     } finally {
       setIsSubmitting(false);
     }
@@ -953,28 +941,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </span>
           </button>
 
-          {!isRegistering && (
-            <>
-              <div className="flex items-center gap-3 py-1 text-[10px] uppercase tracking-widest text-neutral-500">
-                <span className="h-px flex-1 bg-neutral-800" />
-                <span>or</span>
-                <span className="h-px flex-1 bg-neutral-800" />
-              </div>
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={isSubmitting}
-                className="w-full py-3 rounded-xl border border-neutral-700 bg-white text-neutral-900 text-xs font-semibold hover:bg-neutral-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? (
-                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-neutral-900/30 border-t-neutral-900" />
-                ) : (
-                  <Chrome className="w-4 h-4" />
-                )}
-                Continue with Google
-              </button>
-            </>
-          )}
         </form>
 
       </motion.div>
