@@ -148,6 +148,11 @@ export const signUpWithEmail = async (
   });
   if (error) throw error;
   if (!data.user) throw new Error('Supabase did not return a user account.');
+  if (!data.session && data.user.identities?.length === 0) {
+    const existingAccountError = new Error('An account may already exist for this email.');
+    Object.assign(existingAccountError, { code: 'user_already_exists' });
+    throw existingAccountError;
+  }
   return { user: normalizeSupabaseUser(data.user), hasSession: Boolean(data.session) };
 };
 
@@ -191,7 +196,7 @@ export const getAuthErrorMessage = (error: unknown) => {
     return 'Too many sign-up attempts were made recently. Wait a few minutes before trying again. If you have already created an account, sign in or reset your password instead.';
   }
   if (code === 'weak_password' || /password.*(weak|short|at least|minimum)|weak password/.test(normalizedMessage)) {
-    return 'That password does not meet the requirements. Use at least 8 characters, one uppercase letter, and one period (.).';
+    return 'That password does not meet the security requirements. Use at least 8 characters.';
   }
   if (['user_already_registered', 'email_exists', 'user_already_exists'].includes(code)
     || /already registered|already exists|email.*in use/.test(normalizedMessage)) {
@@ -204,7 +209,10 @@ export const getAuthErrorMessage = (error: unknown) => {
     return 'New account creation is temporarily unavailable. Please try again later.';
   }
   if (/email not confirmed|email_not_confirmed/.test(`${code} ${normalizedMessage}`)) {
-    return 'Confirm your email using the link we sent, then sign in again.';
+    return 'Email confirmation is still enabled for this service. Contact support to enable direct sign-in.';
+  }
+  if (code === 'invalid_credentials' || /invalid login credentials|invalid email or password/.test(normalizedMessage)) {
+    return 'The email or password is incorrect. If you recently created your account, confirm your email first or reset your password.';
   }
   if (/failed to fetch|network error|fetch failed/.test(normalizedMessage)) {
     return 'We could not reach the sign-up service. Check your internet connection and try again.';

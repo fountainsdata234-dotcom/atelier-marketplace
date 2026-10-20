@@ -14,7 +14,17 @@ describe('authentication error messages', () => {
 
   it('explains weak password responses with the signup requirements', () => {
     expect(getAuthErrorMessage({ code: 'weak_password', message: 'Password too weak' }))
-      .toContain('at least 8 characters, one uppercase letter, and one period');
+      .toContain('at least 8 characters');
+  });
+
+  it('explains invalid login credentials and offers recovery steps', () => {
+    expect(getAuthErrorMessage({ code: 'invalid_credentials', message: 'Invalid login credentials' }))
+      .toMatch(/email or password is incorrect.*confirm your email.*reset your password/i);
+  });
+
+  it('identifies when the Supabase project still requires email confirmation', () => {
+    expect(getAuthErrorMessage({ code: 'email_not_confirmed', message: 'Email not confirmed' }))
+      .toMatch(/email confirmation is still enabled.*direct sign-in/i);
   });
 
   it('directs possibly existing accounts to sign in or recover access', () => {

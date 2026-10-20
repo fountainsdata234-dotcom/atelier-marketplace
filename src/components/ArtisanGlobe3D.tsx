@@ -4,7 +4,7 @@ import { Line, OrbitControls, Stars } from '@react-three/drei';
 import { Scissors, X } from 'lucide-react';
 import * as THREE from 'three';
 import { User } from '../types';
-import { getScatterOffsetsForLocations } from '../utils/globe';
+import { getEarthTexturePosition, getScatterOffsetsForLocations } from '../utils/globe';
 
 export type GlobeArtisan = User & {
   distanceKm: number | null;
@@ -105,11 +105,12 @@ interface MarkerProps {
   artisan: GlobeArtisan;
   position: THREE.Vector3;
   selected: boolean;
+  isMobile: boolean;
   delay: number;
   onSelect: (artisan: GlobeArtisan) => void;
 }
 
-const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, delay, onSelect }) => {
+const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, isMobile, delay, onSelect }) => {
   const groupRef = useRef<THREE.Group>(null);
   const [entered, setEntered] = useState(false);
 
@@ -143,11 +144,11 @@ const GlobeMarker: React.FC<MarkerProps> = ({ artisan, position, selected, delay
       onPointerOut={(event) => event.stopPropagation()}
     >
       <mesh renderOrder={selected ? 21 : 2}>
-        <sphereGeometry args={[selected ? 0.034 : 0.022, 16, 12]} />
+        <sphereGeometry args={[selected ? (isMobile ? 0.06 : 0.05) : (isMobile ? 0.045 : 0.035), 16, 12]} />
         <meshStandardMaterial
           color={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'}
           emissive={artisan.role === 'tailor' ? '#ff7043' : '#5b7cff'}
-          emissiveIntensity={selected ? 0.55 : 0.18}
+          emissiveIntensity={selected ? 0.9 : 0.5}
           roughness={0.32}
           metalness={0.38}
         />
@@ -180,10 +181,14 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
     );
 
     return artisans.map((artisan, index) => {
-      const base = toGlobePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
       const offset = offsets[index] ?? { x: 0, y: 0, z: 0 };
       const markerOffset = new THREE.Vector3(offset.x, offset.y, offset.z);
-      const position = base.add(markerOffset).normalize().multiplyScalar(MARKER_RADIUS);
+      const alignedOffset = markerOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+      const mapPosition = getEarthTexturePosition(artisan.location.lat ?? 0, artisan.location.lng ?? 0, EARTH_RADIUS);
+      const position = new THREE.Vector3(mapPosition.x, mapPosition.y, mapPosition.z)
+        .add(alignedOffset)
+        .normalize()
+        .multiplyScalar(MARKER_RADIUS);
       return { position };
     });
   }, [artisans]);
@@ -243,6 +248,7 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
             artisan={artisan}
             position={positions[index].position}
             selected={artisan.id === selectedArtisanId}
+            isMobile={isMobile}
             delay={Math.min(index * 24, 720)}
             onSelect={onSelectArtisan}
           />
@@ -355,8 +361,9 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
       <Canvas
         key={isMobile ? 'mobile' : 'desktop'}
         camera={{ position: [0, 0, 8.2], fov: 34 }}
+        frameloop="always"
         dpr={isMobile ? 1 : [1, 1.2]}
-        gl={{ antialias: !isMobile, alpha: true, powerPreference: isMobile ? 'low-power' : 'high-performance' }}
+        gl={{ antialias: !isMobile, alpha: true }}
         fallback={<GlobeFallback artisans={artisans} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
         onCreated={({ gl }) => {
           gl.setClearColor('#000000', 0);

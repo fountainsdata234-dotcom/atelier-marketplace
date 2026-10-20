@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findExactArtisanMatch, getScatterOffsetsForLocations, getSearchSuggestions, hasValidGlobeCoordinates } from './globe';
+import { findExactArtisanMatch, getEarthTexturePosition, getScatterOffsetsForLocations, getSearchSuggestions, hasValidGlobeCoordinates } from './globe';
 
 describe('globe helpers', () => {
   it('accepts valid world coordinates, including zero, and rejects missing or out-of-range coordinates', () => {
@@ -9,6 +9,21 @@ describe('globe helpers', () => {
     expect(hasValidGlobeCoordinates({ lat: 0, lng: -181 })).toBe(false);
     expect(hasValidGlobeCoordinates({ lat: undefined, lng: 10 })).toBe(false);
     expect(hasValidGlobeCoordinates(undefined)).toBe(false);
+  });
+
+  it('aligns longitude and latitude coordinates with the Earth texture', () => {
+    const primeMeridian = getEarthTexturePosition(0, 0);
+    expect(primeMeridian.x).toBeCloseTo(1);
+    expect(primeMeridian.y).toBeCloseTo(0);
+    expect(primeMeridian.z).toBeCloseTo(0);
+    const equatorialEast = getEarthTexturePosition(0, 90);
+    expect(equatorialEast.x).toBeCloseTo(0);
+    expect(equatorialEast.y).toBeCloseTo(0);
+    expect(equatorialEast.z).toBeCloseTo(-1);
+    const lagos = getEarthTexturePosition(6.59651, 3.34205);
+    expect(lagos.x).toBeGreaterThan(0);
+    expect(lagos.y).toBeGreaterThan(0);
+    expect(lagos.z).toBeLessThan(0);
   });
 
   it('keeps nearby seller markers from overlapping one another', () => {

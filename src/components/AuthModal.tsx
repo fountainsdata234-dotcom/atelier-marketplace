@@ -1,24 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Scissors, ShoppingBag, Shield, MapPin, Phone, Lock, Mail, User as UserIcon, Sparkles, CheckCircle2, AlertCircle, Eye, EyeOff, Chrome } from 'lucide-react';
-import { User, UserRole, CountryGeo } from '../types';
+import { User, UserRole, LocationCity, LocationCountry, LocationCurrency, LocationRegion } from '../types';
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import type { CountryCode } from 'libphonenumber-js';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/firebase';
-import { getAuthErrorMessage, resetAuthPassword, signInWithEmail, signInWithGoogle, signUpWithEmail } from '../services/auth';
+import { getAuthErrorMessage, resetAuthPassword, signInWithEmail, signInWithGoogle, signOutAuth, signUpWithEmail } from '../services/auth';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
-
-const INITIAL_COUNTRIES: CountryGeo[] = [{
-  name: 'Nigeria',
-  code: 'NG',
-  dialCode: '+234',
-  flag: 'NG',
-  lat: 9.082,
-  lng: 8.6753,
-  states: [{ name: 'Lagos', code: 'LA', cities: ['Ikeja', 'Lekki', 'Lagos'] }],
-}];
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -56,16 +46,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   // Location Cascading State
-  const [selectedCountryCode, setSelectedCountryCode] = useState('NG');
+  const [selectedCountryCode, setSelectedCountryCode] = useState('');
   const [selectedStateCode, setSelectedStateCode] = useState('');
-  const [selectedCityName, setSelectedCityName] = useState('');
-  const [selectedCurrency, setSelectedCurrency] = useState('NGN');
-  const [worldCountries, setWorldCountries] = useState<CountryGeo[]>(INITIAL_COUNTRIES);
-  const [resolveLocationCoordinates, setResolveLocationCoordinates] = useState<((countryCode: string, stateCode: string, cityName: string, fallback: { lat: number; lng: number }) => { lat: number; lng: number }) | null>(null);
-  const [countrySearch, setCountrySearch] = useState('Nigeria');
+  const [selectedCurrency, setSelectedCurrency] = useState('');
+  const [worldCountries, setWorldCountries] = useState<LocationCountry[]>([]);
+  const [worldCurrencies, setWorldCurrencies] = useState<LocationCurrency[]>([]);
+  const [states, setStates] = useState<LocationRegion[]>([]);
+  const [cityOptions, setCityOptions] = useState<LocationCity[]>([]);
+  const [locationDataLoaded, setLocationDataLoaded] = useState(false);
+  const [locationDataError, setLocationDataError] = useState<string | null>(null);
+  const [countrySearch, setCountrySearch] = useState('');
   const [stateSearch, setStateSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
-  const [detectedCountryCode, setDetectedCountryCode] = useState('NG');
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [locationDetectionMessage, setLocationDetectionMessage] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -98,20 +92,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   // Sync country data
-  const selectedCountry = worldCountries.find(c => c.code === selectedCountryCode) || worldCountries[0];
-  const states = selectedCountry.states;
+  const selectedCountry = worldCountries.find(c => c.code === selectedCountryCode) || null;
   const currentStateObj = states.find(s => s.code === selectedStateCode) || null;
-  const CURRENCY_OPTIONS = ['NGN', 'USD', 'EUR', 'GBP', 'ZAR', 'KES', 'GHS', 'EGP', 'MAD', 'AED', 'CAD', 'CHF', 'XOF'];
 
   useEffect(() => {
-    const nextCurrency = selectedCountry.currency || 'USD';
-    setSelectedCurrency((currentCurrency) => {
-      if (!currentCurrency || !CURRENCY_OPTIONS.includes(currentCurrency) || currentCurrency === nextCurrency) {
-        return nextCurrency;
-      }
-      return currentCurrency;
+    setStates([]);
+    setCityOptions([]);
+    setSelectedStateCode('');
+    setStateSearch('');
+    setCitySearch('');
+    setSelectedCurrency(selectedCountry?.currency || '');
+    if (!selectedCountry) return;
+
+    let isActive = true;
+    void api.getLocationRegions(selectedCountry.code).then((regions: LocationRegion[]) => {
+      if (isActive) setStates(regions);
+    }).catch((loadError: unknown) => {
+      if (!isActive) return;
+      console.error('Unable to load regions for the selected country.', loadError);
+      setLocationDetectionMessage('Region suggestions are temporarily unavailable. You can still enter your location manually.');
     });
-  }, [selectedCountryCode, selectedCountry.currency]);
+    return () => { isActive = false; };
+  }, [selectedCountryCode]);
 
   const filteredCountries = worldCountries.filter((country) => {
     const term = countrySearch.trim().toLowerCase();
@@ -119,58 +121,62 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     return country.name.toLowerCase().includes(term)
       || country.code.toLowerCase().includes(term)
       || country.dialCode.toLowerCase().includes(term);
-  });
+  }).slice(0, 100);
 
   useEffect(() => {
-    if (!isOpen || !isRegistering || resolveLocationCoordinates) return;
+    if (!isOpen || !isRegistering || locationDataLoaded) return;
     let isActive = true;
-    void import('../data/geoData').then((locationData) => {
+    void Promise.all([api.getLocationCountries(), api.getLocationCurrencies()]).then(([countries, currencies]) => {
       if (!isActive) return;
-      setWorldCountries(locationData.WORLD_COUNTRIES);
-      setResolveLocationCoordinates(() => locationData.resolveLocationCoordinates);
-    }).catch(() => undefined);
+      setWorldCountries(countries);
+      setWorldCurrencies(currencies);
+      setLocationDataLoaded(true);
+      setLocationDataError(null);
+    }).catch((loadError: unknown) => {
+      if (!isActive) return;
+      console.error('Unable to load country and currency reference data.', loadError);
+      setLocationDataError('Country suggestions could not be loaded. Please try again.');
+    });
     return () => { isActive = false; };
-  }, [isOpen, isRegistering, resolveLocationCoordinates]);
+  }, [isOpen, isRegistering, locationDataLoaded]);
 
   const filteredStates = states.filter((state) => {
     const term = stateSearch.trim().toLowerCase();
     if (!term) return true;
     return state.name.toLowerCase().includes(term)
       || state.code?.toLowerCase().includes(term);
-  });
+  }).slice(0, 100);
+  const filteredCities = cityOptions.map(city => city.name);
 
-  const restoreAutoCountry = (overrideCode?: string) => {
-    const nextCountryCode = overrideCode || detectedCountryCode || 'NG';
-    const fallbackCountry = worldCountries.find((country) => country.code === nextCountryCode) || worldCountries[0];
-    setSelectedCountryCode(fallbackCountry.code);
-    setCountrySearch(fallbackCountry.name);
-    const firstState = fallbackCountry.states[0];
-    setSelectedStateCode(firstState?.code || '');
-    setStateSearch(firstState?.name || '');
-    setSelectedCityName(firstState?.cities[0] || '');
-    setCitySearch(firstState?.cities[0] || '');
+  const clearSelectedLocation = () => {
+    setSelectedCountryCode('');
+    setCountrySearch('');
+    setSelectedStateCode('');
+    setStateSearch('');
+    setCitySearch('');
   };
 
   useEffect(() => {
-    if (selectedCountry) {
-      setCountrySearch(selectedCountry.name);
-      const firstState = selectedCountry.states[0];
-      const nextStateCode = firstState?.code || '';
-      setSelectedStateCode((prevStateCode) => {
-        if (prevStateCode && selectedCountry.states.some(state => state.code === prevStateCode)) {
-          return prevStateCode;
-        }
-        return nextStateCode;
-      });
-      setSelectedCityName((prevCity) => {
-        const firstCity = firstState?.cities[0] || '';
-        if (prevCity && firstState?.cities.includes(prevCity)) {
-          return prevCity;
-        }
-        return firstCity;
-      });
+    if (!selectedCountryCode || !selectedStateCode) {
+      setCityOptions([]);
+      return;
     }
-  }, [selectedCountryCode]);
+    let isActive = true;
+    const timeout = window.setTimeout(() => {
+      void api.searchLocationCities(selectedCountryCode, selectedStateCode, citySearch.trim()).then((cities: LocationCity[]) => {
+        if (isActive) setCityOptions(cities);
+      }).catch((loadError: unknown) => {
+        if (!isActive) return;
+        console.error('Unable to search cities for the selected region.', loadError);
+        setCityOptions([]);
+        setLocationDetectionMessage('City suggestions are temporarily unavailable. You can enter your city manually.');
+      });
+    }, 180);
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeout);
+    };
+  }, [selectedCountryCode, selectedStateCode, citySearch]);
 
   useEffect(() => {
     if (currentStateObj) {
@@ -182,78 +188,77 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   }, [currentStateObj]);
 
   useEffect(() => {
-    setCitySearch(selectedCityName);
-  }, [selectedCityName]);
-
-  useEffect(() => {
     setRole(defaultRole);
   }, [defaultRole]);
 
-  useEffect(() => {
-    if (!isOpen || !isRegistering || !('geolocation' in navigator)) return;
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
-            {
-              headers: {
-                'Accept-Language': 'en',
-              },
-            },
-          );
-
-          if (!response.ok) return;
-          const payload = await response.json();
-          const countryName = String(payload?.address?.country || '').trim();
-          const stateName = String(payload?.address?.state || payload?.address?.province || payload?.address?.county || '').trim();
-          const cityName = String(payload?.address?.city || payload?.address?.town || payload?.address?.village || payload?.address?.municipality || '').trim();
-
-          if (!countryName && !stateName) return;
-
-          const matchedCountry = worldCountries.find((country) => country.name.toLowerCase() === countryName.toLowerCase() || country.code.toLowerCase() === countryName.toLowerCase())
-            || selectedCountry;
-
-          if (!matchedCountry) return;
-
-          setDetectedCountryCode(matchedCountry.code);
-          setSelectedCountryCode(matchedCountry.code);
-          setCountrySearch(matchedCountry.name);
-
-          if (stateName) {
-            const matchedState = matchedCountry.states.find((state) => state.name.toLowerCase() === stateName.toLowerCase());
-            if (matchedState) {
-              setSelectedStateCode(matchedState.code || '');
-              setStateSearch(matchedState.name);
-
-              if (cityName) {
-                const matchedCity = matchedState.cities.find((city) => city.toLowerCase() === cityName.toLowerCase());
-                if (matchedCity) {
-                  setSelectedCityName(matchedCity);
-                  setCitySearch(matchedCity);
-                  return;
-                }
-              }
-
-              setSelectedCityName('');
-              setCitySearch('');
-              return;
-            }
-
-            setSelectedStateCode('');
-            setStateSearch(stateName);
-            setSelectedCityName('');
-            setCitySearch('');
-          }
-        } catch {
-          // Ignore reverse-geocode failures and keep the normal manual selection flow active.
+  const handleDetectLocation = () => {
+    setLocationDetectionMessage(null);
+    if (!navigator.geolocation) {
+      setLocationDetectionMessage('Location detection is not available in this browser. Choose your location manually.');
+      return;
+    }
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
+          { headers: { 'Accept-Language': 'en' } },
+        );
+        if (!response.ok) {
+          setLocationDetectionMessage('We could not look up that location. Choose your location manually.');
+          return;
         }
-      },
-      () => undefined,
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 600000 },
-    );
-  }, [isOpen, isRegistering, selectedCountry, worldCountries]);
+
+        const payload = await response.json();
+        const address = payload?.address;
+        const normalize = (value: string) => value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const countryCode = String(address?.country_code || '').trim().toUpperCase();
+        const countryName = String(address?.country || '').trim();
+        const country = worldCountries.find((candidate: LocationCountry) => candidate.code.toUpperCase() === countryCode)
+          || worldCountries.find((candidate: LocationCountry) => normalize(candidate.name) === normalize(countryName));
+        if (!country) {
+          setLocationDetectionMessage('We could not match your country. Choose your location manually.');
+          return;
+        }
+
+        setSelectedCountryCode(country.code);
+        setCountrySearch(country.name);
+        const stateName = String(address?.state || address?.province || address?.region || '').trim();
+        const countryRegions = await api.getLocationRegions(country.code);
+        setStates(countryRegions);
+        const state = countryRegions.find((candidate: LocationRegion) => normalize(candidate.name) === normalize(stateName));
+        if (!state) {
+          setSelectedStateCode('');
+          setStateSearch('');
+          setCitySearch('');
+          setLocationDetectionMessage('Country found. Choose your state or region and city from the suggestions to confirm your location.');
+          return;
+        }
+
+        setSelectedStateCode(state.code || '');
+        setStateSearch(state.name);
+        const cityName = String(address?.city || address?.town || address?.village || address?.municipality || '').trim();
+        const matchingCities = cityName
+          ? await api.searchLocationCities(country.code, state.code, cityName)
+          : [];
+        const city = matchingCities.find((candidate: LocationCity) => normalize(candidate.name) === normalize(cityName));
+        setCityOptions(matchingCities);
+        setCitySearch(city?.name || '');
+        setLocationDetectionMessage(city
+          ? 'Location found. Please check the selected country, state, and city before continuing.'
+          : 'Country and state found. Choose your city from the suggestions to confirm your location.');
+      } catch {
+        setLocationDetectionMessage('We could not look up that location. Choose your location manually.');
+      } finally {
+        setIsDetectingLocation(false);
+      }
+    }, (geolocationError) => {
+      setIsDetectingLocation(false);
+      setLocationDetectionMessage(geolocationError.code === geolocationError.PERMISSION_DENIED
+        ? 'Location permission was not granted. Choose your location manually.'
+        : 'We could not detect your location. Choose your location manually.');
+    }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 0 });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,6 +266,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMsg(null);
     setIsSubmitting(true);
     let accountCreated = false;
+    let signupSessionActive = false;
+    let signupProfileSaved = false;
 
     try {
     if (!isRegistering) {
@@ -314,16 +321,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError(`Password is too short. Add ${8 - password.length} more character${8 - password.length === 1 ? '' : 's'} (8 minimum).`);
       return;
     }
-    if (!/[A-Z]/.test(password)) {
-      setError('Add at least one uppercase letter (A-Z) to your password.');
+    const selectedCountryInput = countrySearch.trim().toLowerCase();
+    const normalizedCityName = citySearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const selectedCity = cityOptions.find(city => (
+      city.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === normalizedCityName
+    )) || null;
+    if (locationDataError || !locationDataLoaded) {
+      setError(locationDataError || 'Country, state, and city suggestions are still loading. Please try again shortly.');
       return;
     }
-    if (!/\./.test(password)) {
-      setError('Add a period (.) to your password.');
+    if (!selectedCountry
+      || (selectedCountryInput !== selectedCountry.name.toLowerCase() && selectedCountryInput !== selectedCountry.code.toLowerCase())) {
+      setError('Choose your country from the suggestions so we can validate your phone number.');
       return;
     }
-    if (!currentStateObj || !selectedCityName.trim()) {
-      setError('Please select both your state and city so nearby discovery can work correctly.');
+    if (stateSearch.trim() && (!currentStateObj || currentStateObj.name !== stateSearch.trim())) {
+      setError('Choose a state or region from the suggestions.');
+      return;
+    }
+    if (citySearch.trim() && !currentStateObj) {
+      setError('Choose a state or region before entering a city.');
+      return;
+    }
+    if (!selectedCurrency) {
+      setError('Choose a currency for your account.');
       return;
     }
     if (password !== confirmPassword) {
@@ -349,17 +370,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       ? (handle.startsWith('@') ? handle.trim() : `@${handle.trim()}`)
       : `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
-    const coordinates = resolveLocationCoordinates?.(selectedCountry.code, currentStateObj.code || '', selectedCityName, {
-      lat: selectedCountry.lat,
-      lng: selectedCountry.lng,
-    }) || { lat: selectedCountry.lat, lng: selectedCountry.lng };
     const location = {
       country: selectedCountry.name,
       countryCode: selectedCountry.code,
-      currency: selectedCurrency || selectedCountry.currency || 'USD',
-      state: currentStateObj.name,
-      city: selectedCityName,
-      ...coordinates,
+      currency: selectedCurrency,
+      state: currentStateObj?.code === 'ALL' ? '' : currentStateObj?.name || '',
+      city: selectedCity?.name || citySearch.trim(),
+      ...(selectedCity?.latitude !== undefined ? { lat: selectedCity.latitude } : {}),
+      ...(selectedCity?.longitude !== undefined ? { lng: selectedCity.longitude } : {}),
     };
     const signupProfile = {
       role,
@@ -376,12 +394,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     accountCreated = true;
 
     if (!signupResult.hasSession) {
-      setSuccessMsg('If this is a new account, check your email for a confirmation link. After confirming, sign in here; your account type and profile details are saved. If you already have an account, sign in or reset your password instead. You can add a profile photo after signing in.');
+      setSuccessMsg('Your account was created. Sign in with your email and password to continue.');
       setPassword('');
       setConfirmPassword('');
       setIsRegistering(false);
       return;
     }
+    signupSessionActive = true;
 
     let avatarUploadFailed = false;
     let storedAvatarUrl = authUser.avatarUrl;
@@ -412,18 +431,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       isSuperAdmin: authUser.isSuperAdmin,
     });
     await api.saveProfile(newUser);
+    signupProfileSaved = true;
 
+    await signOutAuth();
+    signupSessionActive = false;
+    setPassword('');
+    setConfirmPassword('');
+    setIsRegistering(false);
     setSuccessMsg(avatarUploadFailed
-      ? 'Your account is ready, but your profile photo did not upload. You can add it from your profile after signing in.'
-      : 'Welcome to FABSATTIRE. Your account is ready, and your tailored journey begins now.');
-    setTimeout(() => {
-      onSuccess(newUser);
-      onClose();
-    }, 600);
+      ? 'Your account was created. Sign in to continue; you can add your profile photo later.'
+      : 'Your account was created. Sign in with your email and password to continue.');
     } catch (authError) {
-      setError(accountCreated
-        ? 'Your account was created, but we could not finish saving your profile. Do not register again. Sign in after confirming your email; your account type and details were saved so setup can continue.'
-        : getAuthErrorMessage(authError));
+      if (accountCreated) {
+        if (signupSessionActive) {
+          try {
+            await signOutAuth();
+            signupSessionActive = false;
+          } catch (signOutError) {
+            console.error('Unable to end the new account session after profile setup failed.', signOutError);
+          }
+        }
+        setPassword('');
+        setConfirmPassword('');
+        setIsRegistering(false);
+        setError(signupProfileSaved
+          ? 'Your account and profile were created, but sign-out could not finish. Refresh this page before signing in.'
+          : 'Your account was created, but profile setup could not finish. Sign in to continue; do not create another account.');
+      } else {
+        setError(getAuthErrorMessage(authError));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -679,8 +715,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="p-3 rounded-xl border border-neutral-800 bg-neutral-900/40 space-y-2.5">
                 <div className="flex items-center gap-1.5 text-xs text-amber-400 font-medium">
                   <MapPin className="w-3.5 h-3.5" />
-                  <span>Geographic Location & Origin</span>
+                  <span className="flex-1">Geographic Location & Origin</span>
+                  <button
+                    type="button"
+                    onClick={handleDetectLocation}
+                    disabled={isDetectingLocation || !locationDataLoaded}
+                    className="rounded-lg border border-amber-500/30 px-2 py-1 text-[10px] text-amber-300 transition-colors hover:bg-amber-500/10 disabled:cursor-wait disabled:opacity-50"
+                  >
+                    {isDetectingLocation ? 'Finding location…' : 'Use my location'}
+                  </button>
                 </div>
+                {locationDetectionMessage && <p role="status" className="text-[10px] text-neutral-400">{locationDetectionMessage}</p>}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <SearchableLocationField
                     label="Country"
@@ -689,12 +734,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       setCountrySearch(nextValue);
                       const match = worldCountries.find((country) => country.name.toLowerCase() === nextValue.trim().toLowerCase() || country.code.toLowerCase() === nextValue.trim().toLowerCase());
                       if (match) {
+                        if (match.code !== selectedCountryCode) {
+                          setSelectedStateCode('');
+                          setStateSearch('');
+                          setCitySearch('');
+                        }
                         setSelectedCountryCode(match.code);
+                      } else if (nextValue.trim().toLowerCase() !== selectedCountry?.name.toLowerCase()) {
+                        setSelectedCountryCode('');
+                        setSelectedStateCode('');
+                        setStateSearch('');
+                        setCitySearch('');
                       }
                     }}
                     onClear={() => {
-                      setCountrySearch('');
-                      restoreAutoCountry();
+                      clearSelectedLocation();
                     }}
                     options={filteredCountries.map((country) => country.name)}
                     placeholder="Search country"
@@ -702,7 +756,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   />
 
                   <SearchableLocationField
-                    label="State / Province"
+                    label="State / Province (optional)"
                     value={stateSearch}
                     onChange={(nextValue) => {
                       setStateSearch(nextValue);
@@ -712,61 +766,55 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       } else {
                         setSelectedStateCode('');
                       }
-                      setSelectedCityName('');
                       setCitySearch('');
                     }}
                     onClear={() => {
-                      const fallbackCountry = worldCountries.find((country) => country.code === selectedCountryCode) || worldCountries[0];
-                      const firstState = fallbackCountry.states[0];
-                      setStateSearch(firstState?.name || '');
-                      setSelectedStateCode(firstState?.code || '');
-                      setSelectedCityName(firstState?.cities[0] || '');
-                      setCitySearch(firstState?.cities[0] || '');
+                      setStateSearch('');
+                      setSelectedStateCode('');
+                      setCitySearch('');
                     }}
                     options={filteredStates.map((state) => state.name)}
                     placeholder="Search state"
                     listId="state-search-list"
-                    required
                   />
 
                   <SearchableLocationField
-                    label="City / District"
+                    label="City / District (optional)"
                     value={citySearch}
                     onChange={(nextValue) => {
                       setCitySearch(nextValue);
-                      setSelectedCityName(nextValue.trim());
                     }}
                     onClear={() => {
-                      const fallbackCountry = worldCountries.find((country) => country.code === selectedCountryCode) || worldCountries[0];
-                      const fallbackState = fallbackCountry.states.find((state) => state.code === selectedStateCode) || fallbackCountry.states[0];
-                      const fallbackCity = fallbackState?.cities[0] || '';
-                      setCitySearch(fallbackCity);
-                      setSelectedCityName(fallbackCity);
+                      setCitySearch('');
                     }}
-                    options={[]}
+                    options={filteredCities}
                     placeholder="Search city"
                     listId="city-search-list"
-                    required
                   />
                 </div>
+                <p className="text-[10px] leading-relaxed text-neutral-500">
+                  Country, region, and city suggestions come from the location catalog. If your city is not listed, enter its name manually; manually entered cities are saved without map coordinates.
+                </p>
                 <div className="mt-2">
                   <label className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-400">
                     Listing currency
                   </label>
                   <select
-                    value={selectedCurrency || selectedCountry.currency || 'USD'}
-                    onChange={(event) => setSelectedCurrency(event.target.value || selectedCountry.currency || 'USD')}
+                    value={selectedCurrency}
+                    onChange={(event) => setSelectedCurrency(event.target.value)}
                     className="w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-3 py-2 text-xs text-neutral-100 focus:border-amber-500 focus:outline-none"
+                    required
                   >
-                    {CURRENCY_OPTIONS.map((currency) => (
-                      <option key={currency} value={currency}>
-                        {currency} - {currency === (selectedCountry.currency || 'USD') ? 'Default for this country' : 'Available'}
+                    {!selectedCurrency && <option value="">Choose currency</option>}
+                    {worldCurrencies.map((currency) => (
+                      <option key={currency.code} value={currency.code}>
+                        {currency.code} — {currency.name}{currency.code === selectedCountry?.currency ? ' (country default)' : ''}
                       </option>
                     ))}
                   </select>
                 </div>
                 <p className="text-[10px] text-neutral-500">
-                  Local currency: <span className="text-amber-400 font-medium">{selectedCountry.currency}</span>
+                  Country default: <span className="text-amber-400 font-medium">{selectedCountry?.currency || 'Choose a country'}</span>
                 </p>
               </div>
 
@@ -774,7 +822,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-neutral-400 mb-1">
-                    Mobile Number * ({selectedCountry.flag} {selectedCountry.dialCode})
+                    Mobile Number * ({selectedCountry?.flag || '🌐'} {selectedCountry?.dialCode || 'select country'})
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 absolute left-3 top-3 text-neutral-500" />
@@ -797,7 +845,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="tel"
                     value={whatsappNumber}
                     onChange={(e) => setWhatsappNumber(e.target.value)}
-                    placeholder={`${selectedCountry.dialCode}8012345678`}
+                    placeholder={`${selectedCountry?.dialCode || ''}8012345678`}
                     className="w-full px-3 py-2 text-xs rounded-xl bg-neutral-800/40 border border-neutral-700 focus:border-amber-500 focus:outline-none font-mono"
                   />
                 </div>
@@ -843,7 +891,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <div>
             <label className="block text-xs font-medium text-neutral-400 mb-1">
-              Password {isRegistering && '(8+ characters, uppercase letter, period)'} *
+              Password {isRegistering && '(8+ characters)'} *
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-3 text-neutral-500" />
@@ -859,7 +907,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use at least 8 characters, one uppercase letter (A-Z), and one period (.). Longer passwords are welcome.</p>}
+            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use at least 8 characters. Longer passwords are welcome.</p>}
           </div>
 
           {isRegistering && (

@@ -21,6 +21,16 @@ export const hasValidGlobeCoordinates = (
     && typeof lng === 'number' && Number.isFinite(lng) && lng >= -180 && lng <= 180;
 };
 
+export const getEarthTexturePosition = (latitude: number, longitude: number, radius = 1) => {
+  const lat = (latitude * Math.PI) / 180;
+  const lng = (longitude * Math.PI) / 180;
+  return {
+    x: radius * Math.cos(lat) * Math.cos(lng),
+    y: radius * Math.sin(lat),
+    z: -radius * Math.cos(lat) * Math.sin(lng),
+  };
+};
+
 const getTangentBasis = (latitude: number, longitude: number) => {
   const lat = (latitude * Math.PI) / 180;
   const lon = (longitude * Math.PI) / 180;

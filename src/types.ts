@@ -410,3 +410,27 @@ export interface CountryGeo {
   lat: number;
   lng: number;
 }
+
+export interface LocationCountry {
+  name: string;
+  code: string;
+  dialCode: string;
+  flag: string;
+  currency: string | null;
+}
+
+export interface LocationRegion {
+  code: string;
+  name: string;
+}
+
+export interface LocationCity {
+  name: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface LocationCurrency {
+  code: string;
+  name: string;
+}

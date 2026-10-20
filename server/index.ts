@@ -8,6 +8,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
 import multer from 'multer';
 import sharp from 'sharp';
+import { listLocationCountries, listLocationCurrencies, listLocationRegions, searchLocationCities } from './locationData.js';
 import { adminAuth, firebaseAdminEnabled, firestore } from './firebaseAdmin.js';
 import type { UserRole } from '../src/types.js';
 import { parseMarketplaceSearch } from '../src/utils/marketplaceSearch.js';
@@ -647,6 +648,41 @@ function buildProfileUpdate(input: Record<string, unknown>) {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'atelier-api' });
+});
+
+app.get('/api/location/countries', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  res.json(listLocationCountries());
+});
+
+app.get('/api/location/currencies', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  res.json(listLocationCurrencies());
+});
+
+app.get('/api/location/countries/:countryCode/states', (req, res) => {
+  const regions = listLocationRegions(req.params.countryCode);
+  if (!regions) {
+    res.status(404).json({ error: 'Choose a country from the suggestions.' });
+    return;
+  }
+  res.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+  res.json(regions);
+});
+
+app.get('/api/location/countries/:countryCode/states/:regionCode/cities', (req, res) => {
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  if (query.length > 80) {
+    res.status(400).json({ error: 'Search for a shorter city name.' });
+    return;
+  }
+  const cities = searchLocationCities(req.params.countryCode, req.params.regionCode, query);
+  if (!cities) {
+    res.status(404).json({ error: 'Choose a state from the suggestions.' });
+    return;
+  }
+  res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+  res.json(cities);
 });
 
 app.post('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest, res: Response) => {

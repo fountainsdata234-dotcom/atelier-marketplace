@@ -469,6 +469,24 @@
 .globe-fallback-marker.is-fabric-seller { background: #5b7cff; color: #5b7cff; }
 .globe-fallback-marker.is-selected { width: 0.68rem; min-width: 0.68rem; height: 0.68rem; min-height: 0.68rem; outline: 2px solid #fff4dc; outline-offset: 2px; }
 
+@media (max-width: 767px) {
+  .globe-fallback-marker {
+    width: 0.8rem;
+    min-width: 0.8rem;
+    height: 0.8rem;
+    min-height: 0.8rem;
+    border-width: 2px;
+    box-shadow: 0 0 0.9rem 0.2rem currentColor;
+  }
+
+  .globe-fallback-marker.is-selected {
+    width: 1rem;
+    min-width: 1rem;
+    height: 1rem;
+    min-height: 1rem;
+  }
+}
+
 .globe-fallback-label {
   position: absolute;
   top: 0.8rem;

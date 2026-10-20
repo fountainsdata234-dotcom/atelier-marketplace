@@ -1,4 +1,4 @@
-import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences } from '../types';
 
 import { getAuthToken, isSupabaseAuthReady } from './auth';
 import { customerMessageForHttpError, customerMessageForNetworkError, safeCustomerErrorMessage } from '../utils/customerMessages';
@@ -31,6 +31,7 @@ function isCacheablePublicRead(path: string, method: string, token: string | nul
   return path === '/api/posts'
     || path === '/api/users'
     || path === '/api/promo-plans'
+    || path.startsWith('/api/location/')
     || path.startsWith('/api/marketplace/feed?')
     || path.startsWith('/api/marketplace/trending?')
     || /^\/api\/reviews\/(?:listing|seller)\/[0-9a-f-]+(?:\?.*)?$/i.test(path);
@@ -45,6 +46,8 @@ function publicReadCacheTtl(path: string) {
   if (path.startsWith('/api/marketplace/trending?')) return 120_000;
   if (path.startsWith('/api/marketplace/feed?') || path === '/api/posts') return 30_000;
   if (path.startsWith('/api/reviews/')) return 60_000;
+  if (path.startsWith('/api/location/countries/') && path.includes('/cities?')) return 3_600_000;
+  if (path.startsWith('/api/location/')) return 86_400_000;
   return PUBLIC_READ_CACHE_TTL_MS;
 }
 
@@ -58,6 +61,7 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
   const method = (options.method || 'GET').toUpperCase();
   const isPublicRead = method === 'GET'
     && (['/api/posts', '/api/users', '/api/promo-plans'].includes(path)
+      || path.startsWith('/api/location/')
       || isPublicMarketplaceRead(path, method));
   let token: string | null;
   try {
@@ -163,6 +167,13 @@ async function performRequest<T>(
 }
 
 export const api = {
+  getLocationCountries: () => request<LocationCountry[]>('/api/location/countries'),
+  getLocationCurrencies: () => request<LocationCurrency[]>('/api/location/currencies'),
+  getLocationRegions: (countryCode: string) => request<LocationRegion[]>(`/api/location/countries/${encodeURIComponent(countryCode)}/states`),
+  searchLocationCities: (countryCode: string, regionCode: string, query: string) => {
+    const search = new URLSearchParams({ q: query });
+    return request<LocationCity[]>(`/api/location/countries/${encodeURIComponent(countryCode)}/states/${encodeURIComponent(regionCode)}/cities?${search}`);
+  },
   getUsers: () => request<User[]>('/api/users'),
   getAdminUsers: () => request<User[]>('/api/admin/users'),
   getProfile: () => request<Partial<User>>('/api/profile'),
