@@ -320,7 +320,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const readyTimerRef = useRef<number | null>(null);
   const selectedArtisan = artisans.find((artisan) => artisan.id === selectedArtisanId) ?? null;
-  const markersReadyDelay = Math.min(Math.max(artisans.length - 1, 0) * 24, 720) + 650;
+  const markersReadyDelay = 250;
   const handleEarthReady = useCallback(() => {
     setIsEarthReady(false);
     if (readyTimerRef.current !== null) window.clearTimeout(readyTimerRef.current);

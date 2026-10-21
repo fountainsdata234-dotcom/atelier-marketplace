@@ -19,17 +19,32 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   isDarkMode,
   profileUrl: sharedProfileUrl,
 }) => {
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
 
   if (!isOpen) return null;
 
   const profileUrl = sharedProfileUrl || window.location.origin;
   const shareText = `Explore master bespoke designs and couture creations by ${name} (${handle}) on FABSATTIRE: ${profileUrl}`;
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(profileUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  const handleCopyLink = async () => {
+    setCopyStatus('idle');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API is unavailable.');
+      await navigator.clipboard.writeText(profileUrl);
+      setCopyStatus('copied');
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = profileUrl;
+      input.setAttribute('readonly', '');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand('copy');
+      input.remove();
+      setCopyStatus(copied ? 'copied' : 'error');
+    }
+    window.setTimeout(() => setCopyStatus('idle'), 2500);
   };
 
   const shareToWhatsApp = () => {
@@ -77,16 +92,18 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
               type="text"
               readOnly
               value={profileUrl}
+              onClick={event => event.currentTarget.select()}
               className="flex-1 bg-transparent px-2 text-xs text-neutral-300 font-mono focus:outline-none"
             />
             <button
               onClick={handleCopyLink}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-neutral-950 hover:bg-amber-400 flex items-center gap-1.5 transition-colors"
             >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
+              {copyStatus === 'copied' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copyStatus === 'copied' ? 'Copied' : copyStatus === 'error' ? 'Select link' : 'Copy'}</span>
             </button>
           </div>
+          {copyStatus === 'error' && <p role="status" className="mt-2 text-[11px] text-amber-400">Copy failed. Select and copy the link above.</p>}
         </div>
 
         {/* Direct Social Networks Grid */}

@@ -34,7 +34,7 @@ export const PostImage: React.FC<PostImageProps> = ({
       src={src}
       alt=""
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl brightness-[0.4] saturate-75"
+      className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-90 blur-3xl brightness-[0.48] saturate-125"
       loading={loading}
       decoding={decoding}
     />

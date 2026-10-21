@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, MapPin, MessageCircle, Share2, Flag } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MapPin, MessageCircle, Share2, Flag, X } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
@@ -37,6 +37,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
   onView,
 }) => {
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(post?.imageUrl || null);
+  const [isImageExpanded, setIsImageExpanded] = useState(false);
   const [isReporting, setIsReporting] = useState(false);
   const [reportReason, setReportReason] = useState('Misleading content');
   const [reportDetails, setReportDetails] = useState('');
@@ -74,7 +75,22 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
 
   useEffect(() => {
     setSelectedImageUrl(post?.imageUrl || null);
+    setIsImageExpanded(false);
   }, [post?.id]);
+
+  useEffect(() => {
+    if (!isImageExpanded) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsImageExpanded(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isImageExpanded]);
 
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white';
   const muted = isDarkMode ? 'text-neutral-400' : 'text-neutral-600';
@@ -117,7 +133,14 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)] lg:items-start">
         <div className={`overflow-hidden rounded-2xl border ${surface}`}>
           <div className="flex min-h-[320px] items-center justify-center bg-neutral-950 sm:min-h-[480px] lg:min-h-[620px]">
-            <PostImage src={selectedImageUrl || post.imageUrl} alt={post.imageAlt || post.title} className="h-full min-h-[320px] w-full sm:min-h-[480px] lg:min-h-[620px]" imageClassName="max-h-[78vh]" fetchPriority="high" decoding="async" />
+            <button
+              type="button"
+              onClick={() => setIsImageExpanded(true)}
+              aria-label={`View ${post.imageAlt || post.title} full screen`}
+              className="block h-full min-h-[320px] w-full cursor-zoom-in sm:min-h-[480px] lg:min-h-[620px]"
+            >
+              <PostImage src={selectedImageUrl || post.imageUrl} alt={post.imageAlt || post.title} className="h-full min-h-[320px] w-full sm:min-h-[480px] lg:min-h-[620px]" imageClassName="max-h-[78vh]" fetchPriority="high" decoding="async" />
+            </button>
           </div>
           {(post.imageAssets?.length || 0) > 1 && <div className="grid grid-cols-4 gap-2 border-t border-neutral-800/60 p-3 sm:grid-cols-6">{post.imageAssets?.map((asset, index) => (
             <button key={asset.url} type="button" onClick={() => setSelectedImageUrl(asset.url)} aria-label={`Show listing image ${index + 1}`} aria-pressed={selectedImageUrl === asset.url} className={`aspect-square overflow-hidden rounded-lg border ${selectedImageUrl === asset.url ? 'border-amber-400' : 'border-neutral-700'}`}>
@@ -174,6 +197,34 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
       </section>
 
       <MarketplaceReviews type="listing" targetId={post.id} currentUser={currentUser} onOpenAuth={onOpenAuth} isDarkMode={isDarkMode} />
+
+      {isImageExpanded && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-3 backdrop-blur-md sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Full-screen image: ${post.imageAlt || post.title}`}
+          onClick={() => setIsImageExpanded(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setIsImageExpanded(false)}
+            aria-label="Close full-screen image"
+            className="absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white shadow-lg transition hover:bg-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="h-full max-h-[92vh] w-full max-w-[96vw]" onClick={event => event.stopPropagation()}>
+            <PostImage
+              src={selectedImageUrl || post.imageUrl}
+              alt={post.imageAlt || post.title}
+              className="h-full w-full rounded-xl"
+              imageClassName="max-h-[92vh] cursor-zoom-out"
+              loading="eager"
+            />
+          </div>
+        </div>
+      )}
 
       {fromOtherSellers.length > 0 && <section className="mt-10">
         <div className="mb-4 flex items-end justify-between gap-3 border-b border-amber-500/15 pb-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Selected by shared tags</p><h2 className="mt-1 font-serif text-2xl font-bold">Related pieces</h2></div><span className={`text-xs ${muted}`}>{fromOtherSellers.length} match{fromOtherSellers.length === 1 ? '' : 'es'}</span></div>

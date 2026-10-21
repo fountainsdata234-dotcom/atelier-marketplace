@@ -1,13 +1,22 @@
-import React, { useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigation, Search } from 'lucide-react';
-import { ClothPost, User } from '../types';
-import { calculateDistanceKm, WORLD_COUNTRIES } from '../data/geoData';
+import { ClothPost, LocationCity, LocationCountry, LocationRegion, User } from '../types';
 import { getSearchSuggestions, hasValidGlobeCoordinates } from '../utils/globe';
 import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
-import { ArtisanGlobe3D, type GlobeArtisan } from './ArtisanGlobe3D';
+import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { api } from '../services/api';
-import { resolveSellerMapLocation } from '../data/geoData';
 import { SearchableLocationField } from './SearchableLocationField';
+
+const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
+
+const calculateDistanceKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const radians = Math.PI / 180;
+  const deltaLat = (lat2 - lat1) * radians;
+  const deltaLng = (lng2 - lng1) * radians;
+  const value = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(lat1 * radians) * Math.cos(lat2 * radians) * Math.sin(deltaLng / 2) ** 2;
+  return Math.round(6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)));
+};
 
 type SellerReviewSummary = {
   sellerId: string;
@@ -140,8 +149,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
       if (user.isBlocked
         || !user.name.trim() && !user.shopName?.trim()
         || (user.role !== 'tailor' && user.role !== 'fabric_seller')) return [];
-      const location = resolveSellerMapLocation(user.location);
-      if (!location) return [];
+      const location = user.location;
       if (!hasValidGlobeCoordinates(location)) return [];
       return [{
         ...user,
@@ -155,6 +163,12 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   }, [currentUser, posts, users]);
 
   const [nearMeOnly, setNearMeOnly] = useState(false);
+  const [locationCountries, setLocationCountries] = useState<LocationCountry[]>([]);
+  const [locationRegions, setLocationRegions] = useState<LocationRegion[]>([]);
+  const [locationCities, setLocationCities] = useState<LocationCity[]>([]);
+  const [globeNearViewport, setGlobeNearViewport] = useState(false);
+  const [locationDataError, setLocationDataError] = useState(false);
+  const globePanelRef = useRef<HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
   const [filterCountry, setFilterCountry] = useState(() => getDefaultLocationFilter(currentUser?.location));
@@ -170,25 +184,88 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const [sellerReviewsLoaded, setSellerReviewsLoaded] = useState(false);
   const [sellerReviewsError, setSellerReviewsError] = useState(false);
   const [selectedArtisanId, setSelectedArtisanId] = useState<string | null>(null);
-  const [countrySearch, setCountrySearch] = useState(() => {
-    const value = getDefaultLocationFilter(currentUser?.location);
-    return WORLD_COUNTRIES.find(country => country.code === value || country.name === value)?.name || '';
-  });
+  const [countrySearch, setCountrySearch] = useState('');
   const [stateSearch, setStateSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
 
+  useEffect(() => {
+    let cancelled = false;
+    void api.getLocationCountries().then(countries => {
+      if (!cancelled) setLocationCountries(countries);
+    }).catch(error => {
+      console.error('Artisan directory country filters could not be loaded.', error);
+      if (!cancelled) setLocationDataError(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (filterCountry === 'all') {
+      setLocationRegions([]);
+      setLocationCities([]);
+      return;
+    }
+    let cancelled = false;
+    void api.getLocationRegions(filterCountry).then(regions => {
+      if (!cancelled) setLocationRegions(regions);
+    }).catch(error => {
+      console.error('Artisan directory regions could not be loaded.', error);
+      if (!cancelled) setLocationDataError(true);
+    });
+    return () => { cancelled = true; };
+  }, [filterCountry]);
+
+  useEffect(() => {
+    const selectedRegion = locationRegions.find(region => region.code === filterState || region.name === filterState);
+    if (filterCountry === 'all' || !selectedRegion) {
+      setLocationCities([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void api.searchLocationCities(filterCountry, selectedRegion.code, citySearch.trim()).then(cities => {
+        if (!cancelled) setLocationCities(cities);
+      }).catch(error => {
+        console.error('Artisan directory city suggestions could not be loaded.', error);
+        if (!cancelled) setLocationDataError(true);
+      });
+    }, citySearch.trim() ? 180 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [citySearch, filterCountry, filterState, locationRegions]);
+
+  useEffect(() => {
+    const panel = globePanelRef.current;
+    if (!panel) return;
+    if (!('IntersectionObserver' in window)) {
+      setGlobeNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setGlobeNearViewport(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '500px 0px' });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
+
   React.useEffect(() => {
+    if (locationCountries.length === 0) return;
     const nextCountry = getDefaultLocationFilter(currentUser?.location);
-    const nextCountryData = WORLD_COUNTRIES.find((country) => country.code === nextCountry || country.name === nextCountry);
-    const nextState = nextCountryData?.states.find((state) => state.name.toLowerCase() === currentUser?.location.state?.toLowerCase());
+    const nextCountryData = locationCountries.find(country => country.code === nextCountry || country.name === nextCountry);
+    const nextState = currentUser?.location.state || '';
     setFilterCountry(nextCountry);
-    setFilterState(nextState?.code || 'all');
-    setFilterCity(nextState?.cities.some((city) => city.toLowerCase() === currentUser?.location.city?.toLowerCase()) ? currentUser?.location.city || 'all' : 'all');
-    setCountrySearch(WORLD_COUNTRIES.find(country => country.code === nextCountry || country.name === nextCountry)?.name || '');
-    setStateSearch(nextState?.name || '');
-    setCitySearch(nextState?.cities.find(city => city.toLowerCase() === currentUser?.location.city?.toLowerCase()) || '');
+    setFilterState(nextState || 'all');
+    setFilterCity(currentUser?.location.city || 'all');
+    setCountrySearch(nextCountryData?.name || '');
+    setStateSearch(nextState);
+    setCitySearch(currentUser?.location.city || '');
     setSelectedArtisanId(null);
-  }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode, currentUser?.location?.state, currentUser?.location?.city]);
+  }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode, currentUser?.location?.state, currentUser?.location?.city, locationCountries]);
   React.useEffect(() => {
     const sellerIds = artisans.map(artisan => artisan.id);
     if (!sellerIds.length) {
@@ -220,16 +297,15 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     setSearchQuery(artisan.handle.startsWith('@') ? artisan.handle : `@${artisan.handle}`);
     setSearchSuggestionsOpen(false);
   };
-  const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry || country.name === filterCountry);
-  const selectedState = selectedCountry?.states.find((state) => state.code === filterState || state.name === filterState);
-  const countryOptions = WORLD_COUNTRIES.filter(country => !countrySearch.trim()
+  const selectedCountry = locationCountries.find(country => country.code === filterCountry || country.name === filterCountry);
+  const selectedState = locationRegions.find(region => region.code === filterState || region.name === filterState);
+  const countryOptions = locationCountries.filter(country => !countrySearch.trim()
     || country.name.toLowerCase().includes(countrySearch.trim().toLowerCase())
     || country.code.toLowerCase().includes(countrySearch.trim().toLowerCase())).slice(0, 100);
-  const stateOptions = (selectedCountry?.states || []).filter(state => !stateSearch.trim()
+  const stateOptions = locationRegions.filter(state => !stateSearch.trim()
     || state.name.toLowerCase().includes(stateSearch.trim().toLowerCase())
     || state.code.toLowerCase().includes(stateSearch.trim().toLowerCase())).slice(0, 100);
-  const cityOptions = (selectedState?.cities || []).filter(city => !citySearch.trim()
-    || city.toLowerCase().includes(citySearch.trim().toLowerCase())).slice(0, 100);
+  const cityOptions = locationCities.map(city => city.name);
   const locationArtisans = artisans.filter((artisan) => {
     const matchesLocation = matchesLocationFilter(
       artisan.location,
@@ -366,7 +442,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             value={countrySearch}
             onChange={value => {
               setCountrySearch(value);
-              const match = WORLD_COUNTRIES.find(country => country.name.toLowerCase() === value.trim().toLowerCase()
+              const match = locationCountries.find(country => country.name.toLowerCase() === value.trim().toLowerCase()
                 || country.code.toLowerCase() === value.trim().toLowerCase());
               setFilterCountry(match?.code || 'all');
               setFilterState('all');
@@ -392,7 +468,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             value={stateSearch}
             onChange={value => {
               setStateSearch(value);
-              const match = selectedCountry?.states.find(state => state.name.toLowerCase() === value.trim().toLowerCase()
+              const match = locationRegions.find(state => state.name.toLowerCase() === value.trim().toLowerCase()
                 || state.code.toLowerCase() === value.trim().toLowerCase());
               setFilterState(match?.code || 'all');
               setFilterCity('all');
@@ -414,8 +490,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             value={citySearch}
             onChange={value => {
               setCitySearch(value);
-              const match = selectedState?.cities.find(city => city.toLowerCase() === value.trim().toLowerCase());
-              setFilterCity(match || 'all');
+              const match = locationCities.find(city => city.name.toLowerCase() === value.trim().toLowerCase());
+              setFilterCity(match?.name || 'all');
               setSelectedArtisanId(null);
             }}
             onClear={() => {
@@ -465,7 +541,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           </div>
         </div>
 
-        <section className={`artisan-globe-panel mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
+        {locationDataError && <p role="status" className="mb-3 text-[11px] text-amber-500">Some location suggestions are temporarily unavailable. You can still search by name or location.</p>}
+        <section ref={globePanelRef} className={`artisan-globe-panel mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
           <div className="artisan-globe-panel-header">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Seller locations · static Earth imagery</p>
@@ -473,14 +550,22 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>
-          <ArtisanGlobe3D
-            artisans={globeArtisans}
-            selectedArtisanId={selectedArtisanId}
-            onSelectArtisan={(artisan) => setSelectedArtisanId(artisan.id)}
-            onOpenArtisan={onSelectArtisan}
-            onCloseArtisan={() => setSelectedArtisanId(null)}
-            isDarkMode={isDarkMode}
-          />
+          {globeNearViewport ? (
+            <Suspense fallback={<div className="artisan-globe-3d flex items-center justify-center text-sm text-orange-100/80" role="status">Preparing the artisan map…</div>}>
+              <ArtisanGlobe3D
+                artisans={globeArtisans}
+                selectedArtisanId={selectedArtisanId}
+                onSelectArtisan={(artisan) => setSelectedArtisanId(artisan.id)}
+                onOpenArtisan={onSelectArtisan}
+                onCloseArtisan={() => setSelectedArtisanId(null)}
+                isDarkMode={isDarkMode}
+              />
+            </Suspense>
+          ) : (
+            <div className="artisan-globe-3d flex items-center justify-center text-sm text-orange-100/80" aria-label="Interactive artisan map loads when visible">
+              Artisan map loads as you reach it
+            </div>
+          )}
         </section>
 
         {searchQuery.trim().length >= 2 && filteredArtisans.length === 0 && (

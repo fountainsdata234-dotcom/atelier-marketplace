@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import { motion } from 'motion/react';
 import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, TrendingUp } from 'lucide-react';
-import { AdminPromoPlan, ClothPost, User, UserLocation, UserRole } from '../types';
+import { AdminPromoPlan, ClothPost, User, UserRole } from '../types';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { PostImage } from './PostImage';
 
@@ -39,7 +39,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
   const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
-  const [sellerLocationResolver, setSellerLocationResolver] = React.useState<((location: UserLocation) => UserLocation | null) | null>(null);
   const [failedFeaturedPostId, setFailedFeaturedPostId] = React.useState<string | null>(null);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
@@ -56,16 +55,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const previewArtisans = React.useMemo<GlobeArtisan[]>(() => users
     .filter(user => !user.isBlocked && (user.role === 'tailor' || user.role === 'fabric_seller'))
     .flatMap(user => {
-      const location = sellerLocationResolver
-        ? sellerLocationResolver(user.location)
-        : typeof user.location.lat === 'number' && Number.isFinite(user.location.lat)
-          && typeof user.location.lng === 'number' && Number.isFinite(user.location.lng)
-          ? user.location
-          : null;
+      const location = typeof user.location.lat === 'number' && Number.isFinite(user.location.lat)
+        && user.location.lat >= -90 && user.location.lat <= 90
+        && typeof user.location.lng === 'number' && Number.isFinite(user.location.lng)
+        && user.location.lng >= -180 && user.location.lng <= 180
+        ? user.location
+        : null;
       if (!location) return [];
       const userPosts = posts.filter(post => post.authorId === user.id);
       return [{ ...user, location, distanceKm: null, postCount: userPosts.length }];
-    }), [posts, sellerLocationResolver, users]);
+    }), [posts, users]);
 
   React.useEffect(() => {
     const section = globeSectionRef.current;
@@ -78,17 +77,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     observer.observe(section);
     return () => observer.disconnect();
   }, []);
-
-  React.useEffect(() => {
-    if (!shouldLoadGlobe || sellerLocationResolver) return;
-    let isActive = true;
-    void import('../data/geoData').then(({ resolveSellerMapLocation }) => {
-      if (isActive) setSellerLocationResolver(() => resolveSellerMapLocation);
-    }).catch((loadError: unknown) => {
-      console.error('Unable to resolve seller locations for the artisan globe.', loadError);
-    });
-    return () => { isActive = false; };
-  }, [sellerLocationResolver, shouldLoadGlobe]);
 
   return (
     <div className="relative z-10 mx-auto w-full max-w-[90rem] px-3 py-6 sm:px-6 sm:py-10 lg:px-8 md:py-16">
