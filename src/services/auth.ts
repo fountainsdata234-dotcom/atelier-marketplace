@@ -209,10 +209,10 @@ export const getAuthErrorMessage = (error: unknown) => {
     return 'New account creation is temporarily unavailable. Please try again later.';
   }
   if (/email not confirmed|email_not_confirmed/.test(`${code} ${normalizedMessage}`)) {
-    return 'Email confirmation is still enabled for this service. Contact support to enable direct sign-in.';
+    return 'This account could not sign in. Check your email and password, then try again.';
   }
   if (code === 'invalid_credentials' || /invalid login credentials|invalid email or password/.test(normalizedMessage)) {
-    return 'The email or password is incorrect. If you recently created your account, confirm your email first or reset your password.';
+    return 'The email or password is incorrect. Check your details or reset your password.';
   }
   if (/failed to fetch|network error|fetch failed/.test(normalizedMessage)) {
     return 'We could not reach the sign-up service. Check your internet connection and try again.';

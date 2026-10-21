@@ -1020,6 +1020,17 @@
   animation: pulse-subtle 4s ease-in-out infinite;
 }
 
+@keyframes marketplace-flame {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scale(1); filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.25)); }
+  35% { transform: translateY(-2px) rotate(3deg) scale(1.08); filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.65)); }
+  70% { transform: translateY(0) rotate(-2deg) scale(0.98); filter: drop-shadow(0 0 7px rgba(251, 191, 36, 0.45)); }
+}
+
+.trending-flame {
+  animation: marketplace-flame 1.25s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
 .marketplace-masonry {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1053,7 +1064,8 @@
   .brand-thread,
   .navbar-sunset-rays::before,
   .navbar-sunset-rays::after,
-  .navbar-sunset-particles {
+  .navbar-sunset-particles,
+  .trending-flame {
     animation: none;
   }
 

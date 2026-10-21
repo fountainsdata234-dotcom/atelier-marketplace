@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, ChevronLeft, ChevronRight, Scissors, Sparkles } from 'lucide-react';
 import { ClothPost, User } from '../types';
+import { PostImage } from './PostImage';
 
 interface MarketplaceInterludeProps {
   posts: ClothPost[];
@@ -71,7 +72,7 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
         <motion.div key={active.user.id} initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35 }} className={`relative overflow-hidden rounded-2xl border ${isDarkMode ? 'border-white/10 bg-black/20' : 'border-amber-200 bg-white/70'}`}>
           <div className="flex min-h-[190px] items-stretch">
             <div className="relative w-[38%] shrink-0 overflow-hidden bg-neutral-900">
-              <img src={active.post.imageUrl} alt={active.post.title} className="absolute inset-0 h-full w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" />
+              <PostImage src={active.post.imageUrl} alt={active.post.title} className="absolute inset-0 h-full w-full" imageClassName="brightness-110 saturate-110" loading="lazy" />
               <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/35" />
             </div>
             <div className="min-w-0 flex-1 p-4 sm:p-5">

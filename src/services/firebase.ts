@@ -170,7 +170,8 @@ export async function logoutFromFirebase() {
 }
 
 export async function uploadUserImage(file: Blob, userId: string, folder: 'profiles' | 'posts' | 'atelier' | string, fileName: string, alreadyOptimized = false) {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8787';
+  const apiUrl = import.meta.env.VITE_API_URL
+    || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
   const { getAuthToken } = await import('./auth');
   const token = await getAuthToken();
   const formData = new FormData();

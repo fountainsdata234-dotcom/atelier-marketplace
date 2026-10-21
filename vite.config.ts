@@ -29,7 +29,8 @@ export default defineConfig(() => {
             if (id.includes('motion') || id.includes('framer-motion')) return 'motion-vendor';
             if (id.includes('/react/') || id.includes('/react-dom/')) return 'react-vendor';
             if (id.includes('lucide-react')) return 'icon-vendor';
-            if (id.includes('country-state-city') || id.includes('libphonenumber-js')) return 'utility-vendor';
+            if (id.includes('country-state-city')) return 'geo-data';
+            if (id.includes('libphonenumber-js')) return 'utility-vendor';
             return undefined;
           },
         },

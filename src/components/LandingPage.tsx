@@ -1,103 +1,14 @@
 import React, { lazy } from 'react';
 import { motion } from 'motion/react';
-import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, Zap, Flame, Trophy, TrendingUp, MapPin } from 'lucide-react';
-import { AdminPromoPlan, ClothPost, User, UserRole } from '../types';
-import { getTopTailors, isNewSeller, rankTrendingPosts } from '../utils/marketplaceRanking';
-import { storageService } from '../services/storage';
+import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, TrendingUp } from 'lucide-react';
+import { AdminPromoPlan, ClothPost, User, UserLocation, UserRole } from '../types';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
+import { PostImage } from './PostImage';
 
 const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
 
 const RESPONSIVE_LANDSCAPE_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-17-44-am.avif';
 const RESPONSIVE_PORTRAIT_IMAGE = 'https://user36765.na.imgto.link/public/20260926/chatgpt-image-sep-26-2026-10-16-27-am.avif';
-interface LandingTrendCard {
-  id: string;
-  title: string;
-  subtitle: string;
-  imageUrl?: string;
-  tag: string;
-  metric: string;
-  location?: string;
-  accent: string;
-  post?: ClothPost;
-  seller?: User;
-}
-
-interface LandingTrendCarouselProps {
-  items: LandingTrendCard[];
-  label: string;
-  accentClass: string;
-  onSelectPost: (post: ClothPost) => void;
-  onSelectSeller: (seller: User) => void;
-}
-
-const LandingTrendCarousel: React.FC<LandingTrendCarouselProps> = ({ items, label, accentClass, onSelectPost, onSelectSeller }) => {
-  const trackRef = React.useRef<HTMLDivElement | null>(null);
-  const pauseUntilRef = React.useRef(0);
-  const [failedImageUrls, setFailedImageUrls] = React.useState<Record<string, string>>({});
-  const visibleItems = items.filter(item => item.imageUrl && failedImageUrls[item.id] !== item.imageUrl);
-
-  React.useEffect(() => {
-    if (visibleItems.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const timer = window.setInterval(() => {
-      const track = trackRef.current;
-      if (!track || document.visibilityState !== 'visible' || Date.now() < pauseUntilRef.current) return;
-      const bounds = track.getBoundingClientRect();
-      if (bounds.bottom <= 0 || bounds.top >= window.innerHeight) return;
-      const firstCard = track.querySelector<HTMLElement>('[data-trend-card]');
-      if (!firstCard) return;
-      const step = firstCard.offsetWidth + 16;
-      const maxScroll = track.scrollWidth - track.clientWidth;
-      track.scrollTo({ left: track.scrollLeft >= maxScroll - 12 ? 0 : track.scrollLeft + step, behavior: 'smooth' });
-    }, 4800);
-    return () => window.clearInterval(timer);
-  }, [visibleItems.length]);
-
-  const openCard = (item: LandingTrendCard) => {
-    if (item.post) onSelectPost(item.post);
-    else if (item.seller) onSelectSeller(item.seller);
-  };
-
-  return (
-    <div
-      ref={trackRef}
-      aria-label={label}
-      aria-roledescription="carousel"
-      className="flex min-w-0 snap-x snap-mandatory touch-pan-x gap-4 overflow-x-auto overscroll-x-contain pb-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-      onPointerDown={() => { pauseUntilRef.current = Date.now() + 6500; }}
-      onPointerEnter={() => { pauseUntilRef.current = Date.now() + 6500; }}
-      onPointerLeave={() => { pauseUntilRef.current = Date.now() + 1200; }}
-      onTouchStart={() => { pauseUntilRef.current = Date.now() + 6500; }}
-      onTouchEnd={() => { pauseUntilRef.current = Date.now() + 1800; }}
-    >
-      {visibleItems.map(item => (
-        <button
-          key={item.id}
-          type="button"
-          data-trend-card
-          onClick={() => openCard(item)}
-          aria-label={item.post ? `View ${item.title} by ${item.post.authorName}` : `View ${item.title}'s seller page`}
-          className="group relative min-w-[82vw] max-w-[320px] flex-none snap-start overflow-hidden rounded-2xl border border-amber-500/20 bg-[#111316] text-left shadow-[0_20px_50px_rgba(0,0,0,0.22)] transition-transform duration-300 hover:-translate-y-1 sm:min-w-[280px]"
-        >
-          <div className={`absolute inset-0 bg-gradient-to-br ${item.accent}`} />
-          <div className="relative aspect-[4/3] overflow-hidden border-b border-white/10">
-            <img src={item.imageUrl} alt={item.post?.imageAlt || item.title} className="h-full w-full bg-neutral-950 object-contain brightness-110 saturate-110" loading="lazy" decoding="async" onError={() => setFailedImageUrls(current => ({ ...current, [item.id]: item.imageUrl || '' }))} />
-            <span className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[10px] font-bold uppercase text-white/90 backdrop-blur-sm">{item.tag}</span>
-          </div>
-          <div className="relative space-y-2.5 p-4">
-            <div className="flex items-center justify-between gap-3 text-[10px] uppercase text-amber-200/80">
-              <span className="truncate">{item.metric}</span>
-              <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-bold ${accentClass}`}><Flame className="h-3 w-3" />Hot</span>
-            </div>
-            <h3 className="line-clamp-2 text-base font-semibold text-white">{item.title}</h3>
-            <p className="line-clamp-2 text-sm text-neutral-300">{item.subtitle}</p>
-            {item.location && <p className="flex items-center gap-1 text-xs text-neutral-400"><MapPin className="h-3.5 w-3.5 shrink-0" />{item.location}</p>}
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-};
 
 interface LandingPageProps {
   onOpenAuth: (defaultRole: UserRole) => void;
@@ -132,27 +43,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [failedFeaturedPostId, setFailedFeaturedPostId] = React.useState<string | null>(null);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
-  const trendingPosts = React.useMemo(() => {
-    const scope = storageService.getRecommendationScope(currentUser?.id);
-    if (!storageService.getRecommendationPreferences(scope).enabled) {
-      return rankTrendingPosts(posts, users, [], currentUser?.id, [], Date.now());
-    }
-    const sessionId = scope.startsWith('session:') ? scope.slice('session:'.length) : '';
-    const events = storageService.getDiscoveryEvents().filter(event =>
-      currentUser ? event.userId === currentUser.id : !event.userId && event.sessionId === sessionId,
-    );
-    return rankTrendingPosts(posts, users, events, currentUser?.id, [], Date.now());
-  }, [posts, users, currentUser?.id]);
-  const hottestPosts = React.useMemo(() => trendingPosts.filter(post => post.imageUrl).slice(0, 6), [trendingPosts]);
-  const lastWeekHits = React.useMemo(() => {
-    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return [...trendingPosts]
-      .filter(post => Number.isFinite(Date.parse(post.createdAt)) && Date.parse(post.createdAt) > oneWeekAgo)
-      .slice(0, 6);
-  }, [trendingPosts]);
-  const topTailors = React.useMemo(() => getTopTailors(posts, users, Date.now())
-    .filter(seller => posts.some(post => post.authorId === seller.id && post.imageUrl?.trim()))
-    .slice(0, 6), [posts, users, currentUser]);
   const featuredPost = React.useMemo(() => {
     const availablePosts = posts.filter(post => post.imageUrl && post.description?.trim());
     if (availablePosts.length === 0) return null;
@@ -164,12 +54,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   }, [posts]);
   const activePromoPlans = React.useMemo(() => promoPlans.filter(plan => plan.isActive), [promoPlans]);
   const previewArtisans = React.useMemo<GlobeArtisan[]>(() => users
-    .filter(user => user.role === 'tailor' || user.role === 'fabric_seller')
-    .filter(user => Number.isFinite(user.location?.lat) && Number.isFinite(user.location?.lng))
-    .map(user => {
+    .filter(user => !user.isBlocked && (user.role === 'tailor' || user.role === 'fabric_seller'))
+    .flatMap(user => {
+      const location = sellerLocationResolver
+        ? sellerLocationResolver(user.location)
+        : typeof user.location.lat === 'number' && Number.isFinite(user.location.lat)
+          && typeof user.location.lng === 'number' && Number.isFinite(user.location.lng)
+          ? user.location
+          : null;
+      if (!location) return [];
       const userPosts = posts.filter(post => post.authorId === user.id);
-      return { ...user, distanceKm: null, postCount: userPosts.length };
-    }), [posts, users]);
+      return [{ ...user, location, distanceKm: null, postCount: userPosts.length }];
+    }), [posts, sellerLocationResolver, users]);
 
   React.useEffect(() => {
     const section = globeSectionRef.current;
@@ -284,44 +180,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </div>
 
-            {featuredPost && featuredPost.id !== failedFeaturedPostId && <div className="relative">
-              <div className="relative overflow-hidden rounded-[28px] border border-neutral-800 bg-neutral-950 p-4">
-                <div className="rounded-[22px] border border-amber-500/20 bg-gradient-to-br from-neutral-900 via-[#17181c] to-[#2a1715] p-4">
-                  <div className="mb-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-400">
+            {featuredPost && featuredPost.id !== failedFeaturedPostId && <article className="min-w-0 overflow-hidden rounded-2xl bg-gradient-to-br from-neutral-900 via-[#17181c] to-[#2a1715] p-3 sm:rounded-3xl sm:p-5">
+                  <div className="mb-4 flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-400 sm:text-xs">
                     <span>From the seller network</span>
-                    <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-emerald-300">Live post</span>
+                    <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1.5 text-emerald-300">Live post</span>
                   </div>
 
-                  <div className="rounded-[22px] bg-neutral-900 p-4 text-white">
-                    <div className="mb-3 flex items-center justify-between">
+                  <div className="rounded-xl bg-neutral-900 p-3 text-white sm:rounded-2xl sm:p-5">
+                    <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
                       <div>
                         <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300">Seller post</p>
                         <h2 className="mt-1 line-clamp-2 text-2xl font-semibold">{featuredPost?.title || 'Real work from real makers'}</h2>
                       </div>
-                      <div className="rounded-full bg-white/10 px-2 py-1 text-xs">Marketplace</div>
+                      <div className="shrink-0 rounded-full bg-white/10 px-2.5 py-1.5 text-xs">Marketplace</div>
                     </div>
 
-                    <div className="relative h-48 overflow-hidden rounded-[20px] bg-slate-950">
-                      <img src={featuredPost?.imageUrl || ''} alt={featuredPost?.imageAlt || featuredPost?.title || 'Atelier listing'} className="h-full w-full object-contain brightness-110 saturate-110" loading="eager" fetchPriority="high" decoding="async" onError={() => { if (featuredPost) setFailedFeaturedPostId(featuredPost.id); }} />
+                    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-slate-950 sm:rounded-2xl">
+                      {featuredPost && <PostImage src={featuredPost.imageUrl} alt={featuredPost.imageAlt || featuredPost.title || 'Atelier listing'} className="h-full w-full" imageClassName="brightness-110 saturate-110" loading="eager" fetchPriority="high" decoding="async" onError={() => setFailedFeaturedPostId(featuredPost.id)} />}
                     </div>
                     <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-neutral-300">{featuredPost?.description || 'A living catalogue of garments, fabrics, and ideas published by the people who make them.'}</p>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-900 px-3 py-2">
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-neutral-900/80 px-3 py-3 sm:mt-4 sm:rounded-2xl sm:px-4">
                     <div>
                       <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-500">Seller catalogue</p>
                       <p className="text-sm font-bold text-amber-300">Browse the full post</p>
                     </div>
                     <button
                       onClick={onExploreMarketplace}
-                      className="rounded-full bg-amber-400 px-4 py-2 text-xs font-bold text-slate-900"
+                      className="shrink-0 rounded-full bg-amber-400 px-4 py-2 text-xs font-bold text-slate-900"
                     >
                       Explore
                     </button>
                   </div>
-                </div>
-              </div>
-            </div>}
+                </article>}
           </div>
         </motion.div>
       </section>
@@ -344,106 +236,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {promoPlansLoading ? <div className="grid gap-4 md:grid-cols-3" aria-label="Loading promotion plans">{[0, 1, 2].map(index => <div key={index} className="h-40 animate-pulse rounded-2xl border border-neutral-800 bg-neutral-900/50" />)}</div> : activePromoPlans.length > 0 ? <div className="grid gap-4 md:grid-cols-3">{activePromoPlans.map(plan => <article key={plan.id} className={`rounded-2xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/70' : 'border-neutral-200 bg-white shadow-sm'}`}><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{plan.badgeLabel || 'Atelier plan'}</p><h3 className="mt-2 text-lg font-serif font-bold">{plan.caption}</h3><p className={`mt-2 min-h-12 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{plan.description}</p><div className="mt-5 flex items-end justify-between gap-3"><strong className="text-xl">{plan.currency || 'USD'} {plan.amount}</strong><span className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">{plan.timeRange}</span></div></article>)}</div> : <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-8 text-center"><p className="text-sm text-neutral-300">No studio plans are live right now.</p><p className="mt-2 text-xs text-neutral-400">New offers will appear here as soon as the next atelier edit is published.</p></div>}
       </motion.section>
 
-      <motion.section initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300">
-              <Flame className="h-5 w-5" />
+      <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.6 }} className="border-t border-amber-500/15 py-12">
+        <div className="flex flex-col gap-5 rounded-3xl border border-amber-500/20 bg-gradient-to-br from-neutral-900 via-neutral-950 to-amber-950/30 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-300">
+              <TrendingUp className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-500">Marketplace pulse</p>
-              <h2 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">What buyers are browsing right now</h2>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-400">Activity-based discovery</p>
+              <h2 className="mt-2 text-xl font-serif font-bold text-white sm:text-2xl">Trends are earned, not invented.</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-300">
+                Marketplace trends use qualified customer activity. Until enough real signals are available, listings stay in the regular feed instead of being labelled “hot.”
+              </p>
             </div>
           </div>
-          <button type="button" onClick={onExploreMarketplace} className="inline-flex items-center gap-2 self-start text-xs font-bold text-amber-500 hover:text-amber-300">Open marketplace <ArrowRight className="h-4 w-4" /></button>
-        </div>
-
-        <div className="space-y-8">
-          <div className="rounded-[28px] border border-amber-500/15 bg-[radial-gradient(circle_at_top,_rgba(251,146,60,0.22),_transparent_18%),linear-gradient(135deg,#120d0a,#171c23,#111317)] p-4 shadow-[0_30px_70px_rgba(251,146,60,0.12)]">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-amber-300">
-                <TrendingUp className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Trending tailors near you</span>
-              </div>
-            </div>
-            <LandingTrendCarousel
-              label="Trending tailor posts"
-              accentClass="bg-amber-500/15 text-amber-200"
-              onSelectPost={onSelectPost}
-              onSelectSeller={onSelectSeller}
-              items={
-              hottestPosts.map(post => ({
-                id: post.id,
-                title: post.title,
-                subtitle: `${post.authorName} • ${post.tags.slice(0, 2).join(' • ')}`,
-                imageUrl: post.imageUrl,
-                post,
-                tag: 'Trending',
-                metric: `${(post.likes?.length || 0) + (post.saves?.length || 0)} likes and saves`,
-                location: post.authorLocation ? `${post.authorLocation.city}, ${post.authorLocation.country}` : undefined,
-                accent: 'from-orange-400/35 via-amber-500/20 to-transparent',
-              }))}
-            />
-          </div>
-
-          <div className="rounded-[28px] border border-amber-500/15 bg-[linear-gradient(135deg,#12161d,#0f172a,#111317)] p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-amber-300">
-                <Zap className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">Trending fabrics near you</span>
-              </div>
-            </div>
-            <LandingTrendCarousel
-              label="Recently active fabric posts"
-              accentClass="bg-cyan-500/15 text-cyan-200"
-              onSelectPost={onSelectPost}
-              onSelectSeller={onSelectSeller}
-              items={
-              lastWeekHits.map(post => ({
-                id: post.id,
-                title: post.title,
-                subtitle: `${post.authorName} • ${post.tags[0] || 'fashion'} update`,
-                imageUrl: post.imageUrl,
-                post,
-                tag: 'Fresh',
-                metric: `${Math.max(1, (post.likes?.length ?? 0) + (post.saves?.length ?? 0))} engaged this week`,
-                location: post.authorLocation ? `${post.authorLocation.city}, ${post.authorLocation.country}` : undefined,
-                accent: 'from-cyan-400/25 via-sky-500/20 to-transparent',
-              }))}
-            />
-          </div>
-
-          <div className="rounded-[28px] border border-amber-500/15 bg-[linear-gradient(135deg,#19120f,#0f1015,#17130d)] p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-amber-300">
-                <Trophy className="h-4 w-4" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.22em]">New &amp; growing ateliers</span>
-              </div>
-              <p className="mt-2 text-xs text-neutral-400">New sellers receive rotating discovery spots. Reviews, featured placement, and listing tags do not certify professional skill.</p>
-            </div>
-            <LandingTrendCarousel
-              label="Featured tailor and fabric seller profiles"
-              accentClass="bg-fuchsia-500/15 text-fuchsia-200"
-              onSelectPost={onSelectPost}
-              onSelectSeller={onSelectSeller}
-              items={topTailors.map(seller => {
-                const sellerPosts = posts.filter(post => post.authorId === seller.id);
-                const featuredImage = sellerPosts.find(post => post.imageUrl?.trim())?.imageUrl;
-                const sellerLocation = seller.location ? `${seller.location.city}, ${seller.location.country}` : 'Global atelier';
-                return {
-                  id: seller.id,
-                  title: seller.shopName || seller.name,
-                  subtitle: `${seller.role === 'fabric_seller' ? 'Fabric merchant' : 'Tailor'}${isNewSeller(seller) ? ' · New seller' : ''}`,
-                  imageUrl: featuredImage,
-                  seller,
-                  tag: seller.isPromoted ? 'Sponsored' : isNewSeller(seller) ? 'New seller' : 'Atelier',
-                  metric: `${sellerPosts.filter(post => !post.deletedAt && (post.status === undefined || post.status === 'published')).length} portfolio pieces`,
-                  location: sellerLocation,
-                  accent: 'from-fuchsia-500/30 via-purple-500/20 to-transparent',
-                };
-              })}
-            />
-          </div>
+          <button type="button" onClick={onExploreMarketplace} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition hover:bg-amber-300">
+            Explore the marketplace <ArrowRight className="h-4 w-4" />
+          </button>
         </div>
       </motion.section>
 

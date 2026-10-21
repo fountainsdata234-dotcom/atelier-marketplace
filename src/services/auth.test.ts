@@ -19,12 +19,12 @@ describe('authentication error messages', () => {
 
   it('explains invalid login credentials and offers recovery steps', () => {
     expect(getAuthErrorMessage({ code: 'invalid_credentials', message: 'Invalid login credentials' }))
-      .toMatch(/email or password is incorrect.*confirm your email.*reset your password/i);
+      .toMatch(/email or password is incorrect.*reset your password/i);
   });
 
-  it('identifies when the Supabase project still requires email confirmation', () => {
+  it('does not expose Supabase email-confirmation configuration details', () => {
     expect(getAuthErrorMessage({ code: 'email_not_confirmed', message: 'Email not confirmed' }))
-      .toMatch(/email confirmation is still enabled.*direct sign-in/i);
+      .toMatch(/account could not sign in.*check your email and password/i);
   });
 
   it('directs possibly existing accounts to sign in or recover access', () => {

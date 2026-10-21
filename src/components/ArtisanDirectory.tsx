@@ -6,6 +6,8 @@ import { getSearchSuggestions, hasValidGlobeCoordinates } from '../utils/globe';
 import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
 import { ArtisanGlobe3D, type GlobeArtisan } from './ArtisanGlobe3D';
 import { api } from '../services/api';
+import { resolveSellerMapLocation } from '../data/geoData';
+import { SearchableLocationField } from './SearchableLocationField';
 
 type SellerReviewSummary = {
   sellerId: string;
@@ -137,12 +139,15 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     return users.flatMap((user): GlobeArtisan[] => {
       if (user.isBlocked
         || !user.name.trim() && !user.shopName?.trim()
-        || (user.role !== 'tailor' && user.role !== 'fabric_seller')
-        || !hasValidGlobeCoordinates(user.location)) return [];
+        || (user.role !== 'tailor' && user.role !== 'fabric_seller')) return [];
+      const location = resolveSellerMapLocation(user.location);
+      if (!location) return [];
+      if (!hasValidGlobeCoordinates(location)) return [];
       return [{
         ...user,
+        location,
         distanceKm: currentUser && hasValidGlobeCoordinates(currentUser.location)
-          ? calculateDistanceKm(currentUser.location.lat, currentUser.location.lng, user.location.lat, user.location.lng)
+          ? calculateDistanceKm(currentUser.location.lat, currentUser.location.lng, location.lat, location.lng)
           : null,
         postCount: postCounts.get(user.id) ?? 0,
       }];
@@ -165,6 +170,12 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const [sellerReviewsLoaded, setSellerReviewsLoaded] = useState(false);
   const [sellerReviewsError, setSellerReviewsError] = useState(false);
   const [selectedArtisanId, setSelectedArtisanId] = useState<string | null>(null);
+  const [countrySearch, setCountrySearch] = useState(() => {
+    const value = getDefaultLocationFilter(currentUser?.location);
+    return WORLD_COUNTRIES.find(country => country.code === value || country.name === value)?.name || '';
+  });
+  const [stateSearch, setStateSearch] = useState('');
+  const [citySearch, setCitySearch] = useState('');
 
   React.useEffect(() => {
     const nextCountry = getDefaultLocationFilter(currentUser?.location);
@@ -173,6 +184,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     setFilterCountry(nextCountry);
     setFilterState(nextState?.code || 'all');
     setFilterCity(nextState?.cities.some((city) => city.toLowerCase() === currentUser?.location.city?.toLowerCase()) ? currentUser?.location.city || 'all' : 'all');
+    setCountrySearch(WORLD_COUNTRIES.find(country => country.code === nextCountry || country.name === nextCountry)?.name || '');
+    setStateSearch(nextState?.name || '');
+    setCitySearch(nextState?.cities.find(city => city.toLowerCase() === currentUser?.location.city?.toLowerCase()) || '');
     setSelectedArtisanId(null);
   }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode, currentUser?.location?.state, currentUser?.location?.city]);
   React.useEffect(() => {
@@ -206,8 +220,16 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     setSearchQuery(artisan.handle.startsWith('@') ? artisan.handle : `@${artisan.handle}`);
     setSearchSuggestionsOpen(false);
   };
-  const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry);
-  const selectedState = selectedCountry?.states.find((state) => state.code === filterState);
+  const selectedCountry = WORLD_COUNTRIES.find((country) => country.code === filterCountry || country.name === filterCountry);
+  const selectedState = selectedCountry?.states.find((state) => state.code === filterState || state.name === filterState);
+  const countryOptions = WORLD_COUNTRIES.filter(country => !countrySearch.trim()
+    || country.name.toLowerCase().includes(countrySearch.trim().toLowerCase())
+    || country.code.toLowerCase().includes(countrySearch.trim().toLowerCase())).slice(0, 100);
+  const stateOptions = (selectedCountry?.states || []).filter(state => !stateSearch.trim()
+    || state.name.toLowerCase().includes(stateSearch.trim().toLowerCase())
+    || state.code.toLowerCase().includes(stateSearch.trim().toLowerCase())).slice(0, 100);
+  const cityOptions = (selectedState?.cities || []).filter(city => !citySearch.trim()
+    || city.toLowerCase().includes(citySearch.trim().toLowerCase())).slice(0, 100);
   const locationArtisans = artisans.filter((artisan) => {
     const matchesLocation = matchesLocationFilter(
       artisan.location,
@@ -339,22 +361,70 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         </div>
 
         <div className={`mb-6 grid gap-2 rounded-2xl border p-3 sm:grid-cols-2 lg:grid-cols-3 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-        <select value={filterCountry} onChange={(event) => { setFilterCountry(event.target.value); setFilterState('all'); setFilterCity('all'); setSelectedArtisanId(null); }} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none">
-            <option value="all">All countries</option>
-            {WORLD_COUNTRIES.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}
-          </select>
-          <select value={filterState} onChange={(event) => { setFilterState(event.target.value); setFilterCity('all'); setSelectedArtisanId(null); }} disabled={!selectedCountry} className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50">
-            <option value="all">All states / provinces</option>
-            {selectedCountry?.states.map((state) => <option key={state.code} value={state.code}>{state.name}</option>)}
-          </select>
-          <input
-            type="text"
-            value={filterCity === 'all' ? '' : filterCity}
-            onChange={(event) => { setFilterCity(event.target.value.trim() || 'all'); setSelectedArtisanId(null); }}
-            disabled={!selectedState}
-            placeholder="Filter by city"
-            aria-label="Filter sellers by city"
-            className="rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-neutral-200 outline-none disabled:opacity-50"
+          <SearchableLocationField
+            label="Country"
+            value={countrySearch}
+            onChange={value => {
+              setCountrySearch(value);
+              const match = WORLD_COUNTRIES.find(country => country.name.toLowerCase() === value.trim().toLowerCase()
+                || country.code.toLowerCase() === value.trim().toLowerCase());
+              setFilterCountry(match?.code || 'all');
+              setFilterState('all');
+              setFilterCity('all');
+              setStateSearch('');
+              setCitySearch('');
+              setSelectedArtisanId(null);
+            }}
+            onClear={() => {
+              setCountrySearch('');
+              setFilterCountry('all');
+              setFilterState('all');
+              setFilterCity('all');
+              setStateSearch('');
+              setCitySearch('');
+            }}
+            options={countryOptions.map(country => country.name)}
+            placeholder="All countries · type to search"
+            listId="artisan-country-filter"
+          />
+          <SearchableLocationField
+            label="State / province"
+            value={stateSearch}
+            onChange={value => {
+              setStateSearch(value);
+              const match = selectedCountry?.states.find(state => state.name.toLowerCase() === value.trim().toLowerCase()
+                || state.code.toLowerCase() === value.trim().toLowerCase());
+              setFilterState(match?.code || 'all');
+              setFilterCity('all');
+              setCitySearch('');
+              setSelectedArtisanId(null);
+            }}
+            onClear={() => {
+              setStateSearch('');
+              setFilterState('all');
+              setFilterCity('all');
+              setCitySearch('');
+            }}
+            options={stateOptions.map(state => state.name)}
+            placeholder={selectedCountry ? 'All states · type to search' : 'Choose a country first'}
+            listId="artisan-state-filter"
+          />
+          <SearchableLocationField
+            label="City"
+            value={citySearch}
+            onChange={value => {
+              setCitySearch(value);
+              const match = selectedState?.cities.find(city => city.toLowerCase() === value.trim().toLowerCase());
+              setFilterCity(match || 'all');
+              setSelectedArtisanId(null);
+            }}
+            onClear={() => {
+              setCitySearch('');
+              setFilterCity('all');
+            }}
+            options={cityOptions}
+            placeholder={selectedState ? 'All cities · type to search' : 'Choose a state first'}
+            listId="artisan-city-filter"
           />
           <label className="sr-only" htmlFor="seller-specialization">Filter by specialization</label>
           <select id="seller-specialization" value={specializationFilter} onChange={event => setSpecializationFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
@@ -398,8 +468,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         <section className={`artisan-globe-panel mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
           <div className="artisan-globe-panel-header">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Live artisan signal</p>
-              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} on the globe` : 'All located sellers are shown. Select a marker or search for a tailor.'}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Seller locations · static Earth imagery</p>
+              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} near ${selectedGlobeArtisan.location.city}, ${selectedGlobeArtisan.location.country}` : 'Pins use registered city coordinates (approximate, not street addresses). Select a marker or search for a tailor.'}</p>
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>

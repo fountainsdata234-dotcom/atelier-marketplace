@@ -394,7 +394,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     accountCreated = true;
 
     if (!signupResult.hasSession) {
-      setSuccessMsg('Your account was created, but this Supabase project still requires email confirmation. Turn off Confirm email in the project’s Authentication settings before sign-in can work without confirming your inbox.');
+      setSuccessMsg('Your account was created. Please sign in with your email and password.');
       setPassword('');
       setConfirmPassword('');
       setIsRegistering(false);

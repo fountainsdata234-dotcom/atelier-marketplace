@@ -12,6 +12,7 @@ import { rankMarketplaceListings } from '../utils/marketplaceRanking';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { SearchableLocationField } from './SearchableLocationField';
+import { PostImage } from './PostImage';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -986,7 +987,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   {suggestion.user?.avatarUrl && !failedAvatarUrls.has(suggestion.user.avatarUrl)
                     ? <img src={suggestion.user.avatarUrl} alt={suggestion.user.name || 'Seller avatar'} onError={() => setFailedAvatarUrls(current => new Set(current).add(suggestion.user!.avatarUrl!))} className="h-9 w-9 rounded-lg object-cover" />
                     : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span>
-                      : suggestion.post ? <img src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg bg-neutral-950 object-contain" />
+                      : suggestion.post ? <PostImage src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg" />
                         : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
                   <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.type === 'recent' ? 'Recent search · this session' : suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? (suggestion.post?.isPromoted ? 'Sponsored listing' : 'Marketplace listing') : 'Category'}</small></span>
                 </button>
@@ -1211,7 +1212,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 >
                   <div className="group/curated-image relative flex min-h-[260px] items-center justify-center overflow-hidden bg-[#f1ece3] p-3 sm:min-h-[340px] md:min-h-0 md:p-6">
                     <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center p-3 sm:p-5">
-                      {imageSource && <img src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="max-h-full max-w-full object-contain transition-transform duration-500 group-hover/curated-image:scale-[1.025]" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
+                      {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500 group-hover/curated-image:scale-[1.025]" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
                     </button>
                     <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:top-6">
                       {post.isPromoted && <span className="rounded-full bg-amber-400 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-neutral-950 shadow-sm">Promoted</span>}
@@ -1347,7 +1348,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
                     <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
                       {imageSource
-                        ? <img src={imageSource} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="block h-auto w-full object-contain brightness-110 saturate-110" loading="lazy" decoding="async" onError={() => handlePostImageError(post, imageSource)} />
+                        ? <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="aspect-[4/3] w-full" imageClassName="brightness-110 saturate-110" loading="lazy" decoding="async" onError={() => handlePostImageError(post, imageSource)} />
                         : <div role="img" aria-label={`Image unavailable for ${post.title}`} className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-neutral-900/80 text-neutral-500"><Scissors aria-hidden="true" className="h-8 w-8 text-amber-500/70" /><span className="text-xs">Listing image unavailable</span></div>}
                       <span className="absolute left-2.5 top-2.5 rounded-md border border-orange-300/30 bg-neutral-950/90 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-orange-200">{activeTrendCategoryLabel}</span>
                       {post.isPromoted && <span className="absolute right-2.5 top-2.5 rounded-md bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Sponsored</span>}
@@ -1788,10 +1789,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 {/* Garment Image with High-Res Zoom / Save */}
                 <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
                   {postImageSource ? (
-                    <img
+                    <PostImage
                       src={postImageSource}
                       alt={post.title}
-                      className="block h-auto w-full cursor-pointer object-contain brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
+                      className="aspect-[4/3] w-full cursor-pointer"
+                      imageClassName="brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
                       referrerPolicy="no-referrer"
                       loading="lazy"
                       decoding="async"

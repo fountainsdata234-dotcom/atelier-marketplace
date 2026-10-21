@@ -5,6 +5,7 @@ import { getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
 import { MarketplaceReviews } from './MarketplaceReviews';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
+import { PostImage } from './PostImage';
 
 interface PostDetailPageProps {
   post: ClothPost | null;
@@ -103,9 +104,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
 
   const renderRelatedCard = (relatedPost: ClothPost) => (
     <button key={relatedPost.id} type="button" onClick={() => onSelectPost(relatedPost)} className={`group min-w-0 overflow-hidden rounded-xl border text-left transition-colors hover:border-amber-500/50 ${surface}`}>
-      <div className="aspect-[4/3] overflow-hidden bg-neutral-950">
-        <img src={relatedPost.imageAssets?.[0]?.thumbnailUrl || relatedPost.imageUrl} alt={relatedPost.title} loading="lazy" decoding="async" className="h-full w-full object-contain brightness-110 saturate-110" />
-      </div>
+      <PostImage src={relatedPost.imageAssets?.[0]?.thumbnailUrl || relatedPost.imageUrl} alt={relatedPost.title} className="aspect-[4/3]" imageClassName="brightness-110 saturate-110" />
       <span className="block truncate px-3 pt-2.5 text-xs font-semibold">{relatedPost.title}</span>
       <span className={`block truncate px-3 pb-3 pt-1 text-[10px] ${muted}`}>{relatedPost.tags.slice(0, 2).map(tag => `#${tag}`).join(' ')}</span>
     </button>
@@ -118,7 +117,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)] lg:items-start">
         <div className={`overflow-hidden rounded-2xl border ${surface}`}>
           <div className="flex min-h-[320px] items-center justify-center bg-neutral-950 sm:min-h-[480px] lg:min-h-[620px]">
-            <img src={selectedImageUrl || post.imageUrl} alt={post.imageAlt || post.title} fetchPriority="high" decoding="async" className="max-h-[78vh] w-full object-contain" />
+            <PostImage src={selectedImageUrl || post.imageUrl} alt={post.imageAlt || post.title} className="h-full min-h-[320px] w-full sm:min-h-[480px] lg:min-h-[620px]" imageClassName="max-h-[78vh]" fetchPriority="high" decoding="async" />
           </div>
           {(post.imageAssets?.length || 0) > 1 && <div className="grid grid-cols-4 gap-2 border-t border-neutral-800/60 p-3 sm:grid-cols-6">{post.imageAssets?.map((asset, index) => (
             <button key={asset.url} type="button" onClick={() => setSelectedImageUrl(asset.url)} aria-label={`Show listing image ${index + 1}`} aria-pressed={selectedImageUrl === asset.url} className={`aspect-square overflow-hidden rounded-lg border ${selectedImageUrl === asset.url ? 'border-amber-400' : 'border-neutral-700'}`}>

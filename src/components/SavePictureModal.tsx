@@ -99,8 +99,14 @@ export const SavePictureModal: React.FC<SavePictureModalProps> = ({
         >
           <img
             src={imageUrl}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl brightness-[0.4] saturate-75"
+          />
+          <img
+            src={imageUrl}
             alt={imageTitle || 'Garment'}
-            className="max-h-full max-w-full select-none rounded-xl object-contain shadow-lg transition-transform duration-150"
+            className="relative z-10 max-h-full max-w-full select-none rounded-xl object-contain shadow-lg transition-transform duration-150"
             style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}
             referrerPolicy="no-referrer"
             draggable={false}
