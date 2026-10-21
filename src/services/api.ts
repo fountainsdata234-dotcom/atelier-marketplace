@@ -1,4 +1,4 @@
-import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences } from '../types';
 
 import { getAuthToken, isSupabaseAuthReady } from './auth';
 import { customerMessageForHttpError, customerMessageForNetworkError, safeCustomerErrorMessage } from '../utils/customerMessages';
@@ -169,6 +169,10 @@ async function performRequest<T>(
 export const api = {
   getLocationCountries: () => request<LocationCountry[]>('/api/location/countries'),
   getLocationCurrencies: () => request<LocationCurrency[]>('/api/location/currencies'),
+  resolveMapLocations: (locations: Array<{ id: string; location: UserLocation }>) => request<Array<{ id: string; location: UserLocation }>>('/api/location/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ locations }),
+  }),
   getLocationRegions: (countryCode: string) => request<LocationRegion[]>(`/api/location/countries/${encodeURIComponent(countryCode)}/states`),
   searchLocationCities: (countryCode: string, regionCode: string, query: string) => {
     const search = new URLSearchParams({ q: query });

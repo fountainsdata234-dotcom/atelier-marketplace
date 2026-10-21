@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listLocationCountries, listLocationCurrencies, listLocationRegions, searchLocationCities } from './locationData.js';
+import { listLocationCountries, listLocationCurrencies, listLocationRegions, resolveMapLocation, searchLocationCities } from './locationData.js';
 
 describe('location API catalog', () => {
   it('provides the full country list with accurate current country currency defaults', () => {
@@ -27,5 +27,25 @@ describe('location API catalog', () => {
     expect(['AAD', 'ANG', 'BGN', 'HRK', 'MRO', 'SLL', 'STD', 'VEF', 'ZWL'].some(code => currencyCodes.has(code))).toBe(false);
     expect(listLocationRegions('NOT_A_COUNTRY')).toBeNull();
     expect(searchLocationCities('NG', 'NOT_A_STATE', 'Aba')).toBeNull();
+  });
+
+  it('resolves approximate map coordinates on the server without shipping the location catalog to clients', () => {
+    expect(resolveMapLocation({
+      country: 'Nigeria',
+      countryCode: 'NG',
+      state: 'LA',
+      city: 'Lagos',
+    })).toMatchObject({
+      country: 'Nigeria',
+      countryCode: 'NG',
+      city: 'Lagos',
+      lat: expect.any(Number),
+      lng: expect.any(Number),
+    });
+    expect(resolveMapLocation({
+      country: 'Unknown',
+      state: '',
+      city: '',
+    })).toBeNull();
   });
 });

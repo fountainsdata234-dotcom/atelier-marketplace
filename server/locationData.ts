@@ -1,5 +1,5 @@
 import { City, Country, State } from 'country-state-city';
-import type { LocationCity, LocationCountry, LocationCurrency, LocationRegion } from '../src/types.js';
+import type { LocationCity, LocationCountry, LocationCurrency, LocationRegion, UserLocation } from '../src/types.js';
 
 const currencyOverrides: Record<string, string | null> = {
   AQ: null,
@@ -54,6 +54,10 @@ const parseCoordinate = (value: string | null | undefined, minimum: number, maxi
     ? coordinate
     : undefined;
 };
+const hasCoordinates = (location: Pick<UserLocation, 'lat' | 'lng'>) => (
+  typeof location.lat === 'number' && Number.isFinite(location.lat) && location.lat >= -90 && location.lat <= 90
+  && typeof location.lng === 'number' && Number.isFinite(location.lng) && location.lng >= -180 && location.lng <= 180
+);
 
 export function listLocationCountries() {
   return countries;
@@ -100,4 +104,33 @@ export function searchLocationCities(countryCode: string, regionCode: string, qu
         ...(longitude !== undefined ? { longitude } : {}),
       };
     });
+}
+
+export function resolveMapLocation(location: UserLocation): UserLocation | null {
+  const country = countryByCode.get(location.countryCode?.trim().toUpperCase() || '')
+    || countryList.find(candidate => normalize(candidate.name) === normalize(location.country));
+  if (!country) return hasCoordinates(location) ? location : null;
+
+  const regions = State.getStatesOfCountry(country.isoCode);
+  const normalizedState = normalize(location.state);
+  const state = regions.find(candidate => candidate.isoCode.toUpperCase() === location.state.trim().toUpperCase()
+    || normalize(candidate.name) === normalizedState);
+  const cities = (state
+    ? City.getCitiesOfState(country.isoCode, state.isoCode)
+    : City.getCitiesOfCountry(country.isoCode)) || [];
+  const city = cities.find(candidate => normalize(candidate.name) === normalize(location.city));
+  const coordinateSource = [city, state, country].find(candidate => (
+    parseCoordinate(candidate?.latitude, -90, 90) !== undefined
+    && parseCoordinate(candidate?.longitude, -180, 180) !== undefined
+  ));
+  const coordinates = coordinateSource
+    ? {
+      lat: parseCoordinate(coordinateSource.latitude, -90, 90)!,
+      lng: parseCoordinate(coordinateSource.longitude, -180, 180)!,
+    }
+    : hasCoordinates(location)
+      ? { lat: location.lat!, lng: location.lng! }
+      : null;
+  if (!coordinates) return null;
+  return { ...location, country: country.name, countryCode: country.isoCode, ...coordinates };
 }

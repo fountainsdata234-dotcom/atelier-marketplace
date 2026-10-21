@@ -1,9 +1,10 @@
 import React, { lazy } from 'react';
 import { motion } from 'motion/react';
 import { Scissors, Sparkles, Compass, ArrowRight, ShoppingBag, Globe2, TrendingUp } from 'lucide-react';
-import { AdminPromoPlan, ClothPost, User, UserRole } from '../types';
+import { AdminPromoPlan, ClothPost, User, UserLocation, UserRole } from '../types';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { PostImage } from './PostImage';
+import { api } from '../services/api';
 
 const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
 
@@ -39,6 +40,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
   const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
+  const [resolvedSellerLocations, setResolvedSellerLocations] = React.useState<Record<string, UserLocation>>({});
+  const resolvingSellerIds = React.useRef(new Set<string>());
   const [failedFeaturedPostId, setFailedFeaturedPostId] = React.useState<string | null>(null);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
@@ -60,11 +63,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         && typeof user.location.lng === 'number' && Number.isFinite(user.location.lng)
         && user.location.lng >= -180 && user.location.lng <= 180
         ? user.location
-        : null;
+        : resolvedSellerLocations[user.id] || null;
       if (!location) return [];
       const userPosts = posts.filter(post => post.authorId === user.id);
       return [{ ...user, location, distanceKm: null, postCount: userPosts.length }];
-    }), [posts, users]);
+    }), [posts, resolvedSellerLocations, users]);
+
+  React.useEffect(() => {
+    if (!shouldLoadGlobe) return;
+    const unresolved = users.filter(user => !user.isBlocked
+      && (user.role === 'tailor' || user.role === 'fabric_seller')
+      && !previewArtisans.some(artisan => artisan.id === user.id)
+      && !resolvingSellerIds.current.has(user.id));
+    if (unresolved.length === 0) return;
+    unresolved.forEach(user => resolvingSellerIds.current.add(user.id));
+    const batches = Array.from({ length: Math.ceil(unresolved.length / 250) }, (_, index) => (
+      unresolved.slice(index * 250, (index + 1) * 250).map(user => ({ id: user.id, location: user.location }))
+    ));
+    let active = true;
+    void Promise.all(batches.map(locations => api.resolveMapLocations(locations))).then(results => {
+      if (!active) return;
+      setResolvedSellerLocations(current => ({
+        ...current,
+        ...Object.fromEntries(results.flat().map(result => [result.id, result.location])),
+      }));
+    }).catch(error => {
+      console.error('Some seller locations could not be resolved for the artisan globe.', error);
+      unresolved.forEach(user => resolvingSellerIds.current.delete(user.id));
+    });
+    return () => { active = false; };
+  }, [previewArtisans, shouldLoadGlobe, users]);
 
   React.useEffect(() => {
     const section = globeSectionRef.current;

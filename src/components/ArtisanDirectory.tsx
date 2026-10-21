@@ -135,6 +135,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
       });
   }, [currentUser, posts, users]);
 
+  const [resolvedMapLocations, setResolvedMapLocations] = useState<Record<string, User['location']>>({});
+  const resolvingMapLocationIds = useRef(new Set<string>());
   const globeArtisans = useMemo(() => {
     const postCounts = new Map<string, number>();
     posts.forEach((post) => {
@@ -149,8 +151,10 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
       if (user.isBlocked
         || !user.name.trim() && !user.shopName?.trim()
         || (user.role !== 'tailor' && user.role !== 'fabric_seller')) return [];
-      const location = user.location;
-      if (!hasValidGlobeCoordinates(location)) return [];
+      const location = hasValidGlobeCoordinates(user.location)
+        ? user.location
+        : resolvedMapLocations[user.id];
+      if (!location || !hasValidGlobeCoordinates(location)) return [];
       return [{
         ...user,
         location,
@@ -160,7 +164,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         postCount: postCounts.get(user.id) ?? 0,
       }];
     });
-  }, [currentUser, posts, users]);
+  }, [currentUser, posts, resolvedMapLocations, users]);
 
   const [nearMeOnly, setNearMeOnly] = useState(false);
   const [locationCountries, setLocationCountries] = useState<LocationCountry[]>([]);
@@ -252,6 +256,33 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     observer.observe(panel);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!globeNearViewport) return;
+    const unresolved = users.filter(user => !user.isBlocked
+      && (user.role === 'tailor' || user.role === 'fabric_seller')
+      && !hasValidGlobeCoordinates(user.location)
+      && !resolvedMapLocations[user.id]
+      && !resolvingMapLocationIds.current.has(user.id));
+    if (unresolved.length === 0) return;
+    unresolved.forEach(user => resolvingMapLocationIds.current.add(user.id));
+    const batches = Array.from({ length: Math.ceil(unresolved.length / 250) }, (_, index) => (
+      unresolved.slice(index * 250, (index + 1) * 250).map(user => ({ id: user.id, location: user.location }))
+    ));
+    let cancelled = false;
+    void Promise.all(batches.map(locations => api.resolveMapLocations(locations))).then(results => {
+      if (!cancelled) {
+        setResolvedMapLocations(current => ({
+          ...current,
+          ...Object.fromEntries(results.flat().map(result => [result.id, result.location])),
+        }));
+      }
+    }).catch(error => {
+      console.error('Some seller locations could not be resolved for the artisan directory map.', error);
+      unresolved.forEach(user => resolvingMapLocationIds.current.delete(user.id));
+    });
+    return () => { cancelled = true; };
+  }, [globeNearViewport, resolvedMapLocations, users]);
 
   React.useEffect(() => {
     if (locationCountries.length === 0) return;

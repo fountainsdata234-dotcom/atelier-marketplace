@@ -8,9 +8,9 @@ import { FieldValue } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
 import multer from 'multer';
 import sharp from 'sharp';
-import { listLocationCountries, listLocationCurrencies, listLocationRegions, searchLocationCities } from './locationData.js';
+import { listLocationCountries, listLocationCurrencies, listLocationRegions, resolveMapLocation, searchLocationCities } from './locationData.js';
 import { adminAuth, firebaseAdminEnabled, firestore } from './firebaseAdmin.js';
-import type { UserRole } from '../src/types.js';
+import type { UserLocation, UserRole } from '../src/types.js';
 import { parseMarketplaceSearch } from '../src/utils/marketplaceSearch.js';
 import {
   createBroadcast,
@@ -658,6 +658,55 @@ app.get('/api/location/countries', (_req, res) => {
 app.get('/api/location/currencies', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
   res.json(listLocationCurrencies());
+});
+
+app.post('/api/location/resolve', (req, res) => {
+  const locations = req.body?.locations;
+  if (!Array.isArray(locations) || locations.length === 0 || locations.length > 250) {
+    res.status(400).json({ error: 'Resolve between 1 and 250 seller locations at a time.' });
+    return;
+  }
+  const candidates: Array<{ id: string; location: UserLocation }> = [];
+  for (const entry of locations as unknown[]) {
+    if (!entry || typeof entry !== 'object') {
+      res.status(400).json({ error: 'Each seller location must include an id and location.' });
+      return;
+    }
+    const item = entry as Record<string, unknown>;
+    const location = item.location;
+    if (typeof item.id !== 'string' || !item.id.trim() || item.id.length > 128
+      || !location || typeof location !== 'object') {
+      res.status(400).json({ error: 'Each seller location must include an id and location.' });
+      return;
+    }
+    const value = location as Record<string, unknown>;
+    const fields = ['country', 'countryCode', 'state', 'city'] as const;
+    if (fields.some(field => value[field] !== undefined
+      && (typeof value[field] !== 'string' || value[field].length > 120))
+      || (value.lat !== undefined && typeof value.lat !== 'number')
+      || (value.lng !== undefined && typeof value.lng !== 'number')) {
+      res.status(400).json({ error: 'Seller location fields must be valid text or coordinates.' });
+      return;
+    }
+    const stringField = (field: string) => typeof value[field] === 'string' ? (value[field] as string).trim().slice(0, 120) : '';
+    candidates.push({
+      id: item.id,
+      location: {
+        country: stringField('country'),
+        countryCode: stringField('countryCode'),
+        state: stringField('state'),
+        city: stringField('city'),
+        ...(typeof value.lat === 'number' ? { lat: value.lat } : {}),
+        ...(typeof value.lng === 'number' ? { lng: value.lng } : {}),
+      },
+    });
+  }
+  const resolved = candidates.flatMap(({ id, location }) => {
+    const mapLocation = resolveMapLocation(location);
+    return mapLocation ? [{ id, location: mapLocation }] : [];
+  });
+  res.set('Cache-Control', 'private, no-store');
+  res.json(resolved);
 });
 
 app.get('/api/location/countries/:countryCode/states', (req, res) => {
