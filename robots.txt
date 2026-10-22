@@ -2,7 +2,6 @@ User-agent: *
 Allow: /
 Allow: /marketplace
 Allow: /artisan
-Allow: /collections
 Allow: /about
 Allow: /privacy
 Allow: /terms
@@ -14,4 +13,4 @@ Disallow: /profile/
 Disallow: /messages/
 Disallow: /collections
 
-Sitemap: https://fabrilux-atelier.vercel.app/sitemap.xml
+Sitemap: https://fabsattire.vercel.app/sitemap.xml

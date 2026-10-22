@@ -120,12 +120,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="text-center lg:text-left">
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-300">
                 <Sparkles className="w-3.5 h-3.5" />
-                Tailor & fabric marketplace
+                Fabsattire · Tailoring & textiles
               </div>
 
               <h1 className="text-4xl font-black leading-none tracking-[-0.06em] text-white sm:text-5xl lg:text-7xl">
                 <span className="relative inline-block">
-                  Tailoring and fabric sourcing with a human touch
+                  Exceptional tailoring. Distinctive fabrics. Made personal.
                   <motion.span
                     aria-hidden="true"
                     animate={{ x: [0, 96, 0], y: [18, -4, 18], rotate: [-18, 12, -18] }}
@@ -138,7 +138,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </h1>
 
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-neutral-300 sm:text-base">
-                Discover refined fabrics, trusted makers, and pieces chosen for fit, finish, and real life. Thoughtful tailoring without the clutter.
+                Discover skilled tailors, quality fabrics, and thoughtfully made pieces. Explore collections, compare makers, and connect directly to find the right fit for every occasion.
               </p>
 
               <div className="mt-6 rounded-[24px] border border-amber-500/20 bg-neutral-950/70 p-3 shadow-[0_18px_40px_rgba(0,0,0,0.2)]">

@@ -59,7 +59,6 @@
   .brand-wordmark {
     font-family: 'Orbitron', 'Segoe UI', sans-serif;
     letter-spacing: 0.06em;
-    text-transform: uppercase;
     text-shadow: 0 0 16px rgba(245, 158, 11, 0.4), 0 0 28px rgba(251, 191, 36, 0.18);
     font-weight: 900;
   }

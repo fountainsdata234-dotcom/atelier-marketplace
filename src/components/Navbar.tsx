@@ -57,14 +57,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <img
             src="/logo.png"
-            alt="FABSATTIRE logo"
+            alt="Fabsattire logo"
             className="h-9 w-9 rounded-lg object-cover shadow-md shadow-amber-500/20 ring-1 ring-amber-500/30 transition-transform duration-200 group-hover:scale-105 sm:h-10 sm:w-10"
           />
           <div className="brand-lockup relative border-l border-amber-500/30 pl-3">
             <span className="brand-thread brand-thread-one" aria-hidden="true" />
             <span className="brand-thread brand-thread-two" aria-hidden="true" />
             <span className="brand-wordmark block whitespace-nowrap text-[14px] font-black leading-none text-amber-400 sm:text-lg">
-              FABSATTIRE
+              Fabsattire
             </span>
             <span className="mt-1 block text-[7px] font-semibold uppercase tracking-[0.12em] text-amber-600/80 sm:text-[8px]">
               TAILOR & FABRIC MARKETPLACE
@@ -179,7 +179,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {canInstall && (
             <button
               onClick={onInstall}
-              aria-label="Install FABSATTIRE app"
+              aria-label="Install Fabsattire app"
               title="Install app"
               className="hidden items-center gap-1.5 rounded-xl border border-amber-500/40 px-2.5 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-500/10 sm:flex"
             >

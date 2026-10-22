@@ -577,7 +577,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           <div className="artisan-globe-panel-header">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Seller locations · static Earth imagery</p>
-              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} near ${selectedGlobeArtisan.location.city}, ${selectedGlobeArtisan.location.country}` : 'Pins use registered city coordinates (approximate, not street addresses). Select a marker or search for a tailor.'}</p>
+              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} near ${selectedGlobeArtisan.location.city}, ${selectedGlobeArtisan.location.country}` : 'Pins use saved coordinates when available; otherwise they show approximate city or regional locations, not live GPS or street addresses. Select a marker or search for a tailor.'}</p>
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>

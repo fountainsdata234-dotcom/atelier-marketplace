@@ -107,9 +107,17 @@ export function searchLocationCities(countryCode: string, regionCode: string, qu
 }
 
 export function resolveMapLocation(location: UserLocation): UserLocation | null {
+  if (hasCoordinates(location)) {
+    const country = countryByCode.get(location.countryCode?.trim().toUpperCase() || '')
+      || countryList.find(candidate => normalize(candidate.name) === normalize(location.country));
+    return country
+      ? { ...location, country: country.name, countryCode: country.isoCode }
+      : location;
+  }
+
   const country = countryByCode.get(location.countryCode?.trim().toUpperCase() || '')
     || countryList.find(candidate => normalize(candidate.name) === normalize(location.country));
-  if (!country) return hasCoordinates(location) ? location : null;
+  if (!country) return null;
 
   const regions = State.getStatesOfCountry(country.isoCode);
   const normalizedState = normalize(location.state);
@@ -128,9 +136,7 @@ export function resolveMapLocation(location: UserLocation): UserLocation | null 
       lat: parseCoordinate(coordinateSource.latitude, -90, 90)!,
       lng: parseCoordinate(coordinateSource.longitude, -180, 180)!,
     }
-    : hasCoordinates(location)
-      ? { lat: location.lat!, lng: location.lng! }
-      : null;
+    : null;
   if (!coordinates) return null;
   return { ...location, country: country.name, countryCode: country.isoCode, ...coordinates };
 }

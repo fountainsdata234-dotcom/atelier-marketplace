@@ -172,7 +172,7 @@ interface StoredMessage {
 const DISCOVERY_EVENT_TYPES = new Set(['VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY']);
 const PUBLIC_CACHE_TTL_MS = 60_000;
 const PUBLIC_CACHE_STALE_MS = 15 * 60_000;
-const WEB_APP_URL = process.env.APP_URL?.trim() || 'https://fabrilux-atelier.vercel.app';
+const WEB_APP_URL = process.env.APP_URL?.trim() || 'https://fabsattire.vercel.app';
 let postsCache: { expiresAt: number; staleUntil: number; value: unknown } | null = null;
 let usersCache: { expiresAt: number; value: unknown } | null = null;
 const marketplaceFeedCache = new Map<string, { expiresAt: number; staleUntil: number; value: unknown }>();

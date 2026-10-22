@@ -48,4 +48,18 @@ describe('location API catalog', () => {
       city: '',
     })).toBeNull();
   });
+
+  it('prioritizes saved coordinates over city-level estimates', () => {
+    expect(resolveMapLocation({
+      country: 'Nigeria',
+      countryCode: 'NG',
+      state: 'LA',
+      city: 'Lagos',
+      lat: 6.5244,
+      lng: 3.3792,
+    })).toMatchObject({
+      lat: 6.5244,
+      lng: 3.3792,
+    });
+  });
 });
