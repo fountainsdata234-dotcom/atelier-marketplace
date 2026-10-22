@@ -32,6 +32,17 @@ function normalizeError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
+export function isMissingRpcFunction(error: unknown, functionName: string): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const details = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  const code = typeof details.code === 'string' ? details.code : '';
+  const message = [details.message, details.details, details.hint]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase();
+  return (code === 'PGRST202' || code === '42883') && message.includes(functionName.toLowerCase());
+}
+
 function toDatabaseRecord(values: ProfileRecord): ProfileRecord {
   return Object.fromEntries(Object.entries(values).map(([key, value]) => [key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`), value]));
 }

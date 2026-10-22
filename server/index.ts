@@ -54,6 +54,7 @@ import {
   saveMarketplaceUserPreferences,
   setMarketplaceRecommendationFeedback,
   recordMarketplaceRecommendationImpression,
+  isMissingRpcFunction,
   setMarketplaceUserBlock,
   setMarketplaceAccountBlock,
   getMarketplaceAbuseFlags,
@@ -1849,21 +1850,35 @@ app.post('/api/marketplace/events', optionalAuth, async (req: AuthenticatedReque
 
   const sessionHash = createHash('sha256').update(`marketplace-session:${sessionId}`).digest('hex');
   try {
-    const outcome = eventType === 'IMPRESSION'
-      ? await recordMarketplaceRecommendationImpression({
+    let outcome: Awaited<ReturnType<typeof recordMarketplaceEngagementEvent>>;
+    if (eventType === 'IMPRESSION') {
+      try {
+        outcome = await recordMarketplaceRecommendationImpression({
           listingId,
           userId: req.authUser?.uid || null,
           sessionHash,
           feedName: recommendation.feedName,
           rankedPosition: recommendation.rankedPosition,
           reasonCode: recommendation.reasonCode,
-        })
-      : await recordMarketplaceEngagementEvent({
+        });
+      } catch (error) {
+        if (!isMissingRpcFunction(error, 'record_marketplace_recommendation_impression')) throw error;
+        console.warn('Recommendation impression tracking is not migrated; recording the base marketplace impression instead.');
+        outcome = await recordMarketplaceEngagementEvent({
           listingId,
-          eventType: eventType as MarketplaceEngagementEventType,
+          eventType: 'IMPRESSION',
           actorId: req.authUser?.uid || null,
           sessionHash,
         });
+      }
+    } else {
+      outcome = await recordMarketplaceEngagementEvent({
+        listingId,
+        eventType: eventType as MarketplaceEngagementEventType,
+        actorId: req.authUser?.uid || null,
+        sessionHash,
+      });
+    }
     if (outcome === 'rate_limited') {
       res.status(429).json({ error: 'Too many marketplace events. Please try again shortly.' });
       return;

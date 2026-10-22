@@ -5,6 +5,8 @@ import { AdminPromoPlan, ClothPost, User, UserLocation, UserRole } from '../type
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { PostImage } from './PostImage';
 import { api } from '../services/api';
+import { useTypingText } from '../hooks/useTypingText';
+import { getAvailableMarketplaceSellerIds } from '../utils/marketplaceAvailability';
 
 const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
 
@@ -23,6 +25,7 @@ interface LandingPageProps {
   posts: ClothPost[];
   promoPlans: AdminPromoPlan[];
   promoPlansLoading: boolean;
+  enableHeroTyping: boolean;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
@@ -37,6 +40,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   posts,
   promoPlans,
   promoPlansLoading,
+  enableHeroTyping,
 }) => {
   const [selectedPreviewArtisanId, setSelectedPreviewArtisanId] = React.useState<string | null>(null);
   const [shouldLoadGlobe, setShouldLoadGlobe] = React.useState(false);
@@ -45,6 +49,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [failedFeaturedPostId, setFailedFeaturedPostId] = React.useState<string | null>(null);
   const globeSectionRef = React.useRef<HTMLElement | null>(null);
   const featuredPostIdRef = React.useRef<string | null>(null);
+  const headline = 'Exceptional tailoring. Distinctive fabrics. Made personal.';
+  const typedHeadline = useTypingText([headline], { enabled: enableHeroTyping, typeDelayMs: 34 });
   const featuredPost = React.useMemo(() => {
     const availablePosts = posts.filter(post => post.imageUrl && post.description?.trim());
     if (availablePosts.length === 0) return null;
@@ -55,8 +61,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     return next;
   }, [posts]);
   const activePromoPlans = React.useMemo(() => promoPlans.filter(plan => plan.isActive), [promoPlans]);
+  const availableSellerIds = React.useMemo(() => getAvailableMarketplaceSellerIds(posts), [posts]);
   const previewArtisans = React.useMemo<GlobeArtisan[]>(() => users
-    .filter(user => !user.isBlocked && (user.role === 'tailor' || user.role === 'fabric_seller'))
+    .filter(user => !user.isBlocked && availableSellerIds.has(user.id) && (user.role === 'tailor' || user.role === 'fabric_seller'))
     .flatMap(user => {
       const location = typeof user.location.lat === 'number' && Number.isFinite(user.location.lat)
         && user.location.lat >= -90 && user.location.lat <= 90
@@ -67,11 +74,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       if (!location) return [];
       const userPosts = posts.filter(post => post.authorId === user.id);
       return [{ ...user, location, distanceKm: null, postCount: userPosts.length }];
-    }), [posts, resolvedSellerLocations, users]);
+    }), [availableSellerIds, posts, resolvedSellerLocations, users]);
 
   React.useEffect(() => {
     if (!shouldLoadGlobe) return;
     const unresolved = users.filter(user => !user.isBlocked
+      && availableSellerIds.has(user.id)
       && (user.role === 'tailor' || user.role === 'fabric_seller')
       && !previewArtisans.some(artisan => artisan.id === user.id)
       && !resolvingSellerIds.current.has(user.id));
@@ -92,7 +100,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       unresolved.forEach(user => resolvingSellerIds.current.delete(user.id));
     });
     return () => { active = false; };
-  }, [previewArtisans, shouldLoadGlobe, users]);
+  }, [availableSellerIds, previewArtisans, shouldLoadGlobe, users]);
 
   React.useEffect(() => {
     const section = globeSectionRef.current;
@@ -125,7 +133,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               <h1 className="text-4xl font-black leading-none tracking-[-0.06em] text-white sm:text-5xl lg:text-7xl">
                 <span className="relative inline-block">
-                  Exceptional tailoring. Distinctive fabrics. Made personal.
+                  <span aria-hidden="true" className="typing-caret">{typedHeadline}</span>
+                  <span className="sr-only">{headline}</span>
                   <motion.span
                     aria-hidden="true"
                     animate={{ x: [0, 96, 0], y: [18, -4, 18], rotate: [-18, 12, -18] }}

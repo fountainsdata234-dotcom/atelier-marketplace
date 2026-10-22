@@ -6,6 +6,7 @@ import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisa
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
+import { isAvailableMarketplaceListing } from '../utils/marketplaceAvailability';
 
 const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
 
@@ -82,15 +83,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const artisans = useMemo(() => {
     return users.filter((user) => !user.isBlocked
       && Boolean(user.name.trim() || user.shopName?.trim())
-      && user.role === 'tailor')
+      && (user.role === 'tailor' || user.role === 'fabric_seller'))
       .map((user): DirectorySeller => {
-        const userPosts = posts.filter((post) => post.authorId === user.id
-          && !post.deletedAt
-          && !post.isBlocked
-          && (post.status === undefined || post.status === 'published')
-          && (post.moderationStatus === undefined || post.moderationStatus === 'approved')
-          && post.availability !== 'unavailable'
-          && post.status !== 'sold_out');
+        const userPosts = posts.filter(post => post.authorId === user.id && isAvailableMarketplaceListing(post));
         const latestPost = [...userPosts].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
         const baseLocation = user.location ?? { city: 'Unknown city', state: 'Unknown', country: 'Unknown', lat: 0, lng: 0 };
         const distanceKm = currentUser && baseLocation.lat && baseLocation.lng && currentUser.location.lat && currentUser.location.lng
@@ -132,7 +127,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
           leadTimeDays: userPosts.map(getLeadTime).filter((days): days is number => days !== null).sort((a, b) => a - b)[0] ?? null,
           availability: Array.from(new Set(userPosts.map(post => post.availability).filter((value): value is Exclude<typeof value, undefined> => Boolean(value)))),
         };
-      });
+      })
+      .filter(artisan => artisan.postCount > 0);
   }, [currentUser, posts, users]);
 
   const [resolvedMapLocations, setResolvedMapLocations] = useState<Record<string, User['location']>>({});
@@ -140,17 +136,15 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const globeArtisans = useMemo(() => {
     const postCounts = new Map<string, number>();
     posts.forEach((post) => {
-      if (post.deletedAt || post.isBlocked
-        || (post.status !== undefined && post.status !== 'published')
-        || (post.moderationStatus !== undefined && post.moderationStatus !== 'approved')
-        || post.availability === 'unavailable' || post.status === 'sold_out') return;
+      if (!isAvailableMarketplaceListing(post)) return;
       postCounts.set(post.authorId, (postCounts.get(post.authorId) ?? 0) + 1);
     });
 
     return users.flatMap((user): GlobeArtisan[] => {
       if (user.isBlocked
         || !user.name.trim() && !user.shopName?.trim()
-        || (user.role !== 'tailor' && user.role !== 'fabric_seller')) return [];
+        || (user.role !== 'tailor' && user.role !== 'fabric_seller')
+        || !postCounts.has(user.id)) return [];
       const location = hasValidGlobeCoordinates(user.location)
         ? user.location
         : resolvedMapLocations[user.id];
@@ -563,7 +557,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         {minimumRatingFilter > 0 && !sellerReviewsLoaded && <p role="status" className="mb-3 text-[11px] text-neutral-500">Loading eligible firsthand review summaries for the selected rating filter…</p>}
         <div className="mb-6 grid gap-3 md:grid-cols-2">
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Tailors</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Active makers with available listings</p>
             <p className="mt-2 text-2xl font-black text-amber-500">{locationArtisans.length}</p>
           </div>
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>

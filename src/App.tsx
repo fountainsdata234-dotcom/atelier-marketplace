@@ -525,9 +525,7 @@ export default function App() {
 
         if (remotePosts !== null) {
           const normalizedPosts = normalizeMarketplacePosts(remotePosts);
-          const postsToDisplay = normalizedPosts.length === 0 && availablePosts.length > 0
-            ? availablePosts
-            : normalizedPosts;
+          const postsToDisplay = normalizedPosts;
           storageService.savePosts(postsToDisplay);
           setPosts(postsToDisplay);
           setPostsLoadError(false);
@@ -900,6 +898,7 @@ export default function App() {
                 posts={posts}
                 promoPlans={promoPlans}
                 promoPlansLoading={isPromoPlansLoading}
+                enableHeroTyping={!isDataLoading && !showIntro}
               />
             </motion.div>
           )}
@@ -926,6 +925,7 @@ export default function App() {
                 onToggleFollow={handleToggleFollow}
                 onSelectSeller={handleSelectSeller}
                 isDarkMode={isDarkMode}
+                enableGreetingTyping={!isDataLoading && !showIntro}
               />
             </motion.div>
           )}

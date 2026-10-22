@@ -13,6 +13,7 @@ import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { SearchableLocationField } from './SearchableLocationField';
 import { PostImage } from './PostImage';
+import { useTypingText } from '../hooks/useTypingText';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -28,6 +29,7 @@ interface MarketplaceProps {
   onToggleFollow: (user: User) => void;
   onSelectSeller: (user: User) => void;
   isDarkMode: boolean;
+  enableGreetingTyping: boolean;
 }
 
 const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -63,7 +65,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onShareTailorProfile,
   onToggleFollow,
   onSelectSeller,
-  isDarkMode
+  isDarkMode,
+  enableGreetingTyping,
 }) => {
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -591,6 +594,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     return `${greeting}${userName ? `, ${userName}` : ''}`;
   };
+  const greetingMessages = useMemo(() => [
+    getGreeting(currentUser?.name || currentUser?.shopName || currentUser?.handle),
+    'Glad you came back 🎉',
+  ], [currentUser?.handle, currentUser?.name, currentUser?.shopName]);
+  const typedGreeting = useTypingText(greetingMessages, { enabled: enableGreetingTyping, repeat: true });
 
   useEffect(() => {
     if (carouselPosts.length < 2) return;
@@ -915,8 +923,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             <Sparkles className="w-3.5 h-3.5" />
             <span>Curated Haute Couture & Fabrics</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-serif font-bold tracking-tight">
-            {getGreeting(currentUser?.name || currentUser?.shopName || currentUser?.handle)}
+          <h1 aria-label={greetingMessages[0]} className="text-3xl sm:text-4xl font-serif font-bold tracking-tight">
+            <span aria-hidden="true" className="typing-caret">{typedGreeting}</span>
           </h1>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             Discover handcrafted garments and premium fabrics from makers who take the details seriously.

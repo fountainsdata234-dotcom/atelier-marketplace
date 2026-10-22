@@ -63,6 +63,22 @@
     font-weight: 900;
   }
 
+  .typing-caret {
+    border-right: 2px solid currentColor;
+    padding-right: 0.08em;
+    animation: typing-caret-blink 0.8s steps(2, start) infinite;
+  }
+
+  @keyframes typing-caret-blink {
+    to { border-color: transparent; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .typing-caret {
+      animation: none;
+    }
+  }
+
   .navbar-sunset-rays {
     position: absolute;
     top: -7rem;

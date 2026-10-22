@@ -138,15 +138,15 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
           <div className="relative mt-5 grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-xs sm:grid-cols-2">
             <div>
               <p className="font-semibold text-white">Identity verification</p>
-              <p className="mt-1 text-neutral-300">No verification badge is recorded.</p>
+              <p className="mt-1 text-neutral-300">Identity verification features are under development.</p>
             </div>
             <div>
               <p className="font-semibold text-white">Skill certification</p>
-              <p className="mt-1 text-neutral-300">No certification badge is recorded.</p>
+              <p className="mt-1 text-neutral-300">Skill certification features are under development.</p>
             </div>
             <div>
               <p className="font-semibold text-white">Performance evidence</p>
-              <p className="mt-1 text-neutral-300">Completed jobs and response-time ranges are not tracked.</p>
+              <p className="mt-1 text-neutral-300">Completed-job and response-time insights are under development.</p>
             </div>
             <div>
               <p className="font-semibold text-white">Portfolio specializations</p>

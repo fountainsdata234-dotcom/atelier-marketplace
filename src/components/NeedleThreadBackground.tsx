@@ -297,11 +297,11 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   }, [isDarkMode]);
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
+    <div className="fixed inset-0 pointer-events-none z-30 overflow-hidden select-none">
       <canvas ref={canvasRef} className="w-full h-full block" />
       
       {/* Interactive Needle Indicator Badge */}
-      <div className="absolute top-20 right-4 pointer-events-auto hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border backdrop-blur-md transition-all duration-200 opacity-60 hover:opacity-100 bg-neutral-900/40 text-amber-300 border-amber-500/20">
+      <div className="absolute top-20 right-4 pointer-events-none hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border backdrop-blur-md opacity-60 bg-neutral-900/40 text-amber-300 border-amber-500/20">
         <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
         <span>Needle & Silk Thread Interactive</span>
       </div>

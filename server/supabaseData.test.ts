@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMarketplaceCursorFilter, type MarketplaceCursor } from './supabaseData.js';
+import { buildMarketplaceCursorFilter, isMissingRpcFunction, type MarketplaceCursor } from './supabaseData.js';
 
 describe('marketplace keyset pagination', () => {
   it('keeps deterministic tie breakers for popularity sorting', () => {
@@ -13,6 +13,26 @@ describe('marketplace keyset pagination', () => {
       + 'and(popularity_score.eq.8.5,published_at.lt.2026-10-15T11:00:00.000Z),'
       + 'and(popularity_score.eq.8.5,published_at.eq.2026-10-15T11:00:00.000Z,id.lt.00000000-0000-4000-8000-000000000001)',
     );
+  });
+
+  describe('database RPC compatibility detection', () => {
+    it('recognizes PostgREST missing-function responses for the requested RPC', () => {
+      expect(isMissingRpcFunction({
+        code: 'PGRST202',
+        message: 'Could not find the function public.record_marketplace_recommendation_impression',
+      }, 'record_marketplace_recommendation_impression')).toBe(true);
+    });
+
+    it('does not treat other RPC failures as missing migrations', () => {
+      expect(isMissingRpcFunction({
+        code: 'PGRST202',
+        message: 'Could not find the function public.other_function',
+      }, 'record_marketplace_recommendation_impression')).toBe(false);
+      expect(isMissingRpcFunction({
+        code: 'XX000',
+        message: 'Database connection failed',
+      }, 'record_marketplace_recommendation_impression')).toBe(false);
+    });
   });
 
   it('includes null prices after non-null prices in ascending order', () => {
