@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sun, Moon, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw } from 'lucide-react';
+import { Sun, Moon, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw, Share2 } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -13,6 +13,7 @@ interface NavbarProps {
   isOnline: boolean;
   canInstall: boolean;
   onInstall: () => void;
+  onShare: () => void;
   onRefresh: () => void;
   isRefreshing?: boolean;
 }
@@ -28,6 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isOnline,
   canInstall,
   onInstall,
+  onShare,
   onRefresh,
   isRefreshing = false
 }) => {
@@ -186,6 +188,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Download className="h-3.5 w-3.5" /> Install
             </button>
           )}
+          <button
+            type="button"
+            onClick={onShare}
+            aria-label="Share Fabsattire"
+            title="Share Fabsattire"
+            className="hidden items-center gap-1.5 rounded-xl border border-neutral-700/50 px-2.5 py-2 text-xs font-semibold text-neutral-300 transition hover:border-amber-500/40 hover:text-amber-300 sm:flex"
+          >
+            <Share2 className="h-3.5 w-3.5" /> Share
+          </button>
           <button type="button" onClick={onRefresh} disabled={isRefreshing} aria-label="Refresh marketplace" title="Refresh marketplace" className="rounded-xl border border-neutral-700/50 p-2 text-neutral-400 transition hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
@@ -272,9 +283,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
                 {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}
               </div>
-              <div className="grid grid-cols-3 gap-2 border-t border-neutral-800 pt-2">
+              <div className="grid grid-cols-4 gap-2 border-t border-neutral-800 pt-2">
                 <button type="button" onClick={() => { setMobileMenuOpen(false); onRefresh(); }} disabled={isRefreshing} className="mobile-nav-item justify-center"><RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />Refresh</button>
                 <button type="button" onClick={onToggleTheme} className="mobile-nav-item justify-center"><span>{isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}Theme</span></button>
+                <button type="button" onClick={() => { setMobileMenuOpen(false); onShare(); }} className="mobile-nav-item justify-center"><Share2 className="h-4 w-4" />Share</button>
                 {currentUser ? <button type="button" onClick={() => { setMobileMenuOpen(false); onLogout(); }} className="mobile-nav-item justify-center text-red-300"><LogOut className="h-4 w-4" />Logout</button> : <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item justify-center text-amber-300">Sign in</button>}
               </div>
             </div>

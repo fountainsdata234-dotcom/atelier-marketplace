@@ -10,6 +10,12 @@
   "theme_color": "#0c0d10",
   "description": "Fabsattire connects people with skilled tailors, quality fabrics, and bespoke fashion.",
   "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "com.fabsattire.app"
+    }
+  ],
   "icons": [
     {
       "src": "/pwa-icon-192.png",

@@ -9,6 +9,10 @@ declare global {
     prompt: () => Promise<void>;
     userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
   }
+
+  interface Navigator {
+    getInstalledRelatedApps?: () => Promise<Array<{ id?: string; platform?: string }>>;
+  }
 }
 
 interface ErrorBoundaryState {

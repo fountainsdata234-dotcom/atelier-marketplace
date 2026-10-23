@@ -90,6 +90,7 @@ export default function App() {
   const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
+  const [shareNotice, setShareNotice] = useState('');
   const [isMobileInstallDevice, setIsMobileInstallDevice] = useState(() => (
     typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
   ));
@@ -98,6 +99,7 @@ export default function App() {
       && (window.matchMedia('(display-mode: standalone)').matches
         || (window.navigator as Navigator & { standalone?: boolean }).standalone === true)
   ));
+  const isAndroidDevice = /android/i.test(navigator.userAgent);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pullStartY = useRef<number | null>(null);
@@ -131,6 +133,23 @@ export default function App() {
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const lastAuthEventUserId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isAppInstalled || !navigator.getInstalledRelatedApps) return;
+    let isActive = true;
+    void navigator.getInstalledRelatedApps()
+      .then(apps => {
+        if (isActive && apps.some(app => app.id === 'com.fabsattire.app')) {
+          setIsAppInstalled(true);
+        }
+      })
+      .catch(error => {
+        console.warn('The installed Fabsattire app could not be detected.', error);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, [isAppInstalled]);
 
   useEffect(() => {
     const mobileQuery = window.matchMedia('(max-width: 1023px)');
@@ -479,6 +498,11 @@ export default function App() {
   }, [currentUser?.id, currentUser?.role]);
 
   const handleInstallApp = async () => {
+    if (isAndroidDevice) {
+      setInstallHelpOpen(true);
+      window.location.assign('https://github.com/fountainsdata234-dotcom/atelier-marketplace/releases/latest/download/app-release.apk');
+      return;
+    }
     if (installPrompt) {
       const promptEvent = installPrompt;
       setInstallPrompt(null);
@@ -493,12 +517,33 @@ export default function App() {
     setInstallHelpOpen(true);
   };
 
-  const canShowInstallPrompt = !isAppInstalled && (Boolean(installPrompt) || isMobileInstallDevice);
+  const canShowInstallPrompt = !isAppInstalled
+    && (Boolean(installPrompt) || isMobileInstallDevice || isAndroidDevice);
   const installInstructions = /iphone|ipad|ipod/i.test(navigator.userAgent)
     ? 'In Safari, tap Share, then choose Add to Home Screen.'
     : /android/i.test(navigator.userAgent)
       ? 'In your browser menu, choose Install app or Add to Home screen. If your browser offers an Install app prompt, use the button again to open it.'
       : 'Open this site in your browser menu and choose Install app or Add to Home screen.';
+
+  const handleShareApp = async () => {
+    const shareData = {
+      title: 'Fabsattire',
+      text: 'Discover skilled tailors, quality fabrics, and bespoke fashion on Fabsattire.',
+      url: window.location.origin,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+      await navigator.clipboard.writeText(shareData.url);
+      setShareNotice('Fabsattire link copied.');
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      console.warn('Fabsattire could not be shared.', error);
+      setShareNotice(`Could not share automatically. Copy this link: ${shareData.url}`);
+    }
+  };
 
   const handlePageRefresh = () => {
     setIsRefreshing(true);
@@ -886,6 +931,7 @@ export default function App() {
         isOnline={isOnline}
         canInstall={canShowInstallPrompt}
         onInstall={handleInstallApp}
+        onShare={handleShareApp}
         onRefresh={handlePageRefresh}
         isRefreshing={isRefreshing}
       />
@@ -1091,6 +1137,13 @@ export default function App() {
         onInstall={handleInstallApp}
       />
 
+      {shareNotice && (
+        <div className="fixed bottom-24 left-1/2 z-[95] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-500/30 bg-[#121316] px-4 py-3 text-sm text-white shadow-xl" role="status">
+          <span className="break-all">{shareNotice}</span>
+          <button type="button" onClick={() => setShareNotice('')} aria-label="Dismiss share message" className="shrink-0 text-neutral-400 hover:text-white"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+
       {installHelpOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={event => {
           if (event.target === event.currentTarget) setInstallHelpOpen(false);
@@ -1110,10 +1163,27 @@ export default function App() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className={`mt-4 text-sm leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>{installInstructions}</p>
-            <p className={`mt-3 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>
-              This installs the website as a progressive web app. If Android reports an older-version warning for a separately downloaded APK, that warning concerns the APK’s Android target version; this website repository does not contain a native Android package.
-            </p>
+            {isAndroidDevice ? (
+              <>
+                <p className={`mt-4 text-sm leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+                  The Fabsattire Android app is downloading. When Chrome finishes, open the APK from Downloads and confirm the Android install prompt. Android may ask you to allow Chrome to install apps from this source.
+                </p>
+                <a
+                  href="https://github.com/fountainsdata234-dotcom/atelier-marketplace/releases/latest/download/app-release.apk"
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-neutral-950 transition hover:bg-amber-300"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Download APK again
+                </a>
+              </>
+            ) : (
+              <>
+                <p className={`mt-4 text-sm leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>{installInstructions}</p>
+                <p className={`mt-3 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>
+                  On Android, the website can download the signed Fabsattire APK, but Android always requires you to confirm the install on your device.
+                </p>
+              </>
+            )}
           </section>
         </div>
       )}

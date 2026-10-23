@@ -2,7 +2,7 @@
 
 ## Android app (Trusted Web Activity)
 
-Fabsattire's Android app is a Trusted Web Activity (TWA). It opens the live site using the Fabsattire app name and icon, preserves the existing web sign-in flow, and targets Android API 36. Its stable Android application ID is `com.fabsattire.app`.
+Fabsattire's Android app is a Trusted Web Activity (TWA). It opens the live site using the Fabsattire app name and icon, preserves the existing web sign-in flow, and targets Android API 36. Its stable Android application ID is `com.fabsattire.app`. The Android build is a small native launcher; marketplace features and data continue to load from the website.
 
 You do not need Android Studio or an Android SDK on your computer. GitHub Actions can build the signed APK in the cloud. The only one-time local requirement is creating a private signing key with a lightweight JDK 17 (no Android Studio required):
 
@@ -12,6 +12,8 @@ You do not need Android Studio or an Android SDK on your computer. GitHub Action
 4. Open **Actions > Build Fabsattire Android APK > Run workflow**. When it completes, download the `fabsattire-android-*` artifact. It contains the signed APK and the public `assetlinks.json` domain-verification file.
 5. Unzip the artifact. In GitHub's repository page, open `public/.well-known/`, choose **Add file > Upload files**, upload the artifact's `assetlinks.json`, and commit it to `main` so Vercel deploys it. The verified file must be live at `https://fabsattire.vercel.app/.well-known/assetlinks.json` for the app to open without Chrome's browser bar.
 6. Install the APK on your Android phone (allow installation from your download source when Android asks). Install/reinstall after the verification file has deployed.
+
+After a signed APK is published, Android visitors can use the website's **Install app** button to download it. Android will still require the user to open the downloaded APK and approve the installation; websites cannot silently install Android packages. The button is hidden when Chrome can confirm that the native app is already installed. The workflow publishes each successful APK build as the latest GitHub Release, which is the download used by that button.
 
 The signing key is permanent for app updates and domain verification. Never generate a replacement after publishing unless you intend to migrate the Android app signing identity. For local Android Studio builds, run `npm run android:twa:update` and `npm run android:twa:build`.
 
