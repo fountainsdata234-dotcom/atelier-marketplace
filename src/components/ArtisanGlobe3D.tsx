@@ -5,6 +5,7 @@ import { Scissors, X } from 'lucide-react';
 import * as THREE from 'three';
 import { User } from '../types';
 import { getEarthTexturePosition, getScatterOffsetsForLocations } from '../utils/globe';
+import { createGlobeSignalPoints } from '../utils/globeSignals';
 
 export type GlobeArtisan = User & {
   distanceKm: number | null;
@@ -13,6 +14,7 @@ export type GlobeArtisan = User & {
 
 interface ArtisanGlobe3DProps {
   artisans: GlobeArtisan[];
+  showArtisanMarkers: boolean;
   selectedArtisanId: string | null;
   onSelectArtisan: (artisan: GlobeArtisan) => void;
   onOpenArtisan: (artisan: GlobeArtisan) => void;
@@ -164,7 +166,83 @@ interface GlobeSceneProps extends ArtisanGlobe3DProps {
   onEarthReady: () => void;
 }
 
-const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, onSelectArtisan, onZoomDistance, onCloseArtisan, isMobile, prefersReducedMotion, onEarthReady }) => {
+const GlobeSignal: React.FC<{
+  position: THREE.Vector3;
+  phase: number;
+  prefersReducedMotion: boolean;
+  coreGeometry: THREE.SphereGeometry;
+  ringGeometry: THREE.TorusGeometry;
+}> = ({ position, phase, prefersReducedMotion, coreGeometry, ringGeometry }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
+  const ringMaterialRef = useRef<THREE.MeshBasicMaterial>(null);
+  const coreMaterialRef = useRef<THREE.MeshBasicMaterial>(null);
+  const orientation = useMemo(() => new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    position.clone().normalize(),
+  ), [position]);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    const ring = ringRef.current;
+    const ringMaterial = ringMaterialRef.current;
+    const coreMaterial = coreMaterialRef.current;
+    if (!group || !ring || !ringMaterial || !coreMaterial) return;
+
+    if (prefersReducedMotion) {
+      ring.scale.setScalar(0.82);
+      ringMaterial.opacity = 0.28;
+      coreMaterial.opacity = 0.6;
+      return;
+    }
+
+    const cycle = ((performance.now() / 1000 + phase) % 3.4) / 3.4;
+    const eased = cycle * cycle * (3 - 2 * cycle);
+    ring.scale.setScalar(0.58 + eased * 1.55);
+    ringMaterial.opacity = 0.52 * (1 - cycle);
+    coreMaterial.opacity = 0.38 + Math.sin(cycle * Math.PI) * 0.45;
+  });
+
+  return (
+    <group ref={groupRef} position={position} quaternion={orientation}>
+      <mesh geometry={coreGeometry} renderOrder={5}>
+        <meshBasicMaterial ref={coreMaterialRef} color="#8df8ff" transparent opacity={0.7} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh ref={ringRef} geometry={ringGeometry} renderOrder={5}>
+        <meshBasicMaterial ref={ringMaterialRef} color="#5ce9ff" transparent opacity={0.4} depthWrite={false} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+};
+
+const GlobeSignalField: React.FC<{ isMobile: boolean; prefersReducedMotion: boolean }> = ({ isMobile, prefersReducedMotion }) => {
+  const signals = useMemo(() => createGlobeSignalPoints(isMobile ? 22 : 36), [isMobile]);
+  const coreGeometry = useMemo(() => new THREE.SphereGeometry(0.025, 8, 6), []);
+  const ringGeometry = useMemo(() => new THREE.TorusGeometry(0.085, 0.006, 4, 20), []);
+  const positions = useMemo(() => signals.map(signal => toGlobePosition(signal.lat, signal.lng, EARTH_RADIUS + 0.025)), [signals]);
+
+  useEffect(() => () => {
+    coreGeometry.dispose();
+    ringGeometry.dispose();
+  }, [coreGeometry, ringGeometry]);
+
+  return (
+    <group>
+      {signals.map((signal, index) => (
+        <GlobeSignal
+          key={index}
+          position={positions[index]}
+          phase={signal.phase}
+          prefersReducedMotion={prefersReducedMotion}
+          coreGeometry={coreGeometry}
+          ringGeometry={ringGeometry}
+        />
+      ))}
+    </group>
+  );
+};
+
+const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, showArtisanMarkers, selectedArtisanId, onSelectArtisan, onZoomDistance, onCloseArtisan, isMobile, prefersReducedMotion, onEarthReady }) => {
   const controlsRef = useRef<any>(null);
   const rotatingGroupRef = useRef<THREE.Group>(null);
   const interactingRef = useRef(false);
@@ -242,7 +320,8 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
       <Stars radius={18} depth={8} count={isMobile ? 120 : 450} factor={1.8} saturation={0.25} fade speed={prefersReducedMotion ? 0 : isMobile ? 0.08 : 0.25} />
       <group ref={rotatingGroupRef}>
         <Earth isMobile={isMobile} onReady={onEarthReady} />
-        {artisans.map((artisan, index) => (
+        <GlobeSignalField isMobile={isMobile} prefersReducedMotion={prefersReducedMotion} />
+        {showArtisanMarkers && artisans.map((artisan, index) => (
           <GlobeMarker
             key={artisan.id}
             artisan={artisan}
@@ -277,11 +356,11 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, selectedArtisanId, on
   );
 };
 
-const GlobeFallback: React.FC<Pick<ArtisanGlobe3DProps, 'artisans' | 'selectedArtisanId' | 'onSelectArtisan'>> = ({ artisans, selectedArtisanId, onSelectArtisan }) => (
+const GlobeFallback: React.FC<Pick<ArtisanGlobe3DProps, 'artisans' | 'showArtisanMarkers' | 'selectedArtisanId' | 'onSelectArtisan'>> = ({ artisans, showArtisanMarkers, selectedArtisanId, onSelectArtisan }) => (
   <div className="globe-webgl-fallback" role="group" aria-label="Earth map with artisan locations">
     <div className="globe-fallback-sphere">
       <img src="/textures/earth/earth_atmos_2048.jpg" alt="" />
-      {artisans.map((artisan, index) => {
+      {showArtisanMarkers && artisans.map((artisan, index) => {
         const latitude = THREE.MathUtils.degToRad(artisan.location.lat ?? 0);
         const longitude = THREE.MathUtils.degToRad(artisan.location.lng ?? 0);
         const x = Math.cos(latitude) * Math.sin(longitude);
@@ -311,7 +390,7 @@ const GlobeFallback: React.FC<Pick<ArtisanGlobe3DProps, 'artisans' | 'selectedAr
   </div>
 );
 
-export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, selectedArtisanId, onSelectArtisan, onOpenArtisan, onCloseArtisan, isDarkMode }) => {
+export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, showArtisanMarkers, selectedArtisanId, onSelectArtisan, onOpenArtisan, onCloseArtisan, isDarkMode }) => {
   const [zoomDistance, setZoomDistance] = useState(8.2);
   const [isEarthReady, setIsEarthReady] = useState(false);
   const [isWebGlUnavailable, setIsWebGlUnavailable] = useState(false);
@@ -364,7 +443,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
         frameloop="always"
         dpr={isMobile ? 1 : [1, 1.2]}
         gl={{ antialias: !isMobile, alpha: true }}
-        fallback={<GlobeFallback artisans={artisans} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
+        fallback={<GlobeFallback artisans={artisans} showArtisanMarkers={showArtisanMarkers} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
         onCreated={({ gl }) => {
           gl.setClearColor('#000000', 0);
           gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.2));
@@ -382,6 +461,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
       >
         <GlobeScene
           artisans={artisans}
+          showArtisanMarkers={showArtisanMarkers}
           selectedArtisanId={selectedArtisanId}
           onSelectArtisan={onSelectArtisan}
           onOpenArtisan={onOpenArtisan}
@@ -393,12 +473,12 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
           onEarthReady={handleEarthReady}
         />
       </Canvas>
-      {isWebGlUnavailable && <GlobeFallback artisans={artisans} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
-      {!isEarthReady && !isWebGlUnavailable && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#10151b]/90 px-5 text-center" role="status" aria-live="polite"><span className="h-10 w-10 animate-spin rounded-full border-2 border-amber-300/25 border-t-amber-300" /><strong className="text-sm text-white">Mapping artisan locations</strong><span className="text-xs text-neutral-300">Loading the Earth and placing makers on the map.</span></div>}
+      {isWebGlUnavailable && <GlobeFallback artisans={artisans} showArtisanMarkers={showArtisanMarkers} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
+      {!isEarthReady && !isWebGlUnavailable && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#10151b]/90 px-5 text-center" role="status" aria-live="polite"><span className="h-10 w-10 animate-spin rounded-full border-2 border-amber-300/25 border-t-amber-300" /><strong className="text-sm text-white">Mapping artisan locations</strong><span className="text-xs text-neutral-300">Locating the global signal field.</span></div>}
       <div className="globe-legend" aria-hidden="true">
         <span><Scissors /> Tailors</span>
         <span><i className="globe-legend-fabric-dot" /> Fabric sellers</span>
-        <span className="globe-legend-zoom">{zoomDistance < 5.8 ? 'Profiles in view' : 'Zoom to reveal profiles'}</span>
+        <span className="globe-legend-zoom">{showArtisanMarkers ? `${artisans.length} matching maker${artisans.length === 1 ? '' : 's'}` : 'Search to reveal makers'}</span>
       </div>
       {selectedArtisan && (
         <div className="globe-selected-card">
@@ -409,7 +489,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, select
               : selectedArtisan.name.slice(0, 1).toUpperCase()}
           </button>
           <div className="globe-selected-copy">
-            <span>{selectedArtisan.role === 'tailor' ? 'Tailor' : 'Fabric seller'}</span>
+            <span>{selectedArtisan.role === 'tailor' ? 'Tailor' : 'Fabric seller'}{zoomDistance < 5.8 ? ' · In view' : ''}</span>
             <strong>{selectedArtisan.name}</strong>
             <small>{formatLocation(selectedArtisan)}</small>
           </div>

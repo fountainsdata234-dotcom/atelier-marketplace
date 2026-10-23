@@ -374,6 +374,10 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const selectedGlobeArtisan = selectedArtisanId
     ? globeArtisans.find((artisan) => artisan.id === selectedArtisanId) ?? null
     : null;
+  const markerSearchActive = searchQuery.trim().length >= 2;
+  const matchingGlobeArtisans = markerSearchActive
+    ? globeArtisans.filter(artisan => filteredArtisans.some(match => match.id === artisan.id))
+    : [];
   const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
@@ -570,15 +574,16 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         <section ref={globePanelRef} className={`artisan-globe-panel mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
           <div className="artisan-globe-panel-header">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Seller locations · static Earth imagery</p>
-              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} near ${selectedGlobeArtisan.location.city}, ${selectedGlobeArtisan.location.country}` : 'Pins use saved coordinates when available; otherwise they show approximate city or regional locations, not live GPS or street addresses. Select a marker or search for a tailor.'}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Global maker signal network</p>
+              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} near ${selectedGlobeArtisan.location.city}, ${selectedGlobeArtisan.location.country}` : 'Signals pulse around the globe. Search a maker to reveal location markers; saved coordinates are used when available, otherwise locations are approximate—not live GPS or street addresses.'}</p>
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>
           {globeNearViewport ? (
             <Suspense fallback={<div className="artisan-globe-3d flex items-center justify-center text-sm text-orange-100/80" role="status">Preparing the artisan map…</div>}>
               <ArtisanGlobe3D
-                artisans={globeArtisans}
+                artisans={matchingGlobeArtisans}
+                showArtisanMarkers={matchingGlobeArtisans.length > 0}
                 selectedArtisanId={selectedArtisanId}
                 onSelectArtisan={(artisan) => setSelectedArtisanId(artisan.id)}
                 onOpenArtisan={onSelectArtisan}
