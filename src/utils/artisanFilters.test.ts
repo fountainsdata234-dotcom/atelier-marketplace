@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { getDefaultLocationFilter, matchesLocationFilter } from './artisanFilters';
+import { countSellerAccounts, getDefaultLocationFilter, matchesLocationFilter } from './artisanFilters';
 
 describe('artisan location filtering', () => {
+  it('counts unique tailor and fabric-seller accounts, not buyers or listings', () => {
+    expect(countSellerAccounts([
+      { id: 'tailor-1', role: 'tailor' },
+      { id: 'tailor-1', role: 'tailor' },
+      { id: 'seller-1', role: 'fabric_seller' },
+      { id: 'buyer-1', role: 'buyer' },
+      { id: 'admin-1', role: 'admin' },
+    ])).toBe(2);
+  });
+
   it('hides sellers outside the selected country even when their name matches the search', () => {
     const artisan = {
       id: 'seller-1',

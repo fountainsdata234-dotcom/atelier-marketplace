@@ -115,6 +115,7 @@ export default function App() {
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>(() => storageService.getUsers());
+  const [sellerDirectoryDataStatus, setSellerDirectoryDataStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [posts, setPosts] = useState<ClothPost[]>(() => storageService.getPosts());
   const [postsLoadError, setPostsLoadError] = useState(false);
   const [promoPlans, setPromoPlans] = useState<AdminPromoPlan[]>([]);
@@ -568,6 +569,13 @@ export default function App() {
             : mergedUsers;
           storageService.saveUsers(usersToPersist);
           setUsers(mergedUsers);
+          setSellerDirectoryDataStatus('ready');
+        } else {
+          console.error(
+            'Seller directory accounts could not be refreshed.',
+            usersResult.status === 'rejected' ? usersResult.reason : new Error('The seller directory returned no account data.'),
+          );
+          setSellerDirectoryDataStatus('error');
         }
 
         if (remotePlans !== null) {
@@ -961,6 +969,7 @@ export default function App() {
             >
               <ArtisanDirectory
                 users={users}
+                sellerDirectoryDataStatus={sellerDirectoryDataStatus}
                 posts={posts}
                 currentUser={currentUser}
                 onSelectArtisan={handleSelectSeller}

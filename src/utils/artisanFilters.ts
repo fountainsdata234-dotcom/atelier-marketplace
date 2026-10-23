@@ -1,3 +1,5 @@
+import type { UserRole } from '../types';
+
 export type LocationLike = {
   country?: string;
   countryCode?: string;
@@ -6,7 +8,18 @@ export type LocationLike = {
   location?: LocationLike;
 };
 
+export type SellerAccount = {
+  id: string;
+  role: UserRole;
+};
+
 const normalizeValue = (value?: string) => String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+export const countSellerAccounts = (users: SellerAccount[]) => new Set(
+  users
+    .filter(user => user.role === 'tailor' || user.role === 'fabric_seller')
+    .map(user => user.id),
+).size;
 
 export const getDefaultLocationFilter = (location?: LocationLike | null) => {
   if (!location) return 'all';
