@@ -1,0 +1,29 @@
+{
+  "packageId": "com.fabsattire.app",
+  "host": "fabsattire.vercel.app",
+  "name": "Fabsattire",
+  "launcherName": "Fabsattire",
+  "display": "standalone",
+  "startUrl": "/",
+  "iconUrl": "https://fabsattire.vercel.app/pwa-icon-512.png",
+  "maskableIconUrl": "https://fabsattire.vercel.app/pwa-icon-512.png",
+  "themeColor": "#0c0d10",
+  "themeColorDark": "#0c0d10",
+  "navigationColor": "#0c0d10",
+  "navigationColorDark": "#0c0d10",
+  "backgroundColor": "#0c0d10",
+  "enableNotifications": true,
+  "enableSiteSettingsShortcut": false,
+  "orientation": "portrait-primary",
+  "appVersionCode": 1,
+  "appVersion": "1.0.0",
+  "minSdkVersion": 24,
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./fabsattire-upload-key.keystore",
+    "alias": "fabsattire"
+  },
+  "fingerprints": [],
+  "webManifestUrl": "https://fabsattire.vercel.app/manifest.webmanifest",
+  "generatorApp": "bubblewrap-cli"
+}

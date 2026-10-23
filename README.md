@@ -1,5 +1,19 @@
 # FABSATTIRE
 
+## Android app (Trusted Web Activity)
+
+The Android wrapper is a Trusted Web Activity (TWA). It opens the live Fabsattire site in an Android app window, keeps the existing website and sign-in flow, and uses the Fabsattire launcher name and icon. The Android application ID is `com.fabsattire.app`; keep it stable once published.
+
+To generate and build the Android Studio project:
+
+1. Install Android Studio and its Android SDK (API 36), plus a supported JDK.
+2. Run `npm install`, then `npm run android:twa:update` to generate the Android Studio project in `android/` from `twa-manifest.json`.
+3. Create an upload keystore named `fabsattire-upload-key.keystore` in the project root with the alias `fabsattire`, and securely back it up. Never commit the keystore or its passwords.
+4. Get the keystore certificate's SHA-256 fingerprint, then run `npm run android:twa:fingerprint:add -- <SHA-256>`. This records the fingerprint and generates `public/.well-known/assetlinks.json`. Deploy that file to `https://fabsattire.vercel.app/.well-known/assetlinks.json`; it is required for the app to open in verified, full-screen mode. If the fingerprint changes, regenerate the file with `npm run android:twa:assetlinks`.
+5. Run `npm run android:twa:build` to build the signed APK and Play Store AAB.
+
+The source tree does not include an Android signing key. A signed installable APK/AAB and verified full-screen launch require the local Android SDK, the privately managed signing key, and the deployed Digital Asset Links file.
+
 FABSATTIRE is a fashion and textile marketplace built to help shoppers discover real tailors, fabric sellers, and makers in their area. The app is designed around a practical problem: people often struggle to find reliable local artisans, compare services, and buy custom clothing or fabric without dealing with fragmented WhatsApp-only chains.
 
 This project combines a premium storefront experience with a functional directory, location-aware discovery, and direct seller communication. Whether someone is searching for a tailor for a wedding outfit, a fabric merchant for a new collection, or a maker with a strong local presence, the platform is meant to make that discovery easier and more trustworthy.

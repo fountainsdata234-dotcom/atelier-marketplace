@@ -14,6 +14,10 @@
     "start": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs server/index.ts",
     "migrate:firebase-to-supabase": "node --env-file-if-exists=.env.local scripts/migrate-firebase-to-supabase.mjs",
     "server:check": "node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.server.json",
+    "android:twa:update": "node ./node_modules/@bubblewrap/cli/bin/bubblewrap.js update --manifest=twa-manifest.json --directory=android --skipVersionUpgrade",
+    "android:twa:build": "node ./node_modules/@bubblewrap/cli/bin/bubblewrap.js build --manifest=twa-manifest.json --directory=android",
+    "android:twa:fingerprint:add": "node ./node_modules/@bubblewrap/cli/bin/bubblewrap.js fingerprint add --manifest=twa-manifest.json --name=Fabsattire-upload-key --output=public/.well-known/assetlinks.json",
+    "android:twa:assetlinks": "node ./node_modules/@bubblewrap/cli/bin/bubblewrap.js fingerprint generateAssetLinks --manifest=twa-manifest.json --output=public/.well-known/assetlinks.json",
     "clean": "rm -rf dist server.js",
     "lint": "node ./node_modules/typescript/bin/tsc --noEmit",
     "postinstall": "node scripts/patch-three-fbx-loader.mjs"
@@ -46,6 +50,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@bubblewrap/cli": "^1.27.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/multer": "^2.2.0",

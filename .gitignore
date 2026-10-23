@@ -11,3 +11,11 @@ coverage/
 .env.*
 !.env.example
 server/firebase-service-account.json
+android/.gradle/
+android/local.properties
+android/**/build/
+android/*.keystore
+android/*.jks
+android/keystore.properties
+/fabsattire-upload-key.keystore
+/fabsattire-upload-key.jks
