@@ -80,12 +80,23 @@ interface ArtisanDirectoryProps {
 }
 
 export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts, currentUser, onSelectArtisan, isDarkMode }) => {
+  const availablePostsBySeller = useMemo(() => {
+    const postsBySeller = new Map<string, ClothPost[]>();
+    posts.forEach(post => {
+      if (!isAvailableMarketplaceListing(post)) return;
+      const sellerPosts = postsBySeller.get(post.authorId) ?? [];
+      sellerPosts.push(post);
+      postsBySeller.set(post.authorId, sellerPosts);
+    });
+    return postsBySeller;
+  }, [posts]);
+
   const artisans = useMemo(() => {
     return users.filter((user) => !user.isBlocked
       && Boolean(user.name.trim() || user.shopName?.trim())
       && (user.role === 'tailor' || user.role === 'fabric_seller'))
       .map((user): DirectorySeller => {
-        const userPosts = posts.filter(post => post.authorId === user.id && isAvailableMarketplaceListing(post));
+        const userPosts = availablePostsBySeller.get(user.id) ?? [];
         const latestPost = [...userPosts].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
         const baseLocation = user.location ?? { city: 'Unknown city', state: 'Unknown', country: 'Unknown', lat: 0, lng: 0 };
         const distanceKm = currentUser && baseLocation.lat && baseLocation.lng && currentUser.location.lat && currentUser.location.lng
@@ -129,7 +140,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         };
       })
       .filter(artisan => artisan.postCount > 0);
-  }, [currentUser, posts, users]);
+  }, [availablePostsBySeller, currentUser, users]);
 
   const [resolvedMapLocations, setResolvedMapLocations] = useState<Record<string, User['location']>>({});
   const resolvingMapLocationIds = useRef(new Set<string>());
@@ -139,17 +150,12 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const [mapLocationResolutionVersion, setMapLocationResolutionVersion] = useState(0);
   const [mapLocationError, setMapLocationError] = useState(false);
   const globeArtisans = useMemo(() => {
-    const postCounts = new Map<string, number>();
-    posts.forEach((post) => {
-      if (!isAvailableMarketplaceListing(post)) return;
-      postCounts.set(post.authorId, (postCounts.get(post.authorId) ?? 0) + 1);
-    });
-
     return users.flatMap((user): GlobeArtisan[] => {
+      const userPosts = availablePostsBySeller.get(user.id);
       if (user.isBlocked
         || !user.name.trim() && !user.shopName?.trim()
         || (user.role !== 'tailor' && user.role !== 'fabric_seller')
-        || !postCounts.has(user.id)) return [];
+        || !userPosts?.length) return [];
       const location = hasValidGlobeCoordinates(user.location)
         ? user.location
         : resolvedMapLocations[user.id];
@@ -160,10 +166,10 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         distanceKm: currentUser && hasValidGlobeCoordinates(currentUser.location)
           ? calculateDistanceKm(currentUser.location.lat, currentUser.location.lng, location.lat, location.lng)
           : null,
-        postCount: postCounts.get(user.id) ?? 0,
+        postCount: userPosts.length,
       }];
     });
-  }, [currentUser, posts, resolvedMapLocations, users]);
+  }, [availablePostsBySeller, currentUser, resolvedMapLocations, users]);
 
   const [nearMeOnly, setNearMeOnly] = useState(false);
   const [locationCountries, setLocationCountries] = useState<LocationCountry[]>([]);
@@ -331,11 +337,12 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     const matchesRadius = !nearMeOnly || (artisan.distanceKm !== null && artisan.distanceKm <= 250);
     return matchesLocation && matchesRadius;
   });
-  const exactSearchMatch = findExactArtisanMatch(artisans, searchQuery);
-  const filteredArtisans = exactSearchMatch ? [exactSearchMatch] : locationArtisans.filter((artisan) => {
+  const exactSearchMatch = findExactArtisanMatch(locationArtisans, searchQuery);
+  const filteredArtisans = locationArtisans.filter((artisan) => {
     const term = searchQuery.trim().toLowerCase();
     const normalizedHandle = artisan.handle.trim().toLowerCase();
     const summary = sellerReviews[artisan.id];
+    const sellerPosts = availablePostsBySeller.get(artisan.id) ?? [];
     const searchable = [
       artisan.name, artisan.shopName || '', artisan.handle,
       artisan.bio || '', artisan.role,
@@ -345,14 +352,14 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
       ...artisan.availability,
       artisan.leadTimeDays === null ? '' : `${artisan.leadTimeDays} days`,
       artisan.minimumOrder === null ? '' : `${artisan.minimumOrder} minimum order`,
-      ...posts.filter(post => post.authorId === artisan.id).map(post => `${post.title} ${post.description}`),
+      ...sellerPosts.map(post => `${post.title} ${post.description}`),
     ].join(' ').toLowerCase();
-    const matchesSearch = !term || searchable.includes(term) || normalizedHandle.includes(term);
+    const matchesSearch = !term || searchable.includes(term) || normalizedHandle.includes(term)
+      || exactSearchMatch?.id === artisan.id;
     const matchesSpecialization = specializationFilter === 'all'
       || artisan.specializations.some(value => value.toLowerCase() === specializationFilter.toLowerCase());
     const matchesServiceType = serviceTypeFilter === 'all'
-      || posts.some(post => post.authorId === artisan.id
-        && matchesServiceType(post, serviceTypeFilter));
+      || sellerPosts.some(post => matchesServiceType(post, serviceTypeFilter));
     const matchesRating = minimumRatingFilter === 0 || !sellerReviewsLoaded || sellerReviewsError
       || Boolean(summary && summary.count > 0 && (summary.confidenceAdjustedRating ?? summary.average) >= minimumRatingFilter);
     const minimumPrice = minimumPriceFilter === '' ? null : Number(minimumPriceFilter);
@@ -408,7 +415,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const matchingGlobeArtisans = markerSearchActive
     ? globeArtisans.filter(artisan => filteredArtisans.some(match => match.id === artisan.id))
     : [];
-  const searchSuggestions = useMemo(() => getSearchSuggestions(artisans, searchQuery, 7), [artisans, searchQuery]);
+  const isMatchingCountAvailable = minimumRatingFilter === 0 || (sellerReviewsLoaded && !sellerReviewsError);
+  const matchingArtisanCount = isMatchingCountAvailable ? filteredArtisans.length : null;
+  const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
     focusArtisan(artisan);
@@ -587,21 +596,23 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         <p className={`mb-4 text-[10px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>
           Price filters compare tailors only when their listing currency is consistent. Delivery area, response time, identity verification and skill credentials are not currently recorded; profile locations and listing details are shown as provided.
         </p>
-        {sellerReviewsError && <p role="status" className="mb-3 text-[11px] text-amber-500">Review summaries are temporarily unavailable; the review rating filter is not being applied.</p>}
+        {sellerReviewsError && <p role="status" className="mb-3 text-[11px] text-amber-500">Review summaries are unavailable; the rating filter and matching total cannot be calculated accurately right now.</p>}
         {minimumRatingFilter > 0 && !sellerReviewsLoaded && <p role="status" className="mb-3 text-[11px] text-neutral-500">Loading eligible firsthand review summaries for the selected rating filter…</p>}
         <div className="mb-6 grid gap-3 md:grid-cols-2">
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Active makers worldwide</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Total active sellers on the globe</p>
             <p className="mt-2 text-2xl font-black text-amber-500">{artisans.length}</p>
+            <p className="mt-1 text-[10px] text-neutral-500">All eligible makers, independent of search and filters</p>
           </div>
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Matching your search &amp; filters</p>
-            <p className="mt-2 text-2xl font-black text-violet-500">{filteredArtisans.length}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Sellers matching search &amp; filters</p>
+            <p className="mt-2 text-2xl font-black text-violet-500" aria-live="polite">{matchingArtisanCount ?? '—'}</p>
+            <p className="mt-1 text-[10px] text-neutral-500">Respects location, service, rating, price and availability</p>
           </div>
         </div>
 
         {locationDataError && <p role="status" className="mb-3 text-[11px] text-amber-500">Some location suggestions are temporarily unavailable. You can still search by name or location.</p>}
-        {exactSearchMatch && searchQuery.trim().length >= 2 && <p className={`mb-3 text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Exact name and handle matches are searched across all locations.</p>}
+        {exactSearchMatch && searchQuery.trim().length >= 2 && <p className={`mb-3 text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>This exact match still follows your selected location and listing filters.</p>}
         {unresolvedSearchLocations > 0 && globeNearViewport && <p role="status" aria-live="polite" className="mb-3 text-[11px] text-orange-300">{mapLocationError ? 'A searched maker’s map location is unavailable. Edit the search to retry; markers need a usable location.' : `Resolving location${unresolvedSearchLocations === 1 ? '' : 's'} for ${unresolvedSearchLocations} matching maker${unresolvedSearchLocations === 1 ? '' : 's'}…`}</p>}
         <section ref={globePanelRef} className={`artisan-globe-panel mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
           <div className="artisan-globe-panel-header">
