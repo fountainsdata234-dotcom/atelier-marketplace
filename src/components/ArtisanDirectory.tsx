@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigation, Search } from 'lucide-react';
 import { ClothPost, LocationCity, LocationCountry, LocationRegion, User } from '../types';
-import { getSearchSuggestions, hasValidGlobeCoordinates } from '../utils/globe';
+import { findExactArtisanMatch, getSearchSuggestions, hasValidGlobeCoordinates } from '../utils/globe';
 import { getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { api } from '../services/api';
@@ -133,6 +133,11 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
 
   const [resolvedMapLocations, setResolvedMapLocations] = useState<Record<string, User['location']>>({});
   const resolvingMapLocationIds = useRef(new Set<string>());
+  const attemptedMapLocationIds = useRef(new Set<string>());
+  const mountedRef = useRef(true);
+  const activeSearchQueryRef = useRef('');
+  const [mapLocationResolutionVersion, setMapLocationResolutionVersion] = useState(0);
+  const [mapLocationError, setMapLocationError] = useState(false);
   const globeArtisans = useMemo(() => {
     const postCounts = new Map<string, number>();
     posts.forEach((post) => {
@@ -185,6 +190,18 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const [countrySearch, setCountrySearch] = useState('');
   const [stateSearch, setStateSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (activeSearchQueryRef.current === searchQuery) return;
+    activeSearchQueryRef.current = searchQuery;
+    attemptedMapLocationIds.current.clear();
+    setMapLocationError(false);
+  }, [searchQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,33 +268,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (!globeNearViewport) return;
-    const unresolved = users.filter(user => !user.isBlocked
-      && (user.role === 'tailor' || user.role === 'fabric_seller')
-      && !hasValidGlobeCoordinates(user.location)
-      && !resolvedMapLocations[user.id]
-      && !resolvingMapLocationIds.current.has(user.id));
-    if (unresolved.length === 0) return;
-    unresolved.forEach(user => resolvingMapLocationIds.current.add(user.id));
-    const batches = Array.from({ length: Math.ceil(unresolved.length / 250) }, (_, index) => (
-      unresolved.slice(index * 250, (index + 1) * 250).map(user => ({ id: user.id, location: user.location }))
-    ));
-    let cancelled = false;
-    void Promise.all(batches.map(locations => api.resolveMapLocations(locations))).then(results => {
-      if (!cancelled) {
-        setResolvedMapLocations(current => ({
-          ...current,
-          ...Object.fromEntries(results.flat().map(result => [result.id, result.location])),
-        }));
-      }
-    }).catch(error => {
-      console.error('Some seller locations could not be resolved for the artisan directory map.', error);
-      unresolved.forEach(user => resolvingMapLocationIds.current.delete(user.id));
-    });
-    return () => { cancelled = true; };
-  }, [globeNearViewport, resolvedMapLocations, users]);
-
   React.useEffect(() => {
     if (locationCountries.length === 0) return;
     const nextCountry = getDefaultLocationFilter(currentUser?.location);
@@ -341,7 +331,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     const matchesRadius = !nearMeOnly || (artisan.distanceKm !== null && artisan.distanceKm <= 250);
     return matchesLocation && matchesRadius;
   });
-  const filteredArtisans = locationArtisans.filter((artisan) => {
+  const exactSearchMatch = findExactArtisanMatch(artisans, searchQuery);
+  const filteredArtisans = exactSearchMatch ? [exactSearchMatch] : locationArtisans.filter((artisan) => {
     const term = searchQuery.trim().toLowerCase();
     const normalizedHandle = artisan.handle.trim().toLowerCase();
     const summary = sellerReviews[artisan.id];
@@ -371,6 +362,45 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
     const matchesAvailability = availabilityFilter === 'all' || artisan.availability.includes(availabilityFilter);
     return matchesSearch && matchesSpecialization && matchesServiceType && matchesRating && matchesPrice && matchesAvailability;
   });
+  const coordinateSearchKey = filteredArtisans.map(artisan => artisan.id).join('|');
+  useEffect(() => {
+    if (!globeNearViewport || searchQuery.trim().length < 2) return;
+    const unresolved = filteredArtisans.filter(artisan => !hasValidGlobeCoordinates(artisan.location)
+      && !resolvedMapLocations[artisan.id]
+      && !attemptedMapLocationIds.current.has(artisan.id)
+      && !resolvingMapLocationIds.current.has(artisan.id));
+    if (unresolved.length === 0) return;
+    unresolved.forEach(artisan => {
+      resolvingMapLocationIds.current.add(artisan.id);
+      attemptedMapLocationIds.current.add(artisan.id);
+    });
+    setMapLocationError(false);
+    const batches = Array.from({ length: Math.ceil(unresolved.length / 250) }, (_, index) => (
+      unresolved.slice(index * 250, (index + 1) * 250).map(artisan => ({ id: artisan.id, location: artisan.location }))
+    ));
+    void Promise.all(batches.map(locations => api.resolveMapLocations(locations))).then(results => {
+      const locations = results.flat();
+      const resolvedIds = new Set(locations.map(result => result.id));
+      if (mountedRef.current && locations.length > 0) {
+        setResolvedMapLocations(current => ({
+          ...current,
+          ...Object.fromEntries(locations.map(result => [result.id, result.location])),
+        }));
+      }
+      if (mountedRef.current && activeSearchQueryRef.current === searchQuery
+        && unresolved.some(artisan => !resolvedIds.has(artisan.id))) setMapLocationError(true);
+    }).catch(error => {
+      console.error('Searched seller locations could not be resolved for the artisan directory map.', error);
+      if (mountedRef.current && activeSearchQueryRef.current === searchQuery) setMapLocationError(true);
+    }).finally(() => {
+      unresolved.forEach(artisan => resolvingMapLocationIds.current.delete(artisan.id));
+      if (mountedRef.current) setMapLocationResolutionVersion(version => version + 1);
+    });
+  }, [coordinateSearchKey, globeNearViewport, mapLocationResolutionVersion, resolvedMapLocations, searchQuery]);
+  const unresolvedSearchLocations = searchQuery.trim().length >= 2
+    ? filteredArtisans.filter(artisan => !hasValidGlobeCoordinates(artisan.location)
+      && !hasValidGlobeCoordinates(resolvedMapLocations[artisan.id])).length
+    : 0;
   const selectedGlobeArtisan = selectedArtisanId
     ? globeArtisans.find((artisan) => artisan.id === selectedArtisanId) ?? null
     : null;
@@ -378,7 +408,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
   const matchingGlobeArtisans = markerSearchActive
     ? globeArtisans.filter(artisan => filteredArtisans.some(match => match.id === artisan.id))
     : [];
-  const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
+  const searchSuggestions = useMemo(() => getSearchSuggestions(artisans, searchQuery, 7), [artisans, searchQuery]);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
     focusArtisan(artisan);
@@ -561,16 +591,18 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
         {minimumRatingFilter > 0 && !sellerReviewsLoaded && <p role="status" className="mb-3 text-[11px] text-neutral-500">Loading eligible firsthand review summaries for the selected rating filter…</p>}
         <div className="mb-6 grid gap-3 md:grid-cols-2">
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Active makers with available listings</p>
-            <p className="mt-2 text-2xl font-black text-amber-500">{locationArtisans.length}</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Active makers worldwide</p>
+            <p className="mt-2 text-2xl font-black text-amber-500">{artisans.length}</p>
           </div>
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Matching this search</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Matching your search &amp; filters</p>
             <p className="mt-2 text-2xl font-black text-violet-500">{filteredArtisans.length}</p>
           </div>
         </div>
 
         {locationDataError && <p role="status" className="mb-3 text-[11px] text-amber-500">Some location suggestions are temporarily unavailable. You can still search by name or location.</p>}
+        {exactSearchMatch && searchQuery.trim().length >= 2 && <p className={`mb-3 text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Exact name and handle matches are searched across all locations.</p>}
+        {unresolvedSearchLocations > 0 && globeNearViewport && <p role="status" aria-live="polite" className="mb-3 text-[11px] text-orange-300">{mapLocationError ? 'A searched maker’s map location is unavailable. Edit the search to retry; markers need a usable location.' : `Resolving location${unresolvedSearchLocations === 1 ? '' : 's'} for ${unresolvedSearchLocations} matching maker${unresolvedSearchLocations === 1 ? '' : 's'}…`}</p>}
         <section ref={globePanelRef} className={`artisan-globe-panel mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
           <div className="artisan-globe-panel-header">
             <div>
@@ -580,7 +612,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, posts
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>
           {globeNearViewport ? (
-            <Suspense fallback={<div className="artisan-globe-3d flex items-center justify-center text-sm text-orange-100/80" role="status">Preparing the artisan map…</div>}>
+            <Suspense fallback={<div className="artisan-globe-3d flex flex-col items-center justify-center gap-3 text-sm text-orange-100/80" role="status" aria-live="polite"><span className="h-10 w-10 animate-spin rounded-full border-2 border-orange-100/25 border-t-orange-200" /><strong>Preparing the artisan globe</strong><span className="text-xs text-orange-100/60">Loading the map and matching locations…</span></div>}>
               <ArtisanGlobe3D
                 artisans={matchingGlobeArtisans}
                 showArtisanMarkers={matchingGlobeArtisans.length > 0}

@@ -130,6 +130,18 @@ describe('globe helpers', () => {
     expect(names[0].name).toBe('Adewale Atelier');
   });
 
+  it('matches exact names and handles across punctuation, case, accents, and leading at-signs', () => {
+    const artisans = [
+      { id: 'a1', name: 'Zoë-Mae Atelier', handle: 'zoe_mae', location: { city: 'Lagos', country: 'Nigeria' } },
+      { id: 'a2', name: 'Dana Silk Co', handle: '@dana.silk', location: { city: 'Cairo', country: 'Egypt' } },
+    ];
+
+    expect(findExactArtisanMatch(artisans, 'zoe mae atelier')?.id).toBe('a1');
+    expect(findExactArtisanMatch(artisans, '@ZOE-MAE')?.id).toBe('a1');
+    expect(findExactArtisanMatch(artisans, 'dana_silk')?.id).toBe('a2');
+    expect(getSearchSuggestions(artisans, '@DANA.SILK')[0].id).toBe('a2');
+  });
+
   it('keeps the globe focused on the exact search match and clears it when the query is empty', () => {
     const artisans = [
       { id: 'a1', name: 'Adewale Atelier', handle: '@adewale', location: { city: 'Lagos', state: 'Lagos', country: 'Nigeria', countryCode: 'NG', lat: 6.5244, lng: 3.3792 } },
