@@ -138,7 +138,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
   React.useEffect(() => {
     const loadRequests = async () => {
-      const cached = storageService.getFabricRequests().filter(request => request.sellerId === currentUser.id);
+      const cached = storageService.getFabricRequests().filter((request: FabricRequest) => request.sellerId === currentUser.id);
       setFabricRequests(cached);
       try {
         const remote = await api.getFabricRequests();
@@ -146,7 +146,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         setFabricRequests(incoming);
         storageService.saveFabricRequests([
           ...incoming,
-          ...storageService.getFabricRequests().filter(request => !incoming.some(item => item.id === request.id)),
+          ...storageService.getFabricRequests().filter((request: FabricRequest) => !incoming.some((item: FabricRequest) => item.id === request.id)),
         ]);
       } catch {
         // Local cache keeps the studio usable when the API is unavailable.

@@ -60,7 +60,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (activeTab !== 'moderation') return;
     void api.getListingsForModeration()
       .then(setModerationListings)
-      .catch(error => setModerationStatus(safeCustomerErrorMessage(error, "We couldn't load the moderation queue. Please try again.")));
+      .catch((error: unknown) => setModerationStatus(safeCustomerErrorMessage(error, "We couldn't load the moderation queue. Please try again.")));
   }, [activeTab]);
 
   useEffect(() => {
@@ -68,14 +68,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAbuseQueueStatus(null);
     void api.getMarketplaceAbuseFlags()
       .then(setAbuseFlags)
-      .catch(error => setAbuseQueueStatus(safeCustomerErrorMessage(error, "We couldn't load the activity queue. Please try again.")));
+      .catch((error: unknown) => setAbuseQueueStatus(safeCustomerErrorMessage(error, "We couldn't load the activity queue. Please try again.")));
   }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'reports') return;
     void api.getListingReports()
       .then(setListingReports)
-      .catch(error => setReportStatus(safeCustomerErrorMessage(error, "We couldn't load reports. Please try again.")));
+      .catch((error: unknown) => setReportStatus(safeCustomerErrorMessage(error, "We couldn't load reports. Please try again.")));
   }, [activeTab]);
 
   const moderateListing = async (listing: ClothPost, decision: 'approve' | 'reject') => {
@@ -181,7 +181,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           const res = storageService.deleteSecondaryAdmin(adminId, currentUser);
           setAdminStatus(safeCustomerErrorMessage(new Error(res.message), 'The administrator account was updated.'));
         })
-        .catch(error => setAdminStatus(safeCustomerErrorMessage(error, "Administrator access couldn't be removed. Please try again.")));
+        .catch((error: unknown) => setAdminStatus(safeCustomerErrorMessage(error, "Administrator access couldn't be removed. Please try again.")));
     }
   };
 

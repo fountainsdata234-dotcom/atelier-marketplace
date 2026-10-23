@@ -127,7 +127,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
           minimumPrice: orderedPrices[0] ?? null,
           maximumPrice: orderedMaximumPrices.at(-1) ?? null,
           currency: currencies.length === 1 ? currencies[0] : null,
-          priceUnit: priceUnits.length === 1 ? priceUnits[0] : null,
+          priceUnit: priceUnits.length === 1 ? priceUnits[0] ?? null : null,
           minimumOrder: minimumOrders[0] ?? null,
           leadTimeDays: userPosts.map(getLeadTime).filter((days): days is number => days !== null).sort((a, b) => a - b)[0] ?? null,
           availability: Array.from(new Set(userPosts.map(post => post.availability).filter((value): value is Exclude<typeof value, undefined> => Boolean(value)))),
@@ -194,9 +194,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
 
   useEffect(() => {
     let cancelled = false;
-    void api.getLocationCountries().then(countries => {
+    void api.getLocationCountries().then((countries: LocationCountry[]) => {
       if (!cancelled) setLocationCountries(countries);
-    }).catch(error => {
+    }).catch((error: unknown) => {
       console.error('Artisan directory country filters could not be loaded.', error);
       if (!cancelled) setLocationDataError(true);
     });
@@ -210,9 +210,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       return;
     }
     let cancelled = false;
-    void api.getLocationRegions(filterCountry).then(regions => {
+    void api.getLocationRegions(filterCountry).then((regions: LocationRegion[]) => {
       if (!cancelled) setLocationRegions(regions);
-    }).catch(error => {
+    }).catch((error: unknown) => {
       console.error('Artisan directory regions could not be loaded.', error);
       if (!cancelled) setLocationDataError(true);
     });
@@ -227,9 +227,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
     }
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      void api.searchLocationCities(filterCountry, selectedRegion.code, citySearch.trim()).then(cities => {
+      void api.searchLocationCities(filterCountry, selectedRegion.code, citySearch.trim()).then((cities: LocationCity[]) => {
         if (!cancelled) setLocationCities(cities);
-      }).catch(error => {
+      }).catch((error: unknown) => {
         console.error('Artisan directory city suggestions could not be loaded.', error);
         if (!cancelled) setLocationDataError(true);
       });
@@ -315,14 +315,14 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       || exactSearchMatch?.id === artisan.id;
     const matchesSpecialization = specializationFilter === 'all'
       || artisan.specializations.some(value => value.toLowerCase() === specializationFilter.toLowerCase());
-    const matchesServiceType = serviceTypeFilter === 'all'
+    const matchesListingServiceType = serviceTypeFilter === 'all'
       || sellerPosts.some(post => matchesServiceType(post, serviceTypeFilter));
     const minimumPrice = minimumPriceFilter === '' ? null : Number(minimumPriceFilter);
     const maximumPrice = maximumPriceFilter === '' ? null : Number(maximumPriceFilter);
     const matchesPrice = (minimumPrice === null || (artisan.maximumPrice !== null && artisan.maximumPrice >= minimumPrice))
       && (maximumPrice === null || (artisan.minimumPrice !== null && artisan.minimumPrice <= maximumPrice));
     const matchesAvailability = availabilityFilter === 'all' || artisan.availability.includes(availabilityFilter);
-    return matchesSearch && matchesSpecialization && matchesServiceType && matchesPrice && matchesAvailability;
+    return matchesSearch && matchesSpecialization && matchesListingServiceType && matchesPrice && matchesAvailability;
   });
   const coordinateSearchKey = filteredArtisans.map(artisan => artisan.id).join('|');
   useEffect(() => {
