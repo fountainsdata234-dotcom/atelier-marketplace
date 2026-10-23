@@ -2,17 +2,18 @@
 
 ## Android app (Trusted Web Activity)
 
-The Android wrapper is a Trusted Web Activity (TWA). It opens the live Fabsattire site in an Android app window, keeps the existing website and sign-in flow, and uses the Fabsattire launcher name and icon. The Android application ID is `com.fabsattire.app`; keep it stable once published.
+Fabsattire's Android app is a Trusted Web Activity (TWA). It opens the live site using the Fabsattire app name and icon, preserves the existing web sign-in flow, and targets Android API 36. Its stable Android application ID is `com.fabsattire.app`.
 
-To generate and build the Android Studio project:
+You do not need Android Studio or an Android SDK on your computer. GitHub Actions can build the signed APK in the cloud. The only one-time local requirement is creating a private signing key with a lightweight JDK 17 (no Android Studio required):
 
-1. Install Android Studio and its Android SDK (API 36), plus a supported JDK.
-2. Run `npm install`, then `npm run android:twa:update` to generate the Android Studio project in `android/` from `twa-manifest.json`.
-3. Create an upload keystore named `fabsattire-upload-key.keystore` in the project root with the alias `fabsattire`, and securely back it up. Never commit the keystore or its passwords.
-4. Get the keystore certificate's SHA-256 fingerprint, then run `npm run android:twa:fingerprint:add -- <SHA-256>`. This records the fingerprint and generates `public/.well-known/assetlinks.json`. Deploy that file to `https://fabsattire.vercel.app/.well-known/assetlinks.json`; it is required for the app to open in verified, full-screen mode. If the fingerprint changes, regenerate the file with `npm run android:twa:assetlinks`.
-5. Run `npm run android:twa:build` to build the signed APK and Play Store AAB.
+1. On Windows, install a JDK 17 (for example, `winget install EclipseAdoptium.Temurin.17.JDK`) and open a new PowerShell window. Run `keytool -genkeypair -v -keystore "$HOME\fabsattire-upload-key.keystore" -alias fabsattire -keyalg RSA -keysize 2048 -validity 10000`. Record the passwords you choose and securely back up the keystore.
+2. In PowerShell, encode the key and copy it directly to your clipboard: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\fabsattire-upload-key.keystore")) | Set-Clipboard`. Do not paste the key into chat, source code, or logs.
+3. In the GitHub repository, open **Settings > Secrets and variables > Actions > New repository secret**. Add `ANDROID_KEYSTORE_BASE64` (paste the clipboard value), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`fabsattire`), and `ANDROID_KEY_PASSWORD`.
+4. Open **Actions > Build Fabsattire Android APK > Run workflow**. When it completes, download the `fabsattire-android-*` artifact. It contains the signed APK and the public `assetlinks.json` domain-verification file.
+5. Unzip the artifact. In GitHub's repository page, open `public/.well-known/`, choose **Add file > Upload files**, upload the artifact's `assetlinks.json`, and commit it to `main` so Vercel deploys it. The verified file must be live at `https://fabsattire.vercel.app/.well-known/assetlinks.json` for the app to open without Chrome's browser bar.
+6. Install the APK on your Android phone (allow installation from your download source when Android asks). Install/reinstall after the verification file has deployed.
 
-The source tree does not include an Android signing key. A signed installable APK/AAB and verified full-screen launch require the local Android SDK, the privately managed signing key, and the deployed Digital Asset Links file.
+The signing key is permanent for app updates and domain verification. Never generate a replacement after publishing unless you intend to migrate the Android app signing identity. For local Android Studio builds, run `npm run android:twa:update` and `npm run android:twa:build`.
 
 FABSATTIRE is a fashion and textile marketplace built to help shoppers discover real tailors, fabric sellers, and makers in their area. The app is designed around a practical problem: people often struggle to find reliable local artisans, compare services, and buy custom clothing or fabric without dealing with fragmented WhatsApp-only chains.
 

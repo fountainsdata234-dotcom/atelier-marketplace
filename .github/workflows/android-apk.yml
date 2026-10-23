@@ -1,0 +1,109 @@
+name: Build Fabsattire Android APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fabsattire-android-release
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    name: Build signed Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 36 build tools
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Validate signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for secret_name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!secret_name}" ]; then
+              echo "::error::Missing GitHub Actions secret: ${secret_name}"
+              exit 1
+            fi
+          done
+
+      - name: Restore signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fabsattire-upload-key.keystore"
+          chmod 600 "$RUNNER_TEMP/fabsattire-upload-key.keystore"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/fabsattire-upload-key.keystore" >> "$GITHUB_ENV"
+
+      - name: Build signed APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          bash ./gradlew --no-daemon \
+            -PandroidVersionCode="$GITHUB_RUN_NUMBER" \
+            -PandroidVersionName="1.0.$GITHUB_RUN_NUMBER" \
+            assembleRelease
+
+      - name: Verify APK signature
+        run: |
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify \
+            --verbose android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Generate Digital Asset Links file
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          fingerprint="$(keytool -list -v \
+            -keystore "$ANDROID_KEYSTORE_PATH" \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            | awk -F': ' '/SHA256:/{print $2; exit}')"
+          if [ -z "$fingerprint" ]; then
+            echo "::error::Could not read the signing certificate fingerprint."
+            exit 1
+          fi
+          mkdir -p public/.well-known
+          FINGERPRINT="$fingerprint" node -e '
+            const fs = require("node:fs");
+            const statement = [{
+              relation: ["delegate_permission/common.handle_all_urls"],
+              target: {
+                namespace: "android_app",
+                package_name: "com.fabsattire.app",
+                sha256_cert_fingerprints: [process.env.FINGERPRINT],
+              },
+            }];
+            fs.writeFileSync("public/.well-known/assetlinks.json", `${JSON.stringify(statement, null, 2)}\n`);
+          '
+
+      - name: Upload APK and domain verification file
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabsattire-android-${{ github.run_number }}
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            public/.well-known/assetlinks.json
+          if-no-files-found: error
+          retention-days: 14
