@@ -19,13 +19,6 @@ const calculateDistanceKm = (lat1: number, lng1: number, lat2: number, lng2: num
   return Math.round(6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)));
 };
 
-type SellerReviewSummary = {
-  sellerId: string;
-  average: number;
-  count: number;
-  confidenceAdjustedRating: number | null;
-};
-
 type DirectorySeller = User & {
   location: User['location'];
   distanceKm: number | null;
@@ -179,13 +172,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const [filterCity, setFilterCity] = useState('all');
   const [specializationFilter, setSpecializationFilter] = useState('all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
-  const [minimumRatingFilter, setMinimumRatingFilter] = useState(0);
   const [minimumPriceFilter, setMinimumPriceFilter] = useState('');
   const [maximumPriceFilter, setMaximumPriceFilter] = useState('');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
-  const [sellerReviews, setSellerReviews] = useState<Record<string, SellerReviewSummary>>({});
-  const [sellerReviewsLoaded, setSellerReviewsLoaded] = useState(false);
-  const [sellerReviewsError, setSellerReviewsError] = useState(false);
   const [selectedArtisanId, setSelectedArtisanId] = useState<string | null>(null);
   const [countrySearch, setCountrySearch] = useState('');
   const [stateSearch, setStateSearch] = useState('');
@@ -281,37 +270,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
     setCitySearch(currentUser?.location.city || '');
     setSelectedArtisanId(null);
   }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode, currentUser?.location?.state, currentUser?.location?.city, locationCountries]);
-  React.useEffect(() => {
-    if (minimumRatingFilter === 0) {
-      setSellerReviews({});
-      setSellerReviewsLoaded(true);
-      setSellerReviewsError(false);
-      return;
-    }
-    const sellerIds = artisans.map(artisan => artisan.id);
-    if (!sellerIds.length) {
-      setSellerReviews({});
-      setSellerReviewsLoaded(true);
-      return;
-    }
-    let cancelled = false;
-    setSellerReviewsLoaded(false);
-    setSellerReviewsError(false);
-    Promise.all(Array.from({ length: Math.ceil(sellerIds.length / 50) }, (_, index) =>
-      api.getSellerReviewSummaries(sellerIds.slice(index * 50, (index + 1) * 50)),
-    )).then(summaryPages => {
-      if (cancelled) return;
-      const summaries = summaryPages.flat();
-      setSellerReviews(Object.fromEntries(summaries.map(summary => [summary.sellerId, summary])));
-      setSellerReviewsLoaded(true);
-    }).catch(error => {
-      if (cancelled) return;
-      console.error('Unable to load public seller review summaries.', error);
-      setSellerReviewsError(true);
-      setSellerReviewsLoaded(true);
-    });
-    return () => { cancelled = true; };
-  }, [artisans, minimumRatingFilter]);
   const focusArtisan = (artisan: DirectorySeller | null) => {
     if (!artisan) return;
     setSelectedArtisanId(artisan.id);
@@ -341,7 +299,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const filteredArtisans = locationArtisans.filter((artisan) => {
     const term = searchQuery.trim().toLowerCase();
     const normalizedHandle = artisan.handle.trim().toLowerCase();
-    const summary = sellerReviews[artisan.id];
     const sellerPosts = availablePostsBySeller.get(artisan.id) ?? [];
     const searchable = [
       artisan.name, artisan.shopName || '', artisan.handle,
@@ -360,14 +317,12 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       || artisan.specializations.some(value => value.toLowerCase() === specializationFilter.toLowerCase());
     const matchesServiceType = serviceTypeFilter === 'all'
       || sellerPosts.some(post => matchesServiceType(post, serviceTypeFilter));
-    const matchesRating = minimumRatingFilter === 0 || (sellerReviewsLoaded && !sellerReviewsError
-      && Boolean(summary && summary.count > 0 && (summary.confidenceAdjustedRating ?? summary.average) >= minimumRatingFilter));
     const minimumPrice = minimumPriceFilter === '' ? null : Number(minimumPriceFilter);
     const maximumPrice = maximumPriceFilter === '' ? null : Number(maximumPriceFilter);
     const matchesPrice = (minimumPrice === null || (artisan.maximumPrice !== null && artisan.maximumPrice >= minimumPrice))
       && (maximumPrice === null || (artisan.minimumPrice !== null && artisan.minimumPrice <= maximumPrice));
     const matchesAvailability = availabilityFilter === 'all' || artisan.availability.includes(availabilityFilter);
-    return matchesSearch && matchesSpecialization && matchesServiceType && matchesRating && matchesPrice && matchesAvailability;
+    return matchesSearch && matchesSpecialization && matchesServiceType && matchesPrice && matchesAvailability;
   });
   const coordinateSearchKey = filteredArtisans.map(artisan => artisan.id).join('|');
   useEffect(() => {
@@ -416,8 +371,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
     ? globeArtisans.filter(artisan => filteredArtisans.some(match => match.id === artisan.id))
     : [];
   const totalSellerCount = sellerDirectoryDataStatus === 'ready' ? countSellerAccounts(users) : null;
-  const isMatchingCountAvailable = sellerDirectoryDataStatus === 'ready'
-    && (minimumRatingFilter === 0 || (sellerReviewsLoaded && !sellerReviewsError));
+  const isMatchingCountAvailable = sellerDirectoryDataStatus === 'ready';
   const matchingArtisanCount = isMatchingCountAvailable ? filteredArtisans.length : null;
   const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
 
@@ -581,10 +535,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
           <select id="seller-service-type" value={serviceTypeFilter} onChange={event => setServiceTypeFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
             <option value="all">All services</option><option value="made_to_order">Made to measure / made to order</option><option value="ready_made">Ready-made clothing</option>
           </select>
-          <label className="sr-only" htmlFor="seller-rating-confidence">Minimum confidence-adjusted seller rating</label>
-          <select id="seller-rating-confidence" value={minimumRatingFilter} onChange={event => setMinimumRatingFilter(Number(event.target.value))} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
-            <option value={0}>Any review rating</option><option value={3}>Confidence-adjusted 3+ (reviewed only)</option><option value={4}>Confidence-adjusted 4+ (reviewed only)</option>
-          </select>
           <label className="sr-only" htmlFor="seller-availability">Filter by seller listing availability</label>
           <select id="seller-availability" value={availabilityFilter} onChange={event => setAvailabilityFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
             <option value="all">Any availability</option><option value="available">Available</option><option value="limited">Limited stock</option><option value="made_to_order">Made to order</option>
@@ -600,8 +550,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
         </p>
         {sellerDirectoryDataStatus === 'loading' && <p role="status" className="mb-3 text-[11px] text-neutral-500">Loading the complete seller directory so the totals are accurate…</p>}
         {sellerDirectoryDataStatus === 'error' && <p role="alert" className="mb-3 text-[11px] text-amber-500">The full seller directory could not be refreshed. Totals are hidden rather than showing incomplete cached data.</p>}
-        {sellerReviewsError && <p role="status" className="mb-3 text-[11px] text-amber-500">Review summaries are unavailable; the rating filter and matching total cannot be calculated accurately right now.</p>}
-        {minimumRatingFilter > 0 && !sellerReviewsLoaded && <p role="status" className="mb-3 text-[11px] text-neutral-500">Loading eligible firsthand review summaries for the selected rating filter…</p>}
         <div className="mb-6 grid gap-3 md:grid-cols-2">
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
             <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Total seller accounts on Fabsattire</p>
@@ -611,7 +559,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
           <div className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
             <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-400">Sellers matching your search &amp; filters</p>
             <p className="mt-2 text-2xl font-black text-violet-500" aria-live="polite">{matchingArtisanCount ?? '—'}</p>
-            <p className="mt-1 text-[10px] text-neutral-500">Counts sellers matching the search and selected location, service, rating, price and availability</p>
+            <p className="mt-1 text-[10px] text-neutral-500">Counts sellers matching the search and selected location, service, price and availability</p>
           </div>
         </div>
 

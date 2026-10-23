@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Users, UserPlus, UserX, Star, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2, Search, X, Flag } from 'lucide-react';
-import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, MarketplaceAbuseFlag, MarketplaceReviewQueueItem } from '../types';
+import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2, Search, X, Flag } from 'lucide-react';
+import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, MarketplaceAbuseFlag } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
@@ -44,13 +44,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [planSaveStatus, setPlanSaveStatus] = useState<string | null>(null);
 
   // Tab State: 'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'
-  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'moderation' | 'reports' | 'reviews' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins'>('sellers');
+  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins'>('sellers');
   const [moderationListings, setModerationListings] = useState<ClothPost[]>([]);
   const [moderationStatus, setModerationStatus] = useState<string | null>(null);
   const [listingReports, setListingReports] = useState<ListingReport[]>([]);
   const [reportStatus, setReportStatus] = useState<string | null>(null);
-  const [reviewQueue, setReviewQueue] = useState<MarketplaceReviewQueueItem[]>([]);
-  const [reviewQueueStatus, setReviewQueueStatus] = useState<string | null>(null);
   const [abuseFlags, setAbuseFlags] = useState<MarketplaceAbuseFlag[]>([]);
   const [abuseQueueStatus, setAbuseQueueStatus] = useState<string | null>(null);
 
@@ -80,14 +78,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       .catch(error => setReportStatus(safeCustomerErrorMessage(error, "We couldn't load reports. Please try again.")));
   }, [activeTab]);
 
-  useEffect(() => {
-    if (activeTab !== 'reviews') return;
-    setReviewQueueStatus(null);
-    void api.getReviewModerationQueue()
-      .then(setReviewQueue)
-      .catch(error => setReviewQueueStatus(safeCustomerErrorMessage(error, "We couldn't load the review queue. Please try again.")));
-  }, [activeTab]);
-
   const moderateListing = async (listing: ClothPost, decision: 'approve' | 'reject') => {
     const reason = decision === 'reject' ? window.prompt('Optional feedback for the seller:') || '' : '';
     try {
@@ -108,47 +98,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setReportStatus(status === 'reviewed' ? 'Report marked as reviewed.' : 'Report dismissed.');
     } catch (error) {
       setReportStatus(safeCustomerErrorMessage(error, "The report couldn't be updated. Please try again."));
-    }
-  };
-
-  const moderateReview = async (item: MarketplaceReviewQueueItem, decision: 'published' | 'rejected' | 'removed') => {
-    const prompt = decision === 'published' ? 'Approval rationale (at least 5 characters):' : 'Explain the policy reason for this decision (at least 5 characters):';
-    const reason = window.prompt(prompt);
-    if (reason === null) return;
-    try {
-      await api.moderateMarketplaceReview(item.reviewType, item.id, decision, reason.trim());
-      setReviewQueue(current => current.filter(entry => entry.id !== item.id));
-      setReviewQueueStatus('Review moderation decision saved.');
-    } catch (error) {
-      setReviewQueueStatus(safeCustomerErrorMessage(error, "The review decision couldn't be saved. Please try again."));
-    }
-  };
-
-  const resolveReviewQueueItem = async (item: MarketplaceReviewQueueItem, decision: string) => {
-    const reason = window.prompt('Enter the reason for this decision (at least 5 characters):');
-    if (reason === null) return;
-    try {
-      if (item.queueType === 'appeal') {
-        await api.resolveMarketplaceReviewAppeal(item.id, decision as 'upheld' | 'overturned', reason.trim());
-      } else {
-        await api.resolveMarketplaceReviewReport(item.id, decision as 'reviewed' | 'dismissed', reason.trim());
-      }
-      setReviewQueue(current => current.filter(entry => entry.id !== item.id));
-      setReviewQueueStatus('Review trust case resolved and recorded.');
-    } catch (error) {
-      setReviewQueueStatus(safeCustomerErrorMessage(error, "The review report couldn't be resolved. Please try again."));
-    }
-  };
-
-  const removeReportedReview = async (item: MarketplaceReviewQueueItem) => {
-    if (!item.reviewId) return;
-    const reason = window.prompt('Explain the policy reason for removing this review (at least 5 characters):');
-    if (reason === null) return;
-    try {
-      await api.moderateMarketplaceReview(item.reviewType, item.reviewId, 'removed', reason.trim());
-      setReviewQueueStatus('Reported review removed and moderation decision recorded. Resolve the report separately.');
-    } catch (error) {
-      setReviewQueueStatus(safeCustomerErrorMessage(error, "The reported review couldn't be removed. Please try again."));
     }
   };
 
@@ -487,17 +436,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }`}
           >
             <span className="inline-flex items-center gap-1.5"><Flag className="h-3.5 w-3.5" /> Listing reports</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reviews')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'reviews'
-                ? 'bg-amber-500 text-neutral-950 font-semibold shadow'
-                : 'bg-neutral-800/40 text-neutral-400 hover:text-white'
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5"><Star className="h-3.5 w-3.5" /> Reviews & appeals</span>
           </button>
 
           <button
@@ -1057,38 +995,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               ))}
             </div>
           )}
-        </section>
-      )}
-
-      {activeTab === 'reviews' && (
-        <section className={`rounded-3xl border p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
-          <h2 className="text-xl font-serif font-bold">Review moderation and trust queue</h2>
-          <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Review new feedback, reports, and appeals. Record a reason for every decision; legitimate negative feedback must not be removed merely because a seller disagrees.</p>
-          {reviewQueueStatus && <p role="status" className="mt-3 text-xs text-amber-300">{reviewQueueStatus}</p>}
-          {reviewQueue.length === 0 ? <p className="py-8 text-center text-xs text-neutral-400">No open review cases.</p> : <div className="mt-5 space-y-3">
-            {reviewQueue.map(item => <article key={`${item.queueType || 'review'}-${item.id}`} className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
-              {item.queueType === 'appeal' ? <>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Review appeal · {item.reviewType}</p>
-                <p className="mt-2 whitespace-pre-wrap text-sm">{item.reason}</p>
-                <p className="mt-2 text-[10px] text-neutral-500">Submitted {new Date(item.createdAt).toLocaleString()} · Review {item.reviewId}</p>
-                <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void resolveReviewQueueItem(item, 'overturned')} className="rounded-lg border border-emerald-500/30 px-3 py-2 text-[10px] font-bold text-emerald-300">Overturn and restore</button><button type="button" onClick={() => void resolveReviewQueueItem(item, 'upheld')} className="rounded-lg border border-neutral-700 px-3 py-2 text-[10px] font-bold text-neutral-300">Uphold decision</button></div>
-              </> : item.queueType === 'report' ? <>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-red-300">Review report · {item.reviewType}</p>
-                <p className="mt-2 text-sm font-semibold">{item.reason?.replaceAll('_', ' ')}</p>
-                <p className="mt-1 whitespace-pre-wrap text-xs text-neutral-400">{item.details || 'No additional information supplied.'}</p>
-                {item.review && <div className="mt-2 rounded-lg bg-neutral-950/40 p-3"><p className="text-xs font-semibold">{item.review.listing?.title || `${item.review.rating || '?'} / 5 star review`}</p><p className="mt-1 whitespace-pre-wrap text-xs text-neutral-400">{item.review.reviewText || 'No written text.'}</p></div>}
-                <p className="mt-2 text-[10px] text-neutral-500">Reported by {item.reporter?.name || item.reporter?.email || item.reporterId} · {new Date(item.createdAt).toLocaleString()} · Review {item.reviewId}</p>
-                <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void removeReportedReview(item)} className="rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-bold text-red-300">Remove review</button><button type="button" onClick={() => void resolveReviewQueueItem(item, 'reviewed')} className="rounded-lg border border-emerald-500/30 px-3 py-2 text-[10px] font-bold text-emerald-300">Resolve report</button><button type="button" onClick={() => void resolveReviewQueueItem(item, 'dismissed')} className="rounded-lg border border-neutral-700 px-3 py-2 text-[10px] font-bold text-neutral-300">Dismiss report</button></div>
-              </> : <>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Pending {item.reviewType} review</p>
-                <p className="mt-1 text-xs text-neutral-400">{item.reviewer?.name || item.reviewer?.email || item.reviewerId} · {item.seller?.shopName || item.seller?.name || 'Seller'}{item.listing?.title ? ` · ${item.listing.title}` : ''}</p>
-                <p className="mt-2 text-sm font-semibold">{item.rating} / 5 stars</p>
-                {item.reviewText && <p className="mt-1 whitespace-pre-wrap text-sm">{item.reviewText}</p>}
-                <p className="mt-2 text-[10px] text-neutral-500">Firsthand feedback; not purchase verified · {new Date(item.createdAt).toLocaleString()}</p>
-                <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => void moderateReview(item, 'published')} className="rounded-lg border border-emerald-500/30 px-3 py-2 text-[10px] font-bold text-emerald-300">Approve</button><button type="button" onClick={() => void moderateReview(item, 'rejected')} className="rounded-lg border border-red-500/30 px-3 py-2 text-[10px] font-bold text-red-300">Reject</button><button type="button" onClick={() => void moderateReview(item, 'removed')} className="rounded-lg border border-neutral-700 px-3 py-2 text-[10px] font-bold text-neutral-300">Remove</button></div>
-              </>}
-            </article>)}
-          </div>}
         </section>
       )}
 

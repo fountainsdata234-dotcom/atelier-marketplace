@@ -43,12 +43,11 @@ const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: num
 
 const getLikeCount = (post: ClothPost) => post.likeCount ?? post.likes.length;
 const getSaveCount = (post: ClothPost) => post.saveCount ?? post.saves.length;
-const TREND_CATEGORY_LABELS: Record<MarketplaceTrendCategory, string> = {
+const TREND_CATEGORY_LABELS: Partial<Record<MarketplaceTrendCategory, string>> = {
   TRENDING_NOW: 'Trending Now',
   RISING: 'Rising',
   POPULAR: 'Popular',
   NEW_NOTICED: 'New & Noticed',
-  HIGHLY_RATED: 'Highly Rated',
   MOST_VIEWED: 'Most Viewed',
 };
 
@@ -1092,7 +1091,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               <option value="newest">Newest</option>
               <option value="price_asc">Price: low to high</option>
               <option value="price_desc">Price: high to low</option>
-              <option value="rating">Top rated</option>
               <option value="popularity">Popularity</option>
             </select>
           </div>
@@ -1271,11 +1269,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className={`text-base font-black uppercase tracking-[0.12em] sm:text-lg ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{activeTrendCategoryLabel}</h2>
                   <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-orange-400">
-                    {activeTrendCategory === 'HIGHLY_RATED' ? 'Customer reviews' : 'Popular picks'}
+                    Popular picks
                   </span>
                 </div>
                 <p className={`mt-1 text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                  {activeTrendCategory === 'HIGHLY_RATED' ? 'Explore pieces customers have rated highly.' : 'A fresh look at pieces shoppers are exploring.'}
+                  A fresh look at pieces shoppers are exploring.
                 </p>
               </div>
             </div>
@@ -1381,8 +1379,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         <span className={`text-right ${isDarkMode ? 'text-neutral-200' : 'text-neutral-800'}`}>{price === null ? 'Price on enquiry' : `${currency} ${Number(price).toLocaleString()}`}</span>
                       </div>
                       <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2 text-[10px] text-neutral-500">
-                        <span className="inline-flex items-center gap-1"><TrendingUp className="h-3 w-3 text-orange-400" />{activeTrendCategory === 'HIGHLY_RATED' ? 'Customer reviews' : 'Popular now'}</span>
-                        {post.ratingCount > 0 && <span className="inline-flex items-center gap-1 text-amber-500"><Star className="h-3 w-3 fill-current" />{post.rating?.toFixed(1)} · {post.ratingCount}</span>}
+                        <span className="inline-flex items-center gap-1"><TrendingUp className="h-3 w-3 text-orange-400" />Popular now</span>
                       </div>
                     </div>
 
@@ -1963,10 +1960,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <span>{saveCount} Saves</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2">
-                    <span className="text-[10px] text-neutral-500">Firsthand feedback is shown on the listing page</span>
-                    <button type="button" onClick={() => openListing(post)} className="text-[10px] font-semibold text-amber-500 hover:text-amber-300">Read reviews</button>
+                    <span className="text-[10px] text-neutral-500">Discover the full listing details</span>
+                    <button type="button" onClick={() => openListing(post)} className="text-[10px] font-semibold text-amber-500 hover:text-amber-300">View details</button>
                   </div>
-                  {activeFeedView === 'for-you' && post.recommendationReason && <p className="text-[10px] text-neutral-500">Why this appears: {post.recommendationReason}</p>}
                 </div>
 
                 {/* Footer: Like Counter and WhatsApp Contact */}

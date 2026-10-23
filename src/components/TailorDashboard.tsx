@@ -94,7 +94,11 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [postStatus, setPostStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [fabricRequests, setFabricRequests] = useState<FabricRequest[]>([]);
   const [requestStatus, setRequestStatus] = useState<string | null>(null);
-  const [warningModalOpen, setWarningModalOpen] = useState(Boolean(currentUser.isWarned && currentUser.warningNote));
+  const warningNoticeKey = `fabsattire-dismissed-warning:${currentUser.id}:${encodeURIComponent(currentUser.warningNote || '')}`;
+  const [warningModalOpen, setWarningModalOpen] = useState(() => (
+    Boolean(currentUser.isWarned && currentUser.warningNote)
+    && localStorage.getItem(warningNoticeKey) !== 'dismissed'
+  ));
   const [activeStudioTab, setActiveStudioTab] = useState<'overview' | 'posts' | 'plans'>('overview');
 
   // Filter posts belonging to this tailor/seller
@@ -120,13 +124,17 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const acknowledgeWarning = async () => {
     const cleared = storageService.updateUser(currentUser.id, { isWarned: false, warningNote: '' });
     if (cleared) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cleared }));
+    localStorage.removeItem(warningNoticeKey);
     setWarningModalOpen(false);
     await api.saveProfile({ isWarned: false, warningNote: '' }).catch(() => undefined);
   };
 
   React.useEffect(() => {
-    setWarningModalOpen(Boolean(currentUser.isWarned && currentUser.warningNote));
-  }, [currentUser.isWarned, currentUser.warningNote]);
+    setWarningModalOpen(
+      Boolean(currentUser.isWarned && currentUser.warningNote)
+      && localStorage.getItem(warningNoticeKey) !== 'dismissed',
+    );
+  }, [currentUser.isWarned, currentUser.warningNote, warningNoticeKey]);
 
   React.useEffect(() => {
     const loadRequests = async () => {
@@ -418,7 +426,10 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-300">Studio notice</p>
                   <h2 className="mt-2 text-2xl font-serif font-bold text-white">Important account message</h2>
                 </div>
-                <button type="button" onClick={() => setWarningModalOpen(false)} className="rounded-full border border-white/10 p-2 text-neutral-400 transition hover:text-white" aria-label="Close notice">
+                <button type="button" onClick={() => {
+                  localStorage.setItem(warningNoticeKey, 'dismissed');
+                  setWarningModalOpen(false);
+                }} className="rounded-full border border-white/10 p-2 text-neutral-400 transition hover:text-white" aria-label="Close notice">
                   <AlertTriangle className="h-4 w-4" />
                 </button>
               </div>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabsattire-v11';
+const CACHE_NAME = 'fabsattire-v12';
 const APP_SHELL = ['/index.html', '/manifest.webmanifest'];
 
 const isStaticAssetRequest = (url) => {

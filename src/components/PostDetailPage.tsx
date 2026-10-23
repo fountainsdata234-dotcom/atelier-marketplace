@@ -3,7 +3,6 @@ import { ArrowLeft, ArrowRight, MapPin, MessageCircle, Share2, Flag, X } from 'l
 import { ClothPost, User } from '../types';
 import { getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
-import { MarketplaceReviews } from './MarketplaceReviews';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { PostImage } from './PostImage';
 
@@ -64,7 +63,6 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
     .map(item => ({ post: item, matchCount: item.tags.filter(tag => postTags.has(tag.trim().toLowerCase())).length }))
     .filter(item => item.matchCount > 0)
     .sort((a, b) => b.matchCount - a.matchCount
-      || (b.post.rating || 0) - (a.post.rating || 0)
       || new Date(b.post.createdAt).getTime() - new Date(a.post.createdAt).getTime())
     .slice(0, 6)
     .map(item => item.post), [visiblePosts, post?.authorId, post?.id, postTags]);
@@ -196,7 +194,6 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
         </aside>
       </section>
 
-      <MarketplaceReviews type="listing" targetId={post.id} currentUser={currentUser} onOpenAuth={onOpenAuth} isDarkMode={isDarkMode} />
 
       {isImageExpanded && (
         <div

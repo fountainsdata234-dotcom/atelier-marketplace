@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowUp } from 'lucide-react';
-import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole, AppNotification } from './types';
+import { ArrowUp, Download, X } from 'lucide-react';
+import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole, AppNotification, DirectMessage } from './types';
 import { storageService } from './services/storage';
 import { NeedleThreadBackground } from './components/NeedleThreadBackground';
 import { IntroLoader } from './components/IntroLoader';
@@ -89,10 +89,18 @@ export default function App() {
   const [showIntro, setShowIntro] = useState<boolean>(() => sessionStorage.getItem('fabrilux_intro_seen') !== '1');
   const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installHelpOpen, setInstallHelpOpen] = useState(false);
+  const [isMobileInstallDevice, setIsMobileInstallDevice] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
+  ));
+  const [isAppInstalled, setIsAppInstalled] = useState(() => (
+    typeof window !== 'undefined'
+      && (window.matchMedia('(display-mode: standalone)').matches
+        || (window.navigator as Navigator & { standalone?: boolean }).standalone === true)
+  ));
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pullStartY = useRef<number | null>(null);
-  const LAST_INSTALLED_EMAIL_KEY = 'atelier_last_installed_email';
 
   // Theme state: default to sophisticated dark luxury aesthetic with full light toggle
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -123,6 +131,14 @@ export default function App() {
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const lastAuthEventUserId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia('(max-width: 1023px)');
+    const updateMobileState = () => setIsMobileInstallDevice(mobileQuery.matches);
+    updateMobileState();
+    mobileQuery.addEventListener('change', updateMobileState);
+    return () => mobileQuery.removeEventListener('change', updateMobileState);
+  }, []);
 
   useEffect(() => {
     const pageMeta: Record<string, { title: string; description: string }> = {
@@ -225,13 +241,12 @@ export default function App() {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     const handleInstallPrompt = (event: Event) => {
+      event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
     const handleInstalled = () => {
       setInstallPrompt(null);
-      if (currentUser?.email) {
-        localStorage.setItem(LAST_INSTALLED_EMAIL_KEY, currentUser.email);
-      }
+      setIsAppInstalled(true);
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -318,15 +333,15 @@ export default function App() {
         } else {
           setCurrentView('marketplace');
         }
-        void api.getProfile().then(savedProfile => {
+        void api.getProfile().then((savedProfile: Partial<User>) => {
           const syncedUser = storageService.upsertUser(mergeProfile(savedProfile));
           setCurrentUser(syncedUser);
           if (!savedProfile.avatarUrl && authUser.avatarUrl) {
-            void api.saveProfile({ avatarUrl: authUser.avatarUrl }).catch(error => {
+            void api.saveProfile({ avatarUrl: authUser.avatarUrl }).catch((error: unknown) => {
               console.warn('Google profile photo could not be saved.', error);
             });
           }
-        }).catch(error => {
+        }).catch((error: unknown) => {
           console.warn('Profile could not be synchronized; continuing with available account details.', error);
         });
         void refreshAllData();
@@ -420,7 +435,7 @@ export default function App() {
     const refreshUnreadCount = async () => {
       try {
         const messages = await api.getMessages();
-        setUnreadCount(messages.filter(message => message.recipientId === currentUser.id && !message.isRead).length);
+        setUnreadCount(messages.filter((message: DirectMessage) => message.recipientId === currentUser.id && !message.isRead).length);
       } catch {
         setUnreadCount(storageService.getMessages(currentUser.id).filter(message => message.recipientId === currentUser.id && !message.isRead).length);
       }
@@ -442,10 +457,10 @@ export default function App() {
   useEffect(() => {
     if (currentUser?.role !== 'admin') return;
     let cancelled = false;
-    void api.getAdminUsers().then(adminUsers => {
+    void api.getAdminUsers().then((adminUsers: User[]) => {
       if (cancelled) return;
       setUsers(adminUsers);
-      storageService.saveUsers(adminUsers.map(user => ({
+      storageService.saveUsers(adminUsers.map((user: User) => ({
         ...user,
         email: '',
         phone: '',
@@ -455,7 +470,7 @@ export default function App() {
         isSuperAdmin: undefined,
         addedByEmail: undefined,
       })));
-    }).catch(error => {
+    }).catch((error: unknown) => {
       console.warn('Administrator user data could not be refreshed.', error);
     });
     return () => {
@@ -464,17 +479,26 @@ export default function App() {
   }, [currentUser?.id, currentUser?.role]);
 
   const handleInstallApp = async () => {
-    if (!installPrompt) return;
-    await installPrompt.prompt();
-    const result = await installPrompt.userChoice;
-    if (result.outcome === 'accepted') {
-      const email = currentUser?.email || 'guest';
-      localStorage.setItem(LAST_INSTALLED_EMAIL_KEY, email);
+    if (installPrompt) {
+      const promptEvent = installPrompt;
       setInstallPrompt(null);
+      try {
+        await promptEvent.prompt();
+        const result = await promptEvent.userChoice;
+        if (result.outcome === 'accepted') return;
+      } catch (error) {
+        console.warn('The browser install prompt could not be completed.', error);
+      }
     }
+    setInstallHelpOpen(true);
   };
 
-  const canShowInstallPrompt = Boolean(installPrompt) && (!currentUser || localStorage.getItem(LAST_INSTALLED_EMAIL_KEY) !== currentUser.email);
+  const canShowInstallPrompt = !isAppInstalled && (Boolean(installPrompt) || isMobileInstallDevice);
+  const installInstructions = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    ? 'In Safari, tap Share, then choose Add to Home Screen.'
+    : /android/i.test(navigator.userAgent)
+      ? 'In your browser menu, choose Install app or Add to Home screen. If your browser offers an Install app prompt, use the button again to open it.'
+      : 'Open this site in your browser menu and choose Install app or Add to Home screen.';
 
   const handlePageRefresh = () => {
     setIsRefreshing(true);
@@ -538,8 +562,8 @@ export default function App() {
         const remotePlans = plansResult.status === 'fulfilled' ? plansResult.value : null;
         if (remoteUsers !== null) {
           const localUsers = storageService.getUsers();
-          const uniqueRemoteUsers: User[] = Array.from(new Map<string, User>(remoteUsers.map(remoteUser => [remoteUser.id, remoteUser])).values());
-          const mergedUsers = uniqueRemoteUsers.map(remoteUser => {
+          const uniqueRemoteUsers: User[] = Array.from(new Map<string, User>(remoteUsers.map((remoteUser: User) => [remoteUser.id, remoteUser])).values());
+          const mergedUsers = uniqueRemoteUsers.map((remoteUser: User) => {
             const localUser = localUsers.find(user => user.id === remoteUser.id);
             if (!localUser) return { ...remoteUser, followers: Array.isArray(remoteUser.followers) ? remoteUser.followers : [] };
             return {
@@ -604,12 +628,12 @@ export default function App() {
     }
 
     landingPostsRequestStarted.current = true;
-    void api.getPosts().then(remotePosts => {
+    void api.getPosts().then((remotePosts: ClothPost[]) => {
       if (remotePosts.length === 0) return;
       const normalizedPosts = normalizeMarketplacePosts(remotePosts);
       storageService.savePosts(normalizedPosts);
       setPosts(normalizedPosts);
-    }).catch(error => {
+    }).catch((error: unknown) => {
       console.warn('Landing page listings could not be refreshed.', error);
     });
   }, [currentView, posts.length]);
@@ -618,10 +642,10 @@ export default function App() {
     if (currentView !== 'landing' || landingPromoPlansRequestStarted.current) return;
     landingPromoPlansRequestStarted.current = true;
     if (promoPlans.length === 0) setIsPromoPlansLoading(true);
-    void api.getPromoPlans().then(remotePlans => {
+    void api.getPromoPlans().then((remotePlans: AdminPromoPlan[]) => {
       storageService.savePromoPlans(remotePlans);
       setPromoPlans(remotePlans);
-    }).catch(error => {
+    }).catch((error: unknown) => {
       console.warn('Landing promotion plans could not be refreshed.', error);
     }).finally(() => {
       setIsPromoPlansLoading(false);
@@ -654,10 +678,10 @@ export default function App() {
       return;
     }
     setNotifications(storageService.getNotifications(currentUser.id).slice(0, 4));
-    void api.getNotifications().then(remoteNotifications => {
+    void api.getNotifications().then((remoteNotifications: AppNotification[]) => {
       storageService.mergeNotifications(remoteNotifications);
       setNotifications(storageService.getNotifications(currentUser.id).slice(0, 4));
-    }).catch(error => console.warn('Remote notifications could not be loaded.', error));
+    }).catch((error: unknown) => console.warn('Remote notifications could not be loaded.', error));
     const markAsRead = () => {
       storageService.markNotificationsRead(currentUser.id);
       void api.markNotificationsRead().catch(() => undefined);
@@ -1066,6 +1090,33 @@ export default function App() {
         canInstall={canShowInstallPrompt}
         onInstall={handleInstallApp}
       />
+
+      {installHelpOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={event => {
+          if (event.target === event.currentTarget) setInstallHelpOpen(false);
+        }}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="install-help-title"
+            className={`w-full max-w-md rounded-3xl border p-5 shadow-2xl ${isDarkMode ? 'border-neutral-700 bg-[#121316] text-white' : 'border-neutral-200 bg-white text-neutral-900'}`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Download className="h-5 w-5 text-amber-400" aria-hidden="true" />
+                <h2 id="install-help-title" className="text-lg font-serif font-bold">Install Fabsattire</h2>
+              </div>
+              <button type="button" onClick={() => setInstallHelpOpen(false)} aria-label="Close install instructions" className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className={`mt-4 text-sm leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>{installInstructions}</p>
+            <p className={`mt-3 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>
+              This installs the website as a progressive web app. If Android reports an older-version warning for a separately downloaded APK, that warning concerns the APK’s Android target version; this website repository does not contain a native Android package.
+            </p>
+          </section>
+        </div>
+      )}
 
       {/* 8. Authentication & Registration Modal */}
       {authModalOpen && <Suspense fallback={null}>

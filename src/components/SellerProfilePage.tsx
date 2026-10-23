@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Ban, MapPin, Phone, Search, Share2, Users, CheckCircle2, Grid3X3, Layers } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
-import { getRatingQuality } from '../utils/marketplaceRanking';
-import { MarketplaceReviews } from './MarketplaceReviews';
 import { api } from '../services/api';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { PostImage } from './PostImage';
@@ -35,7 +33,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
   ), [posts, seller.id]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState('all');
-  const [sortBy, setSortBy] = useState<'newest' | 'rating' | 'price'>('newest');
+  const [sortBy, setSortBy] = useState<'newest' | 'price'>('newest');
   const [isBlocked, setIsBlocked] = useState(false);
   const [isSavingBlock, setIsSavingBlock] = useState(false);
   const [blockError, setBlockError] = useState('');
@@ -56,7 +54,6 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
     const matchesTag = selectedTag === 'all' || post.tags.some(tag => tag.trim().toLowerCase() === selectedTag.toLowerCase());
     return matchesSearch && matchesTag;
   }).sort((a, b) => {
-    if (sortBy === 'rating') return getRatingQuality(b.rating, b.ratingCount) - getRatingQuality(a.rating, a.ratingCount) || (b.ratingCount || 0) - (a.ratingCount || 0);
     if (sortBy === 'price') return (a.pricing.basic || Number.MAX_SAFE_INTEGER) - (b.pricing.basic || Number.MAX_SAFE_INTEGER);
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   }), [allSellerPosts, searchQuery, selectedTag, sortBy]);
@@ -78,7 +75,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
         if (active) setIsBlocked(blockedSellerIds.includes(seller.id));
       })
       .catch(() => {
-        if (active) setBlockError('Your block list could not be loaded.');
+        if (active) setBlockError('Seller block status could not be loaded.');
       });
     return () => { active = false; };
   }, [currentUser?.id, seller.id]);
@@ -155,7 +152,6 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
                 : <p className="mt-1 text-neutral-300">No specialization tags have been listed.</p>}
               <p className="mt-1 text-[10px] text-neutral-400">Based on this seller's listing tags, not a skill certification.</p>
             </div>
-            <p className="text-[10px] text-neutral-400 sm:col-span-2">Firsthand review averages and counts appear below when available. Ratings are feedback, not proof of professional status.</p>
           </div>
         </div>
         <div className={`border-b px-5 py-4 sm:px-8 ${isDarkMode ? 'border-neutral-800/70 bg-[#121316]' : 'border-neutral-200 bg-white'}`}>
@@ -165,7 +161,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
               <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search pieces, materials, or tags" aria-label="Search seller collection" className={`w-full rounded-lg border py-2.5 pl-9 pr-3 text-xs outline-none focus:border-amber-500 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white placeholder-neutral-500' : 'border-neutral-300 bg-white text-neutral-900 placeholder-neutral-400'}`} />
             </label>
             <select value={sortBy} onChange={event => setSortBy(event.target.value as typeof sortBy)} aria-label="Sort seller collection" className={`rounded-lg border px-3 py-2.5 text-xs outline-none focus:border-amber-500 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`}>
-              <option value="newest">Newest</option><option value="rating">Top rated</option><option value="price">Price: low to high</option>
+              <option value="newest">Newest</option><option value="price">Price: low to high</option>
             </select>
           </div>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -174,9 +170,8 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
           </div>
           <p className="mt-2 text-[10px] text-neutral-500">{sellerPosts.length} matching piece{sellerPosts.length === 1 ? '' : 's'}</p>
         </div>
-        <div className="p-5 sm:p-8"><div className="mb-6 flex flex-col gap-4 border-b border-neutral-800/70 pb-5 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><Grid3X3 className="h-4 w-4 text-amber-500" /><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">The collection</p></div><h2 className="mt-1 text-2xl font-serif font-bold">{seller.name}'s edit</h2><p className="mt-1 max-w-xl text-xs text-neutral-400">A considered edit of garments and materials published by this {getRoleLabel(seller.role).toLowerCase()}.</p><div className="mt-3 flex flex-wrap gap-1.5">{collectionTags.map(tag => <span key={tag} className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-400">{tag}</span>)}</div></div><span className="text-xs text-neutral-400">{sellerPosts.length} piece{sellerPosts.length === 1 ? '' : 's'} available</span></div>{sellerPosts.length === 0 ? <p className="rounded-2xl border border-dashed border-neutral-700 p-8 text-center text-xs text-neutral-400">{allSellerPosts.length > 0 ? 'No pieces match these filters.' : 'This seller has not published a collection yet.'}</p> : <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{sellerPosts.map(post => <article id={`collection-post-${post.id}`} key={post.id} className={`group cursor-pointer overflow-hidden rounded-2xl border transition ${featuredPostId === post.id ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-xl shadow-amber-500/20' : isDarkMode ? 'border-neutral-800 bg-neutral-950/60 hover:border-amber-500/40' : 'border-neutral-200 bg-neutral-50 hover:border-amber-500/40'}`}><div className="relative overflow-hidden"><PostImage src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl} alt={post.title} className="aspect-[4/3]" imageClassName="brightness-110 saturate-110" loading="lazy" />{featuredPostId === post.id && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950"><CheckCircle2 className="h-3 w-3" /> Shared piece</span>}</div><div className="p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">{post.tags[0] || getRoleLabel(seller.role)}</p><h3 className="mt-1 font-serif text-lg font-bold">{post.title}</h3><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{post.description}</p><div className="mt-3 flex items-center justify-between text-[10px] text-neutral-400"><span>{post.likes?.length || 0} likes</span><span>{post.saves?.length || 0} saves</span><span>{post.rating ? `${post.rating.toFixed(1)} rating` : 'New'}</span></div></div></article>)}</div>}</div>
+        <div className="p-5 sm:p-8"><div className="mb-6 flex flex-col gap-4 border-b border-neutral-800/70 pb-5 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><Grid3X3 className="h-4 w-4 text-amber-500" /><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">The collection</p></div><h2 className="mt-1 text-2xl font-serif font-bold">{seller.name}'s edit</h2><p className="mt-1 max-w-xl text-xs text-neutral-400">A considered edit of garments and materials published by this {getRoleLabel(seller.role).toLowerCase()}.</p><div className="mt-3 flex flex-wrap gap-1.5">{collectionTags.map(tag => <span key={tag} className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-400">{tag}</span>)}</div></div><span className="text-xs text-neutral-400">{sellerPosts.length} piece{sellerPosts.length === 1 ? '' : 's'} available</span></div>{sellerPosts.length === 0 ? <p className="rounded-2xl border border-dashed border-neutral-700 p-8 text-center text-xs text-neutral-400">{allSellerPosts.length > 0 ? 'No pieces match these filters.' : 'This seller has not published a collection yet.'}</p> : <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{sellerPosts.map(post => <article id={`collection-post-${post.id}`} key={post.id} className={`group cursor-pointer overflow-hidden rounded-2xl border transition ${featuredPostId === post.id ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-xl shadow-amber-500/20' : isDarkMode ? 'border-neutral-800 bg-neutral-950/60 hover:border-amber-500/40' : 'border-neutral-200 bg-neutral-50 hover:border-amber-500/40'}`}><div className="relative overflow-hidden"><PostImage src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl} alt={post.title} className="aspect-[4/3]" imageClassName="brightness-110 saturate-110" loading="lazy" />{featuredPostId === post.id && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950"><CheckCircle2 className="h-3 w-3" /> Shared piece</span>}</div><div className="p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">{post.tags[0] || getRoleLabel(seller.role)}</p><h3 className="mt-1 font-serif text-lg font-bold">{post.title}</h3><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{post.description}</p><div className="mt-3 flex items-center justify-between text-[10px] text-neutral-400"><span>{post.likes?.length || 0} likes</span><span>{post.saves?.length || 0} saves</span>        <span>{new Date(post.createdAt).toLocaleDateString()}</span></div></div></article>)}</div>}</div>
       </section>
-      <MarketplaceReviews type="seller" targetId={seller.id} currentUser={currentUser} onOpenAuth={onOpenAuth} isDarkMode={isDarkMode} />
     </main>
   );
 };
