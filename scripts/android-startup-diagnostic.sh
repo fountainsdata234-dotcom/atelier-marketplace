@@ -3,11 +3,14 @@
 set +e
 diagnostic_file="$RUNNER_TEMP/android-startup-diagnostic.txt"
 
+adb shell getprop ro.build.version.release > "$RUNNER_TEMP/android-version.txt" 2>&1
+adb shell getprop ro.build.version.sdk >> "$RUNNER_TEMP/android-version.txt" 2>&1
 adb shell pm list packages com.android.chrome > "$RUNNER_TEMP/chrome-package.txt" 2>&1
 adb install -r "$RUNNER_TEMP/app-release.apk" > "$RUNNER_TEMP/install-result.txt" 2>&1
 install_status=$?
 
 if [ "$install_status" -eq 0 ]; then
+  adb logcat -c
   adb shell am start -W -n com.fabsattire.app/.LauncherActivity \
     > "$RUNNER_TEMP/launch-result.txt" 2>&1
   launch_status=$?
@@ -21,6 +24,9 @@ fi
 {
   echo "APK install exit code: $install_status"
   echo "Activity launch exit code: $launch_status"
+  echo
+  echo "Android release and API:"
+  cat "$RUNNER_TEMP/android-version.txt"
   echo
   echo "Chrome package on emulator:"
   cat "$RUNNER_TEMP/chrome-package.txt"

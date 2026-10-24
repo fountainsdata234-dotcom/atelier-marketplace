@@ -14,9 +14,13 @@ permissions:
 
 jobs:
   diagnose-android-startup:
-    name: Launch latest APK on Android 11 emulator
+    name: Launch latest APK on Android ${{ matrix.api-level }} emulator
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 30, 35]
     steps:
       - name: Check out diagnostic script
         uses: actions/checkout@v5
@@ -34,14 +38,14 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Install and launch APK in Android 11 emulator
+      - name: Install and launch APK in emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: ${{ matrix.api-level }}
           target: google_apis_playstore
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          emulator-options: -no-window -no-audio -no-boot-anim
           disable-animations: true
           script: bash scripts/android-startup-diagnostic.sh
 
@@ -49,7 +53,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fabsattire-android-startup-diagnostic
+          name: fabsattire-android-startup-diagnostic-api-${{ matrix.api-level }}
           path: ${{ runner.temp }}/android-startup-diagnostic.txt
           if-no-files-found: warn
           retention-days: 7
