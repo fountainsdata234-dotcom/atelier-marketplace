@@ -179,11 +179,22 @@ export const api = {
     return request<LocationCity[]>(`/api/location/countries/${encodeURIComponent(countryCode)}/states/${encodeURIComponent(regionCode)}/cities?${search}`);
   },
   getUsers: () => request<User[]>('/api/users'),
+  refreshUsers: () => {
+    publicReadCache.delete('/api/users');
+    inFlightPublicReads.delete('/api/users');
+    return performRequest<User[]>('/api/users', { cache: 'no-store' }, null, false);
+  },
   getAdminUsers: () => request<User[]>('/api/admin/users'),
+  refreshAdminUsers: () => request<User[]>('/api/admin/users', { cache: 'no-store' }),
   getProfile: () => request<Partial<User>>('/api/profile'),
   getSellerCollections: () => request<SellerCollection[]>('/api/seller-collections'),
   saveSellerCollection: (collection: Pick<SellerCollection, 'title' | 'description' | 'imageUrls'>) => request<SellerCollection>('/api/seller-collections', { method: 'POST', body: JSON.stringify(collection) }),
   getPromoPlans: () => request<AdminPromoPlan[]>('/api/promo-plans'),
+  refreshPromoPlans: () => {
+    publicReadCache.delete('/api/promo-plans');
+    inFlightPublicReads.delete('/api/promo-plans');
+    return performRequest<AdminPromoPlan[]>('/api/promo-plans', { cache: 'no-store' }, null, false);
+  },
   savePromoPlans: (plans: AdminPromoPlan[]) => request<AdminPromoPlan[]>('/api/promo-plans', { method: 'PUT', body: JSON.stringify({ plans }) }),
   toggleFollow: (userId: string) => request<{ followers: string[]; isFollowing: boolean }>(`/api/users/${userId}/follow`, { method: 'POST' }),
   updateUserProfile: (userId: string, updates: Partial<User>) => request<User>(`/api/users/${userId}/profile`, { method: 'PUT', body: JSON.stringify(updates) }),
@@ -193,6 +204,11 @@ export const api = {
   deleteMyAccount: () => request<void>('/api/profile', { method: 'DELETE' }),
   setUserBlocked: (userId: string, blocked: boolean, reason: string) => request<{ ok: boolean; blocked: boolean }>(`/api/admin/users/${userId}/block`, { method: 'POST', body: JSON.stringify({ blocked, reason }) }),
   getPosts: (search?: string) => request<ClothPost[]>(search ? `/api/posts?q=${encodeURIComponent(search)}` : '/api/posts'),
+  refreshPosts: () => {
+    publicReadCache.delete('/api/posts');
+    inFlightPublicReads.delete('/api/posts');
+    return performRequest<ClothPost[]>('/api/posts', { cache: 'no-store' }, null, false);
+  },
   getMarketplaceFeed: (query: MarketplaceFeedQuery) => {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([key, value]) => {

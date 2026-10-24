@@ -297,7 +297,7 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   }, [isDarkMode]);
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-30 overflow-hidden select-none">
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
       <canvas ref={canvasRef} className="w-full h-full block" />
       
       {/* Interactive Needle Indicator Badge */}

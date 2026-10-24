@@ -179,23 +179,20 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     setIsProcessingImage(true);
     setPostStatus(null);
     try {
-      const remainingSlots = 8 - imageAssets.length;
-      if (files.length > remainingSlots) throw new Error(`You can add up to 8 images. ${remainingSlots} image slot(s) remain.`);
-      const uploadedAssets: ListingImageAsset[] = [];
+      if (files.length > 1) throw new Error('A standard post can include one photo. Add multiple photos to a collection instead.');
       let lastCompression: ProcessedImageResult | null = null;
-      for (const file of files) {
-        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
-          throw new Error('Choose JPEG, PNG, WebP, or GIF images.');
-        }
-        if (file.size > 8 * 1024 * 1024) throw new Error(`${file.name} exceeds the 8 MB image limit.`);
-        const result = await compressAndGenerateImageLink(file);
-        if (!result.blob) throw new Error('Please sign in again before uploading an image.');
-        uploadedAssets.push(await api.uploadListingImage(result.blob, `${Date.now()}-${file.name}`));
-        URL.revokeObjectURL(result.url);
-        lastCompression = result;
+      const file = files[0];
+      if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+        throw new Error('Choose JPEG, PNG, WebP, or GIF images.');
       }
-      setImageAssets(current => [...current, ...uploadedAssets]);
-      if ((imageAssets.length === 0 || !imageUrl) && uploadedAssets[0]) setImageUrl(uploadedAssets[0].url);
+      if (file.size > 8 * 1024 * 1024) throw new Error(`${file.name} exceeds the 8 MB image limit.`);
+      const result = await compressAndGenerateImageLink(file);
+      if (!result.blob) throw new Error('Please sign in again before uploading an image.');
+      const uploadedAsset = await api.uploadListingImage(result.blob, `${Date.now()}-${file.name}`);
+      URL.revokeObjectURL(result.url);
+      lastCompression = result;
+      setImageAssets([uploadedAsset]);
+      setImageUrl(uploadedAsset.url);
       setCompressionStats(lastCompression);
     } catch (err: any) {
       setPostStatus({
@@ -203,6 +200,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         message: safeCustomerErrorMessage(err, "We couldn't prepare this image. Please try another file.")
       });
     } finally {
+      e.target.value = '';
       setIsProcessingImage(false);
     }
   };
@@ -402,7 +400,8 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     setImageAlt(post.imageAlt || '');
     setTagsInput(post.tags.join(', '));
     setImageUrl(post.imageUrl);
-    setImageAssets(post.imageAssets || []);
+    const coverImage = post.imageAssets?.find(asset => asset.url === post.imageUrl) || post.imageAssets?.[0];
+    setImageAssets(coverImage ? [coverImage] : []);
     const legacyPrice = Number(post.pricing?.basic);
     setPricingBasic(post.priceMin === null || post.priceMin === undefined
       ? legacyPrice > 0 ? String(legacyPrice) : ''
@@ -802,23 +801,21 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   {postStep === 0 && <div className="space-y-4">
                     <label className="block text-xs font-medium text-neutral-400">{listingType === 'FABRIC' ? 'Fabric images *' : 'Garment / portfolio images *'}</label>
                     <div className="rounded-2xl border-2 border-dashed border-neutral-700 bg-neutral-900/30 p-6 text-center transition-all hover:border-amber-500/60">
-                    <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" id="tailor-file-input" disabled={currentUser.isBlocked || isProcessingImage || imageAssets.length >= 8} onChange={handleFileUpload} className="hidden" />
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="tailor-file-input" disabled={currentUser.isBlocked || isProcessingImage} onChange={handleFileUpload} className="hidden" />
                       <label htmlFor="tailor-file-input" className="flex cursor-pointer flex-col items-center justify-center">
                         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400"><ImageIcon className="h-6 w-6" /></div>
                         <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? 'Processing and securely uploading…' : 'Upload a product image'}</span>
-                        <span className="mt-1 text-[10px] text-neutral-500">Add up to 8 JPEG, PNG, WebP, or GIF images, 8 MB each. Optimized images and thumbnails are generated on the server.</span>
+                        <span className="mt-1 text-[10px] text-neutral-500">One JPEG, PNG, WebP, or GIF photo, up to 8 MB. You can replace it before publishing.</span>
                       </label>
                     </div>
-                    {imageAssets.length > 0 && <div className="grid grid-cols-4 gap-2">{imageAssets.map((asset, index) => (
+                    {imageAssets.length > 0 && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{imageAssets.map((asset, index) => (
                       <div key={asset.url} className="relative aspect-square overflow-hidden rounded-lg border border-neutral-700">
                         <img src={asset.thumbnailUrl || asset.url} alt={`Listing image ${index + 1}`} className="h-full w-full object-cover" />
                         <button type="button" onClick={() => {
-                          const next = imageAssets.filter(item => item.url !== asset.url);
-                          setImageAssets(next);
-                          if (imageUrl === asset.url) setImageUrl(next[0]?.url || '');
+                          setImageAssets([]);
+                          setImageUrl('');
                         }} className="absolute right-1 top-1 rounded bg-black/80 px-1.5 py-0.5 text-xs text-white" aria-label={`Remove image ${index + 1}`}>×</button>
-                        {imageUrl === asset.url && <span className="absolute bottom-1 left-1 rounded bg-black/80 px-1.5 py-0.5 text-[9px] text-amber-300">Main</span>}
-                        {imageUrl !== asset.url && <button type="button" onClick={() => setImageUrl(asset.url)} className="absolute inset-x-0 bottom-0 bg-black/70 py-1 text-[9px] text-white">Make primary</button>}
+                        <span className="absolute bottom-1 left-1 rounded bg-black/80 px-2 py-1 text-[10px] text-amber-300">Post photo</span>
                       </div>
                     ))}</div>}
 

@@ -28,7 +28,7 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
     }, 500);
 
     const finishTimer = setTimeout(() => {
-      sessionStorage.setItem('fabrilux_intro_seen', '1');
+      sessionStorage.setItem('fabsattire_intro_seen', '1');
       onComplete();
     }, 820);
 

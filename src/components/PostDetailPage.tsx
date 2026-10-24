@@ -140,11 +140,6 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
               <PostImage src={selectedImageUrl || post.imageUrl} alt={post.imageAlt || post.title} className="h-full min-h-[320px] w-full sm:min-h-[480px] lg:min-h-[620px]" imageClassName="max-h-[78vh]" fetchPriority="high" decoding="async" />
             </button>
           </div>
-          {(post.imageAssets?.length || 0) > 1 && <div className="grid grid-cols-4 gap-2 border-t border-neutral-800/60 p-3 sm:grid-cols-6">{post.imageAssets?.map((asset, index) => (
-            <button key={asset.url} type="button" onClick={() => setSelectedImageUrl(asset.url)} aria-label={`Show listing image ${index + 1}`} aria-pressed={selectedImageUrl === asset.url} className={`aspect-square overflow-hidden rounded-lg border ${selectedImageUrl === asset.url ? 'border-amber-400' : 'border-neutral-700'}`}>
-              <img src={asset.thumbnailUrl || asset.url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-            </button>
-          ))}</div>}
           {post.tags.length > 0 && <div className="flex flex-wrap gap-2 border-t border-neutral-800/60 p-4">{post.tags.map(tag => <span key={tag} className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold text-amber-400">#{tag}</span>)}</div>}
         </div>
 

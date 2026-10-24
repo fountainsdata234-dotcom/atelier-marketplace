@@ -28,9 +28,20 @@
   }
 
   #root {
+    width: 100%;
     min-width: 0;
-    max-width: 100%;
+    max-width: none;
     overflow-x: clip;
+  }
+
+  #root > div {
+    width: 100%;
+    max-width: none;
+  }
+
+  #root > div > main {
+    width: 100%;
+    min-width: 0;
   }
 
   .app-shell-loading {

@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowUp, Download, X } from 'lucide-react';
+import { ArrowUp, Download, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole, AppNotification, DirectMessage } from './types';
 import { storageService } from './services/storage';
 import { NeedleThreadBackground } from './components/NeedleThreadBackground';
@@ -56,7 +56,7 @@ const getInitialView = () => {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
   if (/^\/@[^/]+\/post\/[^/]+$/i.test(path)) return 'post';
   if (/^\/@[^/]+$/i.test(path)) return 'seller';
-  return PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabrilux_active_view') || 'landing';
+  return PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabsattire_active_view') || sessionStorage.getItem('fabrilux_active_view') || 'landing';
 };
 
 const getInitialPostId = () => {
@@ -86,7 +86,7 @@ export default function App() {
   const publicSellerRoute = Boolean(sharedPathMatch || routeParams.get('seller'));
   const publicPostRoute = Boolean(sharedPathMatch?.[2] || routeParams.get('post'));
   // Intro Loading animation state
-  const [showIntro, setShowIntro] = useState<boolean>(() => sessionStorage.getItem('fabrilux_intro_seen') !== '1');
+  const [showIntro, setShowIntro] = useState<boolean>(() => sessionStorage.getItem('fabsattire_intro_seen') !== '1');
   const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
@@ -102,6 +102,8 @@ export default function App() {
   const isAndroidDevice = /android/i.test(navigator.userAgent);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [imageViewer, setImageViewer] = useState<{ src: string; alt: string } | null>(null);
+  const [imageZoom, setImageZoom] = useState(1);
   const pullStartY = useRef<number | null>(null);
 
   // Theme state: default to sophisticated dark luxury aesthetic with full light toggle
@@ -133,6 +135,47 @@ export default function App() {
   const [broadcasts, setBroadcasts] = useState<BroadcastMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const lastAuthEventUserId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (!root) return;
+
+    const openImageViewer = (event: MouseEvent) => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement)
+        || image.getAttribute('aria-hidden') === 'true'
+        || image.closest('[data-image-viewer]')) return;
+      const src = image.currentSrc || image.src;
+      if (!src || new URL(src, window.location.href).pathname.endsWith('/logo.png')) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setImageZoom(1);
+      setImageViewer({
+        src,
+        alt: image.alt || image.closest('button')?.getAttribute('aria-label') || 'Fabsattire photo',
+      });
+    };
+
+    root.addEventListener('click', openImageViewer, true);
+    return () => root.removeEventListener('click', openImageViewer, true);
+  }, []);
+
+  useEffect(() => {
+    if (!imageViewer) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setImageViewer(null);
+      if (event.key === '+' || event.key === '=') setImageZoom(zoom => Math.min(zoom + 0.5, 4));
+      if (event.key === '-') setImageZoom(zoom => Math.max(zoom - 0.5, 1));
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [imageViewer]);
 
   useEffect(() => {
     if (isAppInstalled || !navigator.getInstalledRelatedApps) return;
@@ -238,7 +281,7 @@ export default function App() {
       setSharedPostId(null);
       setSelectedPostId(null);
       const path = window.location.pathname.replace(/\/$/, '') || '/';
-      setCurrentView(PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabrilux_active_view') || 'landing');
+      setCurrentView(PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabsattire_active_view') || sessionStorage.getItem('fabrilux_active_view') || 'landing');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -547,11 +590,12 @@ export default function App() {
 
   const handlePageRefresh = () => {
     setIsRefreshing(true);
-    void refreshAllData(false).finally(() => setIsRefreshing(false));
+    void refreshAllData(false, true).finally(() => setIsRefreshing(false));
   };
 
-  const refreshAllData = async (showLoader = true) => {
-    const isEligibleView = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
+  const refreshAllData = async (showLoader = true, forceNetworkRefresh = false) => {
+    const isEligibleView = document.visibilityState === 'visible'
+      && (marketplaceViews.includes(currentView) || (forceNetworkRefresh && currentView === 'landing'));
     if (!isEligibleView) {
       setIsDataLoading(false);
       return;
@@ -582,9 +626,11 @@ export default function App() {
       setBroadcasts(storageService.getBroadcasts());
       if (showLoader) setIsDataLoading(false);
       try {
-        const usersRequest = currentUser?.role === 'admin' ? api.getAdminUsers() : api.getUsers();
-        const postsRequest = api.getPosts();
-        const plansRequest = api.getPromoPlans();
+        const usersRequest = currentUser?.role === 'admin'
+          ? forceNetworkRefresh ? api.refreshAdminUsers() : api.getAdminUsers()
+          : forceNetworkRefresh ? api.refreshUsers() : api.getUsers();
+        const postsRequest = forceNetworkRefresh ? api.refreshPosts() : api.getPosts();
+        const plansRequest = forceNetworkRefresh ? api.refreshPromoPlans() : api.getPromoPlans();
         let remotePosts: ClothPost[] | null = null;
         try {
           remotePosts = await postsRequest;
@@ -748,7 +794,7 @@ export default function App() {
   }, [currentUser?.id]);
 
   useEffect(() => {
-    sessionStorage.setItem('fabrilux_active_view', currentView);
+    sessionStorage.setItem('fabsattire_active_view', currentView);
   }, [currentView]);
 
   useEffect(() => {
@@ -947,7 +993,7 @@ export default function App() {
 
       {!isOnline && (
         <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200" role="status">
-          You are offline. Showing saved Fabrilux content; new data will sync when connection returns.
+          You are offline. Showing saved Fabsattire content; new data will sync when connection returns.
         </div>
       )}
       {isRefreshing && <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200">Refreshing marketplace...</div>}
@@ -1223,6 +1269,72 @@ export default function App() {
         imageTitle={savePictureTitle}
         isDarkMode={isDarkMode}
       />
+
+      {imageViewer && (
+        <div
+          data-image-viewer
+          className="fixed inset-0 z-[120] flex flex-col bg-black/95 p-4 backdrop-blur-xl"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full-screen image viewer"
+          onClick={event => {
+            if (event.target === event.currentTarget) setImageViewer(null);
+          }}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-4">
+            <p className="min-w-0 truncate text-xs font-medium text-white/75">{imageViewer.alt}</p>
+            <button
+              type="button"
+              onClick={() => setImageViewer(null)}
+              aria-label="Close image viewer"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto py-3">
+            <img
+              src={imageViewer.src}
+              alt={imageViewer.alt}
+              draggable={false}
+              onClick={() => setImageZoom(zoom => zoom === 1 ? 2 : 1)}
+              className="max-w-none cursor-zoom-in select-none object-contain"
+              style={{
+                width: `${Math.min(window.innerWidth * 0.92, 1200) * imageZoom}px`,
+                height: `${window.innerHeight * 0.82 * imageZoom}px`,
+              }}
+            />
+          </div>
+          <div className="flex shrink-0 items-center justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setImageZoom(zoom => Math.max(zoom - 0.5, 1))}
+              disabled={imageZoom <= 1}
+              aria-label="Zoom out"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-40"
+            >
+              <ZoomOut className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setImageZoom(1)}
+              aria-label="Reset image zoom"
+              className="flex h-11 items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white transition hover:bg-white/20"
+            >
+              <RotateCcw className="h-4 w-4" />{Math.round(imageZoom * 100)}%
+            </button>
+            <button
+              type="button"
+              onClick={() => setImageZoom(zoom => Math.min(zoom + 0.5, 4))}
+              disabled={imageZoom >= 4}
+              aria-label="Zoom in"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-40"
+            >
+              <ZoomIn className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

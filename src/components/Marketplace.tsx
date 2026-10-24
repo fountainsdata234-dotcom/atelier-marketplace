@@ -1396,7 +1396,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           )}
           {!trendingLoading && !trendingError && trendingPosts.length === 0 && !activeTrendingPage?.fallback && (
             <p className={`m-4 rounded-xl border px-4 py-5 text-center text-xs sm:m-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40 text-neutral-400' : 'border-neutral-200 bg-white text-neutral-600'}`}>
-              Popular items will appear here as more customers explore Fabrilux Atelier.
+              Popular items will appear here as more customers explore Fabsattire.
             </p>
           )}
           {(showAllTrending ? trendingPosts.length > 7 : trendingPosts.length >= 7) && (
@@ -1825,17 +1825,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     </span>
                     {post.categoryId && <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold capitalize backdrop-blur-md bg-black/60 text-white border border-white/10">{post.categoryId.replace(/[-_]/g, ' ')}</span>}
                   </div>
-                  {post.imageAssets && post.imageAssets.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => openListing(post)}
-                      className="absolute bottom-2.5 left-2.5 rounded-md bg-black/70 px-2 py-1 text-[10px] font-semibold text-white hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                      aria-label={`View ${post.imageAssets.length} photos for ${post.title}`}
-                    >
-                      {post.imageAssets.length} photos · View gallery
-                    </button>
-                  )}
-
                   {/* Save listing */}
                   <button
                     type="button"
