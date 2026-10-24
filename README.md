@@ -2,7 +2,7 @@
 
 ## Android app (Trusted Web Activity)
 
-Fabsattire's Android app is a Trusted Web Activity (TWA). It opens the live site using the Fabsattire app name and icon, preserves the existing web sign-in flow, and targets Android API 36. Its stable Android application ID is `com.fabsattire.app`. The Android build is a small native launcher; marketplace features and data continue to load from the website. Release code shrinking is disabled because Android Browser Helper resolves launcher components dynamically, and shrinking those names causes startup crashes.
+Fabsattire's Android app is a Trusted Web Activity (TWA). It opens the live site using the Fabsattire app name and icon, preserves the existing web sign-in flow, and targets Android API 36. Its stable Android application ID is `com.fabsattire.app`. The Android build is a small native launcher; marketplace features and data continue to load from the website. Release code shrinking is disabled because Android Browser Helper resolves launcher components dynamically. Its manage-space activity must also be declared in the app manifest, as required by Android Browser Helper.
 
 You do not need Android Studio or an Android SDK on your computer. GitHub Actions can build the signed APK in the cloud. The only one-time local requirement is creating a private signing key with a lightweight JDK 17 (no Android Studio required):
 
