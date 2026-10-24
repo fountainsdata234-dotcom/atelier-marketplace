@@ -98,7 +98,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <button type="button" onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-xs font-semibold text-amber-500 hover:text-amber-300"><ArrowLeft className="h-4 w-4" /> Back to marketplace</button>
       <section className={`overflow-hidden rounded-[2rem] border ${surface}`} onClick={(event) => {
         const card = (event.target as HTMLElement).closest('article[id^="collection-post-"]');

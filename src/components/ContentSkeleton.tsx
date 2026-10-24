@@ -5,7 +5,7 @@ interface ContentSkeletonProps {
 }
 
 export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({ isDarkMode }) => (
-  <div className={`content-loading mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 ${isDarkMode ? 'text-neutral-300' : 'text-slate-700'}`} aria-busy="true" aria-label="Loading content">
+  <div className={`content-loading w-full px-4 py-6 sm:px-6 lg:px-8 ${isDarkMode ? 'text-neutral-300' : 'text-slate-700'}`} aria-busy="true" aria-label="Loading content">
     <div className="loading-wave mb-6 h-28 rounded-3xl border border-white/20 p-5 sm:h-32" />
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }).map((_, index) => (

@@ -444,7 +444,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   };
 
   return (
-    <div className="relative z-10 flex w-full max-w-7xl flex-col mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+    <div className="relative z-10 flex w-full flex-col px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       {isPreviewOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-label="Listing preview">
           <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-700 bg-[#121316] shadow-2xl">

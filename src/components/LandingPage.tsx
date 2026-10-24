@@ -14,7 +14,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, isDarkMode
   return (
     <section className="relative isolate flex min-h-[68vh] items-center overflow-hidden px-5 py-16 sm:min-h-[72vh] sm:px-8 sm:py-20 lg:px-12">
       <div aria-hidden="true" className="pointer-events-none absolute -right-32 top-1/2 -z-10 h-80 w-80 -translate-y-1/2 rounded-full bg-amber-500/10 blur-3xl sm:h-[30rem] sm:w-[30rem]" />
-      <div className={`mx-auto grid w-full max-w-6xl items-center gap-10 rounded-[2rem] border px-6 py-12 shadow-2xl sm:px-10 sm:py-16 lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-16 lg:px-16 ${isDarkMode ? 'border-white/10 bg-white/[0.03] shadow-black/20' : 'border-neutral-200 bg-white/75 shadow-neutral-900/5'}`}>
+      <div className={`grid w-full items-center gap-10 rounded-[2rem] border px-6 py-12 shadow-2xl sm:px-10 sm:py-16 lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-16 lg:px-16 ${isDarkMode ? 'border-white/10 bg-white/[0.03] shadow-black/20' : 'border-neutral-200 bg-white/75 shadow-neutral-900/5'}`}>
         <div className="max-w-4xl">
           <p className={`mb-5 text-xs font-semibold uppercase tracking-[0.28em] ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
             Fabsattire · Tailoring & textiles

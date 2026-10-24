@@ -98,7 +98,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm';
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <div className={`rounded-3xl border p-5 sm:p-8 ${surface}`}>
         <div className="flex flex-col gap-5 border-b border-neutral-800/60 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">

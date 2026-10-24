@@ -95,7 +95,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
 
     if (!post) {
     return (
-      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
+      <main className="w-full px-4 py-8 sm:px-6 lg:px-8">
         <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-amber-500"><ArrowLeft className="h-4 w-4" /> Back to marketplace</button>
         <p className={`mt-12 text-center text-sm ${muted}`}>This listing is no longer available.</p>
       </main>
@@ -125,7 +125,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
   );
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+    <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
       <button type="button" onClick={onBack} className="mb-5 inline-flex items-center gap-2 text-xs font-semibold text-amber-500 hover:text-amber-300"><ArrowLeft className="h-4 w-4" /> Back to marketplace</button>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)] lg:items-start">

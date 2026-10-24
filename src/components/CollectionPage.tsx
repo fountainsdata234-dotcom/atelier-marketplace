@@ -224,7 +224,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
   };
 
   return (
-    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {canCreateSellerCollection && (
         <section className={`rounded-3xl border p-5 sm:p-6 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
           <div className="flex flex-col gap-2 border-b border-neutral-800/70 pb-5 sm:flex-row sm:items-end sm:justify-between">

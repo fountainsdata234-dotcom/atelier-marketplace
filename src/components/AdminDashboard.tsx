@@ -326,7 +326,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+    <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       {/* Admin Top Banner */}
       <div className={`p-6 rounded-3xl border transition-all ${
         isDarkMode

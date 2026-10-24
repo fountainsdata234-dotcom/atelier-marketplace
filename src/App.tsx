@@ -92,7 +92,7 @@ export default function App() {
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState('');
   const [isMobileInstallDevice, setIsMobileInstallDevice] = useState(() => (
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   ));
   const [isAppInstalled, setIsAppInstalled] = useState(() => (
     typeof window !== 'undefined'
@@ -152,7 +152,7 @@ export default function App() {
   }, [isAppInstalled]);
 
   useEffect(() => {
-    const mobileQuery = window.matchMedia('(max-width: 1023px)');
+    const mobileQuery = window.matchMedia('(max-width: 767px)');
     const updateMobileState = () => setIsMobileInstallDevice(mobileQuery.matches);
     updateMobileState();
     mobileQuery.addEventListener('change', updateMobileState);
@@ -517,8 +517,8 @@ export default function App() {
     setInstallHelpOpen(true);
   };
 
-  const canShowInstallPrompt = !isAppInstalled
-    && (Boolean(installPrompt) || isMobileInstallDevice || isAndroidDevice);
+  const isMobileDevice = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+  const canShowInstallPrompt = !isAppInstalled && isMobileDevice && isMobileInstallDevice;
   const installInstructions = /iphone|ipad|ipod/i.test(navigator.userAgent)
     ? 'In Safari, tap Share, then choose Add to Home Screen.'
     : /android/i.test(navigator.userAgent)
