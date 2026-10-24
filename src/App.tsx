@@ -953,7 +953,7 @@ export default function App() {
       {isRefreshing && <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200">Refreshing marketplace...</div>}
 
       {/* 5. Main View Content */}
-      <main className="min-w-0 flex-1 pb-24 lg:pb-8">
+      <main className={`min-w-0 flex-1 ${!currentUser && currentView === 'landing' ? 'pb-8' : 'pb-24'} lg:pb-8`}>
         {isDataLoading ? <ContentSkeleton isDarkMode={isDarkMode} /> : <Suspense fallback={<ContentSkeleton isDarkMode={isDarkMode} />}>
           <AnimatePresence mode="wait">
           {currentView === 'landing' && (
@@ -1116,16 +1116,18 @@ export default function App() {
 
       <Footer isDarkMode={isDarkMode} onNavigate={navigateToView} />
 
-      <MobileBottomNav
-        currentUser={currentUser}
-        currentView={currentView}
-        onNavigate={navigateToView}
-        onOpenAuth={() => handleOpenAuthWithRole('buyer')}
-        onLogout={handleLogout}
-        isDarkMode={isDarkMode}
-        canInstall={canShowInstallPrompt}
-        onInstall={handleInstallApp}
-      />
+      {(currentUser || currentView !== 'landing') && (
+        <MobileBottomNav
+          currentUser={currentUser}
+          currentView={currentView}
+          onNavigate={navigateToView}
+          onOpenAuth={() => handleOpenAuthWithRole('buyer')}
+          onLogout={handleLogout}
+          isDarkMode={isDarkMode}
+          canInstall={canShowInstallPrompt}
+          onInstall={handleInstallApp}
+        />
+      )}
 
       {shareNotice && (
         <div className="fixed bottom-24 left-1/2 z-[95] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-500/30 bg-[#121316] px-4 py-3 text-sm text-white shadow-xl" role="status">

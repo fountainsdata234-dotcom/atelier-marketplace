@@ -82,8 +82,6 @@ export const LegalPage: React.FC<LegalPageProps> = ({ page, isDarkMode, onBack }
             </a>
           </div>
         )}
-
-        <p className="mt-8 border-t border-neutral-800/60 pt-4 text-[11px] text-neutral-500">Last updated September 2026. These pages are provided in plain language so you can make an informed choice before joining.</p>
       </section>
     </main>
   );
