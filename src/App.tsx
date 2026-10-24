@@ -966,17 +966,7 @@ export default function App() {
             >
               <LandingPage
                 onOpenAuth={handleOpenAuthWithRole}
-                onExploreMarketplace={() => navigateToView('marketplace')}
-                onExploreArtisans={() => navigateToView('artisan')}
-                onSelectPost={handleSelectPost}
-                onSelectSeller={handleSelectSeller}
                 isDarkMode={isDarkMode}
-                currentUser={currentUser}
-                users={users}
-                posts={posts}
-                promoPlans={promoPlans}
-                promoPlansLoading={isPromoPlansLoading}
-                enableHeroTyping={!isDataLoading && !showIntro}
               />
             </motion.div>
           )}
