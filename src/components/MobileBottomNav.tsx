@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { Compass, User as UserIcon, Shield, Scissors, LogIn, Users, Info, Download } from 'lucide-react';
 import { User } from '../types';
 
@@ -30,9 +31,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   const handleNavigate = (view: string) => onNavigate(view);
 
   return (
-    <>
-      <div
-          className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 pb-[calc(0.8rem+env(safe-area-inset-bottom))] pt-2 transition-colors ${
+    <motion.div
+      initial={{ y: '100%', opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: '100%', opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 280, damping: 30, mass: 0.8 }}
+      className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 pb-[calc(0.8rem+env(safe-area-inset-bottom))] pt-2 transition-colors ${
           isDarkMode
             ? 'bg-[#0c0d10]/95 border-neutral-800 text-neutral-300'
             : 'bg-white/95 border-neutral-200 text-neutral-700 shadow-lg'
@@ -101,7 +105,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             </button>
           </div>
         </div>
-      </div>
-    </>
+    </motion.div>
   );
 };

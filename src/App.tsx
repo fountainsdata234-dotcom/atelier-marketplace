@@ -1116,18 +1116,21 @@ export default function App() {
 
       <Footer isDarkMode={isDarkMode} onNavigate={navigateToView} />
 
-      {(currentUser || currentView !== 'landing') && (
-        <MobileBottomNav
-          currentUser={currentUser}
-          currentView={currentView}
-          onNavigate={navigateToView}
-          onOpenAuth={() => handleOpenAuthWithRole('buyer')}
-          onLogout={handleLogout}
-          isDarkMode={isDarkMode}
-          canInstall={canShowInstallPrompt}
-          onInstall={handleInstallApp}
-        />
-      )}
+      <AnimatePresence>
+        {currentUser && (
+          <MobileBottomNav
+            key="authenticated-mobile-bottom-nav"
+            currentUser={currentUser}
+            currentView={currentView}
+            onNavigate={navigateToView}
+            onOpenAuth={() => handleOpenAuthWithRole('buyer')}
+            onLogout={handleLogout}
+            isDarkMode={isDarkMode}
+            canInstall={canShowInstallPrompt}
+            onInstall={handleInstallApp}
+          />
+        )}
+      </AnimatePresence>
 
       {shareNotice && (
         <div className="fixed bottom-24 left-1/2 z-[95] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-500/30 bg-[#121316] px-4 py-3 text-sm text-white shadow-xl" role="status">
