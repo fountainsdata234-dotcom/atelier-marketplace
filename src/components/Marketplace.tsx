@@ -994,7 +994,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   {suggestion.user?.avatarUrl && !failedAvatarUrls.has(suggestion.user.avatarUrl)
                     ? <img src={suggestion.user.avatarUrl} alt={suggestion.user.name || 'Seller avatar'} onError={() => setFailedAvatarUrls(current => new Set(current).add(suggestion.user!.avatarUrl!))} className="h-9 w-9 rounded-lg object-cover" />
                     : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span>
-                      : suggestion.post ? <PostImage src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg" />
+                      : suggestion.post ? <PostImage src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg" watermark={false} />
                         : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
                   <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.type === 'recent' ? 'Recent search · this session' : suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? (suggestion.post?.isPromoted ? 'Sponsored listing' : 'Marketplace listing') : 'Category'}</small></span>
                 </button>

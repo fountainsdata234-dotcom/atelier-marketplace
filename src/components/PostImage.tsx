@@ -5,6 +5,7 @@ interface PostImageProps {
   alt: string;
   className?: string;
   imageClassName?: string;
+  watermark?: boolean;
   loading?: React.ImgHTMLAttributes<HTMLImageElement>['loading'];
   decoding?: React.ImgHTMLAttributes<HTMLImageElement>['decoding'];
   fetchPriority?: React.ImgHTMLAttributes<HTMLImageElement>['fetchPriority'];
@@ -20,6 +21,7 @@ export const PostImage: React.FC<PostImageProps> = ({
   alt,
   className = '',
   imageClassName = '',
+  watermark = true,
   loading = 'lazy',
   decoding = 'async',
   fetchPriority,
@@ -51,5 +53,15 @@ export const PostImage: React.FC<PostImageProps> = ({
       onClick={onClick}
       onContextMenu={onContextMenu}
     />
+    {watermark && (
+      <img
+        src="/logo.png"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-2 right-2 z-20 h-8 w-8 rounded-xl border border-white/20 bg-black/60 p-1.5 object-contain shadow-lg shadow-black/40"
+        loading="lazy"
+        decoding="async"
+      />
+    )}
   </div>
 );
