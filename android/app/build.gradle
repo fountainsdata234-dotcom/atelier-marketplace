@@ -71,7 +71,7 @@ android {
 
     defaultConfig {
         applicationId "com.fabsattire.app"
-        minSdkVersion 24
+        minSdkVersion 30
         targetSdkVersion 36
         versionCode (project.findProperty("androidVersionCode")?.toString()?.toInteger() ?: 1)
         versionName (project.findProperty("androidVersionName")?.toString() ?: "1.0.0")

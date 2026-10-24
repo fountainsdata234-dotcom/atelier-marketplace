@@ -64,12 +64,17 @@ const registerServiceWorker = async () => {
   }
 };
 
-createRoot(document.getElementById('root')!).render(
+const root = document.getElementById('root')!;
+createRoot(root).render(
   <StrictMode>
     <AppErrorBoundary>
       <App />
     </AppErrorBoundary>
   </StrictMode>,
 );
+
+window.addEventListener('load', () => {
+  document.body.classList.add('app-shell-loaded');
+}, { once: true });
 
 void registerServiceWorker();

@@ -37,7 +37,8 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/appName"
-
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="false"
         android:supportsRtl="true"
         android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
         android:theme="@android:style/Theme.Translucent.NoTitleBar">
@@ -69,6 +70,8 @@
 
         <activity android:name="LauncherActivity"
             android:alwaysRetainTaskState="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
             android:label="@string/launcherName"
             android:exported="true">
             <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL"
