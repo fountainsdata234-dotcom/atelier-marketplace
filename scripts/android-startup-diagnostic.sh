@@ -14,11 +14,18 @@ if [ "$install_status" -eq 0 ]; then
   timeout 45s adb shell am start -W -n com.fabsattire.app/.LauncherActivity \
     > "$RUNNER_TEMP/launch-result.txt" 2>&1
   launch_status=$?
-  sleep 20
+  sleep 10
+  timeout 20s adb shell dumpsys activity recents > "$RUNNER_TEMP/recents-task-details.txt" 2>&1
+  timeout 10s adb shell input keyevent KEYCODE_HOME
+  sleep 2
+  timeout 10s adb shell input keyevent KEYCODE_APP_SWITCH
+  sleep 3
+  timeout 20s adb exec-out screencap -p > "$RUNNER_TEMP/android-recents.png"
 else
   launch_status=1
   echo "Launch was skipped because APK installation failed." \
     > "$RUNNER_TEMP/launch-result.txt"
+  : > "$RUNNER_TEMP/recents-task-details.txt"
 fi
 
 {
@@ -36,6 +43,9 @@ fi
   echo
   echo "Activity launch result:"
   cat "$RUNNER_TEMP/launch-result.txt"
+  echo
+  echo "Android recent task details:"
+  cat "$RUNNER_TEMP/recents-task-details.txt"
   echo
   echo "Relevant Android startup errors:"
   timeout 30s adb logcat -d -v threadtime -s AndroidRuntime:E ActivityTaskManager:E

@@ -2,6 +2,12 @@ name: Diagnose Fabsattire Android startup
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/android-startup-diagnostic.yml'
+      - 'scripts/android-startup-diagnostic.sh'
   workflow_run:
     workflows:
       - Build Fabsattire Android APK
@@ -57,6 +63,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fabsattire-android-startup-diagnostic-api-${{ matrix.api-level }}
-          path: ${{ runner.temp }}/android-startup-diagnostic.txt
+          path: |
+            ${{ runner.temp }}/android-startup-diagnostic.txt
+            ${{ runner.temp }}/android-recents.png
           if-no-files-found: warn
           retention-days: 7
