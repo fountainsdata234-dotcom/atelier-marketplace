@@ -2,12 +2,13 @@ name: Diagnose Fabsattire Android startup
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows:
+      - Build Fabsattire Android APK
+    types:
+      - completed
     branches:
       - main
-    paths:
-      - '.github/workflows/android-startup-diagnostic.yml'
-      - 'scripts/android-startup-diagnostic.sh'
 
 permissions:
   contents: read
@@ -15,12 +16,13 @@ permissions:
 jobs:
   diagnose-android-startup:
     name: Launch latest APK on Android ${{ matrix.api-level }} emulator
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        api-level: [26, 30, 35]
+        api-level: [30, 35]
     steps:
       - name: Check out diagnostic script
         uses: actions/checkout@v5
@@ -45,6 +47,7 @@ jobs:
           target: google_apis_playstore
           arch: x86_64
           profile: pixel_2
+          emulator-boot-timeout: 300
           emulator-options: -no-window -no-audio -no-boot-anim
           disable-animations: true
           script: bash scripts/android-startup-diagnostic.sh

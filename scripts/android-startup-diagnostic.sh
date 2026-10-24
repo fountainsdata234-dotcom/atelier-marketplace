@@ -3,15 +3,15 @@
 set +e
 diagnostic_file="$RUNNER_TEMP/android-startup-diagnostic.txt"
 
-adb shell getprop ro.build.version.release > "$RUNNER_TEMP/android-version.txt" 2>&1
-adb shell getprop ro.build.version.sdk >> "$RUNNER_TEMP/android-version.txt" 2>&1
-adb shell pm list packages com.android.chrome > "$RUNNER_TEMP/chrome-package.txt" 2>&1
-adb install -r "$RUNNER_TEMP/app-release.apk" > "$RUNNER_TEMP/install-result.txt" 2>&1
+timeout 20s adb shell getprop ro.build.version.release > "$RUNNER_TEMP/android-version.txt" 2>&1
+timeout 20s adb shell getprop ro.build.version.sdk >> "$RUNNER_TEMP/android-version.txt" 2>&1
+timeout 20s adb shell pm list packages com.android.chrome > "$RUNNER_TEMP/chrome-package.txt" 2>&1
+timeout 90s adb install -r "$RUNNER_TEMP/app-release.apk" > "$RUNNER_TEMP/install-result.txt" 2>&1
 install_status=$?
 
 if [ "$install_status" -eq 0 ]; then
-  adb logcat -c
-  adb shell am start -W -n com.fabsattire.app/.LauncherActivity \
+  timeout 10s adb logcat -c
+  timeout 45s adb shell am start -W -n com.fabsattire.app/.LauncherActivity \
     > "$RUNNER_TEMP/launch-result.txt" 2>&1
   launch_status=$?
   sleep 20
@@ -38,7 +38,7 @@ fi
   cat "$RUNNER_TEMP/launch-result.txt"
   echo
   echo "Relevant Android startup errors:"
-  adb logcat -d -v threadtime -s AndroidRuntime:E ActivityTaskManager:E
+  timeout 30s adb logcat -d -v threadtime -s AndroidRuntime:E ActivityTaskManager:E
 } > "$diagnostic_file" 2>&1
 
 cat "$diagnostic_file"
