@@ -9,7 +9,7 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, isDarkMode }) => {
   const headline = 'Find your fit. Meet your maker.';
-  const typedHeadline = useTypingText([headline], { enabled: true, typeDelayMs: 56 });
+  const typedHeadline = useTypingText([headline], { enabled: true, typeDelayMs: 84 });
 
   return (
     <section className="relative isolate flex min-h-[68vh] items-center overflow-hidden px-5 py-16 sm:min-h-[72vh] sm:px-8 sm:py-20 lg:px-12">
@@ -19,7 +19,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, isDarkMode
           <p className={`mb-5 text-xs font-semibold uppercase tracking-[0.28em] ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
             Fabsattire · Tailoring & textiles
           </p>
-          <h1 className={`min-h-[2.1em] text-5xl font-semibold leading-[0.98] tracking-[-0.065em] sm:min-h-[1.15em] sm:text-6xl md:text-7xl lg:text-8xl ${isDarkMode ? 'text-white' : 'text-neutral-950'}`}>
+          <h1 className={`h-[2em] overflow-hidden text-5xl font-semibold leading-[0.98] tracking-[-0.065em] sm:text-6xl md:text-7xl lg:text-8xl ${isDarkMode ? 'text-white' : 'text-neutral-950'}`}>
             <span aria-hidden="true" className="typing-caret">{typedHeadline}</span>
             <span className="sr-only">{headline}</span>
           </h1>

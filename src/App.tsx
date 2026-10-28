@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowUp, Download, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole, AppNotification, DirectMessage } from './types';
@@ -102,9 +102,21 @@ export default function App() {
   const isAndroidDevice = /android/i.test(navigator.userAgent);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [imageViewer, setImageViewer] = useState<{ src: string; alt: string } | null>(null);
-  const [imageZoom, setImageZoom] = useState(1);
+  const [imageViewer, setImageViewer] = useState<{ src: string; alt: string; isPost: boolean } | null>(null);
+  const [imageViewport, setImageViewport] = useState({ scale: 1, x: 0, y: 0 });
+  const [isImageDownloading, setIsImageDownloading] = useState(false);
+  const [imageDownloadError, setImageDownloadError] = useState('');
+  const imageStageRef = useRef<HTMLDivElement | null>(null);
+  const imagePointers = useRef(new Map<number, { x: number; y: number }>());
+  const imageDragStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const imagePinchStart = useRef<{ distance: number; scale: number } | null>(null);
   const pullStartY = useRef<number | null>(null);
+
+  const openImageViewer = useCallback((src: string, alt: string, isPost: boolean) => {
+    setImageViewport({ scale: 1, x: 0, y: 0 });
+    setImageDownloadError('');
+    setImageViewer({ src, alt, isPost });
+  }, []);
 
   // Theme state: default to sophisticated dark luxury aesthetic with full light toggle
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -140,34 +152,42 @@ export default function App() {
     const root = document.getElementById('root');
     if (!root) return;
 
-    const openImageViewer = (event: MouseEvent) => {
+    const handleImageClick = (event: MouseEvent) => {
       const image = event.target;
       if (!(image instanceof HTMLImageElement)
         || image.getAttribute('aria-hidden') === 'true'
-        || image.closest('[data-image-viewer]')) return;
+        || image.closest('[data-image-viewer], [data-open-image-on-click]')) return;
       const src = image.currentSrc || image.src;
       if (!src || new URL(src, window.location.href).pathname.endsWith('/logo.png')) return;
 
       event.preventDefault();
       event.stopPropagation();
-      setImageZoom(1);
-      setImageViewer({
+      openImageViewer(
         src,
-        alt: image.alt || image.closest('button')?.getAttribute('aria-label') || 'Fabsattire photo',
-      });
+        image.alt || image.closest('button')?.getAttribute('aria-label') || 'Fabsattire photo',
+        Boolean(image.closest('[data-post-image]')),
+      );
     };
 
-    root.addEventListener('click', openImageViewer, true);
-    return () => root.removeEventListener('click', openImageViewer, true);
-  }, []);
+    root.addEventListener('click', handleImageClick, true);
+    return () => root.removeEventListener('click', handleImageClick, true);
+  }, [openImageViewer]);
 
   useEffect(() => {
     if (!imageViewer) return;
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setImageViewer(null);
-      if (event.key === '+' || event.key === '=') setImageZoom(zoom => Math.min(zoom + 0.5, 4));
-      if (event.key === '-') setImageZoom(zoom => Math.max(zoom - 0.5, 1));
+      if (event.key === '0') setImageViewport({ scale: 1, x: 0, y: 0 });
+      if (event.key === '+' || event.key === '=') {
+        setImageViewport(current => ({ ...current, scale: Math.min(5, current.scale * 1.25) }));
+      }
+      if (event.key === '-') {
+        setImageViewport(current => {
+          const scale = Math.max(1, current.scale / 1.25);
+          return scale === 1 ? { scale: 1, x: 0, y: 0 } : { ...current, scale };
+        });
+      }
     };
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', closeOnEscape);
@@ -176,6 +196,144 @@ export default function App() {
       window.removeEventListener('keydown', closeOnEscape);
     };
   }, [imageViewer]);
+
+  const zoomImageAtPoint = (clientX: number, clientY: number, nextScale: number) => {
+    const stage = imageStageRef.current;
+    if (!stage) return;
+    const bounds = stage.getBoundingClientRect();
+    setImageViewport(current => {
+      if (nextScale <= 1) return { scale: 1, x: 0, y: 0 };
+      const ratio = nextScale / current.scale;
+      const focusX = clientX - bounds.left - bounds.width / 2;
+      const focusY = clientY - bounds.top - bounds.height / 2;
+      const maxX = bounds.width * (nextScale - 1) / 2;
+      const maxY = bounds.height * (nextScale - 1) / 2;
+      const x = focusX - (focusX - current.x) * ratio;
+      const y = focusY - (focusY - current.y) * ratio;
+      return {
+        scale: nextScale,
+        x: Math.max(-maxX, Math.min(maxX, x)),
+        y: Math.max(-maxY, Math.min(maxY, y)),
+      };
+    });
+  };
+
+  const handleImagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    imagePointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (imagePointers.current.size === 2) {
+      const [first, second] = Array.from(imagePointers.current.values());
+      imagePinchStart.current = {
+        distance: Math.hypot(second.x - first.x, second.y - first.y),
+        scale: imageViewport.scale,
+      };
+      imageDragStart.current = null;
+    } else if (imageViewport.scale > 1) {
+      imageDragStart.current = {
+        x: event.clientX,
+        y: event.clientY,
+        panX: imageViewport.x,
+        panY: imageViewport.y,
+      };
+    }
+  };
+
+  const handleImagePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!imagePointers.current.has(event.pointerId)) return;
+    imagePointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (imagePointers.current.size >= 2 && imagePinchStart.current) {
+      const [first, second] = Array.from(imagePointers.current.values());
+      const distance = Math.hypot(second.x - first.x, second.y - first.y);
+      const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+      const scale = Math.max(1, Math.min(5, imagePinchStart.current.scale * distance / imagePinchStart.current.distance));
+      zoomImageAtPoint(midpoint.x, midpoint.y, scale);
+      return;
+    }
+    if (imageDragStart.current) {
+      const { x, y, panX, panY } = imageDragStart.current;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const maxX = bounds.width * (imageViewport.scale - 1) / 2;
+      const maxY = bounds.height * (imageViewport.scale - 1) / 2;
+      setImageViewport(current => ({
+        ...current,
+        x: Math.max(-maxX, Math.min(maxX, panX + event.clientX - x)),
+        y: Math.max(-maxY, Math.min(maxY, panY + event.clientY - y)),
+      }));
+    }
+  };
+
+  const handleImagePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    imagePointers.current.delete(event.pointerId);
+    imagePinchStart.current = null;
+    imageDragStart.current = null;
+    if (imagePointers.current.size === 1 && imageViewport.scale > 1) {
+      const [remaining] = Array.from(imagePointers.current.values());
+      imageDragStart.current = { ...remaining, panX: imageViewport.x, panY: imageViewport.y };
+    }
+  };
+
+  const handleImageWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const scale = Math.max(1, Math.min(5, imageViewport.scale * (event.deltaY < 0 ? 1.2 : 1 / 1.2)));
+    zoomImageAtPoint(event.clientX, event.clientY, scale);
+  };
+
+  const handleImageDownload = async () => {
+    if (!imageViewer || isImageDownloading) return;
+    setIsImageDownloading(true);
+    setImageDownloadError('');
+    try {
+      const imageResponse = await fetch(imageViewer.src, { mode: 'cors', credentials: 'omit' });
+      if (!imageResponse.ok) throw new Error(`Image download failed with HTTP ${imageResponse.status}.`);
+      let downloadBlob = await imageResponse.blob();
+      let extension = downloadBlob.type === 'image/webp' ? 'webp' : downloadBlob.type === 'image/jpeg' ? 'jpg' : 'png';
+
+      if (imageViewer.isPost) {
+        const [imageBitmap, logoResponse] = await Promise.all([
+          createImageBitmap(downloadBlob),
+          fetch('/logo.png', { cache: 'force-cache' }),
+        ]);
+        if (!logoResponse.ok) throw new Error(`Fabsattire logo download failed with HTTP ${logoResponse.status}.`);
+        const logoBitmap = await createImageBitmap(await logoResponse.blob());
+        const canvas = document.createElement('canvas');
+        canvas.width = imageBitmap.width;
+        canvas.height = imageBitmap.height;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Your browser could not prepare the watermarked image.');
+        context.drawImage(imageBitmap, 0, 0);
+        const logoSize = Math.max(48, Math.round(Math.min(canvas.width, canvas.height) * 0.12));
+        const inset = Math.max(16, Math.round(logoSize * 0.18));
+        const logoX = canvas.width - logoSize - inset;
+        const logoY = canvas.height - logoSize - inset;
+        context.fillStyle = 'rgba(0, 0, 0, 0.58)';
+        context.beginPath();
+        context.roundRect(logoX - inset / 2, logoY - inset / 2, logoSize + inset, logoSize + inset, Math.max(8, logoSize * 0.18));
+        context.fill();
+        context.drawImage(logoBitmap, logoX, logoY, logoSize, logoSize);
+        imageBitmap.close();
+        logoBitmap.close();
+        downloadBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('The watermarked image could not be created.')), 'image/png');
+        });
+        extension = 'png';
+      }
+
+      const objectUrl = URL.createObjectURL(downloadBlob);
+      const filename = imageViewer.alt.replace(/[^a-z0-9-_]+/gi, '-').replace(/^-|-$/g, '').slice(0, 64) || 'fabsattire-image';
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `${filename}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      console.error('The selected image could not be downloaded.', error);
+      setImageDownloadError('Could not download this image. Please check your connection and try again.');
+    } finally {
+      setIsImageDownloading(false);
+    }
+  };
 
   useEffect(() => {
     if (isAppInstalled || !navigator.getInstalledRelatedApps) return;
@@ -1123,6 +1281,7 @@ export default function App() {
                 currentUser={currentUser}
                 posts={posts}
                 promoPlans={promoPlans}
+                onOpenImage={(src, alt) => openImageViewer(src, alt, true)}
                 onOpenSocialShare={(handle, name) => {
                   setSocialShareHandle(handle);
                   setSocialShareName(name);
@@ -1273,7 +1432,7 @@ export default function App() {
       {imageViewer && (
         <div
           data-image-viewer
-          className="fixed inset-0 z-[120] flex flex-col bg-black/95 p-4 backdrop-blur-xl"
+          className="fixed inset-0 z-[120] flex flex-col bg-black/95 p-3 backdrop-blur-xl sm:p-5"
           role="dialog"
           aria-modal="true"
           aria-label="Full-screen image viewer"
@@ -1283,33 +1442,60 @@ export default function App() {
         >
           <div className="flex shrink-0 items-center justify-between gap-4">
             <p className="min-w-0 truncate text-xs font-medium text-white/75">{imageViewer.alt}</p>
-            <button
-              type="button"
-              onClick={() => setImageViewer(null)}
-              aria-label="Close image viewer"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleImageDownload()}
+                disabled={isImageDownloading}
+                aria-label={imageViewer.isPost ? 'Download watermarked post image' : 'Download image'}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white transition hover:bg-white/20 disabled:cursor-wait disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />{isImageDownloading ? 'Preparing…' : 'Download'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageViewer(null)}
+                aria-label="Close image viewer"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto py-3">
+          <div
+            ref={imageStageRef}
+            className="flex min-h-0 flex-1 touch-none select-none items-center justify-center overflow-hidden py-3"
+            onPointerDown={handleImagePointerDown}
+            onPointerMove={handleImagePointerMove}
+            onPointerUp={handleImagePointerUp}
+            onPointerCancel={handleImagePointerUp}
+            onWheel={handleImageWheel}
+            onDoubleClick={event => zoomImageAtPoint(event.clientX, event.clientY, imageViewport.scale > 1 ? 1 : 2.5)}
+            onClick={event => {
+              if (event.target === event.currentTarget) setImageViewer(null);
+            }}
+          >
             <img
               src={imageViewer.src}
               alt={imageViewer.alt}
               draggable={false}
-              onClick={() => setImageZoom(zoom => zoom === 1 ? 2 : 1)}
-              className="max-w-none cursor-zoom-in select-none object-contain"
+              className={`max-h-full max-w-full select-none object-contain ${imageViewport.scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
               style={{
-                width: `${Math.min(window.innerWidth * 0.92, 1200) * imageZoom}px`,
-                height: `${window.innerHeight * 0.82 * imageZoom}px`,
+                transform: `translate(${imageViewport.x}px, ${imageViewport.y}px) scale(${imageViewport.scale})`,
+                transformOrigin: 'center',
+                willChange: 'transform',
               }}
             />
           </div>
+          {imageDownloadError && <p className="shrink-0 text-center text-xs text-red-300" role="alert">{imageDownloadError}</p>}
           <div className="flex shrink-0 items-center justify-center gap-3 pt-2">
             <button
               type="button"
-              onClick={() => setImageZoom(zoom => Math.max(zoom - 0.5, 1))}
-              disabled={imageZoom <= 1}
+              onClick={() => {
+                const stage = imageStageRef.current?.getBoundingClientRect();
+                if (stage) zoomImageAtPoint(stage.left + stage.width / 2, stage.top + stage.height / 2, Math.max(1, imageViewport.scale / 1.25));
+              }}
+              disabled={imageViewport.scale <= 1}
               aria-label="Zoom out"
               className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-40"
             >
@@ -1317,16 +1503,19 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={() => setImageZoom(1)}
+              onClick={() => setImageViewport({ scale: 1, x: 0, y: 0 })}
               aria-label="Reset image zoom"
               className="flex h-11 items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white transition hover:bg-white/20"
             >
-              <RotateCcw className="h-4 w-4" />{Math.round(imageZoom * 100)}%
+              <RotateCcw className="h-4 w-4" />{Math.round(imageViewport.scale * 100)}%
             </button>
             <button
               type="button"
-              onClick={() => setImageZoom(zoom => Math.min(zoom + 0.5, 4))}
-              disabled={imageZoom >= 4}
+              onClick={() => {
+                const stage = imageStageRef.current?.getBoundingClientRect();
+                if (stage) zoomImageAtPoint(stage.left + stage.width / 2, stage.top + stage.height / 2, Math.min(5, imageViewport.scale * 1.25));
+              }}
+              disabled={imageViewport.scale >= 5}
               aria-label="Zoom in"
               className="flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-40"
             >

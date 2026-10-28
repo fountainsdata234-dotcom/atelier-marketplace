@@ -597,7 +597,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     getGreeting(currentUser?.name || currentUser?.shopName || currentUser?.handle),
     'Glad you came back 🎉',
   ], [currentUser?.handle, currentUser?.name, currentUser?.shopName]);
-  const typedGreeting = useTypingText(greetingMessages, { enabled: enableGreetingTyping, repeat: true });
+  const typedGreeting = useTypingText(greetingMessages, { enabled: enableGreetingTyping, repeat: true, typeDelayMs: 82, deleteDelayMs: 44 });
 
   useEffect(() => {
     if (carouselPosts.length < 2) return;
@@ -922,7 +922,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             <Sparkles className="w-3.5 h-3.5" />
             <span>Curated Haute Couture & Fabrics</span>
           </div>
-          <h1 aria-label={greetingMessages[0]} className="text-3xl sm:text-4xl font-serif font-bold tracking-tight">
+          <h1 aria-label={greetingMessages[0]} className="line-clamp-3 h-[3.6em] overflow-hidden text-3xl leading-tight font-serif font-bold tracking-tight sm:line-clamp-2 sm:h-[2.5em] sm:text-4xl">
             <span aria-hidden="true" className="typing-caret">{typedGreeting}</span>
           </h1>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>

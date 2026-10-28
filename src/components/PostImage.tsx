@@ -31,7 +31,7 @@ export const PostImage: React.FC<PostImageProps> = ({
   onClick,
   onContextMenu,
 }) => (
-  <div className={`relative isolate overflow-hidden bg-neutral-950 ${className}`}>
+  <div data-post-image="true" className={`relative isolate overflow-hidden bg-neutral-950 ${className}`}>
     <img
       src={src}
       alt=""

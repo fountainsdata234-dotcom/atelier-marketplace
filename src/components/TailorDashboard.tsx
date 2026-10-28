@@ -14,6 +14,7 @@ interface TailorDashboardProps {
   posts: ClothPost[];
   promoPlans: AdminPromoPlan[];
   onOpenSocialShare: (handle: string, name: string) => void;
+  onOpenImage: (src: string, alt: string) => void;
   isDarkMode: boolean;
 }
 
@@ -22,6 +23,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   posts,
   promoPlans,
   onOpenSocialShare,
+  onOpenImage,
   isDarkMode
 }) => {
   // Post Form State
@@ -868,8 +870,16 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   {myPosts.map(post => (
                     <div key={post.id} className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/40">
                       <div className="relative aspect-4/3 overflow-hidden bg-neutral-900">
-                        <PostImage src={post.imageUrl} alt={post.title} className="h-full w-full" imageClassName="brightness-110 saturate-110" referrerPolicy="no-referrer" />
-                        <button onClick={() => handleDeletePost(post.id)} title="Delete post" className="absolute right-2 top-2 rounded-lg bg-black/70 p-1.5 text-white transition-colors hover:bg-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                        <button
+                          type="button"
+                          data-open-image-on-click
+                          onClick={() => onOpenImage(post.imageUrl, post.title || 'Seller post')}
+                          aria-label={`View ${post.title || 'post image'} full screen`}
+                          className="absolute inset-0 z-10 h-full w-full cursor-zoom-in"
+                        >
+                          <PostImage src={post.imageUrl} alt={post.title} className="h-full w-full" imageClassName="brightness-110 saturate-110" referrerPolicy="no-referrer" />
+                        </button>
+                        <button type="button" onClick={() => handleDeletePost(post.id)} title="Delete post" className="absolute right-2 top-2 z-20 rounded-lg bg-black/70 p-1.5 text-white transition-colors hover:bg-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
                       <div className="space-y-2 p-4">
                         <div className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-amber-300">{(post.status || 'published').replace('_', ' ')}{post.moderationStatus === 'pending' ? ' · moderation pending' : ''}</div>

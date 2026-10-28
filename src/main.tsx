@@ -73,8 +73,4 @@ createRoot(root).render(
   </StrictMode>,
 );
 
-window.addEventListener('load', () => {
-  document.body.classList.add('app-shell-loaded');
-}, { once: true });
-
 void registerServiceWorker();
