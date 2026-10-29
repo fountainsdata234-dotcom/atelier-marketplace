@@ -5,7 +5,7 @@ import { User, UserRole, LocationCity, LocationCountry, LocationCurrency, Locati
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import type { CountryCode } from 'libphonenumber-js';
 import { storageService } from '../services/storage';
-import { uploadUserImage } from '../services/firebase';
+import { uploadUserImage } from '../services/mediaUpload';
 import { getAuthErrorMessage, resetAuthPassword, signInWithEmail, signOutAuth, signUpWithEmail } from '../services/auth';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
@@ -58,6 +58,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [countrySearch, setCountrySearch] = useState('');
   const [stateSearch, setStateSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
+  const [exactArea, setExactArea] = useState('');
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [locationDetectionMessage, setLocationDetectionMessage] = useState<string | null>(null);
 
@@ -106,7 +107,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     let isActive = true;
     void api.getLocationRegions(selectedCountry.code).then((regions: LocationRegion[]) => {
-      if (isActive) setStates(regions);
+      if (!isActive) return;
+      setStates(regions);
+      if (regions.length === 1 && regions[0].code === 'ALL') {
+        setSelectedStateCode('ALL');
+        setStateSearch(regions[0].name);
+      }
     }).catch((loadError: unknown) => {
       if (!isActive) return;
       console.error('Unable to load regions for the selected country.', loadError);
@@ -227,7 +233,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const countryRegions = await api.getLocationRegions(country.code);
         setStates(countryRegions);
         const state = countryRegions.find((candidate: LocationRegion) => normalize(candidate.name) === normalize(stateName));
-        if (!state) {
+        const selectedRegion = state || (countryRegions.length === 1 && countryRegions[0].code === 'ALL' ? countryRegions[0] : null);
+        if (!selectedRegion) {
           setSelectedStateCode('');
           setStateSearch('');
           setCitySearch('');
@@ -235,11 +242,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           return;
         }
 
-        setSelectedStateCode(state.code || '');
-        setStateSearch(state.name);
+        setSelectedStateCode(selectedRegion.code || '');
+        setStateSearch(selectedRegion.name);
         const cityName = String(address?.city || address?.town || address?.village || address?.municipality || '').trim();
         const matchingCities = cityName
-          ? await api.searchLocationCities(country.code, state.code, cityName)
+          ? await api.searchLocationCities(country.code, selectedRegion.code, cityName)
           : [];
         const city = matchingCities.find((candidate: LocationCity) => normalize(candidate.name) === normalize(cityName));
         setCityOptions(matchingCities);
@@ -335,12 +342,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError('Choose your country from the suggestions so we can validate your phone number.');
       return;
     }
-    if (stateSearch.trim() && (!currentStateObj || currentStateObj.name !== stateSearch.trim())) {
+    if (!currentStateObj || currentStateObj.name !== stateSearch.trim()) {
       setError('Choose a state or region from the suggestions.');
       return;
     }
-    if (citySearch.trim() && !currentStateObj) {
-      setError('Choose a state or region before entering a city.');
+    if (!citySearch.trim() || !selectedCity) {
+      setError('Choose your city from the suggestions for the selected state.');
       return;
     }
     if (!selectedCurrency) {
@@ -375,7 +382,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       countryCode: selectedCountry.code,
       currency: selectedCurrency,
       state: currentStateObj?.code === 'ALL' ? '' : currentStateObj?.name || '',
-      city: selectedCity?.name || citySearch.trim(),
+      city: selectedCity?.name || '',
+      businessAddress: exactArea.trim() || undefined,
     };
     const signupProfile = {
       role,
@@ -742,7 +750,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   />
 
                   <SearchableLocationField
-                    label="State / Province (optional)"
+                    label="State / Province"
                     value={stateSearch}
                     onChange={(nextValue) => {
                       setStateSearch(nextValue);
@@ -765,7 +773,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   />
 
                   <SearchableLocationField
-                    label="City / District (optional)"
+                    label="City / District"
                     value={citySearch}
                     onChange={(nextValue) => {
                       setCitySearch(nextValue);
@@ -778,8 +786,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     listId="city-search-list"
                   />
                 </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-neutral-400 mb-1">Exact area, street, or landmark (optional)</label>
+                  <input
+                    type="text"
+                    value={exactArea}
+                    onChange={(event) => setExactArea(event.target.value)}
+                    maxLength={200}
+                    placeholder="e.g. KLM 4, Osusu Amaukwa"
+                    className="w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-3 py-2 text-xs text-neutral-100 placeholder:text-neutral-500 focus:border-amber-500 focus:outline-none"
+                  />
+                  <p className="mt-1 text-[10px] text-neutral-500">This helps customers distinguish sellers in the same city.</p>
+                </div>
                 <p className="text-[10px] leading-relaxed text-neutral-500">
-                  Country, region, and city suggestions come from the location catalog. If your city is not listed, enter its name manually; manually entered cities are saved without map coordinates.
+                  Country, region, and city suggestions are linked to the selected country. Cities outside the selected region cannot be submitted.
                 </p>
                 <div className="mt-2">
                   <label className="mb-1 block text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-400">

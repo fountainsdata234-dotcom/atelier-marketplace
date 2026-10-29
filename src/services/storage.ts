@@ -526,7 +526,7 @@ export const storageService = {
       }
       // Upgrade existing user to admin
       existing.role = 'admin';
-      existing.addedByEmail = 'firebase-admin';
+      existing.addedByEmail = 'supabase-admin';
       this.saveUsers(users);
       return { success: true, message: `Upgraded ${existing.name} (${email}) to Administrator.`, user: existing };
     }
@@ -546,7 +546,7 @@ export const storageService = {
       followers: [],
       createdAt: new Date().toISOString(),
       isSuperAdmin: false,
-      addedByEmail: 'firebase-admin'
+      addedByEmail: 'supabase-admin'
     };
     users.push(newAdmin);
     this.saveUsers(users);

@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'rea
 import { ArrowUpRight, MapPin, Navigation, Search } from 'lucide-react';
 import { ClothPost, LocationCity, LocationCountry, LocationRegion, NearbySellerMatch, User } from '../types';
 import { findExactArtisanMatch, getSearchSuggestions } from '../utils/globe';
-import { countSellerAccounts, getDefaultLocationFilter, matchesLocationFilter } from '../utils/artisanFilters';
+import { countSellerAccounts, matchesLocationFilter } from '../utils/artisanFilters';
 import { calculateDistanceKm, isConfirmedBusinessLocation, NEARBY_SELLER_RADII_KM } from '../utils/nearbySellers';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { api } from '../services/api';
@@ -135,17 +135,20 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       });
   }, [availablePostsBySeller, customerSearchLocation, users]);
 
+  const [resolvedLocationsById, setResolvedLocationsById] = useState<Map<string, User['location']>>(() => new Map());
   const globeArtisans = useMemo(() => {
     return artisans.flatMap((artisan): GlobeArtisan[] => {
-      if (!isConfirmedBusinessLocation(artisan.location)) return [];
+      const resolvedLocation = resolvedLocationsById.get(artisan.id) || artisan.location;
+      if (typeof resolvedLocation.lat !== 'number' || typeof resolvedLocation.lng !== 'number') return [];
       return [{
         ...artisan,
+        location: resolvedLocation,
         distanceKm: customerSearchLocation
-          ? calculateDistanceKm(customerSearchLocation, artisan.location)
+          ? calculateDistanceKm(customerSearchLocation, resolvedLocation)
           : null,
       }];
     });
-  }, [artisans, customerSearchLocation]);
+  }, [artisans, customerSearchLocation, resolvedLocationsById]);
   const [locationCountries, setLocationCountries] = useState<LocationCountry[]>([]);
   const [locationRegions, setLocationRegions] = useState<LocationRegion[]>([]);
   const [locationCities, setLocationCities] = useState<LocationCity[]>([]);
@@ -154,7 +157,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const globePanelRef = useRef<HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
-  const [filterCountry, setFilterCountry] = useState(() => getDefaultLocationFilter(currentUser?.location));
+  const [filterCountry, setFilterCountry] = useState('all');
   const [filterState, setFilterState] = useState('all');
   const [filterCity, setFilterCity] = useState('all');
   const [specializationFilter, setSpecializationFilter] = useState('all');
@@ -166,6 +169,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const [countrySearch, setCountrySearch] = useState('');
   const [stateSearch, setStateSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
+  const [exactAreaSearch, setExactAreaSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -179,7 +183,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   }, []);
 
   useEffect(() => {
-    if (filterCountry === 'all') {
+    if (filterCountry === 'all' || !locationCountries.some(country => country.code === filterCountry)) {
       setLocationRegions([]);
       setLocationCities([]);
       return;
@@ -196,7 +200,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
 
   useEffect(() => {
     const selectedRegion = locationRegions.find(region => region.code === filterState || region.name === filterState);
-    if (filterCountry === 'all' || !selectedRegion) {
+    if (filterCountry === 'all' || filterCountry === '__invalid__' || !selectedRegion) {
       setLocationCities([]);
       return;
     }
@@ -214,6 +218,22 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       window.clearTimeout(timer);
     };
   }, [citySearch, filterCountry, filterState, locationRegions]);
+
+  useEffect(() => {
+    if (artisans.length === 0) {
+      setResolvedLocationsById(new Map());
+      return;
+    }
+    let active = true;
+    void api.resolveMapLocations(artisans.map(artisan => ({ id: artisan.id, location: artisan.location }))).then(resolved => {
+      if (!active) return;
+      setResolvedLocationsById(new Map(resolved.map(item => [item.id, item.location])));
+    }).catch((error: unknown) => {
+      console.error('Seller globe locations could not be resolved from CSC data.', error);
+      if (active) setResolvedLocationsById(new Map());
+    });
+    return () => { active = false; };
+  }, [artisans]);
 
   useEffect(() => {
     const panel = globePanelRef.current;
@@ -234,17 +254,14 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
 
   React.useEffect(() => {
     if (locationCountries.length === 0) return;
-    const nextCountry = getDefaultLocationFilter(currentUser?.location);
-    const nextCountryData = locationCountries.find(country => country.code === nextCountry || country.name === nextCountry);
-    const nextState = currentUser?.location.state || '';
-    setFilterCountry(nextCountry);
-    setFilterState(nextState || 'all');
-    setFilterCity(currentUser?.location.city || 'all');
-    setCountrySearch(nextCountryData?.name || '');
-    setStateSearch(nextState);
-    setCitySearch(currentUser?.location.city || '');
+    setFilterCountry('all');
+    setFilterState('all');
+    setFilterCity('all');
+    setCountrySearch('');
+    setStateSearch('');
+    setCitySearch('');
     setSelectedArtisanId(null);
-  }, [currentUser?.id, currentUser?.location?.country, currentUser?.location?.countryCode, currentUser?.location?.state, currentUser?.location?.city, locationCountries]);
+  }, [locationCountries]);
   const focusArtisan = (artisan: DirectorySeller | null) => {
     if (!artisan) return;
     setSelectedArtisanId(artisan.id);
@@ -268,7 +285,10 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       filterCity,
     );
     const matchesRadius = !nearMeOnly || nearbySellerIds.has(artisan.id);
-    return matchesLocation && matchesRadius;
+    const areaTerm = exactAreaSearch.trim().toLowerCase();
+    const matchesArea = !areaTerm
+      || `${artisan.location.businessAddress || ''} ${artisan.location.city}`.toLowerCase().includes(areaTerm);
+    return matchesLocation && matchesRadius && matchesArea;
   });
   const exactSearchMatch = findExactArtisanMatch(locationArtisans, searchQuery);
   const filteredArtisans = locationArtisans.filter((artisan) => {
@@ -279,6 +299,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       artisan.name, artisan.shopName || '', artisan.handle,
       artisan.bio || '', artisan.role,
       artisan.location.city, artisan.location.state, artisan.location.country,
+      artisan.location.businessAddress || '',
       ...artisan.specializations,
       ...artisan.listingTags,
       ...artisan.availability,
@@ -335,6 +356,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const isMatchingCountAvailable = sellerDirectoryDataStatus === 'ready';
   const matchingArtisanCount = isMatchingCountAvailable ? filteredArtisans.length : null;
   const searchSuggestions = useMemo(() => getSearchSuggestions(locationArtisans, searchQuery, 7), [locationArtisans, searchQuery]);
+  const nearbyArtisans = useMemo(() => filteredArtisans
+    .filter(artisan => artisan.distanceKm !== null)
+    .sort((left, right) => (left.distanceKm ?? Number.POSITIVE_INFINITY) - (right.distanceKm ?? Number.POSITIVE_INFINITY)), [filteredArtisans]);
 
   const handleNearbySearch = () => {
     if (nearMeOnly) {
@@ -366,6 +390,23 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       setIsNearbySearchLoading(false);
     }, { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 });
   };
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    let active = true;
+    navigator.geolocation.getCurrentPosition(position => {
+      if (!active) return;
+      setCustomerSearchLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracyMeters: position.coords.accuracy,
+      });
+      setNearMeOnly(true);
+    }, () => {
+      // Location is optional; manual country, state, city, and area search remains available.
+    }, { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 });
+    return () => { active = false; };
+  }, []);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
     focusArtisan(artisan);
@@ -461,7 +502,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
               setCountrySearch(value);
               const match = locationCountries.find(country => country.name.toLowerCase() === value.trim().toLowerCase()
                 || country.code.toLowerCase() === value.trim().toLowerCase());
-              setFilterCountry(match?.code || 'all');
+              setFilterCountry(match?.code || (value.trim() ? '__invalid__' : 'all'));
               setFilterState('all');
               setFilterCity('all');
               setStateSearch('');
@@ -487,7 +528,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
               setStateSearch(value);
               const match = locationRegions.find(state => state.name.toLowerCase() === value.trim().toLowerCase()
                 || state.code.toLowerCase() === value.trim().toLowerCase());
-              setFilterState(match?.code || 'all');
+              setFilterState(match?.code || (value.trim() ? '__invalid__' : 'all'));
               setFilterCity('all');
               setCitySearch('');
               setSelectedArtisanId(null);
@@ -508,7 +549,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
             onChange={value => {
               setCitySearch(value);
               const match = locationCities.find(city => city.name.toLowerCase() === value.trim().toLowerCase());
-              setFilterCity(match?.name || 'all');
+              setFilterCity(match?.name || (value.trim() ? '__invalid__' : 'all'));
               setSelectedArtisanId(null);
             }}
             onClear={() => {
@@ -519,6 +560,20 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
             placeholder={selectedState ? 'All cities · type to search' : 'Choose a state first'}
             listId="artisan-city-filter"
           />
+          <label className="block text-[10px] text-neutral-400">
+            Exact area / street / landmark
+            <input
+              type="search"
+              value={exactAreaSearch}
+              onChange={event => {
+                setExactAreaSearch(event.target.value);
+                setSelectedArtisanId(null);
+              }}
+              placeholder="e.g. KLM 4, Osusu Amaukwa"
+              className={`mt-1 w-full rounded-lg border px-2.5 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-800/80 text-neutral-200 placeholder:text-neutral-500' : 'border-neutral-300 bg-white text-neutral-800 placeholder:text-neutral-400'}`}
+              aria-label="Search exact seller area, street, or landmark"
+            />
+          </label>
           <label className="sr-only" htmlFor="seller-specialization">Filter by specialization</label>
           <select id="seller-specialization" value={specializationFilter} onChange={event => setSpecializationFilter(event.target.value)} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-200' : 'border-neutral-300 bg-white text-neutral-800'}`}>
             <option value="all">All specializations</option>
@@ -567,6 +622,40 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>
+          {nearMeOnly && (
+            <div className="border-b border-orange-200/15 bg-black/20 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold text-orange-50">Sellers near your current location</p>
+                  <p className="mt-0.5 text-[10px] text-orange-50/65">Sorted by distance from your device. Select one to rotate the globe.</p>
+                </div>
+                <select
+                  value={nearbyRadiusKm}
+                  onChange={event => setNearbyRadiusKm(Number(event.target.value))}
+                  className="rounded-lg border border-orange-200/20 bg-black/30 px-2 py-1.5 text-[10px] text-orange-50"
+                  aria-label="Nearby seller radius"
+                >
+                  {NEARBY_SELLER_RADII_KM.map(radius => <option key={radius} value={radius}>{radius} km</option>)}
+                </select>
+              </div>
+              <div className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
+                {nearbyArtisans.length > 0 ? nearbyArtisans.map(artisan => (
+                  <button
+                    key={artisan.id}
+                    type="button"
+                    onClick={() => focusArtisan(artisan)}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition ${selectedArtisanId === artisan.id ? 'border-amber-300 bg-amber-300/15' : 'border-orange-100/10 bg-white/5 hover:bg-white/10'}`}
+                  >
+                    <span className="min-w-0">
+                      <strong className="block truncate text-xs text-orange-50">{artisan.shopName || artisan.name}</strong>
+                      <span className="block truncate text-[10px] text-orange-50/60">{artisan.location.businessAddress || [artisan.location.city, artisan.location.state].filter(Boolean).join(', ')}</span>
+                    </span>
+                    <span className="shrink-0 text-[10px] font-semibold text-amber-300">{artisan.distanceKm!.toFixed(1)} km</span>
+                  </button>
+                )) : <p className="py-3 text-center text-[11px] text-orange-50/60">No confirmed sellers were found in this radius.</p>}
+              </div>
+            </div>
+          )}
           {globeNearViewport ? (
             <Suspense fallback={<div className="artisan-globe-3d flex items-center justify-center" role="status" aria-label="Preparing interactive artisan globe"><span className="text-xs text-orange-100/70">Preparing interactive globe…</span></div>}>
               <ArtisanGlobe3D

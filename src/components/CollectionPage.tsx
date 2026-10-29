@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bookmark, Image as ImageIcon, Trash2, Sparkles, ShieldAlert, Plus, X, Layers, Upload, CheckCircle2 } from 'lucide-react';
 import { SavedPhoto, SellerCollection, User } from '../types';
 import { storageService } from '../services/storage';
-import { uploadUserImage } from '../services/firebase';
+import { uploadUserImage } from '../services/mediaUpload';
 import { api } from '../services/api';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { PostImage } from './PostImage';

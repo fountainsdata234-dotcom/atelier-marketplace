@@ -3,7 +3,7 @@ import { AlertTriangle, Bookmark, Camera, LogOut, Save, Trash2, UserRound } from
 import { User } from '../types';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
-import { uploadUserImage } from '../services/firebase';
+import { uploadUserImage } from '../services/mediaUpload';
 import { getAuthUserId, signOutAuth } from '../services/auth';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';

@@ -491,6 +491,8 @@ export default function App() {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     const handleInstallPrompt = (event: Event) => {
+      const isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+      if (!isMobile) return;
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
@@ -968,17 +970,6 @@ export default function App() {
     markAsRead();
     const timer = window.setTimeout(markAsRead, 1500);
     return () => window.clearTimeout(timer);
-  }, [currentUser?.id]);
-
-  useEffect(() => {
-    if (!currentUser) return;
-    let unsubscribe: (() => void) | undefined;
-    void import('./services/firebase').then(async ({ listenForForegroundPush }) => {
-      unsubscribe = await listenForForegroundPush(notification => {
-        storageService.addNotification(currentUser.id, notification.title, notification.body, 'system', notification.url);
-      });
-    }).catch(error => console.warn('Foreground push listener could not start.', error));
-    return () => unsubscribe?.();
   }, [currentUser?.id]);
 
   useEffect(() => {
