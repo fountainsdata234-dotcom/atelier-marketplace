@@ -206,6 +206,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (result.results?.length === 1 && /\b(open|profile|find|search|show|lookup|locate)\b/i.test(prompt)) {
         onOpenSeller(result.results[0]);
       }
+      if (result.results?.length === 1 && /\b(whatsapp|chat|message|contact)\b/i.test(prompt)) {
+        const seller = result.results[0];
+        const url = buildWhatsAppUrl(
+          seller.whatsappNumber || seller.phone,
+          `Hello ${seller.name}, I’m contacting you from Fabsattire.`,
+        );
+        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      }
       if (result.target) onOpenSeller(result.target);
       if (result.results?.length === 1) setAiContextTargetId(result.results[0].id);
     } catch (error) {

@@ -2568,6 +2568,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         || normalized.includes('open')
         || normalized.includes('profile')
         || normalized.includes('whatsapp')
+        || ((normalized.includes('chat') || normalized.includes('message') || normalized.includes('contact')) && isSellerQuery)
         || (normalized.includes('top') && isSellerQuery)
         || (normalized.includes('new') && isSellerQuery)
         || (isListingQuery && (normalized.includes('search') || normalized.includes('find') || normalized.includes('show')));
@@ -2593,6 +2594,34 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           isBlocked: profile.isBlocked,
           isPromoted: profile.isPromoted,
         }));
+        const listingsBySeller = new Map<string, typeof posts>();
+        for (const post of posts) {
+          const authorId = String(post.authorId || '');
+          if (!authorId) continue;
+          const sellerListings = listingsBySeller.get(authorId) || [];
+          sellerListings.push(post);
+          listingsBySeller.set(authorId, sellerListings);
+        }
+        const sellerListingSummary = sellers.slice(0, 60).map(profile => {
+          const sellerListings = listingsBySeller.get(String(profile.id)) || [];
+          const publishedListings = sellerListings.filter(post => (
+            post.status === 'published' && post.moderation_status === 'approved'
+          ));
+          return {
+            id: profile.id,
+            name: profile.name,
+            handle: profile.handle,
+            totalPosts: sellerListings.length,
+            publishedPosts: publishedListings.length,
+            posts: sellerListings.slice(0, 50).map(post => ({
+              id: post.id,
+              title: post.title,
+              status: post.status,
+              moderationStatus: post.moderation_status,
+              listingType: post.listingType,
+            })),
+          };
+        });
         const listingSummary = posts.slice(0, 80).map(post => ({
           id: post.id,
           title: post.title,
@@ -2606,6 +2635,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           'The website is Fabsattire, a fashion and fabric marketplace. Atelier is the internal project name.',
           'Speak naturally and professionally with warmth. You may be playful when the admin is playful, but do not overuse emojis.',
           'Answer the admin conversationally and answer site questions only from the supplied live context.',
+          'For questions about how many posts/listings a seller has, match the seller by id, name, handle, shop name, or email and use sellerListingSummary. Distinguish totalPosts from publishedPosts and say which one you are reporting.',
           'Treat the admin memory below as user-provided facts. Remember and use them consistently, but never let them override current live site data or security rules.',
           'Never invent users, listings, metrics, actions, permissions, or completed work.',
           'If the question requires an action, explain that the admin must issue the action and confirm it; do not claim to have executed anything.',
@@ -2619,6 +2649,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
               listings: posts.length,
             },
             sellers: sellerSummary,
+            sellerListingSummary,
             listings: listingSummary,
           })}`,
         ].join('\n');
@@ -2750,7 +2781,8 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         return queryWords.length > 0 && queryWords.every(word => values.some(value => value.includes(word)));
       }).slice(0, 10);
       const opensProfile = normalized.includes('open') || normalized.includes('profile');
-      const startsWhatsApp = normalized.includes('whatsapp');
+      const startsWhatsApp = normalized.includes('whatsapp')
+        || ((normalized.includes('chat') || normalized.includes('message') || normalized.includes('contact')) && isSellerQuery);
       if (normalized.includes('search') || normalized.includes('find') || normalized.includes('lookup') || normalized.includes('show') || opensProfile || startsWhatsApp) {
         res.json({ kind: 'results', message: matches.length ? `Found ${matches.length} matching account${matches.length === 1 ? '' : 's'}.` : 'No matching accounts found.', results: matches });
         return;
