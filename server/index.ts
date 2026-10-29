@@ -544,6 +544,22 @@ type AdminAiPendingAction = {
 };
 const adminAiPendingActions = new Map<string, AdminAiPendingAction>();
 
+const adminAiCorrections: Record<string, string> = {
+  seach: 'search', serach: 'search', findd: 'find', shwo: 'show', profle: 'profile',
+  tailro: 'tailor', tailer: 'tailor', merchanet: 'merchant', merhcant: 'merchant',
+  warnn: 'warn', bloock: 'block', blok: 'block', sellerz: 'sellers',
+};
+
+const normalizeAdminAiPrompt = (prompt: string) => prompt
+  .toLowerCase()
+  .replace(/[^\p{L}\p{N}@._' -]/gu, ' ')
+  .split(/\s+/)
+  .filter(Boolean)
+  .map(word => adminAiCorrections[word] || word)
+  .join(' ');
+
+const adminAiIntentWords = new Set(['search', 'find', 'show', 'get', 'open', 'profile', 'seller', 'sellers', 'tailor', 'merchant', 'fabric', 'warn', 'block', 'please', 'the', 'for', 'me', 'account']);
+
 function requireAbuseLimit(action: string) {
   return (req: Request, res: Response, next: NextFunction) => {
     void enforceAbuseLimit(req as AuthenticatedRequest, res, action)
@@ -2449,12 +2465,15 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         res.status(400).json({ error: 'Enter an instruction for the admin operator.' });
         return;
       }
-      const normalized = prompt.toLowerCase();
+      const normalized = normalizeAdminAiPrompt(prompt);
       const profiles = await getUsers(true);
-      const matchTerm = prompt.match(/(?:@|for\s+|user\s+)([a-z0-9._@-]{2,80})/i)?.[1]?.toLowerCase();
+      const queryWords = normalized.split(/\s+/)
+        .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
+        .filter(word => word.length > 1 && !adminAiIntentWords.has(word));
       const matches = profiles.filter(profile => {
-        const values = [profile.name, profile.handle, profile.email, profile.shopName, profile.id].map(value => String(value || '').toLowerCase());
-        return matchTerm ? values.some(value => value.includes(matchTerm)) : false;
+        const values = [profile.name, profile.handle, profile.email, profile.shopName, profile.id]
+          .map(value => normalizeAdminAiPrompt(String(value || '')));
+        return queryWords.length > 0 && queryWords.every(word => values.some(value => value.includes(word)));
       }).slice(0, 10);
       if (normalized.includes('search') || normalized.includes('find') || normalized.includes('show')) {
         res.json({ kind: 'results', message: matches.length ? `Found ${matches.length} matching account${matches.length === 1 ? '' : 's'}.` : 'No matching accounts found.', results: matches });
@@ -2463,6 +2482,10 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       const target = matches[0];
       if (!target) {
         res.json({ kind: 'message', message: 'I could not identify a target account. Try: “Find tailor @handle” or include the seller name or email.' });
+        return;
+      }
+      if (matches.length > 1 && (normalized.includes('warn') || normalized.includes('block'))) {
+        res.json({ kind: 'message', message: `I found ${matches.length} possible accounts. Please include the exact handle, email, or shop name so I do not act on the wrong account.`, results: matches });
         return;
       }
       const action = normalized.includes('block') ? 'block' : normalized.includes('warn') ? 'warn' : null;

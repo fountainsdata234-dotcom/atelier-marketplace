@@ -49,6 +49,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [aiReply, setAiReply] = useState<string | null>(null);
   const [aiActionId, setAiActionId] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiMessages, setAiMessages] = useState<Array<{ role: 'admin' | 'assistant'; text: string }>>([]);
   const [moderationListings, setModerationListings] = useState<ClothPost[]>([]);
   const [moderationStatus, setModerationStatus] = useState<string | null>(null);
   const [listingReports, setListingReports] = useState<ListingReport[]>([]);
@@ -59,6 +60,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     setEditablePlans(promoPlans);
   }, [promoPlans]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    try {
+      const saved = window.localStorage.getItem(`atelier-admin-ai-chat:${currentUser.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Array<{ role: 'admin' | 'assistant'; text: string }>;
+        if (Array.isArray(parsed)) setAiMessages(parsed.slice(-50));
+      }
+    } catch (error) {
+      console.warn('Admin AI local chat history could not be loaded.', error);
+    }
+  }, [currentUser.id, isSuperAdmin]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    try {
+      window.localStorage.setItem(`atelier-admin-ai-chat:${currentUser.id}`, JSON.stringify(aiMessages.slice(-50)));
+    } catch (error) {
+      console.warn('Admin AI local chat history could not be saved.', error);
+    }
+  }, [aiMessages, currentUser.id, isSuperAdmin]);
 
   useEffect(() => {
     if (activeTab !== 'moderation') return;
@@ -122,15 +145,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const runAdminAi = async () => {
     if (!isSuperAdmin || !aiPrompt.trim()) return;
+    const prompt = aiPrompt.trim();
+    setAiMessages(current => [...current, { role: 'admin' as const, text: prompt }].slice(-50));
+    setAiPrompt('');
     setAiBusy(true);
     setAiReply(null);
     setAiActionId(null);
     try {
-      const result = await api.adminAiCommand(aiPrompt.trim());
+      const result = await api.adminAiCommand(prompt);
       setAiReply(result.message);
       setAiActionId(result.actionId || null);
+      setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
     } catch (error) {
-      setAiReply(safeCustomerErrorMessage(error, 'The admin operator could not process that instruction.'));
+      const message = safeCustomerErrorMessage(error, 'The admin operator could not process that instruction.');
+      setAiReply(message);
+      setAiMessages(current => [...current, { role: 'assistant' as const, text: message }].slice(-50));
     } finally {
       setAiBusy(false);
     }
@@ -143,8 +172,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const result = await api.adminAiConfirm(aiActionId);
       setAiReply(result.message);
       setAiActionId(null);
+      setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
     } catch (error) {
-      setAiReply(safeCustomerErrorMessage(error, 'The approved admin action could not be completed.'));
+      const message = safeCustomerErrorMessage(error, 'The approved admin action could not be completed.');
+      setAiReply(message);
+      setAiMessages(current => [...current, { role: 'assistant' as const, text: message }].slice(-50));
     } finally {
       setAiBusy(false);
     }
@@ -512,6 +544,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="mt-4 flex gap-2">
               <input value={aiPrompt} onChange={event => setAiPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runAdminAi(); }} placeholder="Find tailor @handle, or warn @handle" className="min-h-11 min-w-0 flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 text-sm text-white" />
               <button type="button" onClick={() => void runAdminAi()} disabled={aiBusy || !aiPrompt.trim()} className="rounded-xl bg-amber-400 px-4 text-xs font-bold text-neutral-950 disabled:opacity-50">{aiBusy ? 'Working…' : 'Run'}</button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {['Find tailor @handle', 'Show seller profile', 'Warn @handle', 'Block @handle'].map(prompt => (
+                <button key={prompt} type="button" onClick={() => setAiPrompt(prompt)} className="rounded-full border border-neutral-700 px-3 py-1.5 text-[10px] text-neutral-400 transition hover:border-amber-400 hover:text-amber-300">{prompt}</button>
+              ))}
+              <button type="button" onClick={() => { setAiMessages([]); setAiReply(null); setAiActionId(null); window.localStorage.removeItem(`atelier-admin-ai-chat:${currentUser.id}`); }} className="ml-auto rounded-full px-3 py-1.5 text-[10px] text-neutral-500 hover:text-white">Clear local chat</button>
+            </div>
+            <div className="mt-4 max-h-80 space-y-2 overflow-y-auto rounded-2xl border border-neutral-800 bg-black/10 p-3" aria-live="polite">
+              {aiMessages.length === 0 && <p className="p-3 text-xs text-neutral-500">I’m ready. You can type naturally—even with small spelling mistakes. Try “seach tailro @fabs”.</p>}
+              {aiMessages.map((message, index) => (
+                <div key={`${index}-${message.text}`} className={`rounded-xl px-3 py-2 text-xs ${message.role === 'admin' ? 'ml-6 bg-amber-500/10 text-amber-100' : 'mr-6 bg-neutral-900 text-neutral-300'}`}>
+                  <span className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-neutral-500">{message.role === 'admin' ? 'You' : 'Fabrilux AI'}</span>
+                  {message.text}
+                </div>
+              ))}
             </div>
             {aiReply && <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950/30 p-4 text-sm text-neutral-200">{aiReply}{aiActionId && <button type="button" onClick={() => void confirmAdminAi()} disabled={aiBusy} className="mt-3 block rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Confirm and execute</button>}</div>}
           </section>
