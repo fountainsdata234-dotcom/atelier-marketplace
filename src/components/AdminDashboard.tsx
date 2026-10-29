@@ -7,6 +7,8 @@ import { api } from '../services/api';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
+const LUMINA_WELCOME = "Hi? I’m Lumina ✨ What will you want me to help you with today, boss? 😂";
+
 interface AdminDashboardProps {
   currentUser: User;
   users: User[];
@@ -51,7 +53,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [aiReply, setAiReply] = useState<string | null>(null);
   const [aiActionId, setAiActionId] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiMessages, setAiMessages] = useState<Array<{ role: 'admin' | 'assistant'; text: string }>>([]);
+  const [aiMessages, setAiMessages] = useState<Array<{ role: 'admin' | 'assistant'; text: string }>>([{ role: 'assistant', text: LUMINA_WELCOME }]);
   const [aiResults, setAiResults] = useState<User[]>([]);
   const [aiListingResults, setAiListingResults] = useState<ClothPost[]>([]);
   const [aiMetrics, setAiMetrics] = useState<Record<string, number> | null>(null);
@@ -63,6 +65,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [abuseFlags, setAbuseFlags] = useState<MarketplaceAbuseFlag[]>([]);
   const [abuseQueueStatus, setAbuseQueueStatus] = useState<string | null>(null);
 
+  const normalizeChatText = (value: string) => value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s?!']/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const getLuminaReply = (prompt: string) => {
+    const text = normalizeChatText(prompt);
+    if (/\b(what('?s| is) your name|who are you|your name)\b/.test(text)) {
+      return "I’m Lumina ✨ — your lively Super Admin co-pilot. I keep an eye on the Atelier world, help you find the right account, and wait for your go-ahead before I take serious action. What shall we do, boss? 😂";
+    }
+    if (/\b(how are you|how('re| are) you|you good|are you okay|how do you feel)\b/.test(text)) {
+      return "I’m glowing and fully charged ✨ Thanks for checking on me, boss! I’m ready to crunch the latest Atelier numbers, find a merchant, or help you sort out the marketplace. What’s first? 😄";
+    }
+    if (/^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening)\b/.test(text)) {
+      return "Hi! I’m Lumina ✨ What would you like me to help you with today, boss? I can search merchants, inspect listings, check your numbers, or prepare an action for your confirmation 😂";
+    }
+    if (/\b(thank you|thanks|tnx|appreciate)\b/.test(text)) {
+      return "Anytime, boss 😄 I’m right here when you need me. Shall we make the marketplace sparkle?";
+    }
+    if (/\b(joke|make me laugh|funny)\b/.test(text)) {
+      return "Why did the tailor become a Super Admin favourite? Because they always knew how to stitch the right people together 😂 Now, what shall Lumina investigate?";
+    }
+    if (/\b(help|what can you do|what do you do)\b/.test(text)) {
+      return "I can chat with you, answer questions using live Atelier data, remember the merchant we’re discussing, find sellers and listings, show analytics, open profiles, prepare WhatsApp links, and stage warnings, blocks, promotions, listing actions, and broadcasts for your confirmation.";
+    }
+    return null;
+  };
+
+  const appendLocalLuminaReply = (prompt: string) => {
+    const reply = getLuminaReply(prompt);
+    if (!reply) return false;
+    setAiMessages(current => [...current, { role: 'assistant' as const, text: reply }].slice(-50));
+    setAiReply(reply);
+    return true;
+  };
+
   useEffect(() => {
     setEditablePlans(promoPlans);
   }, [promoPlans]);
@@ -73,7 +112,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const saved = window.localStorage.getItem(`atelier-admin-ai-chat:${currentUser.id}`);
       if (saved) {
         const parsed = JSON.parse(saved) as Array<{ role: 'admin' | 'assistant'; text: string }>;
-        if (Array.isArray(parsed)) setAiMessages(parsed.slice(-50));
+        if (Array.isArray(parsed) && parsed.length > 0) setAiMessages(parsed.slice(-50));
       }
       const savedContext = window.localStorage.getItem(`atelier-admin-ai-context:${currentUser.id}`);
       if (savedContext) setAiContextTargetId(savedContext);
@@ -162,6 +201,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const prompt = aiPrompt.trim();
     setAiMessages(current => [...current, { role: 'admin' as const, text: prompt }].slice(-50));
     setAiPrompt('');
+    if (appendLocalLuminaReply(prompt)) return;
     setAiBusy(true);
     setAiReply(null);
     setAiActionId(null);
@@ -560,26 +600,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <section className={`mt-4 rounded-3xl border p-6 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
             <div className="flex items-start gap-3">
               <Sparkles className="mt-0.5 h-5 w-5 text-amber-400" />
-              <div>
-                <h2 className="text-lg font-bold">Super Admin AI operator</h2>
-                <p className="mt-1 text-xs leading-relaxed text-neutral-400">Search and operate the site through controlled admin tools. Every warning or block requires your confirmation and is audit-safe.</p>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-bold">Lumina</h2>
+                  <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-amber-300">Super Admin AI</span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-400">Hi? I’m Lumina ✨ Ask me anything about the Atelier marketplace, or just talk to me naturally. I’ll remember this conversation on your device.</p>
               </div>
             </div>
             <div className="mt-4 flex gap-2">
-              <input value={aiPrompt} onChange={event => setAiPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runAdminAi(); }} placeholder="Find tailor @handle, or warn @handle" className="min-h-11 min-w-0 flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 text-sm text-white" />
+              <input value={aiPrompt} onChange={event => setAiPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runAdminAi(); }} placeholder="Say hi, ask my name, or give me an admin task…" className="min-h-11 min-w-0 flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 text-sm text-white" />
               <button type="button" onClick={() => void runAdminAi()} disabled={aiBusy || !aiPrompt.trim()} className="rounded-xl bg-amber-400 px-4 text-xs font-bold text-neutral-950 disabled:opacity-50">{aiBusy ? 'Working…' : 'Run'}</button>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
-              {['Show marketplace analytics', 'Find tailor @handle', 'Open merchant profile', 'Top five merchants', '10 new tailors', 'Find listing silk dress', 'Broadcast to sellers: new review rules', 'WhatsApp @handle', 'Promote @handle', 'Warn @handle', 'Block @handle'].map(prompt => (
+              {['Hi Lumina 👋', 'What is your name?', 'How are you doing?', 'Show marketplace analytics', 'Find tailor @handle', 'Open merchant profile', 'Top five merchants', '10 new tailors', 'Find listing silk dress', 'Broadcast to sellers: new review rules', 'WhatsApp @handle', 'Promote @handle', 'Warn @handle', 'Block @handle'].map(prompt => (
                 <button key={prompt} type="button" onClick={() => setAiPrompt(prompt)} className="rounded-full border border-neutral-700 px-3 py-1.5 text-[10px] text-neutral-400 transition hover:border-amber-400 hover:text-amber-300">{prompt}</button>
               ))}
-              <button type="button" onClick={() => { setAiMessages([]); setAiReply(null); setAiActionId(null); setAiResults([]); setAiListingResults([]); setAiMetrics(null); setAiContextTargetId(null); window.localStorage.removeItem(`atelier-admin-ai-chat:${currentUser.id}`); }} className="ml-auto rounded-full px-3 py-1.5 text-[10px] text-neutral-500 hover:text-white">Clear local chat</button>
+              <button type="button" onClick={() => { setAiMessages([{ role: 'assistant', text: LUMINA_WELCOME }]); setAiReply(LUMINA_WELCOME); setAiActionId(null); setAiResults([]); setAiListingResults([]); setAiMetrics(null); setAiContextTargetId(null); window.localStorage.setItem(`atelier-admin-ai-chat:${currentUser.id}`, JSON.stringify([{ role: 'assistant', text: LUMINA_WELCOME }])); }} className="ml-auto rounded-full border border-amber-500/20 px-3 py-1.5 text-[10px] font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/10">Start new chat</button>
             </div>
             <div className="mt-4 max-h-80 space-y-2 overflow-y-auto rounded-2xl border border-neutral-800 bg-black/10 p-3" aria-live="polite">
               {aiMessages.length === 0 && <p className="p-3 text-xs text-neutral-500">I’m ready. You can type naturally—even with small spelling mistakes. Try “seach tailro @fabs”.</p>}
               {aiMessages.map((message, index) => (
                 <div key={`${index}-${message.text}`} className={`rounded-xl px-3 py-2 text-xs ${message.role === 'admin' ? 'ml-6 bg-amber-500/10 text-amber-100' : 'mr-6 bg-neutral-900 text-neutral-300'}`}>
-                  <span className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-neutral-500">{message.role === 'admin' ? 'You' : 'Fabrilux AI'}</span>
+                  <span className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-neutral-500">{message.role === 'admin' ? 'You' : 'Lumina'}</span>
                   {message.text}
                 </div>
               ))}
