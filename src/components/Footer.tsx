@@ -26,6 +26,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-400">Explore</p>
             <ul className="space-y-1.5 text-xs">
               <li><button type="button" onClick={() => onNavigate?.('marketplace')} className="transition hover:text-amber-400">Marketplace</button></li>
+              <li><button type="button" onClick={() => onNavigate?.('assistant')} className="transition hover:text-amber-400">Assistant</button></li>
               <li><button type="button" onClick={() => onNavigate?.('dashboard')} className="transition hover:text-amber-400">Tailor Studio</button></li>
               <li><button type="button" onClick={() => onNavigate?.('about')} className="transition hover:text-amber-400">About us</button></li>
             </ul>

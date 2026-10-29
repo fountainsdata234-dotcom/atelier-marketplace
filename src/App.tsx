@@ -25,6 +25,7 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { ContentSkeleton } from './components/ContentSkeleton';
 import { LegalPage } from './components/LegalPage';
 import { SellerProfilePage } from './components/SellerProfilePage';
+import { AssistantPage } from './components/AssistantPage';
 import { api } from './services/api';
 import { buildPostShareUrl, buildSellerShareUrl, getHandleSlug } from './utils/profile';
 import { buildWhatsAppUrl } from './utils/whatsapp';
@@ -42,6 +43,7 @@ const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
   '/collections': 'collections',
   '/dashboard': 'dashboard',
   '/admin': 'admin',
+  '/assistant': 'assistant',
 };
 
 const PATH_BY_VIEW: Record<string, string> = Object.fromEntries(Object.entries(PUBLIC_VIEW_BY_PATH).map(([path, view]) => [view, path]));
@@ -395,6 +397,7 @@ export default function App() {
       landing: { title: 'Fabsattire | Tailors, Fabrics & Bespoke Fashion', description: 'Find skilled tailors, quality fabrics, and distinctive bespoke fashion. Explore maker collections, discover artisans by location, and connect directly.' },
       marketplace: { title: 'Tailors, Fabrics & Bespoke Pieces | Fabsattire', description: 'Explore garments and fabrics from independent tailors and fabric sellers. Search maker collections and contact artisans directly.' },
       artisan: { title: 'Find Tailors & Fabric Sellers | Fabsattire', description: 'Discover tailors and fabric merchants by location, explore their work, and visit their seller collections.' },
+      assistant: { title: 'Fabsattire Assistant | Find Your Artisan', description: 'Describe what you need in your own words and get intelligent, typo-tolerant help finding the right Fabsattire profile.' },
       about: { title: 'About Fabsattire', description: 'Learn how Fabsattire connects people with independent tailors and fabric sellers.' },
       privacy: { title: 'Privacy Policy | Fabsattire', description: 'Read how Fabsattire handles account information and marketplace data.' },
       terms: { title: 'Terms of Service | Fabsattire', description: 'Review the terms for using the Fabsattire marketplace.' },
@@ -437,7 +440,7 @@ export default function App() {
   const [savePictureTitle, setSavePictureTitle] = useState<string | null>(null);
 
   // Only fetch market data when the user is actually on a live marketplace view.
-  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'post', 'dashboard', 'profile', 'collections', 'messages', 'admin'];
+  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'post', 'dashboard', 'profile', 'collections', 'messages', 'admin', 'assistant'];
   const canRefreshMarketplaceData = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
 
   const navigateToView = (view: string) => {
@@ -1219,6 +1222,18 @@ export default function App() {
                 onSelectSeller={handleSelectSeller}
                 isDarkMode={isDarkMode}
                 enableGreetingTyping={!isDataLoading && !showIntro}
+              />
+            </motion.div>
+          )}
+
+          {currentView === 'assistant' && (
+            <motion.div key="assistant" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.35 }}>
+              <AssistantPage
+                users={users}
+                posts={posts}
+                currentUser={currentUser}
+                isDarkMode={isDarkMode}
+                onSelectSeller={handleSelectSeller}
               />
             </motion.div>
           )}
