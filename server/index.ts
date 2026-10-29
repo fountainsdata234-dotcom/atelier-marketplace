@@ -2532,20 +2532,32 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         || normalized.includes('how many')
         || normalized.includes('top');
       const isSiteQuestion = /\b(what|which|who|how|where|when|why|can|is|are|tell)\b/.test(normalized);
-      const isConversational = !normalized.includes('block')
-        && !normalized.includes('warn')
-        && !normalized.includes('promote')
-        && !normalized.includes('broadcast')
-        && !normalized.includes('listing')
-        && !normalized.includes('post')
-        && !normalized.includes('analytics')
-        && !normalized.includes('overview')
-        && !normalized.includes('stats')
-        && !normalized.includes('search')
-        && !normalized.includes('find')
-        && !normalized.includes('show')
-        && !normalized.includes('open');
-      if (isConversational && gemini) {
+      const isMutationCommand = normalized.includes('block')
+        || normalized.includes('warn')
+        || normalized.includes('promote')
+        || normalized.includes('broadcast')
+        || normalized.includes('announce')
+        || normalized.includes('announcement')
+        || (isListingQuery && (
+          normalized.includes('pause')
+          || normalized.includes('archive')
+          || normalized.includes('approve')
+          || normalized.includes('reject')
+        ));
+      const isExplicitLookupCommand = normalized.includes('search')
+        || normalized.includes('find')
+        || normalized.includes('show')
+        || normalized.includes('open')
+        || normalized.includes('profile')
+        || normalized.includes('whatsapp')
+        || (normalized.includes('top') && isSellerQuery)
+        || (normalized.includes('new') && isSellerQuery)
+        || (isListingQuery && (normalized.includes('search') || normalized.includes('find') || normalized.includes('show')));
+      // Natural questions, including questions about live marketplace data, must
+      // reach the model. Only explicit lookups and mutations use deterministic
+      // routes because those routes render actionable UI and confirmations.
+      const shouldUseGemini = !isMutationCommand && !isExplicitLookupCommand;
+      if (shouldUseGemini && gemini) {
         const sellerSummary = sellers.slice(0, 60).map(profile => ({
           id: profile.id,
           name: profile.name,
