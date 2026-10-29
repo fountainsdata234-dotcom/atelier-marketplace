@@ -11,7 +11,7 @@ export interface UserLocation {
   businessAddress?: string;
   accuracyMeters?: number;
   verificationStatus?: 'needs_setup' | 'needs_confirmation' | 'seller_confirmed';
-  locationSource?: 'device_geolocation';
+  locationSource?: 'device_geolocation' | 'address_search';
   confirmedAt?: string;
 }
 
@@ -21,6 +21,11 @@ export interface NearbySellerMatch {
 }
 
 export interface ReverseGeocodedBusinessLocation {
+  location: UserLocation;
+  confirmationToken: string;
+}
+
+export interface BusinessLocationSearchResult {
   location: UserLocation;
   confirmationToken: string;
 }

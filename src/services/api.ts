@@ -1,4 +1,4 @@
-import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences, NearbySellerMatch, ReverseGeocodedBusinessLocation } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences, NearbySellerMatch, ReverseGeocodedBusinessLocation, BusinessLocationSearchResult } from '../types';
 
 import { getAuthToken, isSupabaseAuthReady } from './auth';
 import { customerMessageForHttpError, customerMessageForNetworkError, safeCustomerErrorMessage } from '../utils/customerMessages';
@@ -177,6 +177,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(coordinates),
   }),
+  searchBusinessLocations: (query: string) => request<BusinessLocationSearchResult[]>(`/api/location/search-business?q=${encodeURIComponent(query)}`),
   saveBusinessLocation: (confirmationToken: string, businessAddress: string) => request<UserLocation>('/api/profile/business-location', {
     method: 'PUT',
     body: JSON.stringify({ confirmationToken, businessAddress, confirmBusinessLocation: true }),

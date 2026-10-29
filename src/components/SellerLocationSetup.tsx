@@ -18,6 +18,9 @@ export const SellerLocationSetup: React.FC<SellerLocationSetupProps> = ({ curren
   const [confirmed, setConfirmed] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [addressQuery, setAddressQuery] = useState('');
+  const [addressResults, setAddressResults] = useState<Array<{ location: UserLocation; confirmationToken: string }>>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
   if (!isSeller(currentUser)) return null;
 
@@ -33,8 +36,8 @@ export const SellerLocationSetup: React.FC<SellerLocationSetupProps> = ({ curren
     setIsDetecting(true);
     navigator.geolocation.getCurrentPosition(async position => {
       const { latitude, longitude, accuracy } = position.coords;
-      if (!Number.isFinite(accuracy) || accuracy > 200) {
-        setStatus({ message: `Your device accuracy is about ${Math.round(accuracy)} m. Move outdoors or closer to your shop and retry; we need a reading within 200 m.`, isError: true });
+      if (!Number.isFinite(accuracy)) {
+        setStatus({ message: 'Your device returned an invalid position. Please retry or choose your shop by address.', isError: true });
         setIsDetecting(false);
         return;
       }
@@ -47,7 +50,7 @@ export const SellerLocationSetup: React.FC<SellerLocationSetupProps> = ({ curren
         setCandidate({ location: result.location, confirmationToken: result.confirmationToken });
         setBusinessAddress(result.location.businessAddress || '');
         setStatus({
-          message: `Position detected with about ${Math.round(accuracy)} m accuracy. Review the map and address, and confirm only if this is your actual shop.`,
+          message: `Position detected with about ${Math.round(accuracy)} m accuracy. This estimate is informational; review the map and confirm only if this is your actual shop.`,
           isError: false,
         });
       } catch (error) {
@@ -68,6 +71,33 @@ export const SellerLocationSetup: React.FC<SellerLocationSetupProps> = ({ curren
       timeout: 20_000,
       maximumAge: 0,
     });
+  };
+
+  const searchShopAddress = async () => {
+    const query = addressQuery.trim();
+    if (query.length < 3) {
+      setStatus({ message: 'Enter a street, area, city, or landmark to search for your shop.', isError: true });
+      return;
+    }
+    setIsSearchingAddress(true);
+    setStatus(null);
+    try {
+      const results = await api.searchBusinessLocations(query);
+      setAddressResults(results);
+      if (!results.length) setStatus({ message: 'No matching places were found. Add more detail and try again.', isError: true });
+    } catch (error) {
+      setStatus({ message: safeCustomerErrorMessage(error, 'Shop address search is temporarily unavailable. Please retry.'), isError: true });
+    } finally {
+      setIsSearchingAddress(false);
+    }
+  };
+
+  const chooseAddress = (result: { location: UserLocation; confirmationToken: string }) => {
+    setCandidate(result);
+    setBusinessAddress(result.location.businessAddress || '');
+    setConfirmed(false);
+    setAddressResults([]);
+    setStatus({ message: 'Shop address selected. Check the map and confirm that this is your public business location.', isError: false });
   };
 
   const saveBusinessLocation = async () => {
@@ -104,7 +134,7 @@ export const SellerLocationSetup: React.FC<SellerLocationSetupProps> = ({ curren
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Seller location setup</p>
           <h2 id="seller-location-title" className="mt-1 text-lg font-bold">Confirm your shop on the map</h2>
           <p className="mt-2 text-xs leading-relaxed text-neutral-400">
-            Detect your position while you are physically at your business. Your phone location is never assumed to be your shop. The confirmed business pin and address will be public so customers can find you and request directions.
+            Detect your position while you are physically at your business, or add the shop by searching its address if you are elsewhere. The confirmed business pin and address will be public so customers can find you and request directions.
           </p>
         </div>
       </div>
@@ -122,6 +152,16 @@ export const SellerLocationSetup: React.FC<SellerLocationSetupProps> = ({ curren
         {isLocationConfirmed && !candidate && (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400"><CheckCircle2 className="h-4 w-4" /> Seller-confirmed location</span>
         )}
+      </div>
+
+      <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950/20 p-3">
+        <p className="text-xs font-semibold">Add shop by address</p>
+        <p className="mt-1 text-[10px] text-neutral-500">Search a street, area, city, or landmark. You do not need to be at the shop.</p>
+        <div className="mt-2 flex gap-2">
+          <input value={addressQuery} onChange={event => setAddressQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void searchShopAddress(); }} placeholder="e.g. KLM 4, Osusu Amaukwa" className="min-h-10 min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs text-white" />
+          <button type="button" onClick={() => void searchShopAddress()} disabled={isSearchingAddress} className="rounded-lg bg-neutral-700 px-3 text-xs font-bold text-white disabled:opacity-50">{isSearchingAddress ? 'Searching…' : 'Search'}</button>
+        </div>
+        {addressResults.length > 0 && <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">{addressResults.map(result => <button key={`${result.location.lat}-${result.location.lng}`} type="button" onClick={() => chooseAddress(result)} className="block w-full rounded-lg border border-neutral-700 p-2 text-left text-xs hover:border-amber-400"><span className="font-semibold">{result.location.city}{result.location.state ? `, ${result.location.state}` : ''}</span><span className="mt-0.5 block text-[10px] text-neutral-400">{result.location.businessAddress}</span></button>)}</div>}
       </div>
 
       {status && <p className={`mt-3 text-xs leading-relaxed ${status.isError ? 'text-red-300' : 'text-emerald-300'}`} role={status.isError ? 'alert' : 'status'}>{status.message}</p>}
@@ -171,7 +211,7 @@ export const SellerLocationSetup: React.FC<SellerLocationSetupProps> = ({ curren
                 </label>
                 <label className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs leading-relaxed">
                   <input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} className="mt-0.5 accent-amber-400" />
-                  <span>I am at this actual business location, have checked the map and address, and agree to show its pin and address to customers.</span>
+                  <span>I have checked the map and address and confirm this is my actual public business location. I agree to show its pin and address to customers.</span>
                 </label>
                 <button
                   type="button"

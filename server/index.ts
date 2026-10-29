@@ -189,6 +189,7 @@ type BusinessLocationTokenPayload = {
   accuracyMeters: number;
   location: Pick<UserLocation, 'country' | 'countryCode' | 'state' | 'city'>;
   address: string;
+  locationSource?: 'device_geolocation' | 'address_search';
   issuedAt: number;
 };
 
@@ -221,7 +222,7 @@ const verifyLocationPayload = (token: unknown): BusinessLocationTokenPayload | n
     const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as BusinessLocationTokenPayload;
     if (!Number.isFinite(payload.latitude) || payload.latitude < -90 || payload.latitude > 90
       || !Number.isFinite(payload.longitude) || payload.longitude < -180 || payload.longitude > 180
-      || !Number.isFinite(payload.accuracyMeters) || payload.accuracyMeters < 0 || payload.accuracyMeters > 200
+      || !Number.isFinite(payload.accuracyMeters) || payload.accuracyMeters < 0 || payload.accuracyMeters > 100_000
       || !Number.isFinite(payload.issuedAt) || Date.now() - payload.issuedAt > 15 * 60_000
       || typeof payload.address !== 'string'
       || !payload.location || typeof payload.location.country !== 'string') return null;
@@ -229,6 +230,26 @@ const verifyLocationPayload = (token: unknown): BusinessLocationTokenPayload | n
   } catch {
     return null;
   }
+};
+
+const searchBusinessLocationsWithNominatim = async (query: string) => {
+  const pending = nominatimQueue.then(async () => {
+    const wait = Math.max(0, 1_000 - (Date.now() - lastNominatimRequestAt));
+    if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+    lastNominatimRequestAt = Date.now();
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.search = new URLSearchParams({
+      format: 'jsonv2',
+      q: query,
+      addressdetails: '1',
+      limit: '5',
+    }).toString();
+    const response = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'Fabsattire Marketplace/1.0' }, signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) throw new Error(`Address search returned HTTP ${response.status}.`);
+    return await response.json() as Array<Record<string, unknown>>;
+  });
+  nominatimQueue = pending.then(() => undefined, () => undefined);
+  return pending;
 };
 
 const reverseGeocodeWithNominatim = async (latitude: number, longitude: number) => {
@@ -783,6 +804,41 @@ app.get('/api/location/currencies', (_req, res) => {
   res.json(listLocationCurrencies());
 });
 
+app.get('/api/location/search-business', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const query = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 160) : '';
+  if (query.length < 3) {
+    res.status(400).json({ error: 'Enter at least 3 characters to search for a shop address.' });
+    return;
+  }
+  try {
+    const results = await searchBusinessLocationsWithNominatim(query);
+    const locations = results.flatMap(result => {
+      const latitude = Number(result.lat);
+      const longitude = Number(result.lon);
+      const address = result.address && typeof result.address === 'object' ? result.address as Record<string, unknown> : {};
+      const text = (value: unknown) => typeof value === 'string' ? value.trim().slice(0, 120) : '';
+      const country = text(address.country);
+      const city = text(address.city || address.town || address.village || address.municipality || address.suburb);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !country || !city) return [];
+      const location: UserLocation = {
+        country,
+        countryCode: text(address.country_code).toUpperCase(),
+        state: text(address.state || address.province || address.region || address.county),
+        city,
+        lat: latitude,
+        lng: longitude,
+        businessAddress: text(result.display_name),
+      };
+      return [{ location, confirmationToken: signLocationPayload({ latitude, longitude, accuracyMeters: 0, location, address: location.businessAddress || query, locationSource: 'address_search', issuedAt: Date.now() }) }];
+    });
+    res.set('Cache-Control', 'private, no-store');
+    res.json(locations);
+  } catch (error) {
+    console.error('Business address search failed.', error);
+    res.status(503).json({ error: 'Shop address search is temporarily unavailable. Please retry.' });
+  }
+});
+
 app.post('/api/location/reverse-business', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
   const profile = await readProfile(req.authUser!.uid);
   if (profile?.role !== 'tailor' && profile?.role !== 'fabric_seller') {
@@ -794,8 +850,8 @@ app.post('/api/location/reverse-business', requireAuth, requireActiveAccount, as
   const accuracyMeters = req.body?.accuracyMeters;
   if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
     || typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
-    || typeof accuracyMeters !== 'number' || !Number.isFinite(accuracyMeters) || accuracyMeters < 0 || accuracyMeters > 200) {
-    res.status(400).json({ error: 'Share a current device position with accuracy within 200 metres.' });
+    || typeof accuracyMeters !== 'number' || !Number.isFinite(accuracyMeters) || accuracyMeters < 0 || accuracyMeters > 100_000) {
+    res.status(400).json({ error: 'Share a valid current device position.' });
     return;
   }
 
@@ -886,7 +942,7 @@ app.put('/api/profile/business-location', requireAuth, requireActiveAccount, asy
     accuracyMeters: signedLocation.accuracyMeters,
     businessAddress,
     verificationStatus: 'seller_confirmed',
-    locationSource: 'device_geolocation',
+    locationSource: signedLocation.locationSource || 'device_geolocation',
     confirmedAt,
   };
   try {
