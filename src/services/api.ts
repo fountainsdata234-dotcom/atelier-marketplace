@@ -220,6 +220,7 @@ export const api = {
     prompt: string,
     contextTargetId?: string,
     conversation?: Array<{ role: 'admin' | 'assistant'; text: string }>,
+    memories?: string[],
   ) => request<{
     kind: 'results' | 'message' | 'chat' | 'confirmation_required' | 'analytics' | 'listing_results';
     message: string;
@@ -234,6 +235,7 @@ export const api = {
       prompt,
       context: contextTargetId ? { targetId: contextTargetId } : undefined,
       conversation: conversation?.slice(-20),
+      memories: memories?.slice(-200),
     }),
   }),
   adminAiConfirm: (actionId: string) => request<{ ok: boolean; message: string }>('/api/admin/ai/confirm', { method: 'POST', body: JSON.stringify({ actionId }) }),

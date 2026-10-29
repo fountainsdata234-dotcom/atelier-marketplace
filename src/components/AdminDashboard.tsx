@@ -58,6 +58,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [aiListingResults, setAiListingResults] = useState<ClothPost[]>([]);
   const [aiMetrics, setAiMetrics] = useState<Record<string, number> | null>(null);
   const [aiContextTargetId, setAiContextTargetId] = useState<string | null>(null);
+  const [aiMemories, setAiMemories] = useState<string[]>([]);
   const [moderationListings, setModerationListings] = useState<ClothPost[]>([]);
   const [moderationStatus, setModerationStatus] = useState<string | null>(null);
   const [listingReports, setListingReports] = useState<ListingReport[]>([]);
@@ -79,6 +80,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
       const savedContext = window.localStorage.getItem(`atelier-admin-ai-context:${currentUser.id}`);
       if (savedContext) setAiContextTargetId(savedContext);
+      const savedMemories = window.localStorage.getItem(`atelier-admin-ai-memory:${currentUser.id}`);
+      if (savedMemories) {
+        const parsed = JSON.parse(savedMemories) as unknown;
+        if (Array.isArray(parsed)) setAiMemories(parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0));
+      }
     } catch (error) {
       console.warn('Admin AI local chat history could not be loaded.', error);
     }
@@ -98,6 +104,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       console.warn('Admin AI local chat history could not be saved.', error);
     }
   }, [aiMessages, currentUser.id, isSuperAdmin]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    try {
+      window.localStorage.setItem(`atelier-admin-ai-memory:${currentUser.id}`, JSON.stringify(aiMemories));
+    } catch (error) {
+      console.warn('Admin AI local memory could not be saved.', error);
+    }
+  }, [aiMemories, currentUser.id, isSuperAdmin]);
 
   useEffect(() => {
     if (activeTab !== 'moderation') return;
@@ -162,6 +177,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const runAdminAi = async () => {
     if (!isSuperAdmin || !aiPrompt.trim()) return;
     const prompt = aiPrompt.trim();
+    const memoryMatch = prompt.match(/^(?:remember|learn|note)\s+(?:that\s+)?(.+)$/i);
+    if (memoryMatch?.[1]) {
+      const learnedFact = memoryMatch[1].trim().replace(/[.]+$/, '');
+      setAiMemories(current => current.includes(learnedFact) ? current : [...current, learnedFact]);
+    }
     setAiMessages(current => [...current, { role: 'admin' as const, text: prompt }].slice(-50));
     setAiPrompt('');
     setAiBusy(true);
@@ -175,6 +195,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         prompt,
         aiContextTargetId || undefined,
         aiMessages,
+        aiMemories,
       );
       setAiReply(result.message);
       setAiActionId(result.actionId || null);
@@ -182,9 +203,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAiListingResults(result.listingResults || []);
       setAiMetrics(result.metrics || null);
       setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
-      if ((/\b(open|profile)\b/i.test(prompt)) && result.results?.length === 1) {
+      if (result.results?.length === 1 && /\b(open|profile|find|search|show|lookup|locate)\b/i.test(prompt)) {
         onOpenSeller(result.results[0]);
       }
+      if (result.target) onOpenSeller(result.target);
       if (result.results?.length === 1) setAiContextTargetId(result.results[0].id);
     } catch (error) {
       const message = safeCustomerErrorMessage(error, 'The admin operator could not process that instruction.');
@@ -569,21 +591,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950 shadow-lg shadow-amber-500/20"><Sparkles className="h-5 w-5" /></div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">Lumina</h2><span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">Private admin companion</span></div>
-                  <p className="mt-1 truncate text-xs text-neutral-500">Live site intelligence · local conversation history</p>
+                  <p className="mt-1 truncate text-xs text-neutral-500">Live site intelligence · {aiMemories.length} saved memories on this device</p>
                 </div>
               </div>
-              <button type="button" onClick={() => { setAiMessages([{ role: 'assistant', text: LUMINA_WELCOME }]); setAiReply(null); setAiActionId(null); setAiResults([]); setAiListingResults([]); setAiMetrics(null); setAiContextTargetId(null); window.localStorage.setItem(`atelier-admin-ai-chat:${currentUser.id}`, JSON.stringify([{ role: 'assistant', text: LUMINA_WELCOME }])); }} className="shrink-0 rounded-xl border border-amber-500/30 px-3 py-2 text-[10px] font-bold text-amber-300 transition hover:bg-amber-500/10">Start new chat</button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button type="button" onClick={() => { setAiMemories([]); window.localStorage.removeItem(`atelier-admin-ai-memory:${currentUser.id}`); }} className="rounded-xl border border-neutral-700 px-3 py-2 text-[10px] font-bold text-neutral-400 transition hover:border-red-500/40 hover:text-red-300">Forget memory</button>
+                <button type="button" onClick={() => { setAiMessages([{ role: 'assistant', text: LUMINA_WELCOME }]); setAiReply(null); setAiActionId(null); setAiResults([]); setAiListingResults([]); setAiMetrics(null); setAiContextTargetId(null); window.localStorage.setItem(`atelier-admin-ai-chat:${currentUser.id}`, JSON.stringify([{ role: 'assistant', text: LUMINA_WELCOME }])); }} className="rounded-xl border border-amber-500/30 px-3 py-2 text-[10px] font-bold text-amber-300 transition hover:bg-amber-500/10">Start new chat</button>
+              </div>
             </header>
             <div className="min-h-[380px] max-h-[58vh] space-y-4 overflow-y-auto px-5 py-6 sm:px-8" aria-live="polite">
               {aiMessages.length === 0 && <p className="p-3 text-xs text-neutral-500">I’m ready. You can type naturally—even with small spelling mistakes. Try “seach tailro @fabs”.</p>}
               {aiMessages.map((message, index) => (
                 <div key={`${index}-${message.text}`} className={`flex ${message.role === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'admin' ? 'rounded-br-md bg-amber-400 text-neutral-950' : isDarkMode ? 'rounded-bl-md bg-neutral-900 text-neutral-200' : 'rounded-bl-md bg-neutral-100 text-neutral-800'}`}>
+                  <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${index === aiMessages.length - 1 ? 'animate-[lumina-message-in_300ms_ease-out]' : ''} ${message.role === 'admin' ? 'rounded-br-md bg-amber-400 text-neutral-950' : isDarkMode ? 'rounded-bl-md bg-neutral-900 text-neutral-200' : 'rounded-bl-md bg-neutral-100 text-neutral-800'}`}>
                     <span className={`mb-1 block text-[9px] font-bold uppercase tracking-wider ${message.role === 'admin' ? 'text-neutral-700' : 'text-neutral-500'}`}>{message.role === 'admin' ? 'You' : 'Lumina'}</span>
                     <p className="whitespace-pre-wrap">{message.text}</p>
                   </div>
                 </div>
               ))}
+              {aiBusy && (
+                <div className="flex justify-start" aria-live="polite" aria-label="Lumina is typing">
+                  <div className={`rounded-2xl rounded-bl-md px-4 py-3 ${isDarkMode ? 'bg-neutral-900' : 'bg-neutral-100'}`}>
+                    <span className="flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-amber-400 [animation-delay:-.2s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-amber-400 [animation-delay:-.1s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-amber-400" />
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
             <form onSubmit={event => { event.preventDefault(); void runAdminAi(); }} className={`flex items-end gap-3 border-t px-5 py-4 sm:px-7 ${isDarkMode ? 'border-neutral-800' : 'border-neutral-200'}`}>
               <textarea
@@ -635,6 +671,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={() => onOpenSeller(result)} className="rounded-lg border border-amber-500/30 px-2.5 py-1.5 text-[10px] font-bold text-amber-300">Open profile</button>
+                      <button type="button" onClick={() => setAiContextTargetId(result.id)} className="rounded-lg border border-sky-500/30 px-2.5 py-1.5 text-[10px] font-bold text-sky-300">Use this account</button>
                       {result.whatsappNumber && <button type="button" onClick={() => { const url = buildWhatsAppUrl(result.whatsappNumber, `Hello ${result.name}, I’m contacting you from Fabsattire.`); if (url) window.open(url, '_blank', 'noopener,noreferrer'); }} className="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300">WhatsApp</button>}
                     </div>
                   </div>
