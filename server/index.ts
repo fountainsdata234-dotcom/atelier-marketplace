@@ -104,7 +104,16 @@ app.disable('x-powered-by');
 if (!supabaseDataEnabled) {
   throw new Error('Supabase server credentials are required to start the Atelier API.');
 }
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,http://192.168.186.15:3001').split(',').map((origin) => origin.trim()).filter(Boolean);
+const configuredOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean);
+const allowedOrigins = new Set([
+  ...configuredOrigins,
+  'https://fabsattire.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'http://192.168.186.15:3001',
+]);
 
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled API promise rejection; server kept alive.', reason);
@@ -136,7 +145,7 @@ app.use(cors({
       return;
     }
 
-    if (allowedOrigins.includes(origin)
+    if (allowedOrigins.has(origin)
       || (process.env.NODE_ENV !== 'production' && isLocalNetworkOrigin(origin))) {
       callback(null, true);
       return;
