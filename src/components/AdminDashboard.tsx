@@ -65,43 +65,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [abuseFlags, setAbuseFlags] = useState<MarketplaceAbuseFlag[]>([]);
   const [abuseQueueStatus, setAbuseQueueStatus] = useState<string | null>(null);
 
-  const normalizeChatText = (value: string) => value
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s?!']/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  const getLuminaReply = (prompt: string) => {
-    const text = normalizeChatText(prompt);
-    if (/\b(what('?s| is) your name|who are you|your name)\b/.test(text)) {
-      return "I’m Lumina ✨ — your lively Super Admin co-pilot. I keep an eye on the Atelier world, help you find the right account, and wait for your go-ahead before I take serious action. What shall we do, boss? 😂";
-    }
-    if (/\b(how are you|how('re| are) you|you good|are you okay|how do you feel)\b/.test(text)) {
-      return "I’m glowing and fully charged ✨ Thanks for checking on me, boss! I’m ready to crunch the latest Atelier numbers, find a merchant, or help you sort out the marketplace. What’s first? 😄";
-    }
-    if (/^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening)\b/.test(text)) {
-      return "Hi! I’m Lumina ✨ What would you like me to help you with today, boss? I can search merchants, inspect listings, check your numbers, or prepare an action for your confirmation 😂";
-    }
-    if (/\b(thank you|thanks|tnx|appreciate)\b/.test(text)) {
-      return "Anytime, boss 😄 I’m right here when you need me. Shall we make the marketplace sparkle?";
-    }
-    if (/\b(joke|make me laugh|funny)\b/.test(text)) {
-      return "Why did the tailor become a Super Admin favourite? Because they always knew how to stitch the right people together 😂 Now, what shall Lumina investigate?";
-    }
-    if (/\b(help|what can you do|what do you do)\b/.test(text)) {
-      return "I can chat with you, answer questions using live Atelier data, remember the merchant we’re discussing, find sellers and listings, show analytics, open profiles, prepare WhatsApp links, and stage warnings, blocks, promotions, listing actions, and broadcasts for your confirmation.";
-    }
-    return null;
-  };
-
-  const appendLocalLuminaReply = (prompt: string) => {
-    const reply = getLuminaReply(prompt);
-    if (!reply) return false;
-    setAiMessages(current => [...current, { role: 'assistant' as const, text: reply }].slice(-50));
-    setAiReply(reply);
-    return true;
-  };
-
   useEffect(() => {
     setEditablePlans(promoPlans);
   }, [promoPlans]);
@@ -201,7 +164,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const prompt = aiPrompt.trim();
     setAiMessages(current => [...current, { role: 'admin' as const, text: prompt }].slice(-50));
     setAiPrompt('');
-    if (appendLocalLuminaReply(prompt)) return;
     setAiBusy(true);
     setAiReply(null);
     setAiActionId(null);
@@ -209,7 +171,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAiListingResults([]);
     setAiMetrics(null);
     try {
-      const result = await api.adminAiCommand(prompt, aiContextTargetId || undefined);
+      const result = await api.adminAiCommand(
+        prompt,
+        aiContextTargetId || undefined,
+        aiMessages,
+      );
       setAiReply(result.message);
       setAiActionId(result.actionId || null);
       setAiResults(result.results || []);
@@ -597,36 +563,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {activeTab === 'ai' && isSuperAdmin && (
-          <section className={`mt-4 rounded-3xl border p-6 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
-            <div className="flex items-start gap-3">
-              <Sparkles className="mt-0.5 h-5 w-5 text-amber-400" />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-bold">Lumina</h2>
-                  <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-amber-300">Super Admin AI</span>
+          <section className={`mt-4 overflow-hidden rounded-[2rem] border ${isDarkMode ? 'border-neutral-800 bg-[#0f1115]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+            <header className={`flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-7 ${isDarkMode ? 'border-neutral-800' : 'border-neutral-200'}`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950 shadow-lg shadow-amber-500/20"><Sparkles className="h-5 w-5" /></div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">Lumina</h2><span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">Private admin companion</span></div>
+                  <p className="mt-1 truncate text-xs text-neutral-500">Live site intelligence · local conversation history</p>
                 </div>
-                <p className="mt-1 text-xs leading-relaxed text-neutral-400">Hi? I’m Lumina ✨ Ask me anything about the Atelier marketplace, or just talk to me naturally. I’ll remember this conversation on your device.</p>
               </div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <input value={aiPrompt} onChange={event => setAiPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runAdminAi(); }} placeholder="Say hi, ask my name, or give me an admin task…" className="min-h-11 min-w-0 flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 text-sm text-white" />
-              <button type="button" onClick={() => void runAdminAi()} disabled={aiBusy || !aiPrompt.trim()} className="rounded-xl bg-amber-400 px-4 text-xs font-bold text-neutral-950 disabled:opacity-50">{aiBusy ? 'Working…' : 'Run'}</button>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {['Hi Lumina 👋', 'What is your name?', 'How are you doing?', 'Show marketplace analytics', 'Find tailor @handle', 'Open merchant profile', 'Top five merchants', '10 new tailors', 'Find listing silk dress', 'Broadcast to sellers: new review rules', 'WhatsApp @handle', 'Promote @handle', 'Warn @handle', 'Block @handle'].map(prompt => (
-                <button key={prompt} type="button" onClick={() => setAiPrompt(prompt)} className="rounded-full border border-neutral-700 px-3 py-1.5 text-[10px] text-neutral-400 transition hover:border-amber-400 hover:text-amber-300">{prompt}</button>
-              ))}
-              <button type="button" onClick={() => { setAiMessages([{ role: 'assistant', text: LUMINA_WELCOME }]); setAiReply(LUMINA_WELCOME); setAiActionId(null); setAiResults([]); setAiListingResults([]); setAiMetrics(null); setAiContextTargetId(null); window.localStorage.setItem(`atelier-admin-ai-chat:${currentUser.id}`, JSON.stringify([{ role: 'assistant', text: LUMINA_WELCOME }])); }} className="ml-auto rounded-full border border-amber-500/20 px-3 py-1.5 text-[10px] font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/10">Start new chat</button>
-            </div>
-            <div className="mt-4 max-h-80 space-y-2 overflow-y-auto rounded-2xl border border-neutral-800 bg-black/10 p-3" aria-live="polite">
+              <button type="button" onClick={() => { setAiMessages([{ role: 'assistant', text: LUMINA_WELCOME }]); setAiReply(null); setAiActionId(null); setAiResults([]); setAiListingResults([]); setAiMetrics(null); setAiContextTargetId(null); window.localStorage.setItem(`atelier-admin-ai-chat:${currentUser.id}`, JSON.stringify([{ role: 'assistant', text: LUMINA_WELCOME }])); }} className="shrink-0 rounded-xl border border-amber-500/30 px-3 py-2 text-[10px] font-bold text-amber-300 transition hover:bg-amber-500/10">Start new chat</button>
+            </header>
+            <div className="min-h-[380px] max-h-[58vh] space-y-4 overflow-y-auto px-5 py-6 sm:px-8" aria-live="polite">
               {aiMessages.length === 0 && <p className="p-3 text-xs text-neutral-500">I’m ready. You can type naturally—even with small spelling mistakes. Try “seach tailro @fabs”.</p>}
               {aiMessages.map((message, index) => (
-                <div key={`${index}-${message.text}`} className={`rounded-xl px-3 py-2 text-xs ${message.role === 'admin' ? 'ml-6 bg-amber-500/10 text-amber-100' : 'mr-6 bg-neutral-900 text-neutral-300'}`}>
-                  <span className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-neutral-500">{message.role === 'admin' ? 'You' : 'Lumina'}</span>
-                  {message.text}
+                <div key={`${index}-${message.text}`} className={`flex ${message.role === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'admin' ? 'rounded-br-md bg-amber-400 text-neutral-950' : isDarkMode ? 'rounded-bl-md bg-neutral-900 text-neutral-200' : 'rounded-bl-md bg-neutral-100 text-neutral-800'}`}>
+                    <span className={`mb-1 block text-[9px] font-bold uppercase tracking-wider ${message.role === 'admin' ? 'text-neutral-700' : 'text-neutral-500'}`}>{message.role === 'admin' ? 'You' : 'Lumina'}</span>
+                    <p className="whitespace-pre-wrap">{message.text}</p>
+                  </div>
                 </div>
               ))}
             </div>
+            <form onSubmit={event => { event.preventDefault(); void runAdminAi(); }} className={`flex items-end gap-3 border-t px-5 py-4 sm:px-7 ${isDarkMode ? 'border-neutral-800' : 'border-neutral-200'}`}>
+              <textarea
+                value={aiPrompt}
+                onChange={event => setAiPrompt(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    void runAdminAi();
+                  }
+                }}
+                rows={1}
+                placeholder="Message Lumina…"
+                aria-label="Message Lumina"
+                className={`max-h-32 min-h-11 flex-1 resize-none rounded-2xl border px-4 py-3 text-sm outline-none transition focus:border-amber-500 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white placeholder:text-neutral-600' : 'border-neutral-200 bg-neutral-50 text-neutral-900 placeholder:text-neutral-400'}`}
+              />
+              <button type="submit" disabled={aiBusy || !aiPrompt.trim()} className="min-h-11 rounded-2xl bg-amber-400 px-5 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50">{aiBusy ? 'Thinking…' : 'Send'}</button>
+            </form>
             {aiMetrics && (
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Marketplace analytics">
                 {[
@@ -679,7 +654,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 ))}
               </div>
             )}
-            {aiReply && <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950/30 p-4 text-sm text-neutral-200">{aiReply}{aiActionId && <button type="button" onClick={() => void confirmAdminAi()} disabled={aiBusy} className="mt-3 block rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Confirm and execute</button>}</div>}
+            {aiActionId && aiReply && <div className="mx-5 mb-5 rounded-2xl border border-red-500/25 bg-red-500/5 p-4 text-sm text-neutral-200 sm:mx-8">{aiReply}<button type="button" onClick={() => void confirmAdminAi()} disabled={aiBusy} className="mt-3 block rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{aiBusy ? 'Executing…' : 'Confirm and execute'}</button></div>}
           </section>
         )}
       </div>

@@ -216,15 +216,26 @@ export const api = {
   deleteSeller: (userId: string) => request<void>(`/api/admin/sellers/${userId}`, { method: 'DELETE' }),
   deleteMyAccount: () => request<void>('/api/profile', { method: 'DELETE' }),
   setUserBlocked: (userId: string, blocked: boolean, reason: string) => request<{ ok: boolean; blocked: boolean }>(`/api/admin/users/${userId}/block`, { method: 'POST', body: JSON.stringify({ blocked, reason }) }),
-  adminAiCommand: (prompt: string, contextTargetId?: string) => request<{
-    kind: 'results' | 'message' | 'confirmation_required' | 'analytics' | 'listing_results';
+  adminAiCommand: (
+    prompt: string,
+    contextTargetId?: string,
+    conversation?: Array<{ role: 'admin' | 'assistant'; text: string }>,
+  ) => request<{
+    kind: 'results' | 'message' | 'chat' | 'confirmation_required' | 'analytics' | 'listing_results';
     message: string;
     actionId?: string;
     target?: User;
     results?: User[];
     listingResults?: ClothPost[];
     metrics?: Record<string, number>;
-  }>('/api/admin/ai/command', { method: 'POST', body: JSON.stringify({ prompt, context: contextTargetId ? { targetId: contextTargetId } : undefined }) }),
+  }>('/api/admin/ai/command', {
+    method: 'POST',
+    body: JSON.stringify({
+      prompt,
+      context: contextTargetId ? { targetId: contextTargetId } : undefined,
+      conversation: conversation?.slice(-20),
+    }),
+  }),
   adminAiConfirm: (actionId: string) => request<{ ok: boolean; message: string }>('/api/admin/ai/confirm', { method: 'POST', body: JSON.stringify({ actionId }) }),
   getPosts: (search?: string) => request<ClothPost[]>(search ? `/api/posts?q=${encodeURIComponent(search)}` : '/api/posts'),
   refreshPosts: () => {

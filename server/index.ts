@@ -8,6 +8,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
 import multer from 'multer';
 import sharp from 'sharp';
+import { GoogleGenAI } from '@google/genai';
 import { listLocationCountries, listLocationCurrencies, listLocationRegions, resolveMapLocation, searchLocationCities } from './locationData.js';
 import { adminAuth, firebaseAdminEnabled, firestore } from './firebaseAdmin.js';
 import type { UserLocation, UserRole } from '../src/types.js';
@@ -98,6 +99,7 @@ import {
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
+const gemini = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 app.disable('x-powered-by');
 if (!supabaseDataEnabled) {
   throw new Error('Supabase server credentials are required to start the Atelier API.');
@@ -2505,6 +2507,17 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       const profiles = await getUsers(true);
       const sellers = profiles.filter(profile => profile.role === 'tailor' || profile.role === 'fabric_seller');
       const contextTargetId = typeof req.body?.context?.targetId === 'string' ? req.body.context.targetId : '';
+      const conversation = Array.isArray(req.body?.conversation)
+        ? req.body.conversation
+          .filter((message: unknown): message is { role: string; text: string } => (
+            Boolean(message)
+            && typeof message === 'object'
+            && typeof (message as { role?: unknown }).role === 'string'
+            && typeof (message as { text?: unknown }).text === 'string'
+          ))
+          .slice(-20)
+          .map((message: { role: string; text: string }) => ({ role: message.role === 'admin' ? 'user' : 'model', text: message.text.slice(0, 2_000) }))
+        : [];
       const posts = await getPosts(1000);
       const getValue = (record: Record<string, unknown>, ...keys: string[]) => keys.map(key => record[key]).find(value => value !== undefined && value !== null);
       const requestedCount = Number(normalized.match(/\b(\d+)\b/)?.[1] || 0);
@@ -2519,6 +2532,77 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         || normalized.includes('how many')
         || normalized.includes('top');
       const isSiteQuestion = /\b(what|which|who|how|where|when|why|can|is|are|tell)\b/.test(normalized);
+      const isConversational = !normalized.includes('block')
+        && !normalized.includes('warn')
+        && !normalized.includes('promote')
+        && !normalized.includes('broadcast')
+        && !normalized.includes('listing')
+        && !normalized.includes('post')
+        && !normalized.includes('analytics')
+        && !normalized.includes('overview')
+        && !normalized.includes('stats')
+        && !normalized.includes('search')
+        && !normalized.includes('find')
+        && !normalized.includes('show')
+        && !normalized.includes('open');
+      if (isConversational && gemini) {
+        const sellerSummary = sellers.slice(0, 60).map(profile => ({
+          id: profile.id,
+          name: profile.name,
+          handle: profile.handle,
+          role: profile.role,
+          shopName: profile.shopName,
+          city: profile.location && typeof profile.location === 'object'
+            ? String((profile.location as Record<string, unknown>).city || '')
+            : '',
+          isBlocked: profile.isBlocked,
+          isPromoted: profile.isPromoted,
+        }));
+        const listingSummary = posts.slice(0, 80).map(post => ({
+          id: post.id,
+          title: post.title,
+          authorName: post.authorName,
+          authorHandle: post.authorHandle,
+          status: post.status,
+          listingType: post.listingType,
+        }));
+        const systemInstruction = [
+          'You are Lumina, the private Super Admin assistant for the Atelier fashion marketplace.',
+          'Speak naturally and professionally with warmth. You may be playful when the admin is playful, but do not overuse emojis.',
+          'Answer the admin conversationally and answer site questions only from the supplied live context.',
+          'Never invent users, listings, metrics, actions, permissions, or completed work.',
+          'If the question requires an action, explain that the admin must issue the action and confirm it; do not claim to have executed anything.',
+          'Keep answers concise unless the admin asks for detail.',
+          `Live context: ${JSON.stringify({
+            totals: {
+              users: profiles.length,
+              sellers: sellers.length,
+              buyers: profiles.filter(profile => profile.role === 'buyer').length,
+              listings: posts.length,
+            },
+            sellers: sellerSummary,
+            listings: listingSummary,
+          })}`,
+        ].join('\n');
+        const contents = [
+          ...conversation.map((message: { role: string; text: string }) => `${message.role === 'user' ? 'Admin' : 'Lumina'}: ${message.text}`),
+          `Admin: ${prompt}`,
+        ].join('\n');
+        try {
+          const response = await gemini.models.generateContent({
+            model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+            contents,
+            config: { systemInstruction, temperature: 0.5, maxOutputTokens: 500 },
+          });
+          const message = response.text?.trim();
+          if (message) {
+            res.json({ kind: 'chat', message });
+            return;
+          }
+        } catch (error) {
+          console.error('Lumina model response failed; continuing with grounded assistant routing.', error);
+        }
+      }
       if (isAnalyticsQuery && !normalized.includes('top') || (normalized.includes('overview') && !isSellerQuery)) {
         const publishedPosts = posts.filter(post => post.status === 'published' && post.moderation_status === 'approved');
         const metrics = {
