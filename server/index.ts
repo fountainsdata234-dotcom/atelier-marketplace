@@ -2615,23 +2615,33 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           `Admin: ${prompt}`,
         ].join('\n');
         try {
-          const configuredModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+          const configuredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
           const request = (model: string) => gemini.models.generateContent({
             model,
             contents,
             config: { systemInstruction, temperature: 0.5, maxOutputTokens: 500 },
           });
+          const models = Array.from(new Set([
+            configuredModel,
+            'gemini-3.5-flash',
+            'gemini-flash-lite-latest',
+          ]));
           let response;
-          try {
-            response = await request(configuredModel);
-          } catch (error) {
-            const status = typeof error === 'object' && error !== null && 'status' in error
-              ? (error as { status?: unknown }).status
-              : undefined;
-            if (status !== 404 || configuredModel === 'gemini-3.8-flash') throw error;
-            console.warn(`Lumina model "${configuredModel}" is unavailable; retrying with gemini-3.8-flash.`);
-            response = await request('gemini-3.8-flash');
+          let lastError: unknown;
+          for (const model of models) {
+            try {
+              response = await request(model);
+              break;
+            } catch (error) {
+              lastError = error;
+              const status = typeof error === 'object' && error !== null && 'status' in error
+                ? (error as { status?: unknown }).status
+                : undefined;
+              if (![404, 429, 500, 502, 503, 504].includes(Number(status))) throw error;
+              console.warn(`Lumina model "${model}" is unavailable (${String(status)}); trying the next available model.`);
+            }
           }
+          if (!response) throw lastError || new Error('No Gemini model returned a response.');
           const message = response.text?.trim();
           if (message) {
             res.json({ kind: 'chat', message });
