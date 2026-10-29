@@ -2615,11 +2615,23 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           `Admin: ${prompt}`,
         ].join('\n');
         try {
-          const response = await gemini.models.generateContent({
-            model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+          const configuredModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+          const request = (model: string) => gemini.models.generateContent({
+            model,
             contents,
             config: { systemInstruction, temperature: 0.5, maxOutputTokens: 500 },
           });
+          let response;
+          try {
+            response = await request(configuredModel);
+          } catch (error) {
+            const status = typeof error === 'object' && error !== null && 'status' in error
+              ? (error as { status?: unknown }).status
+              : undefined;
+            if (status !== 404 || configuredModel === 'gemini-3.8-flash') throw error;
+            console.warn(`Lumina model "${configuredModel}" is unavailable; retrying with gemini-3.8-flash.`);
+            response = await request('gemini-3.8-flash');
+          }
           const message = response.text?.trim();
           if (message) {
             res.json({ kind: 'chat', message });
