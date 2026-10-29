@@ -14,6 +14,7 @@ interface AdminDashboardProps {
   promoPlans: AdminPromoPlan[];
   broadcasts: BroadcastMessage[];
   isDarkMode: boolean;
+  onOpenSeller: (seller: User) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -22,7 +23,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   posts,
   promoPlans,
   broadcasts,
-  isDarkMode
+  isDarkMode,
+  onOpenSeller,
 }) => {
   const isSuperAdmin = currentUser.isSuperAdmin === true;
 
@@ -50,6 +52,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [aiActionId, setAiActionId] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMessages, setAiMessages] = useState<Array<{ role: 'admin' | 'assistant'; text: string }>>([]);
+  const [aiResults, setAiResults] = useState<User[]>([]);
+  const [aiListingResults, setAiListingResults] = useState<ClothPost[]>([]);
+  const [aiMetrics, setAiMetrics] = useState<Record<string, number> | null>(null);
+  const [aiContextTargetId, setAiContextTargetId] = useState<string | null>(null);
   const [moderationListings, setModerationListings] = useState<ClothPost[]>([]);
   const [moderationStatus, setModerationStatus] = useState<string | null>(null);
   const [listingReports, setListingReports] = useState<ListingReport[]>([]);
@@ -69,10 +75,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         const parsed = JSON.parse(saved) as Array<{ role: 'admin' | 'assistant'; text: string }>;
         if (Array.isArray(parsed)) setAiMessages(parsed.slice(-50));
       }
+      const savedContext = window.localStorage.getItem(`atelier-admin-ai-context:${currentUser.id}`);
+      if (savedContext) setAiContextTargetId(savedContext);
     } catch (error) {
       console.warn('Admin AI local chat history could not be loaded.', error);
     }
   }, [currentUser.id, isSuperAdmin]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    if (aiContextTargetId) window.localStorage.setItem(`atelier-admin-ai-context:${currentUser.id}`, aiContextTargetId);
+    else window.localStorage.removeItem(`atelier-admin-ai-context:${currentUser.id}`);
+  }, [aiContextTargetId, currentUser.id, isSuperAdmin]);
 
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -151,11 +165,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAiBusy(true);
     setAiReply(null);
     setAiActionId(null);
+    setAiResults([]);
+    setAiListingResults([]);
+    setAiMetrics(null);
     try {
-      const result = await api.adminAiCommand(prompt);
+      const result = await api.adminAiCommand(prompt, aiContextTargetId || undefined);
       setAiReply(result.message);
       setAiActionId(result.actionId || null);
+      setAiResults(result.results || []);
+      setAiListingResults(result.listingResults || []);
+      setAiMetrics(result.metrics || null);
       setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
+      if ((/\b(open|profile)\b/i.test(prompt)) && result.results?.length === 1) {
+        onOpenSeller(result.results[0]);
+      }
+      if (result.results?.length === 1) setAiContextTargetId(result.results[0].id);
     } catch (error) {
       const message = safeCustomerErrorMessage(error, 'The admin operator could not process that instruction.');
       setAiReply(message);
@@ -546,10 +570,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button type="button" onClick={() => void runAdminAi()} disabled={aiBusy || !aiPrompt.trim()} className="rounded-xl bg-amber-400 px-4 text-xs font-bold text-neutral-950 disabled:opacity-50">{aiBusy ? 'Working…' : 'Run'}</button>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
-              {['Find tailor @handle', 'Show seller profile', 'Warn @handle', 'Block @handle'].map(prompt => (
+              {['Show marketplace analytics', 'Find tailor @handle', 'Open merchant profile', 'Top five merchants', '10 new tailors', 'Find listing silk dress', 'Broadcast to sellers: new review rules', 'WhatsApp @handle', 'Promote @handle', 'Warn @handle', 'Block @handle'].map(prompt => (
                 <button key={prompt} type="button" onClick={() => setAiPrompt(prompt)} className="rounded-full border border-neutral-700 px-3 py-1.5 text-[10px] text-neutral-400 transition hover:border-amber-400 hover:text-amber-300">{prompt}</button>
               ))}
-              <button type="button" onClick={() => { setAiMessages([]); setAiReply(null); setAiActionId(null); window.localStorage.removeItem(`atelier-admin-ai-chat:${currentUser.id}`); }} className="ml-auto rounded-full px-3 py-1.5 text-[10px] text-neutral-500 hover:text-white">Clear local chat</button>
+              <button type="button" onClick={() => { setAiMessages([]); setAiReply(null); setAiActionId(null); setAiResults([]); setAiListingResults([]); setAiMetrics(null); setAiContextTargetId(null); window.localStorage.removeItem(`atelier-admin-ai-chat:${currentUser.id}`); }} className="ml-auto rounded-full px-3 py-1.5 text-[10px] text-neutral-500 hover:text-white">Clear local chat</button>
             </div>
             <div className="mt-4 max-h-80 space-y-2 overflow-y-auto rounded-2xl border border-neutral-800 bg-black/10 p-3" aria-live="polite">
               {aiMessages.length === 0 && <p className="p-3 text-xs text-neutral-500">I’m ready. You can type naturally—even with small spelling mistakes. Try “seach tailro @fabs”.</p>}
@@ -560,6 +584,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               ))}
             </div>
+            {aiMetrics && (
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Marketplace analytics">
+                {[
+                  ['Users', aiMetrics.totalUsers],
+                  ['Sellers', aiMetrics.sellers],
+                  ['Buyers', aiMetrics.buyers],
+                  ['Live listings', aiMetrics.publishedListings],
+                  ['Pending review', aiMetrics.pendingListings],
+                  ['Promoted', aiMetrics.promotedSellers],
+                  ['Blocked', aiMetrics.blockedUsers],
+                  ['Tailors', aiMetrics.tailors],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-xl border border-amber-500/15 bg-amber-500/5 p-3">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-neutral-500">{label}</p>
+                    <p className="mt-1 text-xl font-black text-amber-300">{value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {aiResults.length > 0 && (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Assistant results">
+                {aiResults.map(result => (
+                  <div key={result.id} className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-neutral-100">{result.shopName || result.name}</p>
+                        <p className="truncate text-[11px] text-amber-300">@{result.handle.replace(/^@/, '')} · {result.role.replace('_', ' ')}</p>
+                        <p className="mt-1 text-[10px] text-neutral-500">{result.location?.city || 'Unknown city'} · {result.followers?.length || 0} followers</p>
+                      </div>
+                      {result.isPromoted && <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[9px] font-bold text-amber-300">Promoted</span>}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => onOpenSeller(result)} className="rounded-lg border border-amber-500/30 px-2.5 py-1.5 text-[10px] font-bold text-amber-300">Open profile</button>
+                      {result.whatsappNumber && <button type="button" onClick={() => { const url = buildWhatsAppUrl(result.whatsappNumber, `Hello ${result.name}, I’m contacting you from Fabsattire.`); if (url) window.open(url, '_blank', 'noopener,noreferrer'); }} className="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300">WhatsApp</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {aiListingResults.length > 0 && (
+              <div className="mt-4 space-y-2" aria-label="Listing results">
+                {aiListingResults.map(listing => (
+                  <div key={listing.id} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-neutral-100">{listing.title}</p>
+                      <p className="truncate text-[11px] text-amber-300">{listing.authorName || listing.authorHandle} · {listing.status || 'unknown status'}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-neutral-800 px-2 py-1 text-[9px] text-neutral-400">{listing.listingType || 'listing'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {aiReply && <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950/30 p-4 text-sm text-neutral-200">{aiReply}{aiActionId && <button type="button" onClick={() => void confirmAdminAi()} disabled={aiBusy} className="mt-3 block rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Confirm and execute</button>}</div>}
           </section>
         )}

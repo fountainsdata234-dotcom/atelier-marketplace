@@ -1344,6 +1344,7 @@ export default function App() {
                 promoPlans={promoPlans}
                 broadcasts={broadcasts}
                 isDarkMode={isDarkMode}
+                onOpenSeller={handleSelectSeller}
               />
             </motion.div>
           )}

@@ -539,15 +539,44 @@ type AdminAiPendingAction = {
   expiresAt: number;
   actorId: string;
   targetId: string;
-  action: 'block' | 'warn';
+  action: 'block' | 'warn' | 'promote' | 'pause_listing' | 'archive_listing' | 'approve_listing' | 'reject_listing' | 'broadcast';
   reason: string;
+  listingId?: string;
+  broadcast?: { target: 'all' | 'sellers' | 'buyers'; title: string; body: string };
 };
 const adminAiPendingActions = new Map<string, AdminAiPendingAction>();
 
 const adminAiCorrections: Record<string, string> = {
   seach: 'search', serach: 'search', findd: 'find', shwo: 'show', profle: 'profile',
   tailro: 'tailor', tailer: 'tailor', merchanet: 'merchant', merhcant: 'merchant',
-  warnn: 'warn', bloock: 'block', blok: 'block', sellerz: 'sellers',
+  warnn: 'warn', warnning: 'warn', bloock: 'block', blok: 'block', promot: 'promote',
+  promte: 'promote', sellerz: 'sellers', merchat: 'merchant', merchnt: 'merchant',
+};
+
+const adminAiVocabulary = new Set([
+  'search', 'find', 'show', 'get', 'open', 'profile', 'seller', 'sellers', 'tailor',
+  'tailors', 'merchant', 'merchants', 'fabric', 'warn', 'block', 'promote', 'please',
+  'the', 'for', 'me', 'account', 'accounts', 'top', 'new', 'latest',   'whatsapp', 'listing', 'listings', 'post', 'posts', 'pause', 'archive', 'approve',
+  'reject', 'broadcast', 'announce', 'announcement', 'analytics', 'overview', 'stats',
+  'statistics', 'users', 'buyers', 'live', 'published', 'blocked', 'promoted',
+]);
+
+const editDistance = (left: string, right: string) => {
+  const row = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let column = 1; column <= left.length; column += 1) {
+    let previous = row[0];
+    row[0] = column;
+    for (let index = 1; index <= right.length; index += 1) {
+      const current = row[index];
+      row[index] = Math.min(
+        row[index] + 1,
+        row[index - 1] + 1,
+        previous + (left[column - 1] === right[index - 1] ? 0 : 1),
+      );
+      previous = current;
+    }
+  }
+  return row[right.length];
 };
 
 const normalizeAdminAiPrompt = (prompt: string) => prompt
@@ -555,10 +584,17 @@ const normalizeAdminAiPrompt = (prompt: string) => prompt
   .replace(/[^\p{L}\p{N}@._' -]/gu, ' ')
   .split(/\s+/)
   .filter(Boolean)
-  .map(word => adminAiCorrections[word] || word)
+  .map(word => {
+    if (adminAiCorrections[word]) return adminAiCorrections[word];
+    if (word.startsWith('@') || word.length < 4) return word;
+    const closeWord = [...adminAiVocabulary].find(candidate => (
+      editDistance(word, candidate) <= Math.max(1, Math.floor(candidate.length * 0.25))
+    ));
+    return closeWord || word;
+  })
   .join(' ');
 
-const adminAiIntentWords = new Set(['search', 'find', 'show', 'get', 'open', 'profile', 'seller', 'sellers', 'tailor', 'merchant', 'fabric', 'warn', 'block', 'please', 'the', 'for', 'me', 'account']);
+const adminAiIntentWords = adminAiVocabulary;
 
 function requireAbuseLimit(action: string) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -2467,28 +2503,164 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       }
       const normalized = normalizeAdminAiPrompt(prompt);
       const profiles = await getUsers(true);
+      const sellers = profiles.filter(profile => profile.role === 'tailor' || profile.role === 'fabric_seller');
+      const contextTargetId = typeof req.body?.context?.targetId === 'string' ? req.body.context.targetId : '';
+      const posts = await getPosts(1000);
+      const getValue = (record: Record<string, unknown>, ...keys: string[]) => keys.map(key => record[key]).find(value => value !== undefined && value !== null);
+      const requestedCount = Number(normalized.match(/\b(\d+)\b/)?.[1] || 0);
+      const isSellerQuery = normalized.includes('seller')
+        || normalized.includes('tailor')
+        || normalized.includes('merchant');
+      const isListingQuery = normalized.includes('listing') || normalized.includes('post');
+      const isAnalyticsQuery = normalized.includes('analytics')
+        || normalized.includes('overview')
+        || normalized.includes('stats')
+        || normalized.includes('statistics')
+        || normalized.includes('how many')
+        || normalized.includes('top');
+      const isSiteQuestion = /\b(what|which|who|how|where|when|why|can|is|are|tell)\b/.test(normalized);
+      if (isAnalyticsQuery && !normalized.includes('top') || (normalized.includes('overview') && !isSellerQuery)) {
+        const publishedPosts = posts.filter(post => post.status === 'published' && post.moderation_status === 'approved');
+        const metrics = {
+          totalUsers: profiles.length,
+          sellers: sellers.length,
+          tailors: sellers.filter(profile => profile.role === 'tailor').length,
+          fabricSellers: sellers.filter(profile => profile.role === 'fabric_seller').length,
+          buyers: profiles.filter(profile => profile.role === 'buyer').length,
+          blockedUsers: profiles.filter(profile => getValue(profile, 'is_blocked', 'isBlocked') === true).length,
+          promotedSellers: sellers.filter(profile => getValue(profile, 'is_promoted', 'isPromoted') === true).length,
+          publishedListings: publishedPosts.length,
+          pendingListings: posts.filter(post => post.status === 'pending_review' || post.moderation_status === 'pending').length,
+        };
+        res.json({ kind: 'analytics', message: `Here is the current marketplace overview: ${metrics.sellers} sellers, ${metrics.buyers} buyers, ${metrics.publishedListings} published listings, and ${metrics.pendingListings} awaiting review.`, metrics });
+        return;
+      }
+      if (isSiteQuestion && !isSellerQuery && !isListingQuery && !normalized.includes('warn') && !normalized.includes('block') && !normalized.includes('promote')) {
+        const publishedPosts = posts.filter(post => post.status === 'published' && post.moderation_status === 'approved');
+        const pendingListings = posts.filter(post => post.status === 'pending_review' || post.moderation_status === 'pending');
+        const answer = normalized.includes('blocked')
+          ? `There are ${profiles.filter(profile => getValue(profile, 'is_blocked', 'isBlocked') === true).length} blocked accounts.`
+          : normalized.includes('promoted')
+            ? `There are ${sellers.filter(profile => getValue(profile, 'is_promoted', 'isPromoted') === true).length} promoted seller accounts.`
+            : normalized.includes('pending') || normalized.includes('review')
+              ? `There are ${pendingListings.length} listings awaiting moderation.`
+              : normalized.includes('listing') || normalized.includes('post')
+                ? `The marketplace currently has ${publishedPosts.length} published listings.`
+                : `The site currently has ${profiles.length} users, ${sellers.length} sellers, ${profiles.filter(profile => profile.role === 'buyer').length} buyers, and ${publishedPosts.length} published listings.`;
+        res.json({ kind: 'analytics', message: answer, metrics: {
+          totalUsers: profiles.length,
+          sellers: sellers.length,
+          buyers: profiles.filter(profile => profile.role === 'buyer').length,
+          publishedListings: publishedPosts.length,
+          pendingListings: pendingListings.length,
+        } });
+        return;
+      }
+      if (isListingQuery && (normalized.includes('find') || normalized.includes('search') || normalized.includes('show'))) {
+        const queryWords = normalized.split(/\s+/)
+          .filter(word => word.length > 1 && !adminAiIntentWords.has(word) && !/^\d+$/.test(word));
+        const listingResults = posts.filter(post => {
+          const values = [post.id, post.title, post.description, post.authorName, post.authorHandle]
+            .map(value => normalizeAdminAiPrompt(String(value || '')));
+          return queryWords.length === 0 || queryWords.every(word => values.some(value => value.includes(word)));
+        }).slice(0, 10);
+        res.json({ kind: 'listing_results', message: listingResults.length ? `Found ${listingResults.length} matching listing${listingResults.length === 1 ? '' : 's'}.` : 'No matching listings found.', listingResults });
+        return;
+      }
+      if (normalized.includes('top') && isSellerQuery) {
+        const limit = Math.min(20, Math.max(1, requestedCount || 5));
+        const results = [...sellers]
+          .sort((left, right) => (Array.isArray(right.followers) ? right.followers.length : 0) - (Array.isArray(left.followers) ? left.followers.length : 0))
+          .slice(0, limit);
+        res.json({ kind: 'results', message: `Here are the top ${results.length} seller accounts by follower count.`, results });
+        return;
+      }
+      if (normalized.includes('new') && isSellerQuery) {
+        const limit = Math.min(20, Math.max(1, requestedCount || 10));
+        const results = [...sellers]
+          .sort((left, right) => new Date(String(right.createdAt || 0)).getTime() - new Date(String(left.createdAt || 0)).getTime())
+          .slice(0, limit);
+        res.json({ kind: 'results', message: `Here are the ${results.length} newest seller accounts.`, results });
+        return;
+      }
       const queryWords = normalized.split(/\s+/)
         .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
         .filter(word => word.length > 1 && !adminAiIntentWords.has(word));
       const matches = profiles.filter(profile => {
-        const values = [profile.name, profile.handle, profile.email, profile.shopName, profile.id]
+        const location = profile.location && typeof profile.location === 'object'
+          ? profile.location as Record<string, unknown>
+          : {};
+        const values = [
+          profile.name,
+          profile.handle,
+          profile.email,
+          profile.shopName,
+          profile.id,
+          location.city,
+          location.state,
+          location.country,
+        ]
           .map(value => normalizeAdminAiPrompt(String(value || '')));
         return queryWords.length > 0 && queryWords.every(word => values.some(value => value.includes(word)));
       }).slice(0, 10);
-      if (normalized.includes('search') || normalized.includes('find') || normalized.includes('show')) {
+      const opensProfile = normalized.includes('open') || normalized.includes('profile');
+      const startsWhatsApp = normalized.includes('whatsapp');
+      if (normalized.includes('search') || normalized.includes('find') || normalized.includes('show') || opensProfile || startsWhatsApp) {
         res.json({ kind: 'results', message: matches.length ? `Found ${matches.length} matching account${matches.length === 1 ? '' : 's'}.` : 'No matching accounts found.', results: matches });
         return;
       }
-      const target = matches[0];
-      if (!target) {
-        res.json({ kind: 'message', message: 'I could not identify a target account. Try: “Find tailor @handle” or include the seller name or email.' });
+      const target = matches[0] || profiles.find(profile => String(profile.id) === contextTargetId);
+      const action = normalized.includes('block')
+        ? 'block'
+        : normalized.includes('warn')
+          ? 'warn'
+          : normalized.includes('promote')
+            ? 'promote'
+            : null;
+      if (normalized.includes('broadcast') || normalized.includes('announce') || normalized.includes('announcement')) {
+        const title = prompt.replace(/.*(?:broadcast|announce|announcement)\s*/i, '').trim().slice(0, 120) || 'Atelier announcement';
+        const body = title === 'Atelier announcement' ? 'Please review the latest updates from Atelier Administration.' : title;
+        const id = randomUUID();
+        adminAiPendingActions.set(id, {
+          id,
+          actorId: req.authUser!.uid,
+          targetId: '',
+          action: 'broadcast',
+          reason: `Admin AI broadcast instruction: ${prompt}`.slice(0, 500),
+          broadcast: { target: normalized.includes('seller') || normalized.includes('tailor') || normalized.includes('merchant') ? 'sellers' : normalized.includes('buyer') ? 'buyers' : 'all', title, body },
+          expiresAt: Date.now() + 10 * 60_000,
+        });
+        res.json({ kind: 'confirmation_required', actionId: id, message: `I drafted a ${normalized.includes('seller') ? 'seller' : normalized.includes('buyer') ? 'buyer' : 'platform-wide'} broadcast titled "${title}". Confirm to send it.` });
         return;
       }
-      if (matches.length > 1 && (normalized.includes('warn') || normalized.includes('block'))) {
-        res.json({ kind: 'message', message: `I found ${matches.length} possible accounts. Please include the exact handle, email, or shop name so I do not act on the wrong account.`, results: matches });
+      if (isListingQuery && (normalized.includes('pause') || normalized.includes('archive') || normalized.includes('approve') || normalized.includes('reject'))) {
+        const listingQuery = normalized.split(/\s+/).filter(word => word.length > 1 && !adminAiIntentWords.has(word)).join(' ');
+        const listing = posts.find(post => [post.id, post.title, post.authorName, post.authorHandle].some(value => normalizeAdminAiPrompt(String(value || '')).includes(listingQuery)));
+        if (!listing) {
+          res.json({ kind: 'message', message: 'I could not identify that listing. Include its title, ID, or seller handle.' });
+          return;
+        }
+        if (!target) {
+          res.json({ kind: 'message', message: 'I could not identify a target account. Try: “Find tailor @handle” or include the seller name or email.' });
+          return;
+        }
+        if (matches.length > 1 && (normalized.includes('warn') || normalized.includes('block'))) {
+          res.json({ kind: 'message', message: `I found ${matches.length} possible accounts. Please include the exact handle, email, or shop name so I do not act on the wrong account.`, results: matches });
+          return;
+        }
+        const action = normalized.includes('block')
+          ? 'block'
+          : normalized.includes('warn')
+            ? 'warn'
+            : normalized.includes('promote')
+              ? 'promote'
+              : null;
+        const listingAction = normalized.includes('pause') ? 'pause_listing' : normalized.includes('archive') ? 'archive_listing' : normalized.includes('approve') ? 'approve_listing' : 'reject_listing';
+        const id = randomUUID();
+        adminAiPendingActions.set(id, { id, actorId: req.authUser!.uid, targetId: '', listingId: String(listing.id), action: listingAction, reason: `Admin AI listing instruction: ${prompt}`.slice(0, 500), expiresAt: Date.now() + 10 * 60_000 });
+        res.json({ kind: 'confirmation_required', actionId: id, message: `I am ready to ${listingAction.replace('_listing', ' ')} “${listing.title}” by ${listing.authorName || listing.authorHandle}. Confirm to execute this listing action.` });
         return;
       }
-      const action = normalized.includes('block') ? 'block' : normalized.includes('warn') ? 'warn' : null;
       if (!action) {
         res.json({ kind: 'results', message: `I found ${target.name || target.handle || target.email}. Ask me to search, warn, or block this account.`, results: [target] });
         return;
@@ -2510,6 +2682,78 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         return;
       }
       adminAiPendingActions.delete(actionId);
+      if (pending.action === 'broadcast') {
+        const broadcast = pending.broadcast;
+        if (!broadcast) {
+          res.status(400).json({ error: 'This broadcast preview is incomplete. Run the instruction again.' });
+          return;
+        }
+        const recipients = supabaseDataEnabled
+          ? (await getUsers()).filter(profile => {
+              const role = String(profile.role || '');
+              return broadcast.target === 'all'
+                || (broadcast.target === 'sellers' && (role === 'tailor' || role === 'fabric_seller'))
+                || (broadcast.target === 'buyers' && role === 'buyer');
+            })
+          : (await firestore.collection('profiles').limit(500).get()).docs.filter(doc => {
+              const role = doc.data().role;
+              return broadcast.target === 'all'
+                || (broadcast.target === 'sellers' && (role === 'tailor' || role === 'fabric_seller'))
+                || (broadcast.target === 'buyers' && role === 'buyer');
+            });
+        const createdAt = new Date().toISOString();
+        if (supabaseDataEnabled) {
+          await createBroadcast(recipients.map(profile => ({
+            user_id: String(profile.id),
+            title: broadcast.title,
+            body: broadcast.body,
+            type: 'system',
+            created_at: createdAt,
+            is_read: false,
+            action_url: '/',
+          })));
+          await Promise.all(recipients.map(profile => sendTopicPush(`user_${String(profile.id)}`, broadcast.title, broadcast.body.slice(0, 180), '/', 'broadcast')));
+        } else {
+          const batch = firestore.batch();
+          recipients.forEach(doc => {
+            const recipientId = String(doc.id);
+            batch.set(firestore.collection('profiles').doc(recipientId).collection('notifications').doc(), {
+              userId: recipientId,
+              title: broadcast.title,
+              body: broadcast.body,
+              type: 'system',
+              createdAt,
+              isRead: false,
+              actionUrl: '/',
+            });
+          });
+          await batch.commit();
+          await Promise.all(recipients.map(doc => sendTopicPush(`user_${String(doc.id)}`, broadcast.title, broadcast.body.slice(0, 180), '/', 'broadcast')));
+        }
+        res.json({ ok: true, message: `Broadcast sent to ${recipients.length} ${broadcast.target === 'all' ? 'users' : broadcast.target}.` });
+        return;
+      }
+      if (pending.listingId) {
+        const listing = await getPost(pending.listingId);
+        if (!listing) {
+          res.status(404).json({ error: 'The listing no longer exists.' });
+          return;
+        }
+        const timestamp = new Date().toISOString();
+        const values = pending.action === 'pause_listing'
+          ? { status: 'paused', updated_at: timestamp }
+          : pending.action === 'archive_listing'
+            ? { status: 'archived', updated_at: timestamp }
+            : pending.action === 'approve_listing'
+              ? { status: 'published', moderation_status: 'approved', moderation_note: '', published_at: timestamp, updated_at: timestamp }
+              : { status: 'rejected', moderation_status: 'rejected', moderation_note: pending.reason, published_at: null, updated_at: timestamp };
+        const updated = await updateListing(pending.listingId, values);
+        await recordListingChange(pending.listingId, pending.actorId, pending.action, { reason: pending.reason });
+        invalidatePublicCaches();
+        const verb = pending.action.replace('_listing', '');
+        res.json({ ok: true, message: `${verb.charAt(0).toUpperCase() + verb.slice(1)} "${String(updated.title || 'listing')}" successfully.` });
+        return;
+      }
       const profile = await readProfile(pending.targetId);
       if (!profile || (profile.role !== 'tailor' && profile.role !== 'fabric_seller')) {
         res.status(404).json({ error: 'The seller account no longer exists or is no longer eligible.' });
@@ -2517,10 +2761,12 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       }
       const updates = pending.action === 'block'
         ? { isBlocked: true, warningNote: pending.reason }
-        : { isWarned: true, warningNote: pending.reason };
+        : pending.action === 'warn'
+          ? { isWarned: true, warningNote: pending.reason }
+          : { isPromoted: true };
       await writeProfile(pending.targetId, updates);
       if (pending.action === 'block') await adminAuth.updateUser(pending.targetId, { disabled: true });
-      res.json({ ok: true, message: `${pending.action === 'block' ? 'Blocked' : 'Warned'} ${profile.name || profile.handle || 'seller'} successfully.` });
+      res.json({ ok: true, message: `${pending.action === 'block' ? 'Blocked' : pending.action === 'warn' ? 'Warned' : 'Promoted'} ${profile.name || profile.handle || 'seller'} successfully.` });
     });
     res.json(users);
   } catch (error) {

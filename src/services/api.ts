@@ -216,7 +216,15 @@ export const api = {
   deleteSeller: (userId: string) => request<void>(`/api/admin/sellers/${userId}`, { method: 'DELETE' }),
   deleteMyAccount: () => request<void>('/api/profile', { method: 'DELETE' }),
   setUserBlocked: (userId: string, blocked: boolean, reason: string) => request<{ ok: boolean; blocked: boolean }>(`/api/admin/users/${userId}/block`, { method: 'POST', body: JSON.stringify({ blocked, reason }) }),
-  adminAiCommand: (prompt: string) => request<{ kind: 'results' | 'message' | 'confirmation_required'; message: string; actionId?: string; target?: User; results?: User[] }>('/api/admin/ai/command', { method: 'POST', body: JSON.stringify({ prompt }) }),
+  adminAiCommand: (prompt: string, contextTargetId?: string) => request<{
+    kind: 'results' | 'message' | 'confirmation_required' | 'analytics' | 'listing_results';
+    message: string;
+    actionId?: string;
+    target?: User;
+    results?: User[];
+    listingResults?: ClothPost[];
+    metrics?: Record<string, number>;
+  }>('/api/admin/ai/command', { method: 'POST', body: JSON.stringify({ prompt, context: contextTargetId ? { targetId: contextTargetId } : undefined }) }),
   adminAiConfirm: (actionId: string) => request<{ ok: boolean; message: string }>('/api/admin/ai/confirm', { method: 'POST', body: JSON.stringify({ actionId }) }),
   getPosts: (search?: string) => request<ClothPost[]>(search ? `/api/posts?q=${encodeURIComponent(search)}` : '/api/posts'),
   refreshPosts: () => {
