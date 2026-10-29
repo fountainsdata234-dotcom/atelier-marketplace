@@ -44,7 +44,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [planSaveStatus, setPlanSaveStatus] = useState<string | null>(null);
 
   // Tab State: 'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'
-  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins'>('sellers');
+  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai'>('sellers');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiReply, setAiReply] = useState<string | null>(null);
+  const [aiActionId, setAiActionId] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
   const [moderationListings, setModerationListings] = useState<ClothPost[]>([]);
   const [moderationStatus, setModerationStatus] = useState<string | null>(null);
   const [listingReports, setListingReports] = useState<ListingReport[]>([]);
@@ -113,6 +117,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAbuseQueueStatus(status === 'investigating' ? 'Signal marked for investigation.' : 'Signal review decision recorded.');
     } catch (error) {
       setAbuseQueueStatus(safeCustomerErrorMessage(error, "The activity report couldn't be updated. Please try again."));
+    }
+  };
+
+  const runAdminAi = async () => {
+    if (!isSuperAdmin || !aiPrompt.trim()) return;
+    setAiBusy(true);
+    setAiReply(null);
+    setAiActionId(null);
+    try {
+      const result = await api.adminAiCommand(aiPrompt.trim());
+      setAiReply(result.message);
+      setAiActionId(result.actionId || null);
+    } catch (error) {
+      setAiReply(safeCustomerErrorMessage(error, 'The admin operator could not process that instruction.'));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const confirmAdminAi = async () => {
+    if (!aiActionId) return;
+    setAiBusy(true);
+    try {
+      const result = await api.adminAiConfirm(aiActionId);
+      setAiReply(result.message);
+      setAiActionId(null);
+    } catch (error) {
+      setAiReply(safeCustomerErrorMessage(error, 'The approved admin action could not be completed.'));
+    } finally {
+      setAiBusy(false);
     }
   };
 
@@ -459,7 +493,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             Admin Management ({adminUsers.length})
           </button>
+          {isSuperAdmin && (
+            <button onClick={() => setActiveTab('ai')} className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${activeTab === 'ai' ? 'bg-amber-500 text-neutral-950 font-semibold shadow' : 'bg-neutral-800/40 text-neutral-400 hover:text-white'}`}>
+              AI operator
+            </button>
+          )}
         </div>
+
+        {activeTab === 'ai' && isSuperAdmin && (
+          <section className={`mt-4 rounded-3xl border p-6 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
+            <div className="flex items-start gap-3">
+              <Sparkles className="mt-0.5 h-5 w-5 text-amber-400" />
+              <div>
+                <h2 className="text-lg font-bold">Super Admin AI operator</h2>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-400">Search and operate the site through controlled admin tools. Every warning or block requires your confirmation and is audit-safe.</p>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <input value={aiPrompt} onChange={event => setAiPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runAdminAi(); }} placeholder="Find tailor @handle, or warn @handle" className="min-h-11 min-w-0 flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 text-sm text-white" />
+              <button type="button" onClick={() => void runAdminAi()} disabled={aiBusy || !aiPrompt.trim()} className="rounded-xl bg-amber-400 px-4 text-xs font-bold text-neutral-950 disabled:opacity-50">{aiBusy ? 'Working…' : 'Run'}</button>
+            </div>
+            {aiReply && <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950/30 p-4 text-sm text-neutral-200">{aiReply}{aiActionId && <button type="button" onClick={() => void confirmAdminAi()} disabled={aiBusy} className="mt-3 block rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Confirm and execute</button>}</div>}
+          </section>
+        )}
       </div>
 
       {/* TAB 1: Tailors & Fabric Sellers Management */}

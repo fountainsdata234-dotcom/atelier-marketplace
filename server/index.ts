@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { getMessaging } from 'firebase-admin/messaging';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -530,8 +530,19 @@ function requireSuperAdmin(req: AuthenticatedRequest, res: Response, next: NextF
     res.status(403).json({ error: 'Primary administrator access required.' });
     return;
   }
+
   next();
 }
+
+type AdminAiPendingAction = {
+  id: string;
+  expiresAt: number;
+  actorId: string;
+  targetId: string;
+  action: 'block' | 'warn';
+  reason: string;
+};
+const adminAiPendingActions = new Map<string, AdminAiPendingAction>();
 
 function requireAbuseLimit(action: string) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -1507,7 +1518,7 @@ app.put('/api/profile', requireAuth, requireActiveAccount, async (req: Authentic
     delete profile.location;
     if (requestedAddress !== undefined) {
       profile.location = {
-        ...existingProfile.location,
+        ...(existingProfile.location && typeof existingProfile.location === 'object' ? existingProfile.location : {}),
         businessAddress: requestedAddress || undefined,
       };
     }
@@ -2430,6 +2441,63 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         createdAt: String(profile.created_at || new Date().toISOString()), isSuperAdmin: profile.is_super_admin === true,
         addedByEmail: String(profile.added_by_email || ''),
       };
+    });
+
+    app.post('/api/admin/ai/command', requireAuth, requireAdmin, requireSuperAdmin, async (req: AuthenticatedRequest, res) => {
+      const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim().slice(0, 500) : '';
+      if (!prompt) {
+        res.status(400).json({ error: 'Enter an instruction for the admin operator.' });
+        return;
+      }
+      const normalized = prompt.toLowerCase();
+      const profiles = await getUsers(true);
+      const matchTerm = prompt.match(/(?:@|for\s+|user\s+)([a-z0-9._@-]{2,80})/i)?.[1]?.toLowerCase();
+      const matches = profiles.filter(profile => {
+        const values = [profile.name, profile.handle, profile.email, profile.shopName, profile.id].map(value => String(value || '').toLowerCase());
+        return matchTerm ? values.some(value => value.includes(matchTerm)) : false;
+      }).slice(0, 10);
+      if (normalized.includes('search') || normalized.includes('find') || normalized.includes('show')) {
+        res.json({ kind: 'results', message: matches.length ? `Found ${matches.length} matching account${matches.length === 1 ? '' : 's'}.` : 'No matching accounts found.', results: matches });
+        return;
+      }
+      const target = matches[0];
+      if (!target) {
+        res.json({ kind: 'message', message: 'I could not identify a target account. Try: “Find tailor @handle” or include the seller name or email.' });
+        return;
+      }
+      const action = normalized.includes('block') ? 'block' : normalized.includes('warn') ? 'warn' : null;
+      if (!action) {
+        res.json({ kind: 'results', message: `I found ${target.name || target.handle || target.email}. Ask me to search, warn, or block this account.`, results: [target] });
+        return;
+      }
+      if (target.role !== 'tailor' && target.role !== 'fabric_seller') {
+        res.status(400).json({ error: 'The AI operator can only warn or block seller accounts.' });
+        return;
+      }
+      const id = randomUUID();
+      adminAiPendingActions.set(id, { id, actorId: req.authUser!.uid, targetId: String(target.id), action, reason: `Admin AI instruction: ${prompt}`.slice(0, 500), expiresAt: Date.now() + 10 * 60_000 });
+      res.json({ kind: 'confirmation_required', actionId: id, message: `I am ready to ${action} ${target.name || target.handle || target.email}. Confirm to execute this action.`, target });
+    });
+
+    app.post('/api/admin/ai/confirm', requireAuth, requireAdmin, requireSuperAdmin, async (req: AuthenticatedRequest, res) => {
+      const actionId = typeof req.body?.actionId === 'string' ? req.body.actionId : '';
+      const pending = adminAiPendingActions.get(actionId);
+      if (!pending || pending.expiresAt < Date.now() || pending.actorId !== req.authUser!.uid) {
+        res.status(400).json({ error: 'This AI action preview expired. Run the instruction again.' });
+        return;
+      }
+      adminAiPendingActions.delete(actionId);
+      const profile = await readProfile(pending.targetId);
+      if (!profile || (profile.role !== 'tailor' && profile.role !== 'fabric_seller')) {
+        res.status(404).json({ error: 'The seller account no longer exists or is no longer eligible.' });
+        return;
+      }
+      const updates = pending.action === 'block'
+        ? { isBlocked: true, warningNote: pending.reason }
+        : { isWarned: true, warningNote: pending.reason };
+      await writeProfile(pending.targetId, updates);
+      if (pending.action === 'block') await adminAuth.updateUser(pending.targetId, { disabled: true });
+      res.json({ ok: true, message: `${pending.action === 'block' ? 'Blocked' : 'Warned'} ${profile.name || profile.handle || 'seller'} successfully.` });
     });
     res.json(users);
   } catch (error) {
