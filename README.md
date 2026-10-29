@@ -69,7 +69,7 @@ It is especially useful for communities where shoppers want to:
    `npm run lint`
    `npm run server:check`
 
-For the Render API deployment, set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the service environment. The Vercel frontend uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; its `/api` rewrite forwards API requests to Render.
+For the Render API deployment, set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, and `GEMINI_MODEL` in the service environment. The Vercel frontend uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; its `/api` rewrite forwards API requests to Render. If the Vercel project uses a direct API URL, set the production-only `VITE_API_URL` to the Render service URL and redeploy the frontend.
 
 New accounts are directed to the sign-in form after creation. To allow immediate sign-in without an email confirmation step, turn off **Confirm email** in the Supabase project's Authentication email-provider settings. This is a Supabase project setting and cannot be changed safely by the public client application.
 
