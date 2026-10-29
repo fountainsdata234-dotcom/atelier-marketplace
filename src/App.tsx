@@ -28,6 +28,7 @@ import { SellerProfilePage } from './components/SellerProfilePage';
 import { api } from './services/api';
 import { buildPostShareUrl, buildSellerShareUrl, getHandleSlug } from './utils/profile';
 import { buildWhatsAppUrl } from './utils/whatsapp';
+import { animateActionFeedback } from './utils/actionFeedback';
 
 const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
   '/': 'landing',
@@ -102,7 +103,7 @@ export default function App() {
   const isAndroidDevice = /android/i.test(navigator.userAgent);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [imageViewer, setImageViewer] = useState<{ src: string; alt: string; isPost: boolean } | null>(null);
+  const [imageViewer, setImageViewer] = useState<{ src: string; alt: string; isPost: boolean; postId?: string } | null>(null);
   const [imageViewport, setImageViewport] = useState({ scale: 1, x: 0, y: 0 });
   const [isImageDownloading, setIsImageDownloading] = useState(false);
   const [imageDownloadError, setImageDownloadError] = useState('');
@@ -112,10 +113,10 @@ export default function App() {
   const imagePinchStart = useRef<{ distance: number; scale: number } | null>(null);
   const pullStartY = useRef<number | null>(null);
 
-  const openImageViewer = useCallback((src: string, alt: string, isPost: boolean) => {
+  const openImageViewer = useCallback((src: string, alt: string, isPost: boolean, postId?: string) => {
     setImageViewport({ scale: 1, x: 0, y: 0 });
     setImageDownloadError('');
-    setImageViewer({ src, alt, isPost });
+    setImageViewer({ src, alt, isPost, postId });
   }, []);
 
   // Theme state: default to sophisticated dark luxury aesthetic with full light toggle
@@ -162,10 +163,12 @@ export default function App() {
 
       event.preventDefault();
       event.stopPropagation();
+      const listing = image.closest<HTMLElement>('[data-marketplace-listing-id]');
       openImageViewer(
         src,
         image.alt || image.closest('button')?.getAttribute('aria-label') || 'Fabsattire photo',
         Boolean(image.closest('[data-post-image]')),
+        listing?.dataset.marketplaceListingId,
       );
     };
 
@@ -219,6 +222,16 @@ export default function App() {
   };
 
   const handleImagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse') {
+      event.preventDefault();
+      if (event.button === 2) {
+        zoomImageAtPoint(event.clientX, event.clientY, Math.min(5, imageViewport.scale * 1.2));
+      } else if (event.button === 0) {
+        zoomImageAtPoint(event.clientX, event.clientY, Math.max(1, imageViewport.scale / 1.2));
+      }
+      return;
+    }
+
     event.currentTarget.setPointerCapture(event.pointerId);
     imagePointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (imagePointers.current.size === 2) {
@@ -278,14 +291,19 @@ export default function App() {
     zoomImageAtPoint(event.clientX, event.clientY, scale);
   };
 
-  const handleImageDownload = async () => {
+  const handleImageDownload = async (button: HTMLButtonElement) => {
     if (!imageViewer || isImageDownloading) return;
     setIsImageDownloading(true);
     setImageDownloadError('');
     try {
-      const imageResponse = await fetch(imageViewer.src, { mode: 'cors', credentials: 'omit' });
-      if (!imageResponse.ok) throw new Error(`Image download failed with HTTP ${imageResponse.status}.`);
-      let downloadBlob = await imageResponse.blob();
+      let downloadBlob: Blob;
+      if (imageViewer.postId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(imageViewer.postId)) {
+        downloadBlob = await api.downloadMarketplaceImage(imageViewer.postId);
+      } else {
+        const imageResponse = await fetch(imageViewer.src, { mode: 'cors', credentials: 'omit' });
+        if (!imageResponse.ok) throw new Error(`Image download failed with HTTP ${imageResponse.status}.`);
+        downloadBlob = await imageResponse.blob();
+      }
       let extension = downloadBlob.type === 'image/webp' ? 'webp' : downloadBlob.type === 'image/jpeg' ? 'jpg' : 'png';
 
       if (imageViewer.isPost) {
@@ -326,7 +344,8 @@ export default function App() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+      animateActionFeedback(button, 'download');
     } catch (error) {
       console.error('The selected image could not be downloaded.', error);
       setImageDownloadError('Could not download this image. Please check your connection and try again.');
@@ -1445,7 +1464,7 @@ export default function App() {
             <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={() => void handleImageDownload()}
+                onClick={event => void handleImageDownload(event.currentTarget)}
                 disabled={isImageDownloading}
                 aria-label={imageViewer.isPost ? 'Download watermarked post image' : 'Download image'}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white transition hover:bg-white/20 disabled:cursor-wait disabled:opacity-60"
@@ -1464,13 +1483,13 @@ export default function App() {
           </div>
           <div
             ref={imageStageRef}
-            className="flex min-h-0 flex-1 touch-none select-none items-center justify-center overflow-hidden py-3"
+            className="relative flex min-h-0 flex-1 touch-none select-none items-center justify-center overflow-hidden py-3"
             onPointerDown={handleImagePointerDown}
             onPointerMove={handleImagePointerMove}
             onPointerUp={handleImagePointerUp}
             onPointerCancel={handleImagePointerUp}
             onWheel={handleImageWheel}
-            onDoubleClick={event => zoomImageAtPoint(event.clientX, event.clientY, imageViewport.scale > 1 ? 1 : 2.5)}
+            onContextMenu={event => event.preventDefault()}
             onClick={event => {
               if (event.target === event.currentTarget) setImageViewer(null);
             }}
@@ -1486,6 +1505,9 @@ export default function App() {
                 willChange: 'transform',
               }}
             />
+            <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1.5 text-center text-[10px] text-white/65 backdrop-blur-sm">
+              Right-click to zoom in · left-click to zoom out · pinch on mobile
+            </span>
           </div>
           {imageDownloadError && <p className="shrink-0 text-center text-xs text-red-300" role="alert">{imageDownloadError}</p>}
           <div className="flex shrink-0 items-center justify-center gap-3 pt-2">

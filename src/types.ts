@@ -8,6 +8,21 @@ export interface UserLocation {
   city: string;
   lat?: number;
   lng?: number;
+  businessAddress?: string;
+  accuracyMeters?: number;
+  verificationStatus?: 'needs_setup' | 'needs_confirmation' | 'seller_confirmed';
+  locationSource?: 'device_geolocation';
+  confirmedAt?: string;
+}
+
+export interface NearbySellerMatch {
+  sellerId: string;
+  distanceKm: number;
+}
+
+export interface ReverseGeocodedBusinessLocation {
+  location: UserLocation;
+  confirmationToken: string;
 }
 
 export interface PricingBreakdown {

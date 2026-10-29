@@ -1,4 +1,4 @@
-import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences, NearbySellerMatch, ReverseGeocodedBusinessLocation } from '../types';
 
 import { getAuthToken, isSupabaseAuthReady } from './auth';
 import { customerMessageForHttpError, customerMessageForNetworkError, safeCustomerErrorMessage } from '../utils/customerMessages';
@@ -173,6 +173,18 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ locations }),
   }),
+  reverseGeocodeBusinessLocation: (coordinates: { lat: number; lng: number; accuracyMeters: number }) => request<ReverseGeocodedBusinessLocation>('/api/location/reverse-business', {
+    method: 'POST',
+    body: JSON.stringify(coordinates),
+  }),
+  saveBusinessLocation: (confirmationToken: string, businessAddress: string) => request<UserLocation>('/api/profile/business-location', {
+    method: 'PUT',
+    body: JSON.stringify({ confirmationToken, businessAddress, confirmBusinessLocation: true }),
+  }),
+  getNearbySellers: (coordinates: { lat: number; lng: number }, radiusKm: number) => {
+    const query = new URLSearchParams({ lat: String(coordinates.lat), lng: String(coordinates.lng), radiusKm: String(radiusKm) });
+    return request<NearbySellerMatch[]>(`/api/sellers/nearby?${query}`);
+  },
   getLocationRegions: (countryCode: string) => request<LocationRegion[]>(`/api/location/countries/${encodeURIComponent(countryCode)}/states`),
   searchLocationCities: (countryCode: string, regionCode: string, query: string) => {
     const search = new URLSearchParams({ q: query });

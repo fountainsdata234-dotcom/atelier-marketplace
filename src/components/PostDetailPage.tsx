@@ -134,6 +134,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
             <button
               type="button"
               onClick={() => setIsImageExpanded(true)}
+              data-marketplace-listing-id={post.id}
               aria-label={`View ${post.imageAlt || post.title} full screen`}
               className="block h-full min-h-[320px] w-full cursor-zoom-in sm:min-h-[480px] lg:min-h-[620px]"
             >

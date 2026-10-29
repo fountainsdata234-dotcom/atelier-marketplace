@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sun, Moon, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw, Share2, Info, Mail } from 'lucide-react';
+import { Sun, Moon, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw, Share2, Info, Mail, House, UserRound } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -276,29 +276,29 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
             {isPublicLanding ? (
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item">Overview</button>
+              <div className="mobile-nav-grid grid grid-cols-2 gap-2 text-xs">
+                <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item"><House className="h-4 w-4" />Overview</button>
                 <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
                 <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
                 <button type="button" onClick={() => navigate('about')} className="mobile-nav-item"><Info className="h-4 w-4" />About</button>
                 <button type="button" onClick={() => navigate('contact')} className="mobile-nav-item"><Mail className="h-4 w-4" />Contact</button>
-                <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item text-amber-300">Sign in</button>
+                <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item text-amber-300"><UserRound className="h-4 w-4" />Sign in</button>
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {!currentUser && <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item">Overview</button>}
+                <div className="mobile-nav-grid grid grid-cols-2 gap-2 text-xs">
+                  {!currentUser && <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item"><House className="h-4 w-4" />Overview</button>}
                   <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
                   <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
                   {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
                   {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
                   {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}
                 </div>
-                <div className="grid grid-cols-4 gap-2 border-t border-neutral-800 pt-2">
-                  <button type="button" onClick={() => { setMobileMenuOpen(false); onRefresh(); }} disabled={isRefreshing} className="mobile-nav-item justify-center"><RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />Refresh</button>
-                  <button type="button" onClick={onToggleTheme} className="mobile-nav-item justify-center"><span>{isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}Theme</span></button>
-                  <button type="button" onClick={() => { setMobileMenuOpen(false); onShare(); }} className="mobile-nav-item justify-center"><Share2 className="h-4 w-4" />Share</button>
-                  {currentUser ? <button type="button" onClick={() => { setMobileMenuOpen(false); onLogout(); }} className="mobile-nav-item justify-center text-red-300"><LogOut className="h-4 w-4" />Logout</button> : <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item justify-center text-amber-300">Sign in</button>}
+                <div className="mobile-nav-actions grid grid-cols-2 gap-2 border-t border-neutral-800 pt-2">
+                  <button type="button" onClick={() => { setMobileMenuOpen(false); onRefresh(); }} disabled={isRefreshing} className="mobile-nav-item"><RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />Refresh</button>
+                  <button type="button" onClick={onToggleTheme} className="mobile-nav-item">{isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}Theme</button>
+                  <button type="button" onClick={() => { setMobileMenuOpen(false); onShare(); }} className="mobile-nav-item"><Share2 className="h-4 w-4" />Share</button>
+                  {currentUser ? <button type="button" onClick={() => { setMobileMenuOpen(false); onLogout(); }} className="mobile-nav-item text-red-300"><LogOut className="h-4 w-4" />Logout</button> : <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item text-amber-300"><UserRound className="h-4 w-4" />Sign in</button>}
                 </div>
               </div>
             )}

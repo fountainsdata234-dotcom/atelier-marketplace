@@ -376,8 +376,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       currency: selectedCurrency,
       state: currentStateObj?.code === 'ALL' ? '' : currentStateObj?.name || '',
       city: selectedCity?.name || citySearch.trim(),
-      ...(selectedCity?.latitude !== undefined ? { lat: selectedCity.latitude } : {}),
-      ...(selectedCity?.longitude !== undefined ? { lng: selectedCity.longitude } : {}),
     };
     const signupProfile = {
       role,

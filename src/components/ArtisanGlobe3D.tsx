@@ -58,7 +58,7 @@ const GlobeGrid: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
 
 const Earth: React.FC<{ isMobile: boolean; onReady: () => void }> = ({ isMobile, onReady }) => {
   const texturePaths = isMobile
-    ? ['/textures/earth/earth_atmos_2048.jpg', '/textures/earth/earth_lights_2048.png']
+    ? ['/textures/earth/mobile/earth_atmos_1024.webp', '/textures/earth/mobile/earth_lights_1024.webp']
     : ['/textures/earth/earth_atmos_2048.jpg', '/textures/earth/earth_normal_2048.jpg', '/textures/earth/earth_specular_2048.jpg', '/textures/earth/earth_lights_2048.png'];
   const textures = useLoader(THREE.TextureLoader, texturePaths);
   const surfaceMap = textures[0];
@@ -356,10 +356,10 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, showArtisanMarkers, s
   );
 };
 
-const GlobeFallback: React.FC<Pick<ArtisanGlobe3DProps, 'artisans' | 'showArtisanMarkers' | 'selectedArtisanId' | 'onSelectArtisan'>> = ({ artisans, showArtisanMarkers, selectedArtisanId, onSelectArtisan }) => (
+const GlobeFallback: React.FC<Pick<ArtisanGlobe3DProps, 'artisans' | 'showArtisanMarkers' | 'selectedArtisanId' | 'onSelectArtisan'> & { isMobile: boolean }> = ({ artisans, showArtisanMarkers, selectedArtisanId, onSelectArtisan, isMobile }) => (
   <div className="globe-webgl-fallback" role="group" aria-label="Earth map with artisan locations">
     <div className="globe-fallback-sphere">
-      <img src="/textures/earth/earth_atmos_2048.jpg" alt="" />
+      <img src={isMobile ? '/textures/earth/mobile/earth_atmos_1024.webp' : '/textures/earth/earth_atmos_2048.jpg'} alt="" />
       {showArtisanMarkers && artisans.map((artisan, index) => {
         const latitude = THREE.MathUtils.degToRad(artisan.location.lat ?? 0);
         const longitude = THREE.MathUtils.degToRad(artisan.location.lng ?? 0);
@@ -439,11 +439,11 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, showAr
     <div className={`artisan-globe-3d ${isDarkMode ? 'is-dark' : 'is-light'}${isWebGlUnavailable ? ' webgl-unavailable' : ''}`} aria-label="Interactive artisan globe" aria-busy={!isEarthReady && !isWebGlUnavailable}>
       <Canvas
         key={isMobile ? 'mobile' : 'desktop'}
-        camera={{ position: [0, 0, 8.2], fov: 34 }}
+        camera={{ position: [0, 0, isMobile ? 6.8 : 8.2], fov: 34 }}
         frameloop="always"
         dpr={isMobile ? 1 : [1, 1.2]}
         gl={{ antialias: !isMobile, alpha: true }}
-        fallback={<GlobeFallback artisans={artisans} showArtisanMarkers={showArtisanMarkers} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
+        fallback={<GlobeFallback artisans={artisans} showArtisanMarkers={showArtisanMarkers} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} isMobile={isMobile} />}
         onCreated={({ gl }) => {
           gl.setClearColor('#000000', 0);
           gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.2));
@@ -473,7 +473,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, showAr
           onEarthReady={handleEarthReady}
         />
       </Canvas>
-      {isWebGlUnavailable && <GlobeFallback artisans={artisans} showArtisanMarkers={showArtisanMarkers} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} />}
+      {isWebGlUnavailable && <GlobeFallback artisans={artisans} showArtisanMarkers={showArtisanMarkers} selectedArtisanId={selectedArtisanId} onSelectArtisan={onSelectArtisan} isMobile={isMobile} />}
       {!isEarthReady && !isWebGlUnavailable && <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#10151b]/90 px-5 text-center" role="status" aria-live="polite"><span className="h-10 w-10 animate-spin rounded-full border-2 border-amber-300/25 border-t-amber-300" /><strong className="text-sm text-white">Mapping artisan locations</strong><span className="text-xs text-neutral-300">Locating the global signal field.</span></div>}
       <div className="globe-legend" aria-hidden="true">
         <span><Scissors /> Tailors</span>

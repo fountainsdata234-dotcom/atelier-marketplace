@@ -7,6 +7,7 @@ import { uploadUserImage } from '../services/firebase';
 import { getAuthUserId, signOutAuth } from '../services/auth';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
+import { SellerLocationSetup } from './SellerLocationSetup';
 
 interface ProfilePageProps {
   currentUser: User;
@@ -118,6 +119,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <button type="button" onClick={() => onNavigate('collections')} className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition hover:border-amber-500/50 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}><Bookmark className="h-5 w-5 text-amber-400" /><span><strong className="block text-sm">Saved collection</strong><small className="text-xs text-neutral-400">View your saved designs and inspiration.</small></span></button>
           <button type="button" onClick={() => onNavigate('marketplace')} className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition hover:border-amber-500/50 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}><UserRound className="h-5 w-5 text-amber-400" /><span><strong className="block text-sm">Continue exploring</strong><small className="text-xs text-neutral-400">Discover tailors and fabric sellers.</small></span></button>
         </div>
+
+        <SellerLocationSetup currentUser={currentUser} isDarkMode={isDarkMode} />
 
         {currentUser.isWarned && currentUser.warningNote && (
           <section className="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4" aria-labelledby="account-alert-title">

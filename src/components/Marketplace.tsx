@@ -11,6 +11,7 @@ import { matchesLocationFilter } from '../utils/artisanFilters';
 import { rankMarketplaceListings } from '../utils/marketplaceRanking';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
+import { animateActionFeedback } from '../utils/actionFeedback';
 import { SearchableLocationField } from './SearchableLocationField';
 import { PostImage } from './PostImage';
 import { useTypingText } from '../hooks/useTypingText';
@@ -805,7 +806,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   };
 
   // Handle Save Picture
-  const handleSave = (post: ClothPost) => {
+  const handleSave = (post: ClothPost, button: HTMLButtonElement) => {
     if (!currentUser) {
       onOpenAuth();
       return;
@@ -814,11 +815,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     actionLocks.current.add(post.id);
     setPendingActions(new Set(actionLocks.current));
 
-    const previousPost = feedPosts.find(item => item.id === post.id);
+    const previousPost = feedPosts.find(item => item.id === post.id) || post;
     const wasSaved = Boolean(previousPost?.saves.includes(currentUser.id));
     const previousSavedPhoto = storageService.getSavedPhotos().find(photo => photo.postId === post.id);
-    const result = storageService.toggleSavePost(post.id, currentUser.id);
-    if (result.isSaved) storageService.addSavedPhoto({ url: post.imageUrl, title: post.title, postId: post.id });
+    const nextSaves = wasSaved
+      ? previousPost.saves.filter(userId => userId !== currentUser.id)
+      : [...previousPost.saves, currentUser.id];
+    storageService.reconcilePostEngagement(post.id, { saves: nextSaves });
+    if (wasSaved) {
+      if (previousSavedPhoto) storageService.removeSavedPhoto(previousSavedPhoto.id);
+    } else {
+      storageService.addSavedPhoto({ url: post.imageUrl, title: post.title, postId: post.id });
+    }
     setFeedPosts(current => current.map(item => {
       if (item.id !== post.id) return item;
       const saves = item.saves.filter(userId => userId !== currentUser.id);
@@ -829,13 +837,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
     api.toggleSave(post.id)
       .then(serverResult => {
-        const saves = feedPosts.find(item => item.id === post.id)?.saves.filter(userId => userId !== currentUser.id) || [];
+        const saves = previousPost.saves.filter(userId => userId !== currentUser.id);
         if (serverResult.isSaved) saves.push(currentUser.id);
-        setFeedPosts(current => current.map(item => item.id === post.id
-          ? { ...item, saves, saveCount: serverResult.savesCount }
-          : item));
+        setFeedPosts(current => current.map(item => {
+          if (item.id !== post.id) return item;
+          const itemSaves = item.saves.filter(userId => userId !== currentUser.id);
+          if (serverResult.isSaved) itemSaves.push(currentUser.id);
+          return { ...item, saves: itemSaves, saveCount: serverResult.savesCount };
+        }));
         storageService.reconcilePostEngagement(post.id, { saves });
         if (serverResult.isSaved && !wasSaved) {
+          storageService.addSavedPhoto({ url: post.imageUrl, title: post.title, postId: post.id });
+          animateActionFeedback(button, 'save');
           recordRecommendationSignal(post.id, 'SAVE');
           recordSearchEvent('save', post.id);
         }
@@ -843,17 +856,21 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         if (!serverResult.isSaved) {
           const saved = savedPhotos.find(photo => photo.postId === post.id);
           if (saved) storageService.removeSavedPhoto(saved.id);
+        } else if (!savedPhotos.some(photo => photo.postId === post.id)) {
+          storageService.addSavedPhoto({ url: post.imageUrl, title: post.title, postId: post.id });
         }
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
       .catch(error => {
         setLocationStatus(safeCustomerErrorMessage(error, "We couldn't update your saved listings. Please try again."));
-        storageService.toggleSavePost(post.id, currentUser.id);
-        if (result.isSaved) {
+        storageService.reconcilePostEngagement(post.id, { saves: previousPost.saves });
+        if (!wasSaved) {
           const saved = storageService.getSavedPhotos().find(photo => photo.postId === post.id);
           if (saved) storageService.removeSavedPhoto(saved.id);
         } else if (previousSavedPhoto) {
           storageService.addSavedPhoto({ url: previousSavedPhoto.url, title: previousSavedPhoto.title, postId: previousSavedPhoto.postId });
+        } else if (wasSaved) {
+          storageService.addSavedPhoto({ url: post.imageUrl, title: post.title, postId: post.id });
         }
         setFeedPosts(current => current.map(item => item.id === post.id
           ? { ...item, saves: previousPost?.saves || [], saveCount: previousPost?.saveCount ?? previousPost?.saves.length ?? 0 }
@@ -866,7 +883,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       });
   };
 
-  const downloadImage = async (post: ClothPost) => {
+  const downloadImage = async (post: ClothPost, button: HTMLButtonElement) => {
     setDownloadMessage(null);
     try {
       const blob = await api.downloadMarketplaceImage(post.id);
@@ -879,7 +896,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+      animateActionFeedback(button, 'download');
     } catch (error) {
       setDownloadMessage({
         listingId: post.id,
@@ -1358,7 +1376,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         : <div role="img" aria-label={`Image unavailable for ${post.title}`} className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-neutral-900/80 text-neutral-500"><Scissors aria-hidden="true" className="h-8 w-8 text-amber-500/70" /><span className="text-xs">Listing image unavailable</span></div>}
                       <span className="absolute left-2.5 top-2.5 rounded-md border border-orange-300/30 bg-neutral-950/90 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-orange-200">{activeTrendCategoryLabel}</span>
                       {post.isPromoted && <span className="absolute right-2.5 top-2.5 rounded-md bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Sponsored</span>}
-                      <button type="button" onClick={() => handleSave(post)} disabled={pendingActions.has(post.id)} aria-pressed={isSaved} aria-label={`${isSaved ? 'Remove saved listing' : 'Save listing'}: ${post.title}`} className={`absolute right-2.5 bottom-2.5 rounded-xl p-2 transition ${isSaved ? 'bg-amber-500 text-neutral-950' : 'border border-white/20 bg-black/70 text-white hover:bg-black'}`}>
+                      <button type="button" onClick={event => handleSave(post, event.currentTarget)} disabled={pendingActions.has(post.id)} aria-pressed={isSaved} aria-label={`${isSaved ? 'Remove saved listing' : 'Save listing'}: ${post.title}`} className={`absolute right-2.5 bottom-2.5 rounded-xl p-2 transition ${isSaved ? 'bg-amber-500 text-neutral-950' : 'border border-white/20 bg-black/70 text-white hover:bg-black'}`}>
                         <Bookmark className={`h-4 w-4 ${isSaved ? 'fill-neutral-950' : ''}`} />
                       </button>
                     </div>
@@ -1828,7 +1846,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   {/* Save listing */}
                   <button
                     type="button"
-                    onClick={() => handleSave(post)}
+                    onClick={event => handleSave(post, event.currentTarget)}
                     disabled={pendingActions.has(post.id)}
                   aria-pressed={isSaved}
                     aria-label={`${isSaved ? 'Remove saved listing' : 'Save listing'}: ${post.title}`}
@@ -1876,7 +1894,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   <div className="absolute bottom-2.5 right-2.5 flex gap-1.5 opacity-0 transition-opacity group-hover/img:opacity-100">
                     <button
                       type="button"
-                      onClick={() => void downloadImage(post)}
+                      onClick={event => void downloadImage(post, event.currentTarget)}
                       title="Download image to device"
                       className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-black/70 hover:bg-black text-amber-300 border border-amber-500/30 flex items-center gap-1"
                     >

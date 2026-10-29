@@ -349,7 +349,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
         </div>
       </div>
 
-      {!currentUser?.isPromoted && <div className={`rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
+      <div className={`rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Sparkles className="w-4 h-4 text-amber-400" />
@@ -383,7 +383,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {savedPhotos.map((photo) => (
-              <div key={photo.id} className={`overflow-hidden rounded-2xl border ${isDarkMode ? 'border-neutral-800 bg-neutral-950/40' : 'border-neutral-200 bg-neutral-50'}`}>
+              <div key={photo.id} data-marketplace-listing-id={photo.postId || undefined} className={`overflow-hidden rounded-2xl border ${isDarkMode ? 'border-neutral-800 bg-neutral-950/40' : 'border-neutral-200 bg-neutral-50'}`}>
                 <PostImage src={photo.url} alt={photo.title} className="h-48 w-full sm:h-52" />
                 <div className="p-3 space-y-2.5">
                   <div>
@@ -415,7 +415,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
             ))}
           </div>
         )}
-      </div>}
+      </div>
 
       <div className={`rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
         <div className="flex items-center gap-2 text-sm font-semibold">

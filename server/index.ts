@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { getMessaging } from 'firebase-admin/messaging';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -73,6 +73,7 @@ import {
   getSellerCollections,
   removeUserFromFollowers,
   getUsers,
+  findNearbySellers,
   listProfiles,
   markMessagesRead,
   markNotificationsRead,
@@ -177,6 +178,98 @@ const WEB_APP_URL = process.env.APP_URL?.trim() || 'https://fabsattire.vercel.ap
 let postsCache: { expiresAt: number; staleUntil: number; value: unknown } | null = null;
 let usersCache: { expiresAt: number; value: unknown } | null = null;
 const marketplaceFeedCache = new Map<string, { expiresAt: number; staleUntil: number; value: unknown }>();
+const reverseGeocodeCache = new Map<string, { expiresAt: number; value: Record<string, unknown> }>();
+const reverseGeocodeRateLimit = new Map<string, number>();
+let nominatimQueue: Promise<void> = Promise.resolve();
+let lastNominatimRequestAt = 0;
+
+type BusinessLocationTokenPayload = {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number;
+  location: Pick<UserLocation, 'country' | 'countryCode' | 'state' | 'city'>;
+  address: string;
+  issuedAt: number;
+};
+
+const getLocationSigningSecret = () => process.env.GEOLOCATION_TOKEN_SECRET?.trim()
+  || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  || '';
+
+const signLocationPayload = (payload: BusinessLocationTokenPayload) => {
+  const secret = getLocationSigningSecret();
+  if (!secret) throw new Error('Business location signing secret is not configured.');
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = createHmac('sha256', secret).update(encoded).digest('base64url');
+  return `${encoded}.${signature}`;
+};
+
+const verifyLocationPayload = (token: unknown): BusinessLocationTokenPayload | null => {
+  if (typeof token !== 'string' || token.length > 5000) return null;
+  const [encoded, suppliedSignature, extra] = token.split('.');
+  const secret = getLocationSigningSecret();
+  if (!encoded || !suppliedSignature || extra || !secret) return null;
+  const expectedSignature = createHmac('sha256', secret).update(encoded).digest();
+  let actualSignature: Buffer;
+  try {
+    actualSignature = Buffer.from(suppliedSignature, 'base64url');
+  } catch {
+    return null;
+  }
+  if (actualSignature.length !== expectedSignature.length || !timingSafeEqual(actualSignature, expectedSignature)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as BusinessLocationTokenPayload;
+    if (!Number.isFinite(payload.latitude) || payload.latitude < -90 || payload.latitude > 90
+      || !Number.isFinite(payload.longitude) || payload.longitude < -180 || payload.longitude > 180
+      || !Number.isFinite(payload.accuracyMeters) || payload.accuracyMeters < 0 || payload.accuracyMeters > 200
+      || !Number.isFinite(payload.issuedAt) || Date.now() - payload.issuedAt > 15 * 60_000
+      || typeof payload.address !== 'string'
+      || !payload.location || typeof payload.location.country !== 'string') return null;
+    return payload;
+  } catch {
+    return null;
+  }
+};
+
+const reverseGeocodeWithNominatim = async (latitude: number, longitude: number) => {
+  const cacheKey = `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+  const cached = reverseGeocodeCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const pending = nominatimQueue.then(async () => {
+    const wait = Math.max(0, 1_000 - (Date.now() - lastNominatimRequestAt));
+    if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+    lastNominatimRequestAt = Date.now();
+    const url = new URL('https://nominatim.openstreetmap.org/reverse');
+    url.search = new URLSearchParams({
+      format: 'jsonv2',
+      lat: String(latitude),
+      lon: String(longitude),
+      addressdetails: '1',
+      zoom: '18',
+    }).toString();
+    const response = await fetch(url, {
+      headers: {
+        'Accept-Language': 'en',
+        'User-Agent': 'Fabsattire Marketplace/1.0',
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`Reverse geocoder returned HTTP ${response.status}.`);
+    const result = await response.json() as Record<string, unknown>;
+    if (!result.address || typeof result.address !== 'object' || Array.isArray(result.address)) {
+      throw new Error('Reverse geocoder returned no address details.');
+    }
+    if (reverseGeocodeCache.size >= 2_000) {
+      const firstKey = reverseGeocodeCache.keys().next().value;
+      if (firstKey) reverseGeocodeCache.delete(firstKey);
+    }
+    reverseGeocodeCache.set(cacheKey, { expiresAt: Date.now() + 30 * 86_400_000, value: result });
+    return result;
+  });
+  nominatimQueue = pending.then(() => undefined, () => undefined);
+  return pending;
+};
 
 function setMarketplaceResponseCacheHeaders(req: Request, res: Response) {
   if (req.headers.authorization) {
@@ -214,6 +307,35 @@ async function writeProfile(uid: string, values: Record<string, unknown>) {
   await firestore.collection('profiles').doc(uid).set(values, { merge: true });
   const snapshot = await firestore.collection('profiles').doc(uid).get();
   return snapshot.data() as Record<string, unknown>;
+}
+
+function getPublicSellerLocation(profile: Record<string, unknown>): UserLocation {
+  const raw = profile.location && typeof profile.location === 'object' && !Array.isArray(profile.location)
+    ? profile.location as Record<string, unknown>
+    : {};
+  const country = typeof raw.country === 'string' ? raw.country : '';
+  const countryCode = typeof raw.countryCode === 'string' ? raw.countryCode : '';
+  const state = typeof raw.state === 'string' ? raw.state : '';
+  const city = typeof raw.city === 'string' ? raw.city : '';
+  const latitude = profile.business_latitude;
+  const longitude = profile.business_longitude;
+  const isConfirmed = profile.location_status === 'seller_confirmed'
+    && typeof latitude === 'number' && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+    && typeof longitude === 'number' && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+  if (!isConfirmed) return { country, countryCode, state, city, verificationStatus: 'needs_confirmation' };
+  return {
+    country,
+    countryCode,
+    state,
+    city,
+    lat: latitude as number,
+    lng: longitude as number,
+    ...(typeof raw.businessAddress === 'string' ? { businessAddress: raw.businessAddress } : {}),
+    ...(typeof profile.location_accuracy_m === 'number' ? { accuracyMeters: profile.location_accuracy_m } : {}),
+    verificationStatus: 'seller_confirmed',
+    locationSource: 'device_geolocation',
+    ...(typeof profile.location_confirmed_at === 'string' ? { confirmedAt: profile.location_confirmed_at } : {}),
+  };
 }
 
 function pushTokenDocumentId(token: string) {
@@ -659,6 +781,151 @@ app.get('/api/location/countries', (_req, res) => {
 app.get('/api/location/currencies', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
   res.json(listLocationCurrencies());
+});
+
+app.post('/api/location/reverse-business', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const profile = await readProfile(req.authUser!.uid);
+  if (profile?.role !== 'tailor' && profile?.role !== 'fabric_seller') {
+    res.status(403).json({ error: 'Only seller accounts can confirm a business location.' });
+    return;
+  }
+  const latitude = req.body?.lat;
+  const longitude = req.body?.lng;
+  const accuracyMeters = req.body?.accuracyMeters;
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
+    || typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+    || typeof accuracyMeters !== 'number' || !Number.isFinite(accuracyMeters) || accuracyMeters < 0 || accuracyMeters > 200) {
+    res.status(400).json({ error: 'Share a current device position with accuracy within 200 metres.' });
+    return;
+  }
+
+  const lastLookup = reverseGeocodeRateLimit.get(req.authUser!.uid) || 0;
+  if (Date.now() - lastLookup < 10_000) {
+    res.status(429).json({ error: 'Please wait a few seconds before detecting the location again.' });
+    return;
+  }
+  reverseGeocodeRateLimit.set(req.authUser!.uid, Date.now());
+  if (reverseGeocodeRateLimit.size > 5_000) {
+    for (const [userId, timestamp] of reverseGeocodeRateLimit) {
+      if (Date.now() - timestamp > 10 * 60_000) reverseGeocodeRateLimit.delete(userId);
+    }
+  }
+
+  try {
+    const reverse = await reverseGeocodeWithNominatim(latitude, longitude);
+    const address = reverse.address as Record<string, unknown>;
+    const text = (value: unknown) => typeof value === 'string' ? value.trim().slice(0, 120) : '';
+    const country = text(address.country);
+    const countryCode = text(address.country_code).toUpperCase();
+    const city = text(address.city || address.town || address.village || address.municipality || address.hamlet || address.suburb);
+    const state = text(address.state || address.province || address.region || address.county);
+    if (!country || !city) {
+      res.status(422).json({ error: 'The detected point could not be matched to a city and country. Move outdoors and retry.' });
+      return;
+    }
+    const geocodedAddress = typeof reverse.display_name === 'string' ? reverse.display_name.trim().slice(0, 300) : '';
+    if (!geocodedAddress) {
+      res.status(422).json({ error: 'The detected point did not return a usable address. Please retry.' });
+      return;
+    }
+    const location: UserLocation = { country, countryCode, state, city };
+    const confirmationToken = signLocationPayload({
+      latitude,
+      longitude,
+      accuracyMeters,
+      location,
+      address: geocodedAddress,
+      issuedAt: Date.now(),
+    });
+    res.set('Cache-Control', 'private, no-store');
+    res.json({
+      location: {
+        ...location,
+        lat: latitude,
+        lng: longitude,
+        accuracyMeters,
+        businessAddress: geocodedAddress,
+      },
+      confirmationToken,
+    });
+  } catch (error) {
+    console.error('Seller business address could not be reverse-geocoded.', error);
+    res.status(503).json({ error: 'Address lookup is temporarily unavailable. Please retry in a moment.' });
+  }
+});
+
+app.put('/api/profile/business-location', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const profile = await readProfile(req.authUser!.uid);
+  if (profile?.role !== 'tailor' && profile?.role !== 'fabric_seller') {
+    res.status(403).json({ error: 'Only seller accounts can update a business location.' });
+    return;
+  }
+  if (req.body?.confirmBusinessLocation !== true) {
+    res.status(400).json({ error: 'Confirm that this detected point is your public business location.' });
+    return;
+  }
+  const signedLocation = verifyLocationPayload(req.body?.confirmationToken);
+  if (!signedLocation) {
+    res.status(400).json({ error: 'This location confirmation expired or is invalid. Detect your location again.' });
+    return;
+  }
+  const businessAddress = typeof req.body?.businessAddress === 'string'
+    ? req.body.businessAddress.trim().slice(0, 300)
+    : '';
+  if (!businessAddress) {
+    res.status(400).json({ error: 'Add a business address before confirming your location.' });
+    return;
+  }
+  if (!await enforceAbuseLimit(req, res, 'profile_write', req.authUser!.uid)) return;
+
+  const confirmedAt = new Date().toISOString();
+  const location: UserLocation = {
+    ...signedLocation.location,
+    lat: signedLocation.latitude,
+    lng: signedLocation.longitude,
+    accuracyMeters: signedLocation.accuracyMeters,
+    businessAddress,
+    verificationStatus: 'seller_confirmed',
+    locationSource: 'device_geolocation',
+    confirmedAt,
+  };
+  try {
+    await updateProfile(req.authUser!.uid, {
+      location,
+      businessLatitude: signedLocation.latitude,
+      businessLongitude: signedLocation.longitude,
+      locationAccuracyM: signedLocation.accuracyMeters,
+      locationStatus: 'seller_confirmed',
+      locationConfirmedAt: confirmedAt,
+      updatedAt: confirmedAt,
+    });
+    usersCache = null;
+    res.set('Cache-Control', 'private, no-store');
+    res.json(location);
+  } catch (error) {
+    console.error('Seller business location could not be saved.', error);
+    res.status(503).json({ error: 'Your business location could not be saved. Please try again.' });
+  }
+});
+
+app.get('/api/sellers/nearby', async (req, res) => {
+  const latitude = typeof req.query.lat === 'string' ? Number(req.query.lat) : NaN;
+  const longitude = typeof req.query.lng === 'string' ? Number(req.query.lng) : NaN;
+  const radiusKm = typeof req.query.radiusKm === 'string' ? Number(req.query.radiusKm) : NaN;
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+    || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+    || ![1, 5, 10, 25, 50].includes(radiusKm)) {
+    res.status(400).json({ error: 'Use valid coordinates and a supported 1, 5, 10, 25, or 50 km radius.' });
+    return;
+  }
+  try {
+    const sellers = await findNearbySellers(latitude, longitude, radiusKm);
+    res.set('Cache-Control', 'private, no-store');
+    res.json(sellers);
+  } catch (error) {
+    console.error('Nearby confirmed-seller search failed.', error);
+    res.status(503).json({ error: 'Nearby sellers could not be loaded. Please retry.' });
+  }
 });
 
 app.post('/api/location/resolve', (req, res) => {
@@ -1176,7 +1443,10 @@ app.put('/api/profile', requireAuth, requireActiveAccount, async (req: Authentic
   if (!await enforceAbuseLimit(req, res, 'profile_write', req.authUser!.uid)) return;
   const profile = buildProfileUpdate(req.body || {});
   const existingProfile = await readProfile(req.authUser!.uid);
-  if (existingProfile) delete profile.role;
+  if (existingProfile) {
+    delete profile.role;
+    delete profile.location;
+  }
   delete profile.isPromoted;
   delete profile.isBlocked;
   delete profile.isWarned;
@@ -1186,7 +1456,9 @@ app.put('/api/profile', requireAuth, requireActiveAccount, async (req: Authentic
   delete profile.followers;
   const profileValues = { ...profile, id: req.authUser!.uid, email: req.authUser!.email || '' };
   if (supabaseDataEnabled) {
-    const saved = await upsertProfile(req.authUser!.uid, profileValues);
+    const saved = existingProfile
+      ? await updateProfile(req.authUser!.uid, profile)
+      : await upsertProfile(req.authUser!.uid, profileValues);
     const welcome = await getMessages(req.authUser!.uid);
     if (!welcome.some(message => message.type === 'general' && message.post_title === 'Welcome to Atelier')) {
       const profileName = String(profile.name || req.authUser!.email?.split('@')[0] || 'Atelier Member');
@@ -1967,7 +2239,7 @@ app.get('/api/users', async (_req, res) => {
         return {
           id: String(profile.id), email: '', name, role: role as UserRole,
           phone: '', countryCode: '',
-          location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
+          location: getPublicSellerLocation(profile),
           whatsappNumber: String(profile.whatsapp_number || ''), shopName: String(profile.shop_name || ''), bio: String(profile.bio || ''),
           handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
           avatarUrl: String(profile.avatar_url || ''), isPromoted: profile.is_promoted === true, isBlocked: profile.is_blocked === true,
@@ -2009,7 +2281,13 @@ app.get('/api/users', async (_req, res) => {
         role,
         phone: '',
         countryCode: String(profile.countryCode || ''),
-        location: profile.location && typeof profile.location === 'object' ? profile.location : { country: '', state: '', city: '' },
+        location: {
+          country: typeof (profile.location as Record<string, unknown> | undefined)?.country === 'string' ? String((profile.location as Record<string, unknown>).country) : '',
+          countryCode: typeof (profile.location as Record<string, unknown> | undefined)?.countryCode === 'string' ? String((profile.location as Record<string, unknown>).countryCode) : '',
+          state: typeof (profile.location as Record<string, unknown> | undefined)?.state === 'string' ? String((profile.location as Record<string, unknown>).state) : '',
+          city: typeof (profile.location as Record<string, unknown> | undefined)?.city === 'string' ? String((profile.location as Record<string, unknown>).city) : '',
+          verificationStatus: 'needs_confirmation',
+        },
         whatsappNumber: String(profile.whatsappNumber || ''),
         shopName: String(profile.shopName || ''),
         bio: String(profile.bio || ''),

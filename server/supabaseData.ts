@@ -84,6 +84,20 @@ export async function getUsers(includePrivate = false): Promise<ProfileRecord[]>
   return data || [];
 }
 
+export async function findNearbySellers(latitude: number, longitude: number, radiusKm: number): Promise<Array<{ sellerId: string; distanceKm: number }>> {
+  const { data, error } = await requireClient().rpc('find_nearby_sellers', {
+    p_latitude: latitude,
+    p_longitude: longitude,
+    p_radius_km: radiusKm,
+  });
+  if (error) throw normalizeError(error);
+  return (data || []).flatMap((row: { seller_id?: unknown; distance_km?: unknown }) => (
+    typeof row.seller_id === 'string' && typeof row.distance_km === 'number' && Number.isFinite(row.distance_km)
+      ? [{ sellerId: row.seller_id, distanceKm: row.distance_km }]
+      : []
+  ));
+}
+
 export async function toggleFollow(targetId: string, userId: string): Promise<{ followers: string[]; isFollowing: boolean }> {
   const { data, error } = await requireClient().from('profiles').select('followers').eq('id', targetId).single();
   if (error) throw normalizeError(error);
