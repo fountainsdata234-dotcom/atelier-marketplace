@@ -22,6 +22,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
     handle: currentUser.handle,
     phone: currentUser.phone,
     bio: currentUser.bio || '',
+    businessAddress: currentUser.location.businessAddress || '',
   });
   const [status, setStatus] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
@@ -59,7 +60,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
 
   const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
-    const updates = { ...form, avatarUrl, name: form.name.trim(), handle: form.handle.trim(), phone: form.phone.trim(), bio: form.bio.trim() };
+    const updates = {
+      ...form,
+      avatarUrl,
+      name: form.name.trim(),
+      handle: form.handle.trim(),
+      phone: form.phone.trim(),
+      bio: form.bio.trim(),
+      location: { ...currentUser.location, businessAddress: form.businessAddress.trim() },
+    };
     if (!updates.name || !updates.handle) {
       setStatus('Name and handle are required.');
       return;
@@ -141,6 +150,20 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <label className="text-xs font-semibold">Handle<input value={form.handle} onChange={event => setForm({ ...form, handle: event.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" /></label>
           <label className="text-xs font-semibold">Phone<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" /></label>
           <label className="text-xs font-semibold sm:col-span-2">Bio<textarea rows={4} value={form.bio} onChange={event => setForm({ ...form, bio: event.target.value })} className="mt-1.5 w-full resize-y rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" /></label>
+          {(currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') && (
+            <label className="text-xs font-semibold sm:col-span-2">
+              Business address
+              <input
+                type="text"
+                value={form.businessAddress}
+                onChange={event => setForm({ ...form, businessAddress: event.target.value })}
+                placeholder="Street address, shop name, landmark"
+                maxLength={240}
+                className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm"
+              />
+              <span className="mt-1 block text-[10px] font-normal text-neutral-500">This address is stamped to your seller profile. Confirm your map location separately before enabling nearby discovery.</span>
+            </label>
+          )}
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={isUploadingAvatar} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300 disabled:opacity-60"><Save className="h-4 w-4" /> Save profile</button>{status && <span className="text-xs text-emerald-400">{status}</span>}</div>
         </form>
 

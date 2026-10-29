@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bookmark, Download, Image as ImageIcon, Trash2, Sparkles, ShieldAlert, Plus, X, Layers, Upload, CheckCircle2 } from 'lucide-react';
+import { Bookmark, Image as ImageIcon, Trash2, Sparkles, ShieldAlert, Plus, X, Layers, Upload, CheckCircle2 } from 'lucide-react';
 import { SavedPhoto, SellerCollection, User } from '../types';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/firebase';
@@ -393,15 +393,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={photo.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex-1 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-[10px] font-semibold text-amber-300"
-                    >
-                      <span className="inline-flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> Open</span>
-                    </a>
+                  <div className="flex justify-end">
                     <button
                       onClick={() => storageService.removeSavedPhoto(photo.id)}
                       className="rounded-xl border border-red-500/40 bg-red-500/10 p-2 text-red-400"

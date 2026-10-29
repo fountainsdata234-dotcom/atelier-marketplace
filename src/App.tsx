@@ -111,10 +111,14 @@ export default function App() {
   const imagePointers = useRef(new Map<number, { x: number; y: number }>());
   const imageDragStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const imagePinchStart = useRef<{ distance: number; scale: number } | null>(null);
+  const imageLastTap = useRef(0);
+  const [imageDragMode, setImageDragMode] = useState(false);
   const pullStartY = useRef<number | null>(null);
 
   const openImageViewer = useCallback((src: string, alt: string, isPost: boolean, postId?: string) => {
     setImageViewport({ scale: 1, x: 0, y: 0 });
+    setImageDragMode(false);
+    imageLastTap.current = 0;
     setImageDownloadError('');
     setImageViewer({ src, alt, isPost, postId });
   }, []);
@@ -203,6 +207,7 @@ export default function App() {
   const zoomImageAtPoint = (clientX: number, clientY: number, nextScale: number) => {
     const stage = imageStageRef.current;
     if (!stage) return;
+    if (nextScale <= 1) setImageDragMode(false);
     const bounds = stage.getBoundingClientRect();
     setImageViewport(current => {
       if (nextScale <= 1) return { scale: 1, x: 0, y: 0 };
@@ -234,6 +239,12 @@ export default function App() {
 
     event.currentTarget.setPointerCapture(event.pointerId);
     imagePointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const now = performance.now();
+    const activatedDragMode = event.pointerType === 'touch'
+      && now - imageLastTap.current < 320
+      && imageViewport.scale > 1;
+    if (activatedDragMode) setImageDragMode(true);
+    imageLastTap.current = now;
     if (imagePointers.current.size === 2) {
       const [first, second] = Array.from(imagePointers.current.values());
       imagePinchStart.current = {
@@ -241,7 +252,7 @@ export default function App() {
         scale: imageViewport.scale,
       };
       imageDragStart.current = null;
-    } else if (imageViewport.scale > 1) {
+    } else if (imageViewport.scale > 1 && (imageDragMode || activatedDragMode)) {
       imageDragStart.current = {
         x: event.clientX,
         y: event.clientY,
@@ -279,7 +290,7 @@ export default function App() {
     imagePointers.current.delete(event.pointerId);
     imagePinchStart.current = null;
     imageDragStart.current = null;
-    if (imagePointers.current.size === 1 && imageViewport.scale > 1) {
+    if (imagePointers.current.size === 1 && imageViewport.scale > 1 && imageDragMode) {
       const [remaining] = Array.from(imagePointers.current.values());
       imageDragStart.current = { ...remaining, panX: imageViewport.x, panY: imageViewport.y };
     }
@@ -1498,7 +1509,7 @@ export default function App() {
               src={imageViewer.src}
               alt={imageViewer.alt}
               draggable={false}
-              className={`max-h-full max-w-full select-none object-contain ${imageViewport.scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
+              className={`max-h-full max-w-full select-none object-contain ${imageViewport.scale > 1 && imageDragMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
               style={{
                 transform: `translate(${imageViewport.x}px, ${imageViewport.y}px) scale(${imageViewport.scale})`,
                 transformOrigin: 'center',
@@ -1506,7 +1517,7 @@ export default function App() {
               }}
             />
             <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1.5 text-center text-[10px] text-white/65 backdrop-blur-sm">
-              Right-click to zoom in · left-click to zoom out · pinch on mobile
+              Double-tap after zooming to drag · pinch or wheel to zoom
             </span>
           </div>
           {imageDownloadError && <p className="shrink-0 text-center text-xs text-red-300" role="alert">{imageDownloadError}</p>}

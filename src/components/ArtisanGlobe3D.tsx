@@ -279,12 +279,12 @@ const GlobeScene: React.FC<GlobeSceneProps> = ({ artisans, showArtisanMarkers, s
       return;
     }
     const selectedPosition = positions[selectedIndex].position.clone();
-    const currentRotation = rotatingGroupRef.current?.rotation.y ?? 0;
-    const targetRotation = currentRotation + shortestAngleDelta(currentRotation, Math.atan2(-selectedPosition.x, selectedPosition.z));
-    selectedPosition.applyAxisAngle(new THREE.Vector3(0, 1, 0), targetRotation);
+    // Markers use the earth texture's x/z convention. Rotate the group so the
+    // selected marker's local position reaches the camera-facing +z axis.
+    const targetRotation = Math.atan2(-selectedPosition.x, selectedPosition.z);
     focusRotationRef.current = targetRotation;
-    focusVectorRef.current = selectedPosition.normalize().multiplyScalar(5.2);
-  }, [artisans, camera, positions, selectedArtisanId]);
+    focusVectorRef.current = new THREE.Vector3(0, 0, 5.2);
+  }, [artisans, positions, selectedArtisanId]);
 
   useFrame((_, delta) => {
     const controls = controlsRef.current;

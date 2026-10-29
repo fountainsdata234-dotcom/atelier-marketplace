@@ -568,7 +568,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>
           {globeNearViewport ? (
-            <Suspense fallback={<div className="artisan-globe-3d" role="status" aria-label="Preparing interactive artisan globe"><div className="globe-webgl-fallback"><div className="globe-fallback-sphere"><img src="/textures/earth/mobile/earth_atmos_1024.webp" alt="" /></div><span className="globe-fallback-label">Preparing interactive globe</span></div></div>}>
+            <Suspense fallback={<div className="artisan-globe-3d flex items-center justify-center" role="status" aria-label="Preparing interactive artisan globe"><span className="text-xs text-orange-100/70">Preparing interactive globe…</span></div>}>
               <ArtisanGlobe3D
                 artisans={matchingGlobeArtisans}
                 showArtisanMarkers={matchingGlobeArtisans.length > 0}
