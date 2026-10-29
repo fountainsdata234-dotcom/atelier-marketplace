@@ -4,6 +4,7 @@ import { ClothPost, LocationCity, LocationCountry, LocationRegion, NearbySellerM
 import { findExactArtisanMatch, getSearchSuggestions } from '../utils/globe';
 import { countSellerAccounts, matchesLocationFilter } from '../utils/artisanFilters';
 import { calculateDistanceKm, isConfirmedBusinessLocation, NEARBY_SELLER_RADII_KM } from '../utils/nearbySellers';
+import { resolveSellerMapLocation } from '../data/worldData';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
@@ -138,7 +139,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const [resolvedLocationsById, setResolvedLocationsById] = useState<Map<string, User['location']>>(() => new Map());
   const globeArtisans = useMemo(() => {
     return artisans.flatMap((artisan): GlobeArtisan[] => {
-      const resolvedLocation = resolvedLocationsById.get(artisan.id) || artisan.location;
+      const resolvedLocation = resolvedLocationsById.get(artisan.id)
+        || resolveSellerMapLocation(artisan.location)
+        || artisan.location;
       if (typeof resolvedLocation.lat !== 'number' || typeof resolvedLocation.lng !== 'number') return [];
       return [{
         ...artisan,
@@ -229,8 +232,13 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       if (!active) return;
       setResolvedLocationsById(new Map(resolved.map(item => [item.id, item.location])));
     }).catch((error: unknown) => {
-      console.error('Seller globe locations could not be resolved from CSC data.', error);
-      if (active) setResolvedLocationsById(new Map());
+      console.warn('Remote seller globe location resolution timed out; using the local CSC catalog.', error);
+      if (active) {
+        setResolvedLocationsById(new Map(artisans.flatMap(artisan => {
+          const location = resolveSellerMapLocation(artisan.location);
+          return location ? [[artisan.id, location] as const] : [];
+        })));
+      }
     });
     return () => { active = false; };
   }, [artisans]);
@@ -334,10 +342,20 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
         setNearbySearchStatus('');
       }
     }).catch(error => {
-      console.error('Nearby confirmed-seller search failed.', error);
+      console.warn('Remote nearby-seller search timed out; using confirmed seller coordinates already loaded.', error);
       if (active) {
-        setNearbyMatches([]);
-        setNearbySearchStatus('Nearby sellers could not be loaded. Check your connection and retry.');
+        const fallbackMatches = artisans
+          .filter(artisan => isConfirmedBusinessLocation(artisan.location))
+          .map(artisan => ({
+            sellerId: artisan.id,
+            distanceKm: calculateDistanceKm(customerSearchLocation, artisan.location),
+          }))
+          .filter(match => match.distanceKm <= nearbyRadiusKm)
+          .sort((left, right) => left.distanceKm - right.distanceKm);
+        setNearbyMatches(fallbackMatches);
+        setNearbySearchStatus(fallbackMatches.length > 0
+          ? 'Showing sellers from the confirmed locations already loaded.'
+          : 'Nearby sellers could not be loaded. Check your connection and retry.');
       }
     }).finally(() => {
       if (active) setIsNearbySearchLoading(false);
