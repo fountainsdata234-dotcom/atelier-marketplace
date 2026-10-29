@@ -7,7 +7,6 @@ import { uploadUserImage } from '../services/mediaUpload';
 import { getAuthUserId, signOutAuth } from '../services/auth';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
-import { SellerLocationSetup } from './SellerLocationSetup';
 
 interface ProfilePageProps {
   currentUser: User;
@@ -129,8 +128,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <button type="button" onClick={() => onNavigate('marketplace')} className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition hover:border-amber-500/50 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}><UserRound className="h-5 w-5 text-amber-400" /><span><strong className="block text-sm">Continue exploring</strong><small className="text-xs text-neutral-400">Discover tailors and fabric sellers.</small></span></button>
         </div>
 
-        <SellerLocationSetup currentUser={currentUser} isDarkMode={isDarkMode} />
-
         {currentUser.isWarned && currentUser.warningNote && (
           <section className="mt-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4" aria-labelledby="account-alert-title">
             <div className="flex items-start gap-3">
@@ -161,7 +158,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
                 maxLength={240}
                 className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm"
               />
-              <span className="mt-1 block text-[10px] font-normal text-neutral-500">This address is stamped to your seller profile. Confirm your map location separately before enabling nearby discovery.</span>
+              <span className="mt-1 block text-[10px] font-normal text-neutral-500">This address is shown on your seller profile. Your country, state, and city remain linked to your original registration location.</span>
             </label>
           )}
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={isUploadingAvatar} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300 disabled:opacity-60"><Save className="h-4 w-4" /> Save profile</button>{status && <span className="text-xs text-emerald-400">{status}</span>}</div>

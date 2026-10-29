@@ -1501,7 +1501,16 @@ app.put('/api/profile', requireAuth, requireActiveAccount, async (req: Authentic
   const existingProfile = await readProfile(req.authUser!.uid);
   if (existingProfile) {
     delete profile.role;
+    const requestedAddress = req.body?.location && typeof req.body.location.businessAddress === 'string'
+      ? req.body.location.businessAddress.trim().slice(0, 300)
+      : undefined;
     delete profile.location;
+    if (requestedAddress !== undefined) {
+      profile.location = {
+        ...existingProfile.location,
+        businessAddress: requestedAddress || undefined,
+      };
+    }
   }
   delete profile.isPromoted;
   delete profile.isBlocked;
