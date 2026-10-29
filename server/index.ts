@@ -2566,6 +2566,11 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       // reach the model. Only explicit lookups and mutations use deterministic
       // routes because those routes render actionable UI and confirmations.
       const shouldUseGemini = !isMutationCommand && !isExplicitLookupCommand;
+      if (shouldUseGemini && !gemini) {
+        console.error('Lumina conversation requested but GEMINI_API_KEY is not configured.');
+        res.status(503).json({ error: 'Lumina is not connected to Gemini on the server yet. Add GEMINI_API_KEY to the Render API service and redeploy.' });
+        return;
+      }
       if (shouldUseGemini && gemini) {
         const sellerSummary = sellers.slice(0, 60).map(profile => ({
           id: profile.id,
@@ -2621,7 +2626,9 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
             return;
           }
         } catch (error) {
-          console.error('Lumina model response failed; continuing with grounded assistant routing.', error);
+          console.error('Lumina model response failed.', error);
+          res.status(502).json({ error: 'Lumina could not reach Gemini right now. Check the Render service logs and Gemini configuration, then try again.' });
+          return;
         }
       }
       if (isAnalyticsQuery && !normalized.includes('top') || (normalized.includes('overview') && !isSellerQuery)) {
