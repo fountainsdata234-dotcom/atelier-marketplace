@@ -259,7 +259,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAiMetrics(null);
     try {
       const isAdminAction = /\b(?:block|warn|promote|broadcast|approve|reject|pause|archive|whatsapp|contact|message)\b/i.test(prompt);
-      const result = !isAdminAction
+      const result = await (!isAdminAction
         ? (() => api.assistantCommand(prompt).then(live => ({
           kind: live.kind,
           message: typeof live.message === 'string' && live.message.trim() ? live.message : 'I could not produce a live answer.',
@@ -276,7 +276,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           aiContextTargetId || undefined,
           aiMessages,
           aiMemories,
-        );
+        ));
       const responseMessage = typeof result.message === 'string' && result.message.trim()
         ? result.message
         : 'I could not produce a response. Please try that again.';
