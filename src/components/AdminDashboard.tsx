@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2, Search, X, Flag } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, MarketplaceAbuseFlag } from '../types';
@@ -55,6 +55,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const users = Array.isArray(usersProp) ? usersProp : [];
   const posts = Array.isArray(postsProp) ? postsProp : [];
+  const safePromoPlans = useMemo(() => Array.isArray(promoPlans) ? promoPlans : [], [promoPlans]);
+  const safeBroadcasts = useMemo(() => Array.isArray(broadcasts) ? broadcasts : [], [broadcasts]);
   const isSuperAdmin = currentUser.isSuperAdmin === true;
 
   // Sub-admin management state
@@ -71,7 +73,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [broadcastSentMsg, setBroadcastSentMsg] = useState<string | null>(null);
 
   // Promotion Template Cards state
-  const [editablePlans, setEditablePlans] = useState<AdminPromoPlan[]>(promoPlans);
+  const [editablePlans, setEditablePlans] = useState<AdminPromoPlan[]>(safePromoPlans);
   const [planSaveStatus, setPlanSaveStatus] = useState<string | null>(null);
 
   // Tab State: 'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'
@@ -101,8 +103,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   useEffect(() => {
-    setEditablePlans(promoPlans);
-  }, [promoPlans]);
+    setEditablePlans(safePromoPlans);
+  }, [safePromoPlans]);
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
@@ -1181,11 +1183,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </form>
 
           {/* Past Broadcast History */}
-          {broadcasts.length > 0 && (
+          {safeBroadcasts.length > 0 && (
             <div className="mt-8 pt-6 border-t border-neutral-800">
-              <h3 className="text-sm font-serif font-bold mb-3">Broadcast Log ({broadcasts.length})</h3>
+              <h3 className="text-sm font-serif font-bold mb-3">Broadcast Log ({safeBroadcasts.length})</h3>
               <div className="space-y-3">
-                {broadcasts.map((b) => (
+                {safeBroadcasts.map((b) => (
                   <div key={b.id} className="p-3 rounded-xl border border-neutral-800 bg-neutral-900/30 text-xs">
                     <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono mb-1">
                       <span className="text-amber-400 font-bold uppercase">{b.target}</span>
