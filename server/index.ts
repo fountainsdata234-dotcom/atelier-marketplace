@@ -614,13 +614,14 @@ const adminAiTargetStopWords = new Set([
 ]);
 
 const getAdminAiTargetPhrase = (normalized: string) => {
-  const actionIndex = normalized.search(/\b(warn|block|promote)\b/);
+  const actionIndex = normalized.search(/\b(warn|block|promote|whatsapp|contact|message|chat)\b/);
   if (actionIndex < 0) return '';
-  const remainder = normalized.slice(actionIndex).replace(/^\s*(warn|block|promote)\b\s*/, '');
+  const remainder = normalized.slice(actionIndex).replace(/^\s*(warn|block|promote|whatsapp|contact|message|chat)\b\s*/, '');
   const words = remainder.split(/\s+/);
   const targetWords: string[] = [];
   for (const word of words) {
     if (adminAiTargetStopWords.has(word)) break;
+    if (word === 'on' || word === 'via') break;
     if (word.length > 1) targetWords.push(word);
   }
   return targetWords.join(' ');
@@ -2805,6 +2806,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         return;
       }
       const targetPhrase = getAdminAiTargetPhrase(normalized);
+      const hasTargetedAction = /\b(?:warn|block|promote|whatsapp|contact|message|chat)\b/.test(normalized);
       const queryWords = normalized.split(/\s+/)
         .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
         .filter(word => word.length > 1 && !adminAiIntentWords.has(word));
@@ -2828,7 +2830,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           && (searchable.includes(targetPhrase)
             || targetPhrase.split(/\s+/).every(word => values.some(value => value.includes(word))));
         return Boolean(targetMatches)
-          || (queryWords.length > 0 && queryWords.every(word => values.some(value => value.includes(word))));
+          || (!hasTargetedAction && queryWords.length > 0 && queryWords.every(word => values.some(value => value.includes(word))));
       }).slice(0, 10);
       const opensProfile = normalized.includes('open') || normalized.includes('profile');
       const startsWhatsApp = normalized.includes('whatsapp')
@@ -2845,7 +2847,9 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         res.json({ kind: 'results', message: matches.length ? `Found ${matches.length} matching account${matches.length === 1 ? '' : 's'}.` : 'No matching accounts found.', results: matches });
         return;
       }
-      const target = matches[0] || profiles.find(profile => String(profile.id) === contextTargetId);
+      const target = matches[0] || (!hasTargetedAction
+        ? profiles.find(profile => String(profile.id) === contextTargetId)
+        : undefined);
       const action = startsWhatsApp
         ? 'whatsapp'
         : normalized.includes('block')
@@ -2869,6 +2873,15 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           expiresAt: Date.now() + 10 * 60_000,
         });
         res.json({ kind: 'confirmation_required', actionId: id, message: `I drafted a ${normalized.includes('seller') ? 'seller' : normalized.includes('buyer') ? 'buyer' : 'platform-wide'} broadcast titled "${title}". Confirm to send it.` });
+        return;
+      }
+      if (hasTargetedAction && !target) {
+        res.json({
+          kind: 'message',
+          message: targetPhrase
+            ? 'I could not identify that merchant. Use the exact name, @handle, shop name, email, or merchant ID.'
+            : 'Tell me which merchant this action is for. I will not reuse a previously selected account automatically.',
+        });
         return;
       }
       if (isListingQuery && (normalized.includes('pause') || normalized.includes('archive') || normalized.includes('approve') || normalized.includes('reject'))) {

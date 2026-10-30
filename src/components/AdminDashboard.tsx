@@ -209,6 +209,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const runAdminAi = async () => {
     if (!isSuperAdmin || !aiPrompt.trim()) return;
     const prompt = aiPrompt.trim();
+    const isAffirmative = /^(?:yes|yeah|yep|sure|confirm|confirmed|do it|go ahead|proceed|send it)$/i.test(prompt);
+    const isNegative = /^(?:no|nope|cancel|stop|don't|do not)$/i.test(prompt);
+    if (aiActionId && isAffirmative) {
+      setAiPrompt('');
+      await confirmAdminAi();
+      return;
+    }
+    if (aiActionId && isNegative) {
+      setAiPrompt('');
+      setAiActionId(null);
+      setAiReply('Cancelled. No action was taken.');
+      setAiMessages(current => [...current, { role: 'admin' as const, text: prompt }, { role: 'assistant' as const, text: 'Cancelled. No action was taken.' }].slice(-50));
+      return;
+    }
     const memoryMatch = prompt.match(/^(?:remember|learn|note)\s+(?:that\s+)?(.+)$/i);
     if (memoryMatch?.[1]) {
       const learnedFact = memoryMatch[1].trim().replace(/[.]+$/, '');
