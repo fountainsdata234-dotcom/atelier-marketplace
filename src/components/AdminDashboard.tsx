@@ -42,8 +42,8 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentUser,
-  users,
-  posts,
+  users: usersProp,
+  posts: postsProp,
   promoPlans,
   broadcasts,
   isDarkMode,
@@ -53,6 +53,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   isLuminaPage = false,
   initialTab = 'sellers',
 }) => {
+  const users = Array.isArray(usersProp) ? usersProp : [];
+  const posts = Array.isArray(postsProp) ? postsProp : [];
   const isSuperAdmin = currentUser.isSuperAdmin === true;
 
   // Sub-admin management state
@@ -349,9 +351,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         user.handle,
         user.email,
         user.role.replace('_', ' '),
-        user.location.city,
-        user.location.state,
-        user.location.country,
+        user.location?.city,
+        user.location?.state,
+        user.location?.country,
         user.phone,
         user.whatsappNumber,
         user.bio,
@@ -1252,7 +1254,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         {new Date(post.createdAt).toLocaleString()}
                       </td>
                       <td className="py-3 font-mono text-[11px] text-neutral-400">
-                        {post.likes.length} Likes • {post.saves.length} Saves
+                        {(post.likes || []).length} Likes • {(post.saves || []).length} Saves
                       </td>
                       <td className="py-3 text-right">
                         <button
