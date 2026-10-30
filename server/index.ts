@@ -2929,6 +2929,10 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         || normalized.includes('go to')
         || normalized.includes('navigate to')
         || normalized.includes('take me to');
+      const refersToSelectedSeller = Boolean(
+        contextTargetId
+        && normalized.match(/\b(her|him|them|their|this account|this seller|selected account|selected seller)\b/),
+      );
       if (matches.length === 0 && opensProfile && queryWords.length > 0) {
         const fuzzyMatches = profiles
           .map(profile => {
@@ -2967,6 +2971,17 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       if (matches.length > 1 && /\b(?:warn|block|promote)\b/.test(normalized)) {
         res.json({ kind: 'results', message: `I found ${matches.length} possible accounts. Choose the exact merchant before I take that action.`, results: matches });
         return;
+      }
+      if (opensProfile && refersToSelectedSeller) {
+        const selectedSeller = sellers.find(profile => String(profile.id) === contextTargetId);
+        if (selectedSeller) {
+          res.json({
+            kind: 'results',
+            message: `Opening ${selectedSeller.name || selectedSeller.handle}'s profile so you can confirm the account.`,
+            results: [selectedSeller],
+          });
+          return;
+        }
       }
       if (normalized.includes('search') || normalized.includes('find') || normalized.includes('lookup') || normalized.includes('show') || opensProfile) {
         res.json({ kind: 'results', message: matches.length ? `Found ${matches.length} matching account${matches.length === 1 ? '' : 's'}.` : 'No matching accounts found.', results: matches });
