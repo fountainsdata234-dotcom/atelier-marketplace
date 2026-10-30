@@ -114,17 +114,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Artisan</span>
           </button>
 
-          <button
-            onClick={() => onNavigate('assistant')}
+          {currentUser?.isSuperAdmin && <button
+            onClick={() => onNavigate('lumina')}
             className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
-              currentView === 'assistant'
+              currentView === 'lumina'
                 ? 'text-amber-400 bg-amber-500/10 font-semibold'
                 : 'text-neutral-400 hover:text-neutral-100'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Assistant</span>
-          </button>
+            <span>Lumina</span>
+          </button>}
 
           {currentUser && !isSeller && (
             <button
@@ -292,7 +292,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item"><House className="h-4 w-4" />Overview</button>
                 <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
                 <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
-                <button type="button" onClick={() => navigate('assistant')} className="mobile-nav-item"><Sparkles className="h-4 w-4" />Assistant</button>
+                {currentUser?.isSuperAdmin && <button type="button" onClick={() => navigate('lumina')} className="mobile-nav-item"><Sparkles className="h-4 w-4" />Lumina</button>}
                 <button type="button" onClick={() => navigate('about')} className="mobile-nav-item"><Info className="h-4 w-4" />About</button>
                 <button type="button" onClick={() => navigate('contact')} className="mobile-nav-item"><Mail className="h-4 w-4" />Contact</button>
                 <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item text-amber-300"><UserRound className="h-4 w-4" />Sign in</button>
@@ -303,7 +303,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {!currentUser && <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item"><House className="h-4 w-4" />Overview</button>}
                   <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
                   <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
-                  <button type="button" onClick={() => navigate('assistant')} className="mobile-nav-item"><Sparkles className="h-4 w-4" />Assistant</button>
+                  {currentUser?.isSuperAdmin && <button type="button" onClick={() => navigate('lumina')} className="mobile-nav-item"><Sparkles className="h-4 w-4" />Lumina</button>}
                   {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
                   {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
                   {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}

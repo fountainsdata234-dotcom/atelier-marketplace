@@ -17,6 +17,7 @@ interface AdminDashboardProps {
   broadcasts: BroadcastMessage[];
   isDarkMode: boolean;
   onOpenSeller: (seller: User) => void;
+  initialTab?: 'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai';
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -27,6 +28,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   broadcasts,
   isDarkMode,
   onOpenSeller,
+  initialTab = 'sellers',
 }) => {
   const isSuperAdmin = currentUser.isSuperAdmin === true;
 
@@ -48,7 +50,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [planSaveStatus, setPlanSaveStatus] = useState<string | null>(null);
 
   // Tab State: 'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'
-  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai'>('sellers');
+  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai'>(initialTab);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiReply, setAiReply] = useState<string | null>(null);
   const [aiActionId, setAiActionId] = useState<string | null>(null);
@@ -593,7 +595,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {activeTab === 'ai' && isSuperAdmin && (
-          <section className={`mt-4 overflow-hidden rounded-[2rem] border ${isDarkMode ? 'border-neutral-800 bg-[#0f1115]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+          <section className={`-mx-4 mt-4 min-h-[calc(100vh-7rem)] overflow-hidden rounded-none border-y sm:-mx-6 lg:-mx-8 ${isDarkMode ? 'border-neutral-800 bg-[#0f1115]' : 'border-neutral-200 bg-white shadow-sm'}`}>
             <header className={`flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-7 ${isDarkMode ? 'border-neutral-800' : 'border-neutral-200'}`}>
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950 shadow-lg shadow-amber-500/20"><Sparkles className="h-5 w-5" /></div>
