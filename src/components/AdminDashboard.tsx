@@ -9,7 +9,19 @@ import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 const LUMINA_WELCOME = "Hi? I’m Lumina ✨ What will you want me to help you with today, boss? 😂";
 
-const LuminaTypingText: React.FC<{ text: string }> = ({ text }) => {
+const normalizeAiMessages = (value: unknown): Array<{ role: 'admin' | 'assistant'; text: string }> => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((message): message is { role?: unknown; text?: unknown } => Boolean(message) && typeof message === 'object')
+    .map(message => ({
+      role: message.role === 'admin' ? 'admin' as const : 'assistant' as const,
+      text: typeof message.text === 'string' ? message.text : '',
+    }))
+    .filter(message => message.text.length > 0)
+    .slice(-50);
+};
+
+const LuminaTypingText: React.FC<{ text?: string }> = ({ text = '' }) => {
   const [visibleText, setVisibleText] = useState('');
 
   useEffect(() => {
@@ -116,7 +128,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const saved = window.localStorage.getItem(`atelier-admin-ai-chat:${currentUser.id}`);
       if (saved) {
         const parsed = JSON.parse(saved) as Array<{ role: 'admin' | 'assistant'; text: string }>;
-        if (Array.isArray(parsed) && parsed.length > 0) setAiMessages(parsed.slice(-50));
+        const messages = normalizeAiMessages(parsed);
+        if (messages.length > 0) setAiMessages(messages);
       }
       const savedContext = window.localStorage.getItem(`atelier-admin-ai-context:${currentUser.id}`);
       if (savedContext) setAiContextTargetId(savedContext);
@@ -250,13 +263,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const result = liveMerchantQuestion
         ? (() => api.assistantCommand(prompt).then(live => ({
           kind: live.kind,
-          message: live.message,
-          results: (live.results || []).map(id => users.find(user => user.id === id)).filter((user): user is User => Boolean(user)),
+          message: typeof live.message === 'string' ? live.message : 'I could not produce a live answer.',
+          results: (Array.isArray(live.results) ? live.results : []).map(id => users.find(user => user.id === id)).filter((user): user is User => Boolean(user)),
           metrics: live.metrics?.reduce((values, metric) => {
             values[metric.label] = metric.value;
             return values;
           }, {} as Record<string, number>),
-          target: live.targetId ? users.find(user => user.id === live.targetId) : undefined,
+          target: typeof live.targetId === 'string' ? users.find(user => user.id === live.targetId) : undefined,
           suggestions: live.suggestions,
         })))()
         : api.adminAiCommand(
