@@ -9,6 +9,18 @@ const API_REQUEST_TIMEOUT_MS = 20_000;
 const GET_RETRY_DELAYS_MS = [750, 1_500];
 const publicReadCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightPublicReads = new Map<string, Promise<unknown>>();
+let adminAiRoutesReady: Promise<unknown> | null = null;
+
+function ensureAdminAiRoutes() {
+  if (!adminAiRoutesReady) {
+    adminAiRoutesReady = request<User[]>('/api/admin/users')
+      .catch(error => {
+        adminAiRoutesReady = null;
+        throw error;
+      });
+  }
+  return adminAiRoutesReady;
+}
 
 function getMarketplaceSessionId() {
   const key = 'atelier_marketplace_session_v1';
@@ -221,7 +233,7 @@ export const api = {
     contextTargetId?: string,
     conversation?: Array<{ role: 'admin' | 'assistant'; text: string }>,
     memories?: string[],
-  ) => request<{
+  ) => ensureAdminAiRoutes().then(() => request<{
     kind: 'results' | 'message' | 'chat' | 'confirmation_required' | 'analytics' | 'listing_results';
     message: string;
     actionId?: string;
@@ -238,13 +250,13 @@ export const api = {
       conversation: conversation?.slice(-20),
       memories: memories?.slice(-200),
     }),
-  }),
-  adminAiConfirm: (actionId: string) => request<{
+  })),
+  adminAiConfirm: (actionId: string) => ensureAdminAiRoutes().then(() => request<{
     ok: boolean;
     message: string;
     target?: Pick<User, 'id' | 'name' | 'handle' | 'whatsappNumber' | 'phone'>;
     whatsappMessage?: string;
-  }>('/api/admin/ai/confirm', { method: 'POST', body: JSON.stringify({ actionId }) }),
+  }>('/api/admin/ai/confirm', { method: 'POST', body: JSON.stringify({ actionId }) })),
   getPosts: (search?: string) => request<ClothPost[]>(search ? `/api/posts?q=${encodeURIComponent(search)}` : '/api/posts'),
   refreshPosts: () => {
     publicReadCache.delete('/api/posts');
