@@ -2479,6 +2479,40 @@ app.post('/api/assistant/command', async (req: Request, res: Response) => {
     const normalized = normalizeAdminAiPrompt(prompt);
     const [profiles, posts] = await Promise.all([getUsers(true), getPosts(1000)]);
     const sellers = profiles.filter(profile => profile.role === 'tailor' || profile.role === 'fabric_seller');
+    const isExplicitMarketplaceQuestion = /\b(?:merchant|merchants|seller|sellers|tailor|tailors|artisan|artisans|fabric|listing|listings|post|posts|location|where|city|shop|handle|profile|marketplace|how many|how much|find|show|open)\b/i.test(prompt);
+    if (!isExplicitMarketplaceQuestion && gemini) {
+      try {
+        const context = {
+          merchantCount: sellers.length,
+          listingCount: posts.length,
+          userCount: profiles.length,
+        };
+        const response = await gemini.models.generateContent({
+          model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            systemInstruction: [
+              'You are Lumina, a warm and intelligent assistant inside Fabsattire, a fashion marketplace.',
+              'Respond naturally to casual conversation, greetings, and general questions.',
+              'For “how far” or similar greetings, answer naturally, for example: “I’m doing well and ready to help. What would you like to explore?”',
+              'Do not pretend to have taken actions. Keep the answer concise and conversational.',
+              `Current live context for optional use: ${JSON.stringify(context)}`,
+            ].join('\n'),
+            temperature: 0.7,
+            maxOutputTokens: 300,
+          },
+        });
+        const message = response.text?.trim();
+        if (message) {
+          res.json({ kind: 'chat', message });
+          return;
+        }
+      } catch (error) {
+        console.error('Lumina conversational response failed.', error);
+        res.status(502).json({ error: 'Lumina could not respond conversationally right now. Please try again.' });
+        return;
+      }
+    }
     const ignoredTerms = new Set([
       'how', 'many', 'much', 'does', 'do', 'has', 'have', 'on', 'their', 'the', 'post', 'posts',
       'listing', 'listings', 'location', 'where', 'is', 'are', 'me', 'please', 'merchant', 'merchants',
