@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Bot, ChevronRight, Eraser, Sparkles, UserRound } from 'lucide-react';
+import { ArrowRight, Bot, ChevronRight, Eraser, Search, Sparkles, Store, UserRound, UsersRound } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getHandleSlug } from '../utils/profile';
 
@@ -17,6 +17,16 @@ interface AssistantMessage {
   text: string;
   createdAt: string;
   profileIds?: string[];
+  metrics?: Array<{ label: string; value: number }>;
+  suggestions?: string[];
+}
+
+interface AssistantReply {
+  text: string;
+  profileIds?: string[];
+  metrics?: Array<{ label: string; value: number }>;
+  suggestions?: string[];
+  openProfile?: User;
 }
 
 const STORAGE_KEY = 'atelier_local_assistant_conversation_v1';
@@ -114,8 +124,54 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
       .map(item => item.user);
   };
 
-  const makeReply = (text: string) => {
+  const makeReply = (text: string): AssistantReply => {
     const normalized = cleanText(text);
+    const asksForCount = Boolean(
+      normalized.match(/\b(how many|how much|number of|count|total)\b/)
+      && normalized.match(/\b(merchant|merchants|seller|sellers|tailor|tailors|artisan|artisans|user|users|fabric seller|fabric sellers)\b/),
+    );
+
+    // Count questions must be handled before profile matching: words such as
+    // "merchant" are valid entities here, not evidence that a profile was named.
+    if (asksForCount) {
+      const merchantCount = sellers.length;
+      const tailorCount = sellers.filter(user => user.role === 'tailor').length;
+      const fabricSellerCount = sellers.filter(user => user.role === 'fabric_seller').length;
+      return {
+        text: `There are ${merchantCount} merchants on Fabsattire right now: ${tailorCount} tailor${tailorCount === 1 ? '' : 's'} and ${fabricSellerCount} fabric seller${fabricSellerCount === 1 ? '' : 's'}.`,
+        metrics: [
+          { label: 'Total merchants', value: merchantCount },
+          { label: 'Tailors', value: tailorCount },
+          { label: 'Fabric sellers', value: fabricSellerCount },
+        ],
+        suggestions: merchantCount > 0
+          ? ['Show me the merchants', 'Find a tailor', 'Find a fabric seller']
+          : ['How do I become a merchant?'],
+      };
+    }
+
+    const asksToListMerchants = Boolean(
+      normalized.match(/\b(show|list|see|browse|find)\b/)
+      && normalized.match(/\b(merchant|merchants|seller|sellers|tailor|tailors|artisan|artisans)\b/),
+    );
+    if (asksToListMerchants) {
+      const requestedRole = normalized.match(/\b(tailor|tailors)\b/)
+        ? 'tailor'
+        : normalized.match(/\b(fabric seller|fabric sellers)\b/)
+          ? 'fabric_seller'
+          : null;
+      const matchingSellers = requestedRole
+        ? sellers.filter(user => user.role === requestedRole)
+        : sellers;
+      return {
+        text: matchingSellers.length > 0
+          ? `Here are ${matchingSellers.length} merchant${matchingSellers.length === 1 ? '' : 's'}${requestedRole === 'tailor' ? ' who are tailors' : requestedRole === 'fabric_seller' ? ' who sell fabric' : ''}. Choose a profile to open it.`
+          : 'I could not find any merchants in that category yet.',
+        profileIds: matchingSellers.slice(0, 10).map(user => user.id),
+        suggestions: ['How many merchants are there?', 'Find a tailor', 'Find a fabric seller'],
+      };
+    }
+
     const profiles = findProfiles(text);
     const asksForProfile = Boolean(normalized.match(/@[\w.-]+|profile|handle|artisan|tailor|seller|merchant/));
 
@@ -172,6 +228,8 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
         role: 'assistant',
         text: reply.text,
         profileIds: reply.profileIds,
+        metrics: reply.metrics,
+        suggestions: reply.suggestions,
         createdAt: new Date().toISOString(),
       };
       setMessages(current => [...current, assistantMessage].slice(-MAX_MESSAGES));
@@ -187,6 +245,9 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
   };
 
   const profileById = new Map(sellers.map(profile => [profile.id, profile]));
+  const sendSuggestion = (suggestion: string) => {
+    setDraft(suggestion);
+  };
   return (
     <section className={`mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:py-12 ${isDarkMode ? 'text-neutral-100' : 'text-neutral-900'}`}>
       <div className={`overflow-hidden rounded-[2rem] border shadow-2xl ${isDarkMode ? 'border-amber-500/20 bg-[#121419]/95' : 'border-amber-500/20 bg-white'}`}>
@@ -205,7 +266,9 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
               {message.role === 'assistant' && <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-300"><Bot className="h-4 w-4" /></div>}
               <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${message.role === 'user' ? 'rounded-br-md bg-amber-400 text-neutral-950' : isDarkMode ? 'rounded-bl-md bg-neutral-800/80 text-neutral-200' : 'rounded-bl-md bg-neutral-100 text-neutral-800'}`}>
                 <p>{message.text}</p>
+                {message.metrics && <div className="mt-3 overflow-hidden rounded-xl border border-amber-500/20"><div className="grid grid-cols-[1fr_auto] bg-amber-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-300"><span>Merchant type</span><span>Count</span></div>{message.metrics.map(metric => <div key={metric.label} className="grid grid-cols-[1fr_auto] border-t border-amber-500/10 px-3 py-2 text-xs"><span>{metric.label}</span><strong>{metric.value}</strong></div>)}</div>}
                 {message.profileIds && <div className="mt-3 space-y-2">{message.profileIds.map(id => { const profile = profileById.get(id); if (!profile) return null; return <button type="button" key={id} onClick={() => onSelectSeller(profile)} className="flex w-full items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-2.5 text-left transition hover:border-amber-400 hover:bg-amber-500/20"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/20 text-amber-300"><UserRound className="h-4 w-4" /></div><span className="min-w-0 flex-1"><strong className="block truncate text-xs">{profile.name}</strong><small className="block truncate text-[11px] text-amber-300">@{getHandleSlug(profile.handle)} · {profile.email}</small></span><ChevronRight className="h-4 w-4 text-amber-300" /></button>; })}</div>}
+                {message.suggestions && <div className="mt-3 flex flex-wrap gap-2">{message.suggestions.map(suggestion => <button type="button" key={suggestion} onClick={() => sendSuggestion(suggestion)} className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/20">{suggestion.includes('Show') ? <UsersRound className="h-3.5 w-3.5" /> : suggestion.includes('Find') ? <Search className="h-3.5 w-3.5" /> : <Store className="h-3.5 w-3.5" />}{suggestion}</button>)}</div>}
               </div>
             </div>
           ))}
