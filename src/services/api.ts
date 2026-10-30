@@ -258,6 +258,17 @@ export const api = {
     whatsappMessage?: string;
   }>('/api/admin/ai/confirm', { method: 'POST', body: JSON.stringify({ actionId }) })),
   getPosts: (search?: string) => request<ClothPost[]>(search ? `/api/posts?q=${encodeURIComponent(search)}` : '/api/posts'),
+  assistantCommand: (prompt: string) => request<{
+    kind: 'message' | 'results' | 'analytics';
+    message: string;
+    targetId?: string;
+    results?: string[];
+    metrics?: Array<{ label: string; value: number }>;
+    suggestions?: string[];
+  }>('/api/assistant/command', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  }),
   refreshPosts: () => {
     publicReadCache.delete('/api/posts');
     inFlightPublicReads.delete('/api/posts');

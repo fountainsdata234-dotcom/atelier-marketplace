@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Bot, ChevronRight, Eraser, Search, Sparkles, Store, UserRound, UsersRound } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getHandleSlug } from '../utils/profile';
+import { api } from '../services/api';
 
 interface AssistantPageProps {
   users: User[];
@@ -208,7 +209,7 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
     return { text: 'I understand you’re looking for help, but I need one more detail. You can mention a profile handle with @, a city, a fabric type, or what you want to make.' };
   };
 
-  const sendMessage = (event: React.FormEvent) => {
+  const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
     if (!text || isThinking) return;
@@ -221,21 +222,35 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
     };
     setMessages(current => [...current, userMessage].slice(-MAX_MESSAGES));
     setIsThinking(true);
-    window.setTimeout(() => {
-      const reply = makeReply(text);
+    try {
+      const liveReply = await api.assistantCommand(text);
+      const selectedProfile = liveReply.targetId ? sellers.find(profile => profile.id === liveReply.targetId) : undefined;
       const assistantMessage: AssistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        text: reply.text,
-        profileIds: reply.profileIds,
-        metrics: reply.metrics,
-        suggestions: reply.suggestions,
+        text: liveReply.message,
+        profileIds: liveReply.results || (selectedProfile ? [selectedProfile.id] : undefined),
+        metrics: liveReply.metrics,
+        suggestions: liveReply.suggestions,
         createdAt: new Date().toISOString(),
       };
       setMessages(current => [...current, assistantMessage].slice(-MAX_MESSAGES));
       setIsThinking(false);
-      if (reply.openProfile) onSelectSeller(reply.openProfile);
-    }, 420);
+      if (selectedProfile && /\b(open|profile)\b/i.test(text)) onSelectSeller(selectedProfile);
+    } catch (error) {
+      const fallback = makeReply(text);
+      const fallbackMessage: AssistantMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        text: `${fallback.text} I couldn’t reach the live marketplace service, so this answer may be limited.`,
+        profileIds: fallback.profileIds,
+        metrics: fallback.metrics,
+        suggestions: fallback.suggestions,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages(current => [...current, fallbackMessage].slice(-MAX_MESSAGES));
+      setIsThinking(false);
+    }
   };
 
   const clearConversation = () => {

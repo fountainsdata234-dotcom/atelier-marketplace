@@ -241,12 +241,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAiListingResults([]);
     setAiMetrics(null);
     try {
-      const result = await api.adminAiCommand(
-        prompt,
-        aiContextTargetId || undefined,
-        aiMessages,
-        aiMemories,
-      );
+      const liveMerchantQuestion = /\b(?:location|where|post|posts|listing|listings|how many|merchant|seller|tailor|fabric seller)\b/i.test(prompt)
+        && !/\b(?:block|warn|promote|broadcast|approve|reject|pause|archive|whatsapp|contact|message)\b/i.test(prompt);
+      const result = liveMerchantQuestion
+        ? (() => api.assistantCommand(prompt).then(live => ({
+          kind: live.kind,
+          message: live.message,
+          results: (live.results || []).map(id => users.find(user => user.id === id)).filter((user): user is User => Boolean(user)),
+          metrics: live.metrics?.reduce((values, metric) => {
+            values[metric.label] = metric.value;
+            return values;
+          }, {} as Record<string, number>),
+          target: live.targetId ? users.find(user => user.id === live.targetId) : undefined,
+          suggestions: live.suggestions,
+        })))()
+        : api.adminAiCommand(
+          prompt,
+          aiContextTargetId || undefined,
+          aiMessages,
+          aiMemories,
+        );
       setAiReply(result.message);
       setAiActionId(result.actionId || null);
       setAiResults(result.results || []);

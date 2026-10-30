@@ -563,6 +563,7 @@ const adminAiCorrections: Record<string, string> = {
   tailro: 'tailor', tailer: 'tailor', merchanet: 'merchant', merhcant: 'merchant',
   warnn: 'warn', warnning: 'warn', bloock: 'block', blok: 'block', promot: 'promote',
   promte: 'promote', sellerz: 'sellers', merchat: 'merchant', merchnt: 'merchant',
+  fabme: 'fabme',
 };
 
 const adminAiVocabulary = new Set([
@@ -2525,6 +2526,115 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         createdAt: String(profile.created_at || new Date().toISOString()), isSuperAdmin: profile.is_super_admin === true,
         addedByEmail: String(profile.added_by_email || ''),
       };
+    });
+
+    app.post('/api/assistant/command', async (req: Request, res: Response) => {
+      const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim().slice(0, 500) : '';
+      if (!prompt) {
+        res.status(400).json({ error: 'Tell Lumina what you would like to know.' });
+        return;
+      }
+
+      const normalized = normalizeAdminAiPrompt(prompt);
+      const [profiles, posts] = await Promise.all([getUsers(true), getPosts(1000)]);
+      const sellers = profiles.filter(profile => profile.role === 'tailor' || profile.role === 'fabric_seller');
+      const sellerTerms = new Set([
+        'how', 'many', 'much', 'does', 'do', 'has', 'have', 'on', 'their', 'the', 'post', 'posts',
+        'listing', 'listings', 'location', 'where', 'is', 'are', 'me', 'please', 'merchant', 'merchants',
+        'seller', 'sellers', 'tailor', 'tailors', 'fabric', 'shop', 'account', 'accounts', 'about',
+        'total', 'published', 'live', 'and', 'or', 'in', 'of', 'tell', 'find', 'show', 'open',
+      ]);
+      const terms = normalized.split(/\s+/)
+        .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
+        .filter(word => word.length > 1 && !sellerTerms.has(word) && !/^\d+$/.test(word));
+      const sellerMatches = sellers
+        .map(profile => {
+          const location = profile.location && typeof profile.location === 'object'
+            ? profile.location as Record<string, unknown>
+            : {};
+          const values = [profile.name, profile.handle, profile.shopName, profile.email, location.city, location.state, location.country]
+            .map(value => normalizeAdminAiPrompt(String(value || '')))
+            .filter(Boolean);
+          const score = terms.reduce((total, term) => total + Math.min(...values.map(value => (
+            value.includes(term) ? 0 : editDistance(term, value)
+          ))), 0);
+          const closeEnough = terms.length > 0 && terms.every(term => values.some(value => (
+            value.includes(term) || editDistance(term, value) <= Math.max(2, Math.ceil(term.length * 0.4))
+          )));
+          return { profile, score, closeEnough };
+        })
+        .filter(item => item.closeEnough)
+        .sort((left, right) => left.score - right.score)
+        .slice(0, 10)
+        .map(item => item.profile);
+
+      if (sellerMatches.length > 1) {
+        res.json({
+          kind: 'results',
+          message: `I found ${sellerMatches.length} merchants that could match. Choose the right profile and I’ll check its live details.`,
+          results: sellerMatches.map(profile => String(profile.id)),
+          suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'],
+        });
+        return;
+      }
+
+      if (sellerMatches.length === 1) {
+        const seller = sellerMatches[0];
+        const sellerPosts = posts.filter(post => String(post.authorId) === String(seller.id) && !post.deleted_at && !post.deletedAt);
+        const publishedPosts = sellerPosts.filter(post => post.status === 'published' && post.moderation_status === 'approved');
+        const location = seller.location && typeof seller.location === 'object'
+          ? seller.location as Record<string, unknown>
+          : {};
+        const asksLocation = /\b(location|where|city|based|from)\b/.test(normalized);
+        const asksPosts = /\b(post|posts|listing|listings|publish|published)\b/.test(normalized);
+        const locationText = [location.city, location.state, location.country].map(value => String(value || '')).filter(Boolean).join(', ') || 'location not listed';
+        const answer = asksLocation && asksPosts
+          ? `${seller.name || seller.handle} is based in ${locationText} and has ${sellerPosts.length} total posts (${publishedPosts.length} published listings).`
+          : asksLocation
+            ? `${seller.name || seller.handle} is based in ${locationText}.`
+            : asksPosts
+              ? `${seller.name || seller.handle} has ${sellerPosts.length} total posts, including ${publishedPosts.length} published listings.`
+              : `${seller.name || seller.handle} is based in ${locationText} and has ${sellerPosts.length} total posts.`;
+        res.json({
+          kind: 'message',
+          message: `${answer} I checked the live marketplace records just now.`,
+          targetId: String(seller.id),
+          suggestions: ['Show this profile', 'Show all merchants', 'Find a tailor'],
+        });
+        return;
+      }
+
+      if (/\b(show|list|browse|find)\b/.test(normalized) && /\b(merchant|merchants|seller|sellers|tailor|tailors|artisan|artisans)\b/.test(normalized)) {
+        const requestedRole = /\btailor/.test(normalized) ? 'tailor' : /\bfabric seller/.test(normalized) ? 'fabric_seller' : '';
+        const matchingSellers = requestedRole ? sellers.filter(profile => profile.role === requestedRole) : sellers;
+        res.json({
+          kind: 'results',
+          message: matchingSellers.length
+            ? `I found ${matchingSellers.length} live merchant profiles. Choose one to open it.`
+            : 'I could not find any merchants in that category yet.',
+          results: matchingSellers.slice(0, 10).map(profile => String(profile.id)),
+          suggestions: ['How many merchants are there?', 'Find a tailor', 'Find a fabric seller'],
+        });
+        return;
+      }
+
+      if (/\bhow many\b/.test(normalized) && /\bmerchant|merchants|seller|sellers|tailor|tailors\b/.test(normalized)) {
+        const tailors = sellers.filter(profile => profile.role === 'tailor').length;
+        const fabricSellers = sellers.filter(profile => profile.role === 'fabric_seller').length;
+        res.json({
+          kind: 'analytics',
+          message: `There are ${sellers.length} merchants on Fabsattire right now: ${tailors} tailors and ${fabricSellers} fabric sellers.`,
+          metrics: [{ label: 'Total merchants', value: sellers.length }, { label: 'Tailors', value: tailors }, { label: 'Fabric sellers', value: fabricSellers }],
+          suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'],
+        });
+        return;
+      }
+
+      res.json({
+        kind: 'message',
+        message: 'I can check live merchant profiles, locations, posts, listings, and fabric options. Tell me a name, handle, city, or what you are looking for.',
+        suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'],
+      });
     });
 
     app.post('/api/admin/ai/command', requireAuth, requireAdmin, requireSuperAdmin, async (req: AuthenticatedRequest, res) => {
