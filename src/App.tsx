@@ -43,7 +43,6 @@ const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
   '/collections': 'collections',
   '/dashboard': 'dashboard',
   '/admin': 'admin',
-  '/lumina': 'lumina',
 };
 
 const PATH_BY_VIEW: Record<string, string> = Object.fromEntries(Object.entries(PUBLIC_VIEW_BY_PATH).map(([path, view]) => [view, path]));
@@ -59,7 +58,8 @@ const getInitialView = () => {
   const path = window.location.pathname.replace(/\/$/, '') || '/';
   if (/^\/@[^/]+\/post\/[^/]+$/i.test(path)) return 'post';
   if (/^\/@[^/]+$/i.test(path)) return 'seller';
-  return PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabsattire_active_view') || sessionStorage.getItem('fabrilux_active_view') || 'landing';
+  const storedView = sessionStorage.getItem('fabsattire_active_view') || sessionStorage.getItem('fabrilux_active_view');
+  return PUBLIC_VIEW_BY_PATH[path] || (storedView === 'lumina' ? 'admin' : storedView) || 'landing';
 };
 
 const getInitialPostId = () => {
@@ -440,7 +440,7 @@ export default function App() {
   const [savePictureTitle, setSavePictureTitle] = useState<string | null>(null);
 
   // Only fetch market data when the user is actually on a live marketplace view.
-  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'post', 'dashboard', 'profile', 'collections', 'messages', 'admin', 'lumina'];
+  const marketplaceViews = ['marketplace', 'artisan', 'seller', 'post', 'dashboard', 'profile', 'collections', 'messages', 'admin'];
   const canRefreshMarketplaceData = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
 
   const navigateToView = (view: string) => {
@@ -1175,7 +1175,12 @@ export default function App() {
         <ArrowUp className="h-5 w-5" />
       </button>
       {currentUser?.isSuperAdmin && (
-        <LuminaFloatingShortcut isDarkMode={isDarkMode} onOpen={() => setCurrentView('lumina')} />
+        <LuminaFloatingShortcut isDarkMode={isDarkMode} onOpen={() => {
+          setSharedSeller(null);
+          setSharedPostId(null);
+          setSelectedPostId(null);
+          setCurrentView('lumina');
+        }} />
       )}
 
       {!isOnline && (
