@@ -2469,6 +2469,82 @@ app.get('/api/users', async (_req, res) => {
   }
 });
 
+app.post('/api/assistant/command', async (req: Request, res: Response) => {
+  const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim().slice(0, 500) : '';
+  if (!prompt) {
+    res.status(400).json({ error: 'Tell Lumina what you would like to know.' });
+    return;
+  }
+  try {
+    const normalized = normalizeAdminAiPrompt(prompt);
+    const [profiles, posts] = await Promise.all([getUsers(true), getPosts(1000)]);
+    const sellers = profiles.filter(profile => profile.role === 'tailor' || profile.role === 'fabric_seller');
+    const ignoredTerms = new Set([
+      'how', 'many', 'much', 'does', 'do', 'has', 'have', 'on', 'their', 'the', 'post', 'posts',
+      'listing', 'listings', 'location', 'where', 'is', 'are', 'me', 'please', 'merchant', 'merchants',
+      'seller', 'sellers', 'tailor', 'tailors', 'fabric', 'shop', 'account', 'accounts', 'about',
+      'total', 'published', 'live', 'and', 'or', 'in', 'of', 'tell', 'find', 'show', 'open',
+    ]);
+    const terms = normalized.split(/\s+/)
+      .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
+      .filter(word => word.length > 1 && !ignoredTerms.has(word) && !/^\d+$/.test(word));
+    const matches = sellers
+      .map(profile => {
+        const location = profile.location && typeof profile.location === 'object'
+          ? profile.location as Record<string, unknown>
+          : {};
+        const values = [profile.name, profile.handle, profile.shopName, profile.email, location.city, location.state, location.country]
+          .map(value => normalizeAdminAiPrompt(String(value || '')))
+          .filter(Boolean);
+        const closeEnough = terms.length > 0 && terms.every(term => values.some(value => (
+          value.includes(term) || editDistance(term, value) <= Math.max(2, Math.ceil(term.length * 0.4))
+        )));
+        const score = terms.reduce((total, term) => total + Math.min(...values.map(value => value.includes(term) ? 0 : editDistance(term, value))), 0);
+        return { profile, closeEnough, score };
+      })
+      .filter(item => item.closeEnough)
+      .sort((left, right) => left.score - right.score)
+      .slice(0, 10)
+      .map(item => item.profile);
+
+    if (matches.length === 1) {
+      const seller = matches[0];
+      const sellerPosts = posts.filter(post => String(post.authorId) === String(seller.id) && !post.deleted_at && !post.deletedAt);
+      const publishedPosts = sellerPosts.filter(post => post.status === 'published' && post.moderation_status === 'approved');
+      const location = seller.location && typeof seller.location === 'object'
+        ? seller.location as Record<string, unknown>
+        : {};
+      const locationText = [location.city, location.state, location.country].map(value => String(value || '')).filter(Boolean).join(', ') || 'location not listed';
+      const asksLocation = /\b(location|where|city|based|from)\b/.test(normalized);
+      const asksPosts = /\b(post|posts|listing|listings|publish|published)\b/.test(normalized);
+      const message = asksLocation && asksPosts
+        ? `${seller.name || seller.handle} is based in ${locationText} and has ${sellerPosts.length} total posts (${publishedPosts.length} published listings).`
+        : asksLocation
+          ? `${seller.name || seller.handle} is based in ${locationText}.`
+          : `${seller.name || seller.handle} has ${sellerPosts.length} total posts, including ${publishedPosts.length} published listings.`;
+      res.json({ kind: 'message', message: `${message} I checked the live marketplace records just now.`, targetId: String(seller.id), suggestions: ['Show this profile', 'Show all merchants', 'Find a tailor'] });
+      return;
+    }
+
+    if (matches.length > 1) {
+      res.json({ kind: 'results', message: `I found ${matches.length} merchants that could match. Choose the right profile and I’ll check its live details.`, results: matches.map(profile => String(profile.id)), suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
+      return;
+    }
+
+    if (/\bhow many\b/.test(normalized) && /\bmerchant|merchants|seller|sellers|tailor|tailors\b/.test(normalized)) {
+      const tailors = sellers.filter(profile => profile.role === 'tailor').length;
+      const fabricSellers = sellers.filter(profile => profile.role === 'fabric_seller').length;
+      res.json({ kind: 'analytics', message: `There are ${sellers.length} merchants on Fabsattire right now: ${tailors} tailors and ${fabricSellers} fabric sellers.`, metrics: [{ label: 'Total merchants', value: sellers.length }, { label: 'Tailors', value: tailors }, { label: 'Fabric sellers', value: fabricSellers }], suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
+      return;
+    }
+
+    res.json({ kind: 'message', message: 'I could not find a matching merchant in the live marketplace data. Try their name, handle, or city.', suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
+  } catch (error) {
+    console.error('Lumina live assistant request failed.', error);
+    res.status(503).json({ error: 'Lumina could not read live marketplace data right now. Please try again.' });
+  }
+});
+
 app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: AuthenticatedRequest, res) => {
   try {
     if (!supabaseDataEnabled) {
