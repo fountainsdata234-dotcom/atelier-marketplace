@@ -944,7 +944,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             <span aria-hidden="true" className="typing-caret">{typedGreeting}</span>
           </h1>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-            Discover handcrafted garments and premium fabrics from makers who take the details seriously.
+            Discover handcrafted garments and premium fabrics from merchants who take the details seriously.
           </p>
         </div>
 
@@ -1220,7 +1220,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400/15 text-xs font-bold text-neutral-950 ring-1 ring-amber-500/30">👘</div>
               <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-amber-400">Curated atelier picks</h2>
             </div>
-            <span className="text-[11px] text-neutral-400">Selected work from real makers</span>
+            <span className="text-[11px] text-neutral-400">Selected work from real merchants</span>
           </div>
           <div className="relative overflow-hidden rounded-[2rem] border border-amber-500/30 bg-neutral-950 shadow-[0_30px_80px_rgba(0,0,0,0.4)]">
             {(() => {

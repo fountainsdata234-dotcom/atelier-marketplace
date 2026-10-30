@@ -9,6 +9,23 @@ import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 const LUMINA_WELCOME = "Hi? I’m Lumina ✨ What will you want me to help you with today, boss? 😂";
 
+const LuminaTypingText: React.FC<{ text: string }> = ({ text }) => {
+  const [visibleText, setVisibleText] = useState('');
+
+  useEffect(() => {
+    let index = 0;
+    setVisibleText('');
+    const interval = window.setInterval(() => {
+      index += Math.max(1, Math.ceil(text.length / 180));
+      setVisibleText(text.slice(0, index));
+      if (index >= text.length) window.clearInterval(interval);
+    }, 12);
+    return () => window.clearInterval(interval);
+  }, [text]);
+
+  return <span className={visibleText.length < text.length ? 'typing-caret' : undefined}>{visibleText}</span>;
+};
+
 interface AdminDashboardProps {
   currentUser: User;
   users: User[];
@@ -17,6 +34,9 @@ interface AdminDashboardProps {
   broadcasts: BroadcastMessage[];
   isDarkMode: boolean;
   onOpenSeller: (seller: User) => void;
+  onNavigate: (view: string) => void;
+  onCloseLumina: () => void;
+  isLuminaPage?: boolean;
   initialTab?: 'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai';
 }
 
@@ -28,6 +48,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   broadcasts,
   isDarkMode,
   onOpenSeller,
+  onNavigate,
+  onCloseLumina,
+  isLuminaPage = false,
   initialTab = 'sellers',
 }) => {
   const isSuperAdmin = currentUser.isSuperAdmin === true;
@@ -67,6 +90,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [reportStatus, setReportStatus] = useState<string | null>(null);
   const [abuseFlags, setAbuseFlags] = useState<MarketplaceAbuseFlag[]>([]);
   const [abuseQueueStatus, setAbuseQueueStatus] = useState<string | null>(null);
+  const [isClosingLumina, setIsClosingLumina] = useState(false);
+
+  const closeLumina = () => {
+    if (isClosingLumina) return;
+    setIsClosingLumina(true);
+    window.setTimeout(onCloseLumina, 280);
+  };
 
   useEffect(() => {
     setEditablePlans(promoPlans);
@@ -205,16 +235,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAiListingResults(result.listingResults || []);
       setAiMetrics(result.metrics || null);
       setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
+      if (result.navigationView) onNavigate(result.navigationView);
       if (result.results?.length === 1 && /\b(open|profile|find|search|show|lookup|locate)\b/i.test(prompt)) {
         onOpenSeller(result.results[0]);
-      }
-      if (result.results?.length === 1 && /\b(whatsapp|chat|message|contact)\b/i.test(prompt)) {
-        const seller = result.results[0];
-        const url = buildWhatsAppUrl(
-          seller.whatsappNumber || seller.phone,
-          `Hello ${seller.name}, I’m contacting you from Fabsattire.`,
-        );
-        if (url) window.open(url, '_blank', 'noopener,noreferrer');
       }
       if (result.target) onOpenSeller(result.target);
       if (result.results?.length === 1) setAiContextTargetId(result.results[0].id);
@@ -235,6 +258,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAiReply(result.message);
       setAiActionId(null);
       setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
+      if (result.target) {
+        const url = buildWhatsAppUrl(
+          result.target.whatsappNumber || result.target.phone,
+          result.whatsappMessage || `Hello ${result.target.name}, I’m contacting you from Fabsattire.`,
+        );
+        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      }
     } catch (error) {
       const message = safeCustomerErrorMessage(error, 'The approved admin action could not be completed.');
       setAiReply(message);
@@ -454,9 +484,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+    <div className={`${isLuminaPage ? `fixed inset-0 z-[80] overflow-y-auto px-3 py-3 sm:p-6 ${isClosingLumina ? 'lumina-collapse' : 'lumina-expand'}` : 'relative z-10 w-full px-4 py-6 sm:px-6 lg:px-8'} space-y-8`}>
       {/* Admin Top Banner */}
-      <div className={`p-6 rounded-3xl border transition-all ${
+      <div className={`${isLuminaPage ? 'hidden' : ''} p-6 rounded-3xl border transition-all ${
         isDarkMode
           ? 'bg-gradient-to-br from-amber-500/10 via-[#121316] to-[#0c0d10] border-amber-500/40 shadow-xl'
           : 'bg-gradient-to-br from-amber-50 via-white to-neutral-50 border-amber-300 shadow-sm'
@@ -497,9 +527,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
         </div>
+      </div>
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-2 mt-6 pt-4 border-t border-amber-500/20 text-xs font-medium">
+        <div className={`${isLuminaPage ? 'hidden' : ''} flex flex-wrap gap-2 mt-6 pt-4 border-t border-amber-500/20 text-xs font-medium`}>
           <button
             onClick={() => setActiveTab('sellers')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
@@ -587,15 +618,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             Admin Management ({adminUsers.length})
           </button>
-          {isSuperAdmin && (
-            <button onClick={() => setActiveTab('ai')} className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${activeTab === 'ai' ? 'bg-amber-500 text-neutral-950 font-semibold shadow' : 'bg-neutral-800/40 text-neutral-400 hover:text-white'}`}>
-              AI operator
-            </button>
-          )}
         </div>
 
         {activeTab === 'ai' && isSuperAdmin && (
-          <section className={`-mx-4 mt-4 min-h-[calc(100vh-7rem)] overflow-hidden rounded-none border-y sm:-mx-6 lg:-mx-8 ${isDarkMode ? 'border-neutral-800 bg-[#0f1115]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+          <section className={`${isLuminaPage ? 'min-h-[calc(100vh-1.5rem)] rounded-[2rem] border' : '-mx-4 mt-4 min-h-[calc(100vh-7rem)] overflow-hidden rounded-none border-y sm:-mx-6 lg:-mx-8'} ${isDarkMode ? 'border-neutral-800 bg-[#0f1115]' : 'border-neutral-200 bg-white shadow-sm'}`}>
             <header className={`flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-7 ${isDarkMode ? 'border-neutral-800' : 'border-neutral-200'}`}>
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950 shadow-lg shadow-amber-500/20"><Sparkles className="h-5 w-5" /></div>
@@ -605,6 +631,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {isLuminaPage && <button type="button" onClick={closeLumina} aria-label="Close Lumina" className="rounded-full border border-amber-500/30 p-2 text-amber-300 transition hover:bg-amber-500/10"><X className="h-4 w-4" /></button>}
                 <button type="button" onClick={() => { setAiMemories([]); window.localStorage.removeItem(`atelier-admin-ai-memory:${currentUser.id}`); }} className="rounded-xl border border-neutral-700 px-3 py-2 text-[10px] font-bold text-neutral-400 transition hover:border-red-500/40 hover:text-red-300">Forget memory</button>
                 <button type="button" onClick={() => { setAiMessages([{ role: 'assistant', text: LUMINA_WELCOME }]); setAiReply(null); setAiActionId(null); setAiResults([]); setAiListingResults([]); setAiMetrics(null); setAiContextTargetId(null); window.localStorage.setItem(`atelier-admin-ai-chat:${currentUser.id}`, JSON.stringify([{ role: 'assistant', text: LUMINA_WELCOME }])); }} className="rounded-xl border border-amber-500/30 px-3 py-2 text-[10px] font-bold text-amber-300 transition hover:bg-amber-500/10">Start new chat</button>
               </div>
@@ -615,7 +642,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div key={`${index}-${message.text}`} className={`flex ${message.role === 'admin' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${index === aiMessages.length - 1 ? 'animate-[lumina-message-in_300ms_ease-out]' : ''} ${message.role === 'admin' ? 'rounded-br-md bg-amber-400 text-neutral-950' : isDarkMode ? 'rounded-bl-md bg-neutral-900 text-neutral-200' : 'rounded-bl-md bg-neutral-100 text-neutral-800'}`}>
                     <span className={`mb-1 block text-[9px] font-bold uppercase tracking-wider ${message.role === 'admin' ? 'text-neutral-700' : 'text-neutral-500'}`}>{message.role === 'admin' ? 'You' : 'Lumina'}</span>
-                    <p className="whitespace-pre-wrap">{message.text}</p>
+                    <p className="whitespace-pre-wrap">{message.role === 'assistant' ? <LuminaTypingText text={message.text} /> : message.text}</p>
                   </div>
                 </div>
               ))}
@@ -682,7 +709,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={() => onOpenSeller(result)} className="rounded-lg border border-amber-500/30 px-2.5 py-1.5 text-[10px] font-bold text-amber-300">Open profile</button>
                       <button type="button" onClick={() => setAiContextTargetId(result.id)} className="rounded-lg border border-sky-500/30 px-2.5 py-1.5 text-[10px] font-bold text-sky-300">Use this account</button>
-                      {result.whatsappNumber && <button type="button" onClick={() => { const url = buildWhatsAppUrl(result.whatsappNumber, `Hello ${result.name}, I’m contacting you from Fabsattire.`); if (url) window.open(url, '_blank', 'noopener,noreferrer'); }} className="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300">WhatsApp</button>}
+                      {result.whatsappNumber && <button type="button" onClick={() => { setAiContextTargetId(result.id); setAiPrompt(`contact @${result.handle.replace(/^@/, '')} on WhatsApp`); }} className="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300">Ask to contact on WhatsApp</button>}
                     </div>
                   </div>
                 ))}
@@ -704,8 +731,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {aiActionId && aiReply && <div className="mx-5 mb-5 rounded-2xl border border-red-500/25 bg-red-500/5 p-4 text-sm text-neutral-200 sm:mx-8">{aiReply}<button type="button" onClick={() => void confirmAdminAi()} disabled={aiBusy} className="mt-3 block rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{aiBusy ? 'Executing…' : 'Confirm and execute'}</button></div>}
           </section>
         )}
-      </div>
-
       {/* TAB 1: Tailors & Fabric Sellers Management */}
       {activeTab === 'sellers' && (
         <section className={`p-6 rounded-3xl border transition-colors ${

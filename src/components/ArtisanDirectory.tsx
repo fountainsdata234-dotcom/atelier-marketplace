@@ -635,8 +635,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
         <section ref={globePanelRef} className={`artisan-globe-panel mb-6 overflow-hidden rounded-[1.7rem] border ${isDarkMode ? 'border-orange-300/20 bg-[#1f0d11]' : 'border-orange-500/20 bg-[#1f0d11]'} text-white`}>
           <div className="artisan-globe-panel-header">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Global maker signal network</p>
-              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} near ${selectedGlobeArtisan.location.city}, ${selectedGlobeArtisan.location.country}` : 'Signals pulse around the globe. Search a maker to reveal location markers; saved coordinates are used when available, otherwise locations are approximate—not live GPS or street addresses.'}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-orange-200">Global merchant signal network</p>
+              <p className="mt-1 text-xs text-orange-50/75">{selectedGlobeArtisan ? `Showing ${selectedGlobeArtisan.name} near ${selectedGlobeArtisan.location.city}, ${selectedGlobeArtisan.location.country}` : 'Signals pulse around the globe. Search a merchant to reveal location markers; saved coordinates are used when available, otherwise locations are approximate—not live GPS or street addresses.'}</p>
             </div>
             <span className="artisan-globe-status"><i /> Live network</span>
           </div>

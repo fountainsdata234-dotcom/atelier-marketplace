@@ -478,7 +478,7 @@ export const ArtisanGlobe3D: React.FC<ArtisanGlobe3DProps> = ({ artisans, showAr
       <div className="globe-legend" aria-hidden="true">
         <span><Scissors /> Tailors</span>
         <span><i className="globe-legend-fabric-dot" /> Fabric sellers</span>
-        <span className="globe-legend-zoom">{showArtisanMarkers ? `${artisans.length} matching maker${artisans.length === 1 ? '' : 's'}` : 'Search to reveal makers'}</span>
+        <span className="globe-legend-zoom">{showArtisanMarkers ? `${artisans.length} matching merchant${artisans.length === 1 ? '' : 's'}` : 'Search to reveal merchants'}</span>
       </div>
       {selectedArtisan && (
         <div className="globe-selected-card">

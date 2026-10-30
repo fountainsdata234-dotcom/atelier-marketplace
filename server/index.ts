@@ -550,7 +550,7 @@ type AdminAiPendingAction = {
   expiresAt: number;
   actorId: string;
   targetId: string;
-  action: 'block' | 'warn' | 'promote' | 'pause_listing' | 'archive_listing' | 'approve_listing' | 'reject_listing' | 'broadcast';
+  action: 'block' | 'warn' | 'promote' | 'whatsapp' | 'pause_listing' | 'archive_listing' | 'approve_listing' | 'reject_listing' | 'broadcast';
   reason: string;
   listingId?: string;
   broadcast?: { target: 'all' | 'sellers' | 'buyers'; title: string; body: string };
@@ -607,6 +607,24 @@ const normalizeAdminAiPrompt = (prompt: string) => prompt
   .join(' ');
 
 const adminAiIntentWords = adminAiVocabulary;
+
+const adminAiTargetStopWords = new Set([
+  'that', 'with', 'because', 'for', 'saying', 'says', 'message', 'posted', 'posting',
+  'picture', 'photo', 'image', 'wrong', 'the', 'a', 'an', 'on', 'in', 'to',
+]);
+
+const getAdminAiTargetPhrase = (normalized: string) => {
+  const actionIndex = normalized.search(/\b(warn|block|promote)\b/);
+  if (actionIndex < 0) return '';
+  const remainder = normalized.slice(actionIndex).replace(/^\s*(warn|block|promote)\b\s*/, '');
+  const words = remainder.split(/\s+/);
+  const targetWords: string[] = [];
+  for (const word of words) {
+    if (adminAiTargetStopWords.has(word)) break;
+    if (word.length > 1) targetWords.push(word);
+  }
+  return targetWords.join(' ');
+};
 
 function requireAbuseLimit(action: string) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -2514,7 +2532,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         return;
       }
       const normalized = normalizeAdminAiPrompt(prompt);
-      const profiles = await getUsers(true);
+      const [profiles, posts] = await Promise.all([getUsers(true), getPosts(1000)]);
       const sellers = profiles.filter(profile => profile.role === 'tailor' || profile.role === 'fabric_seller');
       const contextTargetId = typeof req.body?.context?.targetId === 'string' ? req.body.context.targetId : '';
       const conversation = Array.isArray(req.body?.conversation)
@@ -2535,7 +2553,6 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           .filter(Boolean)
           .slice(-200)
         : [];
-      const posts = await getPosts(1000);
       const getValue = (record: Record<string, unknown>, ...keys: string[]) => keys.map(key => record[key]).find(value => value !== undefined && value !== null);
       const requestedCount = Number(normalized.match(/\b(\d+)\b/)?.[1] || 0);
       const isSellerQuery = normalized.includes('seller')
@@ -2572,6 +2589,33 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         || (normalized.includes('top') && isSellerQuery)
         || (normalized.includes('new') && isSellerQuery)
         || (isListingQuery && (normalized.includes('search') || normalized.includes('find') || normalized.includes('show')));
+      const navigationViews: Record<string, string> = {
+        home: 'landing',
+        landing: 'landing',
+        marketplace: 'marketplace',
+        market: 'marketplace',
+        artisans: 'artisan',
+        artisan: 'artisan',
+        sellers: 'artisan',
+        seller: 'artisan',
+        messages: 'messages',
+        inbox: 'messages',
+        profile: 'profile',
+        collections: 'collections',
+        admin: 'admin',
+        dashboard: 'dashboard',
+      };
+      const navigationTarget = Object.entries(navigationViews).find(([name]) => (
+        normalized.match(new RegExp(`\\b(?:go|open|show|take me to|navigate to)\\s+(?:the\\s+)?${name}\\b`))
+      ));
+      if (navigationTarget) {
+        res.json({
+          kind: 'navigation',
+          message: `Opening ${navigationTarget[0]} now.`,
+          navigationView: navigationTarget[1],
+        });
+        return;
+      }
       // Natural questions, including questions about live marketplace data, must
       // reach the model. Only explicit lookups and mutations use deterministic
       // routes because those routes render actionable UI and confirmations.
@@ -2760,6 +2804,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         res.json({ kind: 'results', message: `Here are the ${results.length} newest seller accounts.`, results });
         return;
       }
+      const targetPhrase = getAdminAiTargetPhrase(normalized);
       const queryWords = normalized.split(/\s+/)
         .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
         .filter(word => word.length > 1 && !adminAiIntentWords.has(word));
@@ -2778,17 +2823,32 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           location.country,
         ]
           .map(value => normalizeAdminAiPrompt(String(value || '')));
-        return queryWords.length > 0 && queryWords.every(word => values.some(value => value.includes(word)));
+        const searchable = values.join(' ');
+        const targetMatches = targetPhrase
+          && (searchable.includes(targetPhrase)
+            || targetPhrase.split(/\s+/).every(word => values.some(value => value.includes(word))));
+        return Boolean(targetMatches)
+          || (queryWords.length > 0 && queryWords.every(word => values.some(value => value.includes(word))));
       }).slice(0, 10);
       const opensProfile = normalized.includes('open') || normalized.includes('profile');
       const startsWhatsApp = normalized.includes('whatsapp')
         || ((normalized.includes('chat') || normalized.includes('message') || normalized.includes('contact')) && isSellerQuery);
-      if (normalized.includes('search') || normalized.includes('find') || normalized.includes('lookup') || normalized.includes('show') || opensProfile || startsWhatsApp) {
+      if (startsWhatsApp && matches.length > 1) {
+        res.json({ kind: 'results', message: `I found ${matches.length} possible accounts. Choose the exact merchant before I open WhatsApp.`, results: matches });
+        return;
+      }
+      if (matches.length > 1 && /\b(?:warn|block|promote)\b/.test(normalized)) {
+        res.json({ kind: 'results', message: `I found ${matches.length} possible accounts. Choose the exact merchant before I take that action.`, results: matches });
+        return;
+      }
+      if (normalized.includes('search') || normalized.includes('find') || normalized.includes('lookup') || normalized.includes('show') || opensProfile) {
         res.json({ kind: 'results', message: matches.length ? `Found ${matches.length} matching account${matches.length === 1 ? '' : 's'}.` : 'No matching accounts found.', results: matches });
         return;
       }
       const target = matches[0] || profiles.find(profile => String(profile.id) === contextTargetId);
-      const action = normalized.includes('block')
+      const action = startsWhatsApp
+        ? 'whatsapp'
+        : normalized.includes('block')
         ? 'block'
         : normalized.includes('warn')
           ? 'warn'
@@ -2848,8 +2908,16 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         return;
       }
       const id = randomUUID();
-      adminAiPendingActions.set(id, { id, actorId: req.authUser!.uid, targetId: String(target.id), action, reason: `Admin AI instruction: ${prompt}`.slice(0, 500), expiresAt: Date.now() + 10 * 60_000 });
-      res.json({ kind: 'confirmation_required', actionId: id, message: `I am ready to ${action} ${target.name || target.handle || target.email}. Confirm to execute this action.`, target });
+      const targetStart = targetPhrase ? prompt.toLowerCase().indexOf(targetPhrase) : -1;
+      const requestedMessage = targetStart >= 0
+        ? prompt.slice(targetStart + targetPhrase.length).replace(/^(?:\s*(?:that|with|saying|message)\s*)/i, '').trim()
+        : '';
+      const reason = action === 'whatsapp'
+        ? (requestedMessage || `Hello ${target.name || target.handle || ''}, I’m contacting you from Fabsattire.`).slice(0, 500)
+        : (requestedMessage || `Admin AI instruction: ${prompt}`).slice(0, 500);
+      adminAiPendingActions.set(id, { id, actorId: req.authUser!.uid, targetId: String(target.id), action, reason, expiresAt: Date.now() + 10 * 60_000 });
+      const actionLabel = action === 'whatsapp' ? 'contact' : action;
+      res.json({ kind: 'confirmation_required', actionId: id, message: `Are you sure you want to ${actionLabel} ${target.name || target.handle || target.email}${reason ? ` with this message: “${reason}”` : ''}?`, target });
     });
 
     app.post('/api/admin/ai/confirm', requireAuth, requireAdmin, requireSuperAdmin, async (req: AuthenticatedRequest, res) => {
@@ -2935,6 +3003,21 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       const profile = await readProfile(pending.targetId);
       if (!profile || (profile.role !== 'tailor' && profile.role !== 'fabric_seller')) {
         res.status(404).json({ error: 'The seller account no longer exists or is no longer eligible.' });
+        return;
+      }
+      if (pending.action === 'whatsapp') {
+        res.json({
+          ok: true,
+          message: `WhatsApp is ready for ${profile.name || profile.handle || 'the merchant'}.`,
+          target: {
+            id: String(profile.id),
+            name: String(profile.name || profile.handle || 'Merchant'),
+            handle: String(profile.handle || ''),
+            whatsappNumber: String(profile.whatsapp_number || profile.whatsappNumber || ''),
+            phone: String(profile.phone || ''),
+          },
+          whatsappMessage: pending.reason,
+        });
         return;
       }
       const updates = pending.action === 'block'

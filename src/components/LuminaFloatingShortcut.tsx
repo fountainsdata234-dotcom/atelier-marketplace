@@ -56,7 +56,7 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      className={`fixed z-[60] flex h-14 w-14 touch-none items-center justify-center rounded-full border shadow-2xl transition-transform hover:scale-105 ${
+      className={`fixed z-[70] flex h-14 w-14 touch-none items-center justify-center rounded-full border shadow-2xl transition-transform hover:scale-105 ${
         isDarkMode
           ? 'border-amber-300/50 bg-amber-400 text-neutral-950 shadow-amber-500/30'
           : 'border-amber-600/40 bg-amber-500 text-white shadow-amber-500/30'

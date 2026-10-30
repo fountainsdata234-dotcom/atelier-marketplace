@@ -8,7 +8,7 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, isDarkMode }) => {
-  const headline = 'Find your fit. Meet your maker.';
+  const headline = 'Find your fit. Meet your merchant.';
   const typedHeadline = useTypingText([headline], { enabled: true, typeDelayMs: 84 });
 
   return (
@@ -19,7 +19,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, isDarkMode
           <p className={`mb-5 text-xs font-semibold uppercase tracking-[0.28em] ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
             Fabsattire · Tailoring & textiles
           </p>
-          <h1 className={`h-[2em] overflow-hidden text-5xl font-semibold leading-[0.98] tracking-[-0.065em] sm:text-6xl md:text-7xl lg:text-8xl ${isDarkMode ? 'text-white' : 'text-neutral-950'}`}>
+          <h1 className={`min-h-[2em] overflow-visible text-5xl font-semibold leading-[0.98] tracking-[-0.065em] sm:text-6xl md:text-7xl lg:text-8xl ${isDarkMode ? 'text-white' : 'text-neutral-950'}`}>
             <span aria-hidden="true" className="typing-caret">{typedHeadline}</span>
             <span className="sr-only">{headline}</span>
           </h1>

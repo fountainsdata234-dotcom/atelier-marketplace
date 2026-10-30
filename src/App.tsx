@@ -394,8 +394,8 @@ export default function App() {
 
   useEffect(() => {
     const pageMeta: Record<string, { title: string; description: string }> = {
-      landing: { title: 'Fabsattire | Tailors, Fabrics & Bespoke Fashion', description: 'Find skilled tailors, quality fabrics, and distinctive bespoke fashion. Explore maker collections, discover artisans by location, and connect directly.' },
-      marketplace: { title: 'Tailors, Fabrics & Bespoke Pieces | Fabsattire', description: 'Explore garments and fabrics from independent tailors and fabric sellers. Search maker collections and contact artisans directly.' },
+      landing: { title: 'Fabsattire | Tailors, Fabrics & Bespoke Fashion', description: 'Find skilled tailors, quality fabrics, and distinctive bespoke fashion. Explore merchant collections, discover artisans by location, and connect directly.' },
+      marketplace: { title: 'Tailors, Fabrics & Bespoke Pieces | Fabsattire', description: 'Explore garments and fabrics from independent tailors and fabric sellers. Search merchant collections and contact artisans directly.' },
       artisan: { title: 'Find Tailors & Fabric Sellers | Fabsattire', description: 'Discover tailors and fabric merchants by location, explore their work, and visit their seller collections.' },
       lumina: { title: 'Lumina | Fabsattire Super Admin', description: 'Private Super Admin workspace for live Fabsattire operations and marketplace intelligence.' },
       about: { title: 'About Fabsattire', description: 'Learn how Fabsattire connects people with independent tailors and fabric sellers.' },
@@ -1338,6 +1338,9 @@ export default function App() {
                 broadcasts={broadcasts}
                 isDarkMode={isDarkMode}
                 onOpenSeller={handleSelectSeller}
+                onNavigate={navigateToView}
+                onCloseLumina={() => navigateToView('admin')}
+                isLuminaPage={currentView === 'lumina'}
                 initialTab={currentView === 'lumina' ? 'ai' : undefined}
               />
             </motion.div>

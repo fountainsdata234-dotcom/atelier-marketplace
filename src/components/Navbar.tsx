@@ -61,7 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <img
             src="/logo.png"
             alt="Fabsattire logo"
-            className="h-9 w-9 rounded-lg object-cover shadow-md shadow-amber-500/20 ring-1 ring-amber-500/30 transition-transform duration-200 group-hover:scale-105 sm:h-10 sm:w-10"
+            className="h-9 w-9 rounded-lg object-cover transition-transform duration-200 group-hover:scale-105 sm:h-10 sm:w-10"
           />
           <div className="brand-lockup relative border-l border-amber-500/30 pl-3">
             <span className="brand-thread brand-thread-one" aria-hidden="true" />

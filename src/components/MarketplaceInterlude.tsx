@@ -60,7 +60,7 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
             A pause for the hands behind the craft.
           </h2>
           <p className={`mt-3 max-w-lg text-sm leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-            You have seen the latest pieces. Now meet the makers behind the work.
+            You have seen the latest pieces. Now meet the merchants behind the work.
           </p>
           <div className="mt-5 flex items-center gap-2">
             {featuredSellers.map((seller, index) => (
@@ -88,7 +88,7 @@ export const MarketplaceInterlude: React.FC<MarketplaceInterludeProps> = ({ post
               <button type="button" onClick={() => onSelectSeller(active.user)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 transition hover:gap-2.5">Visit atelier <ArrowRight className="h-3.5 w-3.5" /></button>
             </div>
           </div>
-          {featuredSellers.length > 1 && <div className="absolute bottom-3 right-3 flex gap-1"><button type="button" aria-label="Previous featured maker" onClick={() => setActiveIndex(index => (index - 1 + featuredSellers.length) % featuredSellers.length)} className="rounded-full border border-amber-500/30 p-1.5 text-amber-400 hover:bg-amber-500/10"><ChevronLeft className="h-3.5 w-3.5" /></button><button type="button" aria-label="Next featured maker" onClick={() => setActiveIndex(index => (index + 1) % featuredSellers.length)} className="rounded-full border border-amber-500/30 p-1.5 text-amber-400 hover:bg-amber-500/10"><ChevronRight className="h-3.5 w-3.5" /></button></div>}
+          {featuredSellers.length > 1 && <div className="absolute bottom-3 right-3 flex gap-1"><button type="button" aria-label="Previous featured merchant" onClick={() => setActiveIndex(index => (index - 1 + featuredSellers.length) % featuredSellers.length)} className="rounded-full border border-amber-500/30 p-1.5 text-amber-400 hover:bg-amber-500/10"><ChevronLeft className="h-3.5 w-3.5" /></button><button type="button" aria-label="Next featured merchant" onClick={() => setActiveIndex(index => (index + 1) % featuredSellers.length)} className="rounded-full border border-amber-500/30 p-1.5 text-amber-400 hover:bg-amber-500/10"><ChevronRight className="h-3.5 w-3.5" /></button></div>}
         </motion.div>
       </div>
       <Sparkles className="pointer-events-none absolute right-6 top-5 h-4 w-4 text-amber-400/40" />

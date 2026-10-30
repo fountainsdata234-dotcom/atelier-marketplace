@@ -225,6 +225,7 @@ export const api = {
     kind: 'results' | 'message' | 'chat' | 'confirmation_required' | 'analytics' | 'listing_results';
     message: string;
     actionId?: string;
+    navigationView?: string;
     target?: User;
     results?: User[];
     listingResults?: ClothPost[];
@@ -238,7 +239,12 @@ export const api = {
       memories: memories?.slice(-200),
     }),
   }),
-  adminAiConfirm: (actionId: string) => request<{ ok: boolean; message: string }>('/api/admin/ai/confirm', { method: 'POST', body: JSON.stringify({ actionId }) }),
+  adminAiConfirm: (actionId: string) => request<{
+    ok: boolean;
+    message: string;
+    target?: Pick<User, 'id' | 'name' | 'handle' | 'whatsappNumber' | 'phone'>;
+    whatsappMessage?: string;
+  }>('/api/admin/ai/confirm', { method: 'POST', body: JSON.stringify({ actionId }) }),
   getPosts: (search?: string) => request<ClothPost[]>(search ? `/api/posts?q=${encodeURIComponent(search)}` : '/api/posts'),
   refreshPosts: () => {
     publicReadCache.delete('/api/posts');
