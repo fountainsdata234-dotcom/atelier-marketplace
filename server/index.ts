@@ -571,6 +571,7 @@ const adminAiVocabulary = new Set([
   'the', 'for', 'me', 'account', 'accounts', 'top', 'new', 'latest',   'whatsapp', 'listing', 'listings', 'post', 'posts', 'pause', 'archive', 'approve',
   'reject', 'broadcast', 'announce', 'announcement', 'analytics', 'overview', 'stats',
   'statistics', 'users', 'buyers', 'live', 'published', 'blocked', 'promoted',
+  'are', 'you', 'your', 'u', 'serious', 'cant', 'cannot', 'from', 'where', 'is',
 ]);
 
 const editDistance = (left: string, right: string) => {
@@ -2577,6 +2578,9 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       const merchantQuestionTerms = normalized.split(/\s+/)
         .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
         .filter(word => word.length > 1 && !merchantQuestionWords.has(word) && !/^\d+$/.test(word));
+      const looksLikeSellerLookup = /\b(find|locate|where is|who is|open|go to|navigate to)\b/.test(normalized)
+        && merchantQuestionTerms.length > 0
+        && !isListingQuery;
       const isMerchantQuestion = /\b(?:how many|how much|does|do|has|have|tell me|show me)\b/.test(normalized)
         && (normalized.includes('merchant') || normalized.includes('seller') || normalized.includes('tailor')
           || normalized.includes('post') || normalized.includes('listing') || normalized.includes('like')
@@ -2632,9 +2636,9 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         });
         return;
       }
-      if (isMerchantQuestion) {
+      if (isMerchantQuestion || looksLikeSellerLookup) {
         const selectedSeller = sellers.find(profile => String(profile.id) === contextTargetId);
-        const sellerMatches = selectedSeller ? [selectedSeller] : sellers.filter(profile => {
+        let sellerMatches = selectedSeller ? [selectedSeller] : sellers.filter(profile => {
           const location = profile.location && typeof profile.location === 'object'
             ? profile.location as Record<string, unknown>
             : {};
@@ -2645,6 +2649,38 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           return merchantQuestionTerms.length === 0
             || merchantQuestionTerms.every(term => values.some(value => value.includes(term)));
         });
+        if (sellerMatches.length === 0 && merchantQuestionTerms.length > 0) {
+          sellerMatches = sellers
+            .map(profile => {
+              const location = profile.location && typeof profile.location === 'object'
+                ? profile.location as Record<string, unknown>
+                : {};
+              const values = [
+                profile.name,
+                profile.handle,
+                profile.email,
+                profile.shopName,
+                location.city,
+                location.state,
+                location.country,
+              ]
+                .map(value => normalizeAdminAiPrompt(String(value || '')))
+                .join(' ')
+                .split(/\s+/)
+                .filter(Boolean);
+              const score = merchantQuestionTerms.reduce((total, term) => total + Math.min(
+                ...values.map(value => editDistance(term, value)),
+              ), 0);
+              const closeEnough = merchantQuestionTerms.every(term => values.some(value => (
+                editDistance(term, value) <= Math.max(2, Math.ceil(term.length * 0.4))
+              )));
+              return { profile, score, closeEnough };
+            })
+            .filter(item => item.closeEnough)
+            .sort((left, right) => left.score - right.score)
+            .slice(0, 10)
+            .map(item => item.profile);
+        }
         if (sellerMatches.length > 1 && merchantQuestionTerms.length > 0) {
           res.json({
             kind: 'results',
@@ -2933,7 +2969,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         contextTargetId
         && normalized.match(/\b(her|him|them|their|this account|this seller|selected account|selected seller)\b/),
       );
-      if (matches.length === 0 && opensProfile && queryWords.length > 0) {
+      if (matches.length === 0 && isExplicitLookupCommand && queryWords.length > 0) {
         const fuzzyMatches = profiles
           .map(profile => {
             const location = profile.location && typeof profile.location === 'object'
@@ -2954,9 +2990,12 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
             const score = queryWords.reduce((total, word) => total + Math.min(
               ...values.map(value => editDistance(word, value)),
             ), 0);
-            return { profile, score };
+            const closeEnough = queryWords.every(word => values.some(value => (
+              editDistance(word, value) <= Math.max(2, Math.ceil(word.length * 0.4))
+            )));
+            return { profile, score, closeEnough };
           })
-          .filter(item => item.score <= queryWords.length * 2)
+          .filter(item => item.closeEnough)
           .sort((left, right) => left.score - right.score)
           .slice(0, 10)
           .map(item => item.profile);
