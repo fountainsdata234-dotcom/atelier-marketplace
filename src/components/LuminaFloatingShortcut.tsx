@@ -12,11 +12,13 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
   const [position, setPosition] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') as { right?: number; bottom?: number } | null;
-      if (saved && typeof saved.right === 'number' && typeof saved.bottom === 'number') return saved;
+      if (saved && typeof saved.right === 'number' && typeof saved.bottom === 'number') {
+        return { right: Math.max(8, saved.right), bottom: Math.max(144, saved.bottom) };
+      }
     } catch {
       // Use the default position when stored device UI state is invalid.
     }
-    return { right: 20, bottom: 88 };
+    return { right: 20, bottom: 152 };
   });
   const dragStart = useRef<{ x: number; y: number; right: number; bottom: number } | null>(null);
   const moved = useRef(false);
@@ -26,7 +28,11 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
   }, [position]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Some browsers reject capture when the pointer leaves during a fast tap.
+    }
     dragStart.current = { x: event.clientX, y: event.clientY, right: position.right, bottom: position.bottom };
     moved.current = false;
   };
@@ -39,13 +45,18 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved.current = true;
     setPosition({
       right: Math.max(8, Math.min(window.innerWidth - 64, start.right - dx)),
-      bottom: Math.max(72, Math.min(window.innerHeight - 64, start.bottom - dy)),
+      bottom: Math.max(144, Math.min(window.innerHeight - 64, start.bottom - dy)),
     });
   };
 
   const handlePointerUp = () => {
     if (!moved.current) onOpen();
     dragStart.current = null;
+  };
+
+  const handlePointerCancel = () => {
+    dragStart.current = null;
+    moved.current = false;
   };
 
   return (
@@ -56,6 +67,7 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       className={`fixed z-[70] flex h-14 w-14 touch-none items-center justify-center rounded-full border shadow-2xl transition-transform hover:scale-105 ${
         isDarkMode
           ? 'border-amber-300/50 bg-amber-400 text-neutral-950 shadow-amber-500/30'

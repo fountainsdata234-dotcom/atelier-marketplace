@@ -2566,6 +2566,21 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         || normalized.includes('statistics')
         || normalized.includes('how many')
         || normalized.includes('top');
+      const merchantQuestionWords = new Set([
+        'how', 'many', 'much', 'does', 'do', 'has', 'have', 'on', 'their', 'the', 'names',
+        'name', 'handle', 'handles', 'with', 'for', 'me', 'please', 'merchant', 'merchants',
+        'seller', 'sellers', 'tailor', 'tailors', 'fabric', 'shop', 'account', 'accounts',
+        'post', 'posts', 'listing', 'listings', 'like', 'likes', 'rating', 'ratings',
+        'review', 'reviews', 'published', 'live', 'total', 'show', 'tell', 'about',
+        'or', 'and', 'in', 'of', 'their',
+      ]);
+      const merchantQuestionTerms = normalized.split(/\s+/)
+        .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
+        .filter(word => word.length > 1 && !merchantQuestionWords.has(word) && !/^\d+$/.test(word));
+      const isMerchantQuestion = /\b(?:how many|how much|does|do|has|have|tell me|show me)\b/.test(normalized)
+        && (normalized.includes('merchant') || normalized.includes('seller') || normalized.includes('tailor')
+          || normalized.includes('post') || normalized.includes('listing') || normalized.includes('like')
+          || normalized.includes('rating') || normalized.includes('review') || merchantQuestionTerms.length > 0);
       const isSiteQuestion = /\b(what|which|who|how|where|when|why|can|is|are|tell)\b/.test(normalized);
       const isMutationCommand = normalized.includes('block')
         || normalized.includes('warn')
@@ -2617,6 +2632,56 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         });
         return;
       }
+      if (isMerchantQuestion) {
+        const sellerMatches = sellers.filter(profile => {
+          const location = profile.location && typeof profile.location === 'object'
+            ? profile.location as Record<string, unknown>
+            : {};
+          const values = [
+            profile.name, profile.handle, profile.email, profile.shopName, profile.id,
+            location.city, location.state, location.country,
+          ].map(value => normalizeAdminAiPrompt(String(value || '')));
+          return merchantQuestionTerms.length === 0
+            || merchantQuestionTerms.every(term => values.some(value => value.includes(term)));
+        });
+        if (sellerMatches.length > 1 && merchantQuestionTerms.length > 0) {
+          res.json({
+            kind: 'results',
+            message: `I found ${sellerMatches.length} merchants matching that name or handle. Choose the exact merchant so I can report the correct live totals.`,
+            results: sellerMatches.slice(0, 10),
+          });
+          return;
+        }
+        if (sellerMatches.length === 1) {
+          const seller = sellerMatches[0];
+          const sellerPosts = posts.filter(post => String(post.authorId || '') === String(seller.id));
+          const publishedPosts = sellerPosts.filter(post => post.status === 'published' && post.moderation_status === 'approved');
+          const likes = sellerPosts.reduce((total, post) => total + (Number(post.likeCount) || (Array.isArray(post.likes) ? post.likes.length : 0)), 0);
+          const ratingsCount = sellerPosts.reduce((total, post) => total + (Number(post.ratingCount) || 0), 0);
+          const ratingTotal = sellerPosts.reduce((total, post) => total + ((Number(post.rating) || 0) * (Number(post.ratingCount) || 0)), 0);
+          const averageRating = ratingsCount > 0 ? (ratingTotal / ratingsCount).toFixed(2) : 'no ratings yet';
+          const wantsPosts = normalized.includes('post') || normalized.includes('listing');
+          const wantsLikes = normalized.includes('like');
+          const wantsRating = normalized.includes('rating') || normalized.includes('review');
+          const answer = wantsPosts
+            ? `${seller.name || seller.handle} has ${sellerPosts.length} total post${sellerPosts.length === 1 ? '' : 's'}, including ${publishedPosts.length} published listing${publishedPosts.length === 1 ? '' : 's'}.`
+            : wantsLikes
+              ? `${seller.name || seller.handle} has ${likes} total like${likes === 1 ? '' : 's'} across ${sellerPosts.length} post${sellerPosts.length === 1 ? '' : 's'}.`
+              : wantsRating
+                ? `${seller.name || seller.handle} has ${averageRating} average rating from ${ratingsCount} rating${ratingsCount === 1 ? '' : 's'} across their listings.`
+                : `${seller.name || seller.handle} has ${sellerPosts.length} total posts, ${publishedPosts.length} published listings, ${likes} likes, and ${averageRating} average rating.`;
+          res.json({
+            kind: 'message',
+            message: `${answer} Live data checked by merchant ID, name, handle, and listing author.`,
+            target: seller,
+          });
+          return;
+        }
+        if (merchantQuestionTerms.length > 0) {
+          res.json({ kind: 'message', message: 'I could not find a merchant matching that name or handle in the live marketplace data.' });
+          return;
+        }
+      }
       // Natural questions, including questions about live marketplace data, must
       // reach the model. Only explicit lookups and mutations use deterministic
       // routes because those routes render actionable UI and confirmations.
@@ -2627,7 +2692,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         return;
       }
       if (shouldUseGemini && gemini) {
-        const sellerSummary = sellers.slice(0, 60).map(profile => ({
+        const sellerSummary = sellers.map(profile => ({
           id: profile.id,
           name: profile.name,
           handle: profile.handle,
@@ -2647,7 +2712,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           sellerListings.push(post);
           listingsBySeller.set(authorId, sellerListings);
         }
-        const sellerListingSummary = sellers.slice(0, 60).map(profile => {
+        const sellerListingSummary = sellers.map(profile => {
           const sellerListings = listingsBySeller.get(String(profile.id)) || [];
           const publishedListings = sellerListings.filter(post => (
             post.status === 'published' && post.moderation_status === 'approved'
