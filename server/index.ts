@@ -2633,7 +2633,8 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         return;
       }
       if (isMerchantQuestion) {
-        const sellerMatches = sellers.filter(profile => {
+        const selectedSeller = sellers.find(profile => String(profile.id) === contextTargetId);
+        const sellerMatches = selectedSeller ? [selectedSeller] : sellers.filter(profile => {
           const location = profile.location && typeof profile.location === 'object'
             ? profile.location as Record<string, unknown>
             : {};
@@ -2901,7 +2902,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
       const queryWords = normalized.split(/\s+/)
         .map(word => word.replace(/^@/, '').replace(/['’]s$/, ''))
         .filter(word => word.length > 1 && !adminAiIntentWords.has(word));
-      const matches = profiles.filter(profile => {
+      let matches = profiles.filter(profile => {
         const location = profile.location && typeof profile.location === 'object'
           ? profile.location as Record<string, unknown>
           : {};
@@ -2923,7 +2924,40 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         return Boolean(targetMatches)
           || (!hasTargetedAction && queryWords.length > 0 && queryWords.every(word => values.some(value => value.includes(word))));
       }).slice(0, 10);
-      const opensProfile = normalized.includes('open') || normalized.includes('profile');
+      const opensProfile = normalized.includes('open')
+        || normalized.includes('profile')
+        || normalized.includes('go to')
+        || normalized.includes('navigate to')
+        || normalized.includes('take me to');
+      if (matches.length === 0 && opensProfile && queryWords.length > 0) {
+        const fuzzyMatches = profiles
+          .map(profile => {
+            const location = profile.location && typeof profile.location === 'object'
+              ? profile.location as Record<string, unknown>
+              : {};
+            const values = [
+              profile.name,
+              profile.handle,
+              profile.shopName,
+              location.city,
+              location.state,
+              location.country,
+            ]
+              .map(value => normalizeAdminAiPrompt(String(value || '')))
+              .join(' ')
+              .split(/\s+/)
+              .filter(Boolean);
+            const score = queryWords.reduce((total, word) => total + Math.min(
+              ...values.map(value => editDistance(word, value)),
+            ), 0);
+            return { profile, score };
+          })
+          .filter(item => item.score <= queryWords.length * 2)
+          .sort((left, right) => left.score - right.score)
+          .slice(0, 10)
+          .map(item => item.profile);
+        matches = fuzzyMatches;
+      }
       const startsWhatsApp = normalized.includes('whatsapp')
         || ((normalized.includes('chat') || normalized.includes('message') || normalized.includes('contact')) && isSellerQuery);
       if (startsWhatsApp && matches.length > 1) {

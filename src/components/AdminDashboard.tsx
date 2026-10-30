@@ -254,13 +254,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAiMetrics(result.metrics || null);
       setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
       if (result.navigationView) onNavigate(result.navigationView);
-      if (result.results?.length === 1 && /\b(open|profile|find|search|show|lookup|locate)\b/i.test(prompt)) {
+      if (result.results?.length === 1 && /\b(open|profile|find|search|show|lookup|locate|go to|navigate to|take me to)\b/i.test(prompt)) {
         onOpenSeller(result.results[0]);
       }
       if (result.target) onOpenSeller(result.target);
       if (result.results?.length === 1) setAiContextTargetId(result.results[0].id);
     } catch (error) {
       const message = safeCustomerErrorMessage(error, 'The admin operator could not process that instruction.');
+      setAiReply(message);
+      setAiMessages(current => [...current, { role: 'assistant' as const, text: message }].slice(-50));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const useAccountForLumina = async (seller: User) => {
+    const handle = seller.handle.replace(/^@/, '');
+    const contextMessage = `Use this account: ${seller.name} (@${handle}). My next questions are about this particular seller.`;
+    const prompt = `Tell me the important current information about ${seller.name} (@${handle}), including their role, location, listings, published listings, likes, and ratings.`;
+    const nextMessages = [...aiMessages, { role: 'admin' as const, text: contextMessage }].slice(-50);
+    setAiContextTargetId(seller.id);
+    window.localStorage.setItem(`atelier-admin-ai-context:${currentUser.id}`, seller.id);
+    setAiMessages(nextMessages);
+    setAiPrompt('');
+    setAiBusy(true);
+    setAiReply(null);
+    setAiActionId(null);
+    setAiResults([]);
+    setAiListingResults([]);
+    setAiMetrics(null);
+    try {
+      const result = await api.adminAiCommand(prompt, seller.id, nextMessages, aiMemories);
+      setAiReply(result.message);
+      setAiActionId(result.actionId || null);
+      setAiResults(result.results || []);
+      setAiListingResults(result.listingResults || []);
+      setAiMetrics(result.metrics || null);
+      setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
+    } catch (error) {
+      const message = safeCustomerErrorMessage(error, 'Lumina could not load that seller’s information.');
       setAiReply(message);
       setAiMessages(current => [...current, { role: 'assistant' as const, text: message }].slice(-50));
     } finally {
@@ -726,7 +758,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={() => onOpenSeller(result)} className="rounded-lg border border-amber-500/30 px-2.5 py-1.5 text-[10px] font-bold text-amber-300">Open profile</button>
-                      <button type="button" onClick={() => setAiContextTargetId(result.id)} className="rounded-lg border border-sky-500/30 px-2.5 py-1.5 text-[10px] font-bold text-sky-300">Use this account</button>
+                      <button type="button" onClick={() => void useAccountForLumina(result)} disabled={aiBusy} className="rounded-lg border border-sky-500/30 px-2.5 py-1.5 text-[10px] font-bold text-sky-300 disabled:cursor-not-allowed disabled:opacity-50">Use this account</button>
                       {result.whatsappNumber && <button type="button" onClick={() => { setAiContextTargetId(result.id); setAiPrompt(`contact @${result.handle.replace(/^@/, '')} on WhatsApp`); }} className="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-[10px] font-bold text-emerald-300">Ask to contact on WhatsApp</button>}
                     </div>
                   </div>
