@@ -103,6 +103,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [promoPlans]);
 
   useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
     if (!isSuperAdmin) return;
     try {
       const saved = window.localStorage.getItem(`atelier-admin-ai-chat:${currentUser.id}`);
