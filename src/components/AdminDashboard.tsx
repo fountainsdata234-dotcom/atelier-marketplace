@@ -258,12 +258,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAiListingResults([]);
     setAiMetrics(null);
     try {
-      const liveMerchantQuestion = /\b(?:location|where|post|posts|listing|listings|how many|merchant|seller|tailor|fabric seller)\b/i.test(prompt)
-        && !/\b(?:block|warn|promote|broadcast|approve|reject|pause|archive|whatsapp|contact|message)\b/i.test(prompt);
-      const result = liveMerchantQuestion
+      const isAdminAction = /\b(?:block|warn|promote|broadcast|approve|reject|pause|archive|whatsapp|contact|message)\b/i.test(prompt);
+      const result = !isAdminAction
         ? (() => api.assistantCommand(prompt).then(live => ({
           kind: live.kind,
-          message: typeof live.message === 'string' ? live.message : 'I could not produce a live answer.',
+          message: typeof live.message === 'string' && live.message.trim() ? live.message : 'I could not produce a live answer.',
           results: (Array.isArray(live.results) ? live.results : []).map(id => users.find(user => user.id === id)).filter((user): user is User => Boolean(user)),
           metrics: live.metrics?.reduce((values, metric) => {
             values[metric.label] = metric.value;
@@ -278,12 +277,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           aiMessages,
           aiMemories,
         );
-      setAiReply(result.message);
+      const responseMessage = typeof result.message === 'string' && result.message.trim()
+        ? result.message
+        : 'I could not produce a response. Please try that again.';
+      setAiReply(responseMessage);
       setAiActionId(result.actionId || null);
       setAiResults(result.results || []);
       setAiListingResults(result.listingResults || []);
       setAiMetrics(result.metrics || null);
-      setAiMessages(current => [...current, { role: 'assistant' as const, text: result.message }].slice(-50));
+      setAiMessages(current => [...current, { role: 'assistant' as const, text: responseMessage }].slice(-50));
       if (result.navigationView) onNavigate(result.navigationView);
       if (result.results?.length === 1 && /\b(open|profile|find|search|show|lookup|locate|go to|navigate to|take me to)\b/i.test(prompt)) {
         onOpenSeller(result.results[0]);
