@@ -2654,25 +2654,51 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
         }
         if (sellerMatches.length === 1) {
           const seller = sellerMatches[0];
-          const sellerPosts = posts.filter(post => String(post.authorId || '') === String(seller.id));
-          const publishedPosts = sellerPosts.filter(post => post.status === 'published' && post.moderation_status === 'approved');
-          const likes = sellerPosts.reduce((total, post) => total + (Number(post.likeCount) || (Array.isArray(post.likes) ? post.likes.length : 0)), 0);
-          const ratingsCount = sellerPosts.reduce((total, post) => total + (Number(post.ratingCount) || 0), 0);
-          const ratingTotal = sellerPosts.reduce((total, post) => total + ((Number(post.rating) || 0) * (Number(post.ratingCount) || 0)), 0);
+          let sellerPosts: Array<Record<string, unknown>> = [];
+          if (supabaseDataEnabled) {
+            sellerPosts = await getSellerListings(String(seller.id)) as Array<Record<string, unknown>>;
+          } else {
+            const sellerPostSnapshot = await firestore.collection('posts')
+              .where('authorId', '==', String(seller.id))
+              .get();
+            sellerPosts = sellerPostSnapshot.docs.map(document => ({
+              id: document.id,
+              ...document.data(),
+            }));
+          }
+          const activeSellerPosts = sellerPosts.filter(post => !post.deleted_at && !post.deletedAt);
+          const publishedPosts = activeSellerPosts.filter(post => (
+            String(post.status || '') === 'published'
+            && String(post.moderation_status || post.moderationStatus || '') === 'approved'
+            && !post.deleted_at
+            && !post.deletedAt
+          ));
+          const likes = activeSellerPosts.reduce((total, post) => total + (
+            Number(post.likeCount || post.like_count)
+            || (Array.isArray(post.likes) ? post.likes.length : 0)
+          ), 0);
+          const ratingsCount = activeSellerPosts.reduce((total, post) => total + (
+            Number(post.ratingCount || post.rating_count || post.sellerReviewCount || post.seller_review_count) || 0
+          ), 0);
+          const ratingTotal = activeSellerPosts.reduce((total, post) => {
+            const rating = Number(post.rating || post.ratingAverage || post.rating_average || post.sellerRating || post.seller_rating) || 0;
+            const count = Number(post.ratingCount || post.rating_count || post.sellerReviewCount || post.seller_review_count) || 0;
+            return total + rating * count;
+          }, 0);
           const averageRating = ratingsCount > 0 ? (ratingTotal / ratingsCount).toFixed(2) : 'no ratings yet';
           const wantsPosts = normalized.includes('post') || normalized.includes('listing');
           const wantsLikes = normalized.includes('like');
           const wantsRating = normalized.includes('rating') || normalized.includes('review');
           const answer = wantsPosts
-            ? `${seller.name || seller.handle} has ${sellerPosts.length} total post${sellerPosts.length === 1 ? '' : 's'}, including ${publishedPosts.length} published listing${publishedPosts.length === 1 ? '' : 's'}.`
+            ? `${seller.name || seller.handle} has ${activeSellerPosts.length} total post${activeSellerPosts.length === 1 ? '' : 's'}, including ${publishedPosts.length} published listing${publishedPosts.length === 1 ? '' : 's'}.`
             : wantsLikes
-              ? `${seller.name || seller.handle} has ${likes} total like${likes === 1 ? '' : 's'} across ${sellerPosts.length} post${sellerPosts.length === 1 ? '' : 's'}.`
+              ? `${seller.name || seller.handle} has ${likes} total like${likes === 1 ? '' : 's'} across ${activeSellerPosts.length} post${activeSellerPosts.length === 1 ? '' : 's'}.`
               : wantsRating
                 ? `${seller.name || seller.handle} has ${averageRating} average rating from ${ratingsCount} rating${ratingsCount === 1 ? '' : 's'} across their listings.`
-                : `${seller.name || seller.handle} has ${sellerPosts.length} total posts, ${publishedPosts.length} published listings, ${likes} likes, and ${averageRating} average rating.`;
+                : `${seller.name || seller.handle} has ${activeSellerPosts.length} total posts, ${publishedPosts.length} published listings, ${likes} likes, and ${averageRating} average rating.`;
           res.json({
             kind: 'message',
-            message: `${answer} Live data checked by merchant ID, name, handle, and listing author.`,
+            message: `${answer} I checked the merchant's complete listing records, not just the public marketplace feed.`,
             target: seller,
           });
           return;
