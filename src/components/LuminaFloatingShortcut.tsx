@@ -72,15 +72,21 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
-      className={`fixed z-[2147483000] flex h-13 w-13 touch-none items-center justify-center rounded-full border shadow-2xl transition-transform hover:scale-105 ${
+      className={`lumina-floating-button fixed z-[2147483000] flex h-13 w-13 touch-none items-center justify-center rounded-full border shadow-2xl transition-transform hover:scale-105 ${
         isDarkMode
           ? 'border-amber-300/50 bg-amber-400 text-neutral-950 shadow-amber-500/30'
           : 'border-amber-600/40 bg-amber-500 text-white shadow-amber-500/30'
       }`}
       style={{ right: position.right, bottom: position.bottom }}
     >
-      <Bot className="h-6 w-6" aria-hidden="true" />
-      <span className="absolute -bottom-5 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider text-amber-400">Lumina</span>
+      <span className="lumina-floating-halo" aria-hidden="true" />
+      <Bot className="lumina-floating-icon relative z-10 h-6 w-6" aria-hidden="true" />
+      <svg className="lumina-floating-label" viewBox="0 0 96 62" aria-hidden="true">
+        <path id="lumina-label-path" d="M 11 31 A 37 37 0 0 0 85 31" />
+        <text>
+          <textPath href="#lumina-label-path" startOffset="50%" textAnchor="middle">LUMINA</textPath>
+        </text>
+      </svg>
     </button>
   ), document.body);
 };

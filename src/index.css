@@ -625,6 +625,85 @@
   padding-bottom: max(0.55rem, calc(0.55rem + env(safe-area-inset-bottom)));
 }
 
+.lumina-floating-button {
+  isolation: isolate;
+  animation: lumina-float 3.2s ease-in-out infinite;
+  will-change: transform, box-shadow;
+}
+
+.lumina-floating-button:hover,
+.lumina-floating-button:focus-visible {
+  animation-play-state: paused;
+  transform: translateY(-0.2rem) scale(1.08);
+  box-shadow: 0 0 0 0.25rem rgba(251, 191, 36, 0.14), 0 1rem 2.5rem rgba(245, 158, 11, 0.4);
+}
+
+.lumina-floating-button:active {
+  transform: translateY(0.05rem) scale(0.96);
+}
+
+.lumina-floating-halo {
+  position: absolute;
+  inset: -0.3rem;
+  z-index: -1;
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  border-radius: 9999px;
+  opacity: 0.7;
+  animation: lumina-halo 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+.lumina-floating-icon {
+  animation: lumina-bot-bob 2.4s ease-in-out infinite;
+}
+
+.lumina-floating-label {
+  position: absolute;
+  top: 2.55rem;
+  left: 50%;
+  width: 5.6rem;
+  height: 3.65rem;
+  overflow: visible;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.lumina-floating-label path {
+  fill: none;
+  stroke: none;
+}
+
+.lumina-floating-label text {
+  fill: #fbbf24;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+}
+
+@keyframes lumina-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-0.18rem); }
+}
+
+@keyframes lumina-halo {
+  0% { opacity: 0.65; transform: scale(0.9); }
+  70%, 100% { opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes lumina-bot-bob {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-0.08rem) rotate(-4deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lumina-floating-button,
+  .lumina-floating-halo,
+  .lumina-floating-icon {
+    animation: none;
+  }
+}
+
 @media (max-width: 767px) {
   .mobile-detail-sheet {
     transform-origin: center bottom;
