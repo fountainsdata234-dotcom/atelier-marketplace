@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Sparkles, Scissors, Trash2, Search, X, Flag } from 'lucide-react';
+import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Bot, Scissors, Trash2, Search, X, Flag } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, MarketplaceAbuseFlag } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -264,10 +264,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           kind: live.kind,
           message: typeof live.message === 'string' && live.message.trim() ? live.message : 'I could not produce a live answer.',
           results: (Array.isArray(live.results) ? live.results : []).map(id => users.find(user => user.id === id)).filter((user): user is User => Boolean(user)),
-          metrics: live.metrics?.reduce((values, metric) => {
-            values[metric.label] = metric.value;
-            return values;
-          }, {} as Record<string, number>),
+          metrics: Array.isArray(live.metrics)
+            ? live.metrics.reduce((values, metric) => {
+              if (metric && typeof metric.label === 'string' && Number.isFinite(metric.value)) {
+                values[metric.label] = metric.value;
+              }
+              return values;
+            }, {} as Record<string, number>)
+            : undefined,
           target: typeof live.targetId === 'string' ? users.find(user => user.id === live.targetId) : undefined,
           suggestions: live.suggestions,
         })))()
@@ -707,7 +711,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <section className={`${isLuminaPage ? 'min-h-[calc(100vh-1.5rem)] rounded-[2rem] border' : '-mx-4 mt-4 min-h-[calc(100vh-7rem)] overflow-hidden rounded-none border-y sm:-mx-6 lg:-mx-8'} ${isDarkMode ? 'border-neutral-800 bg-[#0f1115]' : 'border-neutral-200 bg-white shadow-sm'}`}>
             <header className={`flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-7 ${isDarkMode ? 'border-neutral-800' : 'border-neutral-200'}`}>
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950 shadow-lg shadow-amber-500/20"><Sparkles className="h-5 w-5" /></div>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950 shadow-lg shadow-amber-500/20"><Bot className="h-5 w-5" aria-hidden="true" /></div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">Lumina</h2><span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">Private admin companion</span></div>
                   <p className="mt-1 truncate text-xs text-neutral-500">Live site intelligence · {aiMemories.length} saved memories on this device</p>

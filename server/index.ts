@@ -843,7 +843,7 @@ function validateListingInput(input: Record<string, unknown>, userId: string, pr
     const minimumOrder = Number(rawDetails.minimumOrder);
     if (!material || !colour || !['yard', 'metre', 'piece', 'roll'].includes(String(priceUnit))
       || !Number.isFinite(minimumOrder) || minimumOrder <= 0) {
-      return { error: 'Fabric listings require material, colour, price unit, and a positive minimum order.' };
+      return { error: 'Fabric listings require free-form material and colour descriptions, a price unit, and a positive minimum order.' };
     }
     if (stockQuantity !== null && minimumOrder > stockQuantity) return { error: 'Minimum order cannot exceed the available quantity.' };
     const width = rawDetails.width === undefined || rawDetails.width === null || rawDetails.width === '' ? null : Number(rawDetails.width);
@@ -3944,7 +3944,7 @@ app.post('/api/posts/:postId/report', requireAuth, requireActiveAccount, async (
   }
 });
 
-const REVIEW_SUBMISSIONS_ENABLED = false;
+const REVIEW_SUBMISSIONS_ENABLED = true;
 const REVIEW_TYPES = new Set(['listing', 'seller']);
 const REVIEW_CATEGORY_KEYS = new Set(['quality', 'communication', 'accuracy', 'timeliness', 'value']);
 const REVIEW_REPORT_REASONS = new Set(['harassment', 'personal_information', 'spam', 'conflict_of_interest', 'policy_violation', 'other']);
