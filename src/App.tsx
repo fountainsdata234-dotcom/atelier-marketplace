@@ -451,6 +451,7 @@ export default function App() {
     setSharedPostId(null);
     setSelectedPostId(null);
     setCurrentView(view);
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   };
 
   useEffect(() => {
@@ -1193,14 +1194,15 @@ export default function App() {
       {/* 5. Main View Content */}
       <main className={`min-w-0 flex-1 ${!currentUser && currentView === 'landing' ? 'pb-8' : 'pb-24'} lg:pb-8`}>
         {isDataLoading ? <ContentSkeleton isDarkMode={isDarkMode} /> : <Suspense fallback={<ContentSkeleton isDarkMode={isDarkMode} />}>
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" initial={false}>
           {currentView === 'landing' && (
             <motion.div
               key="landing"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0, x: '7%', rotateY: 2 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              exit={{ opacity: 0, x: '-7%', rotateY: -2 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'left center', perspective: 1200 }}
             >
               <LandingPage
                 onOpenAuth={handleOpenAuthWithRole}
@@ -1212,10 +1214,11 @@ export default function App() {
           {currentView === 'marketplace' && (
             <motion.div
               key="marketplace"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0, x: '7%', rotateY: 2 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              exit={{ opacity: 0, x: '-7%', rotateY: -2 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'left center', perspective: 1200 }}
             >
               <Marketplace
                 posts={posts}
@@ -1237,7 +1240,7 @@ export default function App() {
           )}
 
           {currentView === 'post' && (
-            <motion.div key="post" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }}>
+            <motion.div className="mobile-detail-sheet" key="post" initial={{ opacity: 0, x: isMobileInstallDevice ? 0 : '7%', y: isMobileInstallDevice ? '8%' : 0, scale: isMobileInstallDevice ? 0.985 : 1, rotateY: isMobileInstallDevice ? 0 : 2 }} animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotateY: 0 }} exit={{ opacity: 0, x: isMobileInstallDevice ? 0 : '-7%', y: isMobileInstallDevice ? '4%' : 0, scale: isMobileInstallDevice ? 0.985 : 1, rotateY: isMobileInstallDevice ? 0 : -2 }} transition={{ type: 'spring', stiffness: 280, damping: 28, mass: 0.72 }} style={{ transformOrigin: 'left center', perspective: 1200 }}>
               <PostDetailPage
                 post={posts.find(post => post.id === selectedPostId) || null}
                 posts={posts}
@@ -1260,10 +1263,11 @@ export default function App() {
           {currentView === 'artisan' && (
             <motion.div
               key="artisan"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0, x: '7%', rotateY: 2 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              exit={{ opacity: 0, x: '-7%', rotateY: -2 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'left center', perspective: 1200 }}
             >
               <ArtisanDirectory
                 users={users}
@@ -1279,10 +1283,11 @@ export default function App() {
           {currentView === 'collections' && (
             <motion.div
               key="collections"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0, x: '7%', rotateY: 2 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              exit={{ opacity: 0, x: '-7%', rotateY: -2 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'left center', perspective: 1200 }}
             >
               <CollectionPage
                 currentUser={currentUser}
@@ -1292,13 +1297,13 @@ export default function App() {
           )}
 
           {currentView === 'profile' && currentUser && (
-            <motion.div key="profile" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }} transition={{ duration: 0.35 }}>
+            <motion.div key="profile" initial={{ opacity: 0, x: '7%', rotateY: 2 }} animate={{ opacity: 1, x: 0, rotateY: 0 }} exit={{ opacity: 0, x: '-7%', rotateY: -2 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }} style={{ transformOrigin: 'left center', perspective: 1200 }}>
               <ProfilePage currentUser={currentUser} isDarkMode={isDarkMode} onNavigate={setCurrentView} onLogout={handleLogout} />
             </motion.div>
           )}
 
           {currentView === 'seller' && sharedSeller && (
-            <motion.div key="seller" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }}>
+            <motion.div className="mobile-detail-sheet" key="seller" initial={{ opacity: 0, x: isMobileInstallDevice ? 0 : '7%', y: isMobileInstallDevice ? '8%' : 0, scale: isMobileInstallDevice ? 0.985 : 1, rotateY: isMobileInstallDevice ? 0 : 2 }} animate={{ opacity: 1, x: 0, y: 0, scale: 1, rotateY: 0 }} exit={{ opacity: 0, x: isMobileInstallDevice ? 0 : '-7%', y: isMobileInstallDevice ? '4%' : 0, scale: isMobileInstallDevice ? 0.985 : 1, rotateY: isMobileInstallDevice ? 0 : -2 }} transition={{ type: 'spring', stiffness: 280, damping: 28, mass: 0.72 }} style={{ transformOrigin: 'left center', perspective: 1200 }}>
               <SellerProfilePage seller={sharedSeller} posts={posts} featuredPostId={sharedPostId} currentUser={currentUser} onOpenAuth={() => handleOpenAuthWithRole('buyer')} isDarkMode={isDarkMode} onBack={() => navigateToView('marketplace')} onShare={handleShareTailorProfile} onToggleFollow={handleToggleFollow} onSelectPost={handleSelectPost} />
             </motion.div>
           )}
@@ -1306,10 +1311,11 @@ export default function App() {
           {currentView === 'dashboard' && currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller') && (
             <motion.div
               key="dashboard"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0, x: '7%', rotateY: 2 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              exit={{ opacity: 0, x: '-7%', rotateY: -2 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'left center', perspective: 1200 }}
             >
               <TailorDashboard
                 currentUser={currentUser}
@@ -1330,10 +1336,11 @@ export default function App() {
           {(currentView === 'admin' || currentView === 'lumina') && currentUser?.role === 'admin' && (
             <motion.div
               key="admin"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.35 }}
+              initial={{ opacity: 0, x: '7%', rotateY: 2 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              exit={{ opacity: 0, x: '-7%', rotateY: -2 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'left center', perspective: 1200 }}
             >
               <AdminDashboard
                 currentUser={currentUser}

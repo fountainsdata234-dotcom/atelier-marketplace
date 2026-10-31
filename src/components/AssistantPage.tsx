@@ -223,7 +223,10 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
     setMessages(current => [...current, userMessage].slice(-MAX_MESSAGES));
     setIsThinking(true);
     try {
-      const liveReply = await api.assistantCommand(text);
+      const liveReply = await api.assistantCommand(text, [...messages, userMessage].map(message => ({
+        role: message.role,
+        text: message.text,
+      })));
       const selectedProfile = liveReply.targetId ? sellers.find(profile => profile.id === liveReply.targetId) : undefined;
       const assistantMessage: AssistantMessage = {
         id: `assistant-${Date.now()}`,
@@ -238,14 +241,12 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
       setIsThinking(false);
       if (selectedProfile && /\b(open|profile)\b/i.test(text)) onSelectSeller(selectedProfile);
     } catch (error) {
-      const fallback = makeReply(text);
       const fallbackMessage: AssistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        text: `${fallback.text} I couldn’t reach the live marketplace service, so this answer may be limited.`,
-        profileIds: fallback.profileIds,
-        metrics: fallback.metrics,
-        suggestions: fallback.suggestions,
+        text: error instanceof Error && error.message
+          ? error.message
+          : 'Lumina could not reach Gemini right now. Please try again.',
         createdAt: new Date().toISOString(),
       };
       setMessages(current => [...current, fallbackMessage].slice(-MAX_MESSAGES));

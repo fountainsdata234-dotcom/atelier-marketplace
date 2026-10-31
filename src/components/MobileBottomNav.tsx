@@ -36,27 +36,27 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: '100%', opacity: 0 }}
       transition={{ type: 'spring', stiffness: 280, damping: 30, mass: 0.8 }}
-      className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-xl px-2 pb-[calc(0.8rem+env(safe-area-inset-bottom))] pt-2 transition-colors ${
+        className={`mobile-bottom-nav lg:hidden fixed bottom-0 left-0 right-0 z-40 px-2 pb-[calc(0.55rem+env(safe-area-inset-bottom))] pt-2 transition-colors ${
           isDarkMode
-            ? 'bg-[#0c0d10]/95 border-neutral-800 text-neutral-300'
-            : 'bg-white/95 border-neutral-200 text-neutral-700 shadow-lg'
+              ? 'text-neutral-300'
+              : 'text-neutral-700'
         }`}
       >
-        <div className="mx-auto max-w-md">
+          <div className={`mx-auto max-w-md rounded-[1.65rem] border p-1.5 shadow-2xl backdrop-blur-2xl ${isDarkMode ? 'border-white/10 bg-[#111318]/90 shadow-black/40' : 'border-neutral-200/80 bg-white/90 shadow-neutral-300/50'}`}>
           {canInstall && (
             <button
               type="button"
               onClick={onInstall}
-              className="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-300"
+              className="tap-spring mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-300"
             >
               <Download className="h-4 w-4" />
               Install app
             </button>
           )}
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-4 gap-1">
             <button
               onClick={() => handleNavigate(currentUser ? 'marketplace' : 'landing')}
-              className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
+              className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
                 primaryActionIsActive(currentUser ? 'marketplace' : 'landing') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
@@ -67,7 +67,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller' || currentUser.role === 'admin') ? (
               <button
                 onClick={() => handleNavigate(studioView)}
-                className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
+                className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
                   primaryActionIsActive(studioView) ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
                 }`}
               >
@@ -77,7 +77,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             ) : (
               <button
                 onClick={() => onOpenAuth()}
-                className="flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 text-neutral-400 transition-all"
+                className="tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 text-neutral-400 transition-all"
               >
                 <LogIn className="w-5 h-5 text-amber-500" />
                 <span className="text-[10px] font-medium">Join</span>
@@ -86,7 +86,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
             <button
               onClick={() => handleNavigate('artisan')}
-              className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
+              className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
                 primaryActionIsActive('artisan') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >
@@ -96,7 +96,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
             <button
               onClick={() => handleNavigate(currentUser ? 'profile' : 'about')}
-              className={`flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-xl p-2 transition-all ${
+              className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
                 primaryActionIsActive(currentUser ? 'profile' : 'about') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
               }`}
             >

@@ -115,6 +115,74 @@ const allowedOrigins = new Set([
   'http://192.168.186.15:3001',
 ]);
 
+type LuminaConversationMessage = {
+  role: 'user' | 'assistant';
+  text: string;
+};
+
+const generateLuminaMessage = async (
+  prompt: string,
+  profiles: ProfileRecord[],
+  posts: Array<Record<string, unknown>>,
+  conversation: LuminaConversationMessage[] = [],
+) => {
+  if (!gemini) {
+    throw new Error('Lumina is not connected to Gemini on the server.');
+  }
+
+  const liveContext = {
+    users: profiles.map(profile => ({
+      id: profile.id,
+      name: profile.name,
+      handle: profile.handle,
+      email: profile.email,
+      role: profile.role,
+      shopName: profile.shopName,
+      bio: profile.bio,
+      location: profile.location,
+      isBlocked: profile.isBlocked,
+      isPromoted: profile.isPromoted,
+      createdAt: profile.createdAt,
+    })),
+    listings: posts.map(post => ({
+      id: post.id,
+      title: post.title,
+      description: post.description,
+      authorId: post.authorId,
+      authorName: post.authorName,
+      authorHandle: post.authorHandle,
+      listingType: post.listingType,
+      status: post.status,
+      moderationStatus: post.moderation_status || post.moderationStatus,
+      location: post.location,
+      createdAt: post.createdAt || post.created_at,
+    })),
+  };
+  const history = conversation.slice(-20).map(message => `${message.role}: ${message.text}`).join('\n');
+  const response = await gemini.models.generateContent({
+    model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+    contents: [
+      `User request: ${prompt}`,
+      history ? `Recent conversation:\n${history}` : '',
+      `Live Fabsattire data (the source of truth; do not invent or omit relevant records):\n${JSON.stringify(liveContext)}`,
+    ].filter(Boolean).join('\n\n'),
+    config: {
+      systemInstruction: [
+        'You are Lumina, an intelligent full assistant inside Fabsattire, a fashion and fabric marketplace.',
+        'Generate a fresh answer for every request using the live data supplied in this request and the recent conversation.',
+        'You can explain, compare, search, summarize, recommend, and guide the user. Never claim an action was completed unless the application explicitly performs it.',
+        'For marketplace facts, use only the supplied live data. If the data does not contain an answer, say that clearly instead of guessing.',
+        'Understand spelling mistakes, informal language, and follow-up questions. Be concise but useful, and do not use canned greetings or fixed scripts.',
+      ].join('\n'),
+      temperature: 0.7,
+      maxOutputTokens: 700,
+    },
+  });
+  const message = response.text?.trim();
+  if (!message) throw new Error('Gemini returned an empty Lumina response.');
+  return message;
+};
+
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled API promise rejection; server kept alive.', reason);
 });
@@ -2471,6 +2539,16 @@ app.get('/api/users', async (_req, res) => {
 
 app.post('/api/assistant/command', async (req: Request, res: Response) => {
   const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim().slice(0, 500) : '';
+  const conversation = Array.isArray(req.body?.conversation)
+    ? req.body.conversation
+      .filter((message: unknown): message is LuminaConversationMessage => (
+        Boolean(message)
+        && typeof message === 'object'
+        && ((message as LuminaConversationMessage).role === 'user' || (message as LuminaConversationMessage).role === 'assistant')
+        && typeof (message as LuminaConversationMessage).text === 'string'
+      ))
+      .slice(-20)
+    : [];
   if (!prompt) {
     res.status(400).json({ error: 'Tell Lumina what you would like to know.' });
     return;
@@ -2479,40 +2557,12 @@ app.post('/api/assistant/command', async (req: Request, res: Response) => {
     const normalized = normalizeAdminAiPrompt(prompt);
     const [profiles, posts] = await Promise.all([getUsers(true), getPosts(1000)]);
     const sellers = profiles.filter(profile => profile.role === 'tailor' || profile.role === 'fabric_seller');
-    const isExplicitMarketplaceQuestion = /\b(?:merchant|merchants|seller|sellers|tailor|tailors|artisan|artisans|fabric|listing|listings|post|posts|location|where|city|shop|handle|profile|marketplace|how many|how much|find|show|open)\b/i.test(prompt);
-    if (!isExplicitMarketplaceQuestion && gemini) {
-      try {
-        const context = {
-          merchantCount: sellers.length,
-          listingCount: posts.length,
-          userCount: profiles.length,
-        };
-        const response = await gemini.models.generateContent({
-          model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-          contents: prompt,
-          config: {
-            systemInstruction: [
-              'You are Lumina, a warm and intelligent assistant inside Fabsattire, a fashion marketplace.',
-              'Respond naturally to casual conversation, greetings, and general questions.',
-              'For “how far” or similar greetings, answer naturally, for example: “I’m doing well and ready to help. What would you like to explore?”',
-              'Do not pretend to have taken actions. Keep the answer concise and conversational.',
-              `Current live context for optional use: ${JSON.stringify(context)}`,
-            ].join('\n'),
-            temperature: 0.7,
-            maxOutputTokens: 300,
-          },
-        });
-        const message = response.text?.trim();
-        if (message) {
-          res.json({ kind: 'chat', message });
-          return;
-        }
-      } catch (error) {
-        console.error('Lumina conversational response failed.', error);
-        res.status(502).json({ error: 'Lumina could not respond conversationally right now. Please try again.' });
-        return;
-      }
+    if (!gemini) {
+      console.error('Lumina request rejected because GEMINI_API_KEY is not configured.');
+      res.status(503).json({ error: 'Lumina is not connected to Gemini on the server yet. Add GEMINI_API_KEY and redeploy the API.' });
+      return;
     }
+    const generatedMessage = await generateLuminaMessage(prompt, profiles, posts, conversation);
     const ignoredTerms = new Set([
       'how', 'many', 'much', 'does', 'do', 'has', 'have', 'on', 'their', 'the', 'post', 'posts',
       'listing', 'listings', 'location', 'where', 'is', 'are', 'me', 'please', 'merchant', 'merchants',
@@ -2556,23 +2606,23 @@ app.post('/api/assistant/command', async (req: Request, res: Response) => {
         : asksLocation
           ? `${seller.name || seller.handle} is based in ${locationText}.`
           : `${seller.name || seller.handle} has ${sellerPosts.length} total posts, including ${publishedPosts.length} published listings.`;
-      res.json({ kind: 'message', message: `${message} I checked the live marketplace records just now.`, targetId: String(seller.id), suggestions: ['Show this profile', 'Show all merchants', 'Find a tailor'] });
+      res.json({ kind: 'message', message: generatedMessage, targetId: String(seller.id), suggestions: ['Show this profile', 'Show all merchants', 'Find a tailor'] });
       return;
     }
 
     if (matches.length > 1) {
-      res.json({ kind: 'results', message: `I found ${matches.length} merchants that could match. Choose the right profile and I’ll check its live details.`, results: matches.map(profile => String(profile.id)), suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
+      res.json({ kind: 'results', message: generatedMessage, results: matches.map(profile => String(profile.id)), suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
       return;
     }
 
     if (/\bhow many\b/.test(normalized) && /\bmerchant|merchants|seller|sellers|tailor|tailors\b/.test(normalized)) {
       const tailors = sellers.filter(profile => profile.role === 'tailor').length;
       const fabricSellers = sellers.filter(profile => profile.role === 'fabric_seller').length;
-      res.json({ kind: 'analytics', message: `There are ${sellers.length} merchants on Fabsattire right now: ${tailors} tailors and ${fabricSellers} fabric sellers.`, metrics: [{ label: 'Total merchants', value: sellers.length }, { label: 'Tailors', value: tailors }, { label: 'Fabric sellers', value: fabricSellers }], suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
+      res.json({ kind: 'analytics', message: generatedMessage, metrics: [{ label: 'Total merchants', value: sellers.length }, { label: 'Tailors', value: tailors }, { label: 'Fabric sellers', value: fabricSellers }], suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
       return;
     }
 
-    res.json({ kind: 'message', message: 'I could not find a matching merchant in the live marketplace data. Try their name, handle, or city.', suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
+    res.json({ kind: 'message', message: generatedMessage, suggestions: ['Show all merchants', 'Find a tailor', 'Find a fabric seller'] });
   } catch (error) {
     console.error('Lumina live assistant request failed.', error);
     res.status(503).json({ error: 'Lumina could not read live marketplace data right now. Please try again.' });

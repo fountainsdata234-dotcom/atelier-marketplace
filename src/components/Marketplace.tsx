@@ -1384,6 +1384,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <div className="space-y-2 p-3">
                       <div>
                         <h3 className={`font-serif text-base font-bold leading-snug ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{post.title}</h3>
+                        <div className="mt-1 flex items-center gap-1 text-[11px]">
+                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                          <span className="font-semibold text-amber-500">{post.rating > 0 ? post.rating.toFixed(1) : 'New'}</span>
+                          <span className={isDarkMode ? 'text-neutral-500' : 'text-neutral-500'}>({post.ratingCount || 0} reviews)</span>
+                        </div>
                         <p className={`mt-1 line-clamp-2 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>{post.description}</p>
                       </div>
                       <button type="button" onClick={() => openListing(post)} className="min-h-9 rounded-lg border border-amber-500/30 px-3 text-left text-[11px] font-semibold text-amber-500 hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">

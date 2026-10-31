@@ -1,180 +1,89 @@
-import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Scissors, Sparkles } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { motion } from 'motion/react';
 
 interface IntroLoaderProps {
   onComplete: () => void;
   isDarkMode: boolean;
 }
 
+const brand = 'FABSATTIRE'.split('');
+const letterStart = [
+  { x: -72, y: 58, rotate: -18 },
+  { x: 54, y: 72, rotate: 14 },
+  { x: -42, y: 42, rotate: -12 },
+  { x: 76, y: 55, rotate: 20 },
+  { x: -64, y: 76, rotate: -16 },
+  { x: 48, y: 48, rotate: 12 },
+  { x: -50, y: 64, rotate: -20 },
+  { x: 68, y: 40, rotate: 16 },
+  { x: -34, y: 70, rotate: -14 },
+  { x: 42, y: 56, rotate: 18 },
+];
+
 export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode }) => {
-  const [stage, setStage] = useState<number>(0);
-  const [progress, setProgress] = useState<number>(10);
-
   useEffect(() => {
-    const timer1 = setTimeout(() => {
-      setStage(1);
-      setProgress(48);
-    }, 120);
-
-    const timer2 = setTimeout(() => {
-      setStage(2);
-      setProgress(84);
-    }, 280);
-
-    const timer3 = setTimeout(() => {
-      setProgress(100);
-      setStage(3);
-    }, 500);
-
-    const finishTimer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       sessionStorage.setItem('fabsattire_intro_seen', '1');
       onComplete();
-    }, 820);
-
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-      clearTimeout(finishTimer);
-    };
+    }, 1050);
+    return () => window.clearTimeout(timer);
   }, [onComplete]);
-
-  const stagesText = [
-    'Unrolling Raw Silk & Cashmere...',
-    'Threading Golden Bespoke Needles...',
-    'Connecting World Artisans & Ateliers...',
-    'Welcome to Haute Couture Marketplace'
-  ];
 
   return (
     <motion.div
       initial={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.04, filter: 'blur(8px)' }}
-      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden ${
-        isDarkMode ? 'bg-[#0a0b0d] text-neutral-100' : 'bg-[#faf8f4] text-neutral-900'
-      }`}
+      exit={{ opacity: 0, scale: 1.02 }}
+      transition={{ duration: 0.28, ease: 'easeOut' }}
+      className={`fixed inset-0 z-50 flex items-center justify-center overflow-hidden ${isDarkMode ? 'bg-[#0c0d10] text-white' : 'bg-[#fbf9f5] text-neutral-900'}`}
+      role="status"
+      aria-label="Opening Fabsattire"
     >
-      {/* Background radial luxury glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(217,119,6,0.12)_0%,transparent_70%)] pointer-events-none" />
-
-      {/* Haute Couture tape measure top & bottom motif */}
-      <div className="absolute top-0 left-0 right-0 h-4 flex items-center justify-between px-2 opacity-30 select-none overflow-hidden font-mono text-[9px] border-b border-amber-600/30">
-        {Array.from({ length: 40 }).map((_, i) => (
-          <span key={i} className="flex flex-col items-center">
-            <span className="h-2 w-px bg-amber-500" />
-            <span>{i * 5}cm</span>
-          </span>
-        ))}
-      </div>
-
-      <div className="relative z-10 flex flex-col items-center max-w-md px-6 text-center">
-        {/* Animated Emblem: Needle & Scissor Weave */}
-        <div className="relative w-28 h-28 mb-8 flex items-center justify-center">
-          {/* Outer rotating stitch ring */}
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
-            className="absolute inset-0 rounded-full border-2 border-dashed border-amber-500/30"
-          />
-
-          {/* Pulsing inner glow */}
-          <motion.div
-            animate={{ scale: [1, 1.15, 1], opacity: [0.2, 0.45, 0.2] }}
-            transition={{ duration: 2.5, repeat: Infinity }}
-            className="absolute inset-2 rounded-full bg-amber-500/20 blur-xl"
-          />
-
-          {/* Central branded logo */}
-          <motion.div
-            initial={{ scale: 0.6, rotate: -25, opacity: 0 }}
-            animate={{ scale: 1, rotate: 0, opacity: 1 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-            className="relative z-10 w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500/20 via-neutral-900/80 to-amber-700/20 border border-amber-500/40 backdrop-blur-md flex items-center justify-center shadow-2xl shadow-amber-900/20"
-          >
-            <img src="/logo.png" alt="FABSATTIRE" className="h-12 w-12 rounded-xl object-cover" />
-          </motion.div>
-
-          <motion.div
-            animate={{ x: [-42, 38, -42], y: [18, -10, 18], rotate: [-18, 16, -18] }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute z-20 text-amber-300 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"
-          >
-            <Scissors className="h-5 w-5" />
-          </motion.div>
-
-          {/* Orbiting Sparkle */}
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-            className="absolute inset-0"
-          >
-            <Sparkles className="w-4 h-4 text-amber-300 absolute -top-1 left-1/2 -translate-x-1/2" />
-          </motion.div>
-        </div>
-
-        {/* Brand Title */}
+      <div className="pointer-events-none absolute h-56 w-56 rounded-full bg-amber-400/10 blur-3xl" />
+      <div className="relative flex flex-col items-center px-6 text-center">
         <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.7 }}
-        >
-          <span className="text-xs uppercase tracking-[0.35em] text-amber-500/90 font-medium">
-            Bespoke Tailoring & Fabric Marketplace
-          </span>
-          <h1 className="text-4xl sm:text-5xl font-serif font-bold tracking-tight mt-1 mb-3 text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100">
-            ATELIER
-          </h1>
-          <p className="text-sm font-light text-neutral-400 max-w-sm mb-6">
-            Where master tailors, exquisite fabric sellers, and discerning clients meet.
-          </p>
-        </motion.div>
-
-        {/* Progress Bar & Stage Indicator */}
-        <div className="w-64 space-y-2.5">
-          <div className="h-1.5 w-full bg-neutral-800/60 rounded-full overflow-hidden border border-amber-500/20">
-            <motion.div
-              className="h-full bg-gradient-to-r from-amber-500 via-amber-300 to-amber-600 rounded-full"
-              style={{ width: `${progress}%` }}
-              transition={{ ease: 'easeOut', duration: 0.4 }}
-            />
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono">
-            <AnimatePresence mode="wait">
+          initial={{ scaleX: 0, opacity: 0 }}
+          animate={{ scaleX: 1, opacity: 1 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="absolute -top-5 h-px w-44 origin-center bg-gradient-to-r from-transparent via-amber-400/80 to-transparent"
+        />
+        <div className="flex h-20 items-end justify-center gap-0.5 sm:h-24">
+          {brand.map((letter, index) => {
+            const start = letterStart[index];
+            return (
               <motion.span
-                key={stage}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.25 }}
-                className="text-amber-400/90"
+                key={`${letter}-${index}`}
+                initial={{ opacity: 0, x: start.x, y: start.y, rotate: start.rotate, scale: 0.72 }}
+                animate={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: [0.72, 1.12, 0.96, 1] }}
+                transition={{ delay: index * 0.055, duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block font-serif text-[clamp(1.7rem,9vw,4rem)] font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-t from-amber-600 via-amber-300 to-amber-100"
               >
-                {stagesText[stage]}
+                {letter}
               </motion.span>
-            </AnimatePresence>
-            <span>{progress}%</span>
-          </div>
+            );
+          })}
         </div>
-
-        {/* Skip button */}
-        <button
-          onClick={onComplete}
-          className="mt-8 text-xs text-neutral-400 hover:text-amber-300 underline underline-offset-4 tracking-wider transition-colors"
+        <motion.div
+          initial={{ width: 0, opacity: 0 }}
+          animate={{ width: 112, opacity: 1 }}
+          transition={{ delay: 0.72, duration: 0.35 }}
+          className="mt-1 h-px bg-gradient-to-r from-transparent via-amber-400 to-transparent"
+        />
+        <motion.span
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.58, duration: 0.3 }}
+          className="mt-3 text-[10px] font-semibold uppercase tracking-[0.32em] text-amber-500"
         >
-          Enter Marketplace Immediately →
-        </button>
-      </div>
-
-      {/* Tape measure bottom */}
-      <div className="absolute bottom-0 left-0 right-0 h-4 flex items-center justify-between px-2 opacity-30 select-none overflow-hidden font-mono text-[9px] border-t border-amber-600/30">
-        {Array.from({ length: 40 }).map((_, i) => (
-          <span key={i} className="flex flex-col items-center">
-            <span className="h-2 w-px bg-amber-500" />
-            <span>{i * 5}cm</span>
-          </span>
-        ))}
+          Tailor · Fabric · Marketplace
+        </motion.span>
+        <div className="mt-7 h-1 w-40 overflow-hidden rounded-full bg-amber-500/15">
+          <motion.div
+            className="h-full rounded-full bg-amber-400"
+            initial={{ width: '0%' }}
+            animate={{ width: '100%' }}
+            transition={{ duration: 0.95, ease: 'easeInOut' }}
+          />
+        </div>
       </div>
     </motion.div>
   );

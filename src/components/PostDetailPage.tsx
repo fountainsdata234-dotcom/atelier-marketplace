@@ -5,6 +5,7 @@ import { getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { PostImage } from './PostImage';
+import { MarketplaceReviews } from './MarketplaceReviews';
 
 interface PostDetailPageProps {
   post: ClothPost | null;
@@ -223,6 +224,14 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
         <div className="mb-4 flex items-end justify-between gap-3 border-b border-amber-500/15 pb-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Selected by shared tags</p><h2 className="mt-1 font-serif text-2xl font-bold">Related pieces</h2></div><span className={`text-xs ${muted}`}>{fromOtherSellers.length} match{fromOtherSellers.length === 1 ? '' : 'es'}</span></div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">{fromOtherSellers.map(renderRelatedCard)}</div>
       </section>}
+      {post && <MarketplaceReviews
+        type="listing"
+        targetId={post.id}
+        contextListingId={post.id}
+        currentUser={currentUser}
+        onOpenAuth={onOpenAuth}
+        isDarkMode={isDarkMode}
+      />}
     </main>
   );
 };
