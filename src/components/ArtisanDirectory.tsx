@@ -4,13 +4,16 @@ import { ClothPost, LocationCity, LocationCountry, LocationRegion, NearbySellerM
 import { findExactArtisanMatch, getSearchSuggestions } from '../utils/globe';
 import { countSellerAccounts, matchesLocationFilter } from '../utils/artisanFilters';
 import { calculateDistanceKm, isConfirmedBusinessLocation, NEARBY_SELLER_RADII_KM } from '../utils/nearbySellers';
-import { resolveSellerMapLocation } from '../data/worldData';
 import type { GlobeArtisan } from './ArtisanGlobe3D';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
 import { isAvailableMarketplaceListing } from '../utils/marketplaceAvailability';
 
 const ArtisanGlobe3D = lazy(() => import('./ArtisanGlobe3D').then(module => ({ default: module.ArtisanGlobe3D })));
+
+const getKnownMapLocation = (location: User['location']): User['location'] | null => (
+  typeof location.lat === 'number' && typeof location.lng === 'number' ? location : null
+);
 
 type DirectorySeller = User & {
   location: User['location'];
@@ -140,7 +143,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const globeArtisans = useMemo(() => {
     return artisans.flatMap((artisan): GlobeArtisan[] => {
       const resolvedLocation = resolvedLocationsById.get(artisan.id)
-        || resolveSellerMapLocation(artisan.location)
+        || getKnownMapLocation(artisan.location)
         || artisan.location;
       if (typeof resolvedLocation.lat !== 'number' || typeof resolvedLocation.lng !== 'number') return [];
       return [{
@@ -155,7 +158,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const [locationCountries, setLocationCountries] = useState<LocationCountry[]>([]);
   const [locationRegions, setLocationRegions] = useState<LocationRegion[]>([]);
   const [locationCities, setLocationCities] = useState<LocationCity[]>([]);
-  const [globeNearViewport, setGlobeNearViewport] = useState(false);
+  const [globeRequested, setGlobeRequested] = useState(false);
   const [locationDataError, setLocationDataError] = useState(false);
   const globePanelRef = useRef<HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -223,7 +226,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   }, [citySearch, filterCountry, filterState, locationRegions]);
 
   useEffect(() => {
-    if (!globeNearViewport) return;
+    if (!globeRequested) return;
     if (artisans.length === 0) {
       setResolvedLocationsById(new Map());
       return;
@@ -236,30 +239,13 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       console.warn('Remote seller globe location resolution timed out; using the local CSC catalog.', error);
       if (active) {
         setResolvedLocationsById(new Map(artisans.flatMap(artisan => {
-          const location = resolveSellerMapLocation(artisan.location);
+          const location = getKnownMapLocation(artisan.location);
           return location ? [[artisan.id, location] as const] : [];
         })));
       }
     });
     return () => { active = false; };
-  }, [artisans, globeNearViewport]);
-
-  useEffect(() => {
-    const panel = globePanelRef.current;
-    if (!panel) return;
-    if (!('IntersectionObserver' in window)) {
-      setGlobeNearViewport(true);
-      return;
-    }
-    const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        setGlobeNearViewport(true);
-        observer.disconnect();
-      }
-    }, { rootMargin: '500px 0px' });
-    observer.observe(panel);
-    return () => observer.disconnect();
-  }, []);
+  }, [artisans, globeRequested]);
 
   React.useEffect(() => {
     if (locationCountries.length === 0) return;
@@ -675,7 +661,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
               </div>
             </div>
           )}
-          {globeNearViewport ? (
+          {globeRequested ? (
             <Suspense fallback={<div className="artisan-globe-3d flex items-center justify-center" role="status" aria-label="Preparing interactive artisan globe"><span className="text-xs text-orange-100/70">Preparing interactive globe…</span></div>}>
               <ArtisanGlobe3D
                 artisans={matchingGlobeArtisans}
@@ -688,8 +674,11 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
               />
             </Suspense>
           ) : (
-            <div className="artisan-globe-3d flex items-center justify-center text-sm text-orange-100/80" aria-label="Interactive artisan map loads when visible">
-              Artisan map loads as you reach it
+            <div className="artisan-globe-3d flex flex-col items-center justify-center gap-3 px-6 text-center text-sm text-orange-100/80" aria-label="Interactive artisan map is optional">
+              <p>Interactive globe is optional and loads only when you request it.</p>
+              <button type="button" onClick={() => setGlobeRequested(true)} className="rounded-full border border-amber-300/50 bg-amber-300/10 px-4 py-2 text-xs font-bold text-amber-200 transition hover:bg-amber-300/20">
+                Open interactive globe
+              </button>
             </div>
           )}
         </section>
