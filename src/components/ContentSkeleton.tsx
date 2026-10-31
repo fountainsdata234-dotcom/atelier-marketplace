@@ -9,7 +9,7 @@ export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({ isDarkMode }) 
     <div className="text-center" role="status">
       <div className="flex items-center justify-center" aria-hidden="true">
         {'FABSATTIRE'.split('').map((letter, index) => (
-          <span key={`${letter}-${index}`} className="fab-loader-letter font-serif text-[clamp(1.45rem,8vw,3rem)] font-bold text-amber-400" style={{ animationDelay: `${index * 55}ms` }}>{letter}</span>
+          <span key={`${letter}-${index}`} className="fab-loader-letter font-serif text-[clamp(1.45rem,8vw,3rem)] font-bold text-amber-400" style={{ animationDelay: `${index * 55}ms`, ['--fab-loader-index' as string]: index }}>{letter}</span>
         ))}
       </div>
       <div className="mx-auto mt-3 h-px w-28 bg-gradient-to-r from-transparent via-amber-400 to-transparent" />

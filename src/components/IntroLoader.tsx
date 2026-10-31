@@ -54,7 +54,7 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
                 key={`${letter}-${index}`}
                 initial={{ opacity: 0, x: start.x, y: start.y, rotate: start.rotate, scale: 0.72 }}
                 animate={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: [0.72, 1.12, 0.96, 1] }}
-                transition={{ delay: index * 0.055, duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ delay: index * 0.055, duration: 0.62, ease: [0.22, 1, 0.36, 1], type: 'spring', bounce: 0.48 }}
                 className="inline-block font-serif text-[clamp(1.7rem,9vw,4rem)] font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-t from-amber-600 via-amber-300 to-amber-100"
               >
                 {letter}

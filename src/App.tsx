@@ -444,7 +444,7 @@ export default function App() {
   const canRefreshMarketplaceData = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
 
   const navigateToView = (view: string) => {
-    const nextPath = PATH_BY_VIEW[view] || '/';
+    const nextPath = view === 'lumina' ? `${PATH_BY_VIEW.admin}?lumina=1` : PATH_BY_VIEW[view] || '/';
     const currentUrl = `${window.location.pathname}${window.location.search}`;
     if (currentUrl !== nextPath) window.history.pushState({ view }, '', nextPath);
     setSharedSeller(null);
@@ -1190,7 +1190,7 @@ export default function App() {
       {isRefreshing && <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200">Refreshing marketplace...</div>}
 
       {/* 5. Main View Content */}
-      <main className={`min-w-0 flex-1 ${!currentUser && currentView === 'landing' ? 'pb-8' : 'pb-24'} lg:pb-8`}>
+      <main className={`view-content-stage min-w-0 flex-1 ${!currentUser && currentView === 'landing' ? 'pb-8' : 'pb-24'} lg:pb-8`}>
         {isDataLoading ? <ContentSkeleton isDarkMode={isDarkMode} /> : <Suspense fallback={<ContentSkeleton isDarkMode={isDarkMode} />}>
           <AnimatePresence mode="wait" initial={false}>
           {currentView === 'landing' && (
@@ -1331,8 +1331,8 @@ export default function App() {
             </motion.div>
           )}
 
-          {(currentView === 'admin' || currentView === 'lumina')
-            && (currentUser?.role === 'admin' || (currentView === 'lumina' && currentUser?.isSuperAdmin)) && (
+          {currentView === 'admin'
+            && currentUser?.role === 'admin' && (
             <motion.div
               key="admin"
               initial={{ opacity: 0, x: '7%', rotateY: 2 }}
@@ -1351,8 +1351,7 @@ export default function App() {
                 onOpenSeller={handleSelectSeller}
                 onNavigate={navigateToView}
                 onCloseLumina={() => navigateToView('admin')}
-                isLuminaPage={currentView === 'lumina'}
-                initialTab={currentView === 'lumina' ? 'ai' : undefined}
+                isLuminaPage={false}
               />
             </motion.div>
           )}
@@ -1363,6 +1362,24 @@ export default function App() {
           </AnimatePresence>
         </Suspense>}
       </main>
+
+      {currentView === 'lumina' && currentUser?.isSuperAdmin && (
+        <Suspense fallback={<ContentSkeleton isDarkMode={isDarkMode} />}>
+          <AdminDashboard
+            currentUser={currentUser}
+            users={users}
+            posts={posts}
+            promoPlans={promoPlans}
+            broadcasts={broadcasts}
+            isDarkMode={isDarkMode}
+            onOpenSeller={handleSelectSeller}
+            onNavigate={navigateToView}
+            onCloseLumina={() => navigateToView('admin')}
+            isLuminaPage
+            initialTab="ai"
+          />
+        </Suspense>
+      )}
 
       <Footer isDarkMode={isDarkMode} onNavigate={navigateToView} />
 
