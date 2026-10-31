@@ -461,17 +461,16 @@
 
 .branded-loader-orbit::after {
   position: absolute;
-  top: -0.3rem;
-  left: 50%;
-  width: 5.2rem;
-  height: 1.1rem;
-  border-top: 0.18rem solid #ffb000;
+  top: -0.42rem;
+  left: calc(50% - 1.4rem);
+  width: 2.8rem;
+  height: 0.78rem;
+  border-top: 0.2rem solid #ffb000;
   border-radius: 50%;
   box-shadow: 0 -0.05rem 0.8rem #ff9100;
   content: '';
-  transform: translateX(-50%) rotate(28deg);
-  transform-origin: center;
-  animation: branded-loader-orbit-glow 1.65s ease-in-out infinite;
+  transform-origin: 1.4rem 4.25rem;
+  animation: branded-loader-ribbon 2.4s linear infinite;
 }
 
 .branded-loader-spark {
@@ -552,8 +551,9 @@
   50% { filter: drop-shadow(0 0 1rem rgba(255, 164, 0, 0.95)); transform: scale(1.04); }
 }
 
-@keyframes branded-loader-orbit-glow {
-  50% { opacity: 0.72; transform: translateX(-50%) rotate(34deg) scale(1.06); }
+@keyframes branded-loader-ribbon {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @keyframes branded-loader-sparkle {

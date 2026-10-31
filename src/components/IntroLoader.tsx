@@ -27,7 +27,7 @@ export const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete, isDarkMode
       <div className="branded-loader-content" role="status">
         <div className="branded-loader-mark" aria-hidden="true">
           <span className="branded-loader-orbit" />
-          <img src="/logo.png" alt="" className="branded-loader-logo" />
+          <img src="/logo-loader.webp" alt="" className="branded-loader-logo" />
           <span className="branded-loader-spark">✦</span>
         </div>
         <p className="branded-loader-title">Loading<span className="branded-loader-dots">...</span></p>

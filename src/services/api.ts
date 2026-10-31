@@ -6,6 +6,7 @@ import { customerMessageForHttpError, customerMessageForNetworkError, safeCustom
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 const PUBLIC_READ_CACHE_TTL_MS = 60_000;
 const API_REQUEST_TIMEOUT_MS = 20_000;
+const AI_REQUEST_TIMEOUT_MS = 90_000;
 const GET_RETRY_DELAYS_MS = [750, 1_500];
 const publicReadCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightPublicReads = new Map<string, Promise<unknown>>();
@@ -129,7 +130,10 @@ async function performRequest<T>(
 ) {
   const method = (options.method || 'GET').toUpperCase();
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const timeoutMs = path.startsWith('/api/assistant/') || path.startsWith('/api/admin/ai/') || path === '/api/admin/users'
+    ? AI_REQUEST_TIMEOUT_MS
+    : API_REQUEST_TIMEOUT_MS;
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
