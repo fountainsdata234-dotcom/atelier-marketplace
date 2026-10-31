@@ -49,8 +49,11 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
     });
   };
 
-  const handlePointerUp = () => {
-    if (!moved.current) onOpen();
+  const handlePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!moved.current) {
+      event.preventDefault();
+      onOpen();
+    }
     dragStart.current = null;
   };
 

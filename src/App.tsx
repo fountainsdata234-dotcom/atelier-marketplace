@@ -1180,7 +1180,7 @@ export default function App() {
           setSharedSeller(null);
           setSharedPostId(null);
           setSelectedPostId(null);
-          setCurrentView('lumina');
+          navigateToView('lumina');
         }} />
       )}
 
@@ -1333,7 +1333,8 @@ export default function App() {
             </motion.div>
           )}
 
-          {(currentView === 'admin' || currentView === 'lumina') && currentUser?.role === 'admin' && (
+          {(currentView === 'admin' || currentView === 'lumina')
+            && (currentUser?.role === 'admin' || (currentView === 'lumina' && currentUser?.isSuperAdmin)) && (
             <motion.div
               key="admin"
               initial={{ opacity: 0, x: '7%', rotateY: 2 }}
