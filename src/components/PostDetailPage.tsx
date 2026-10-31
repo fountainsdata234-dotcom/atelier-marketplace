@@ -152,6 +152,9 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
             <h1 className="mt-2 font-serif text-2xl font-bold sm:text-3xl">{post.title}</h1>
             <div className={`mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs ${muted}`}>
               <span>Firsthand feedback is shown below</span>
+              <button type="button" onClick={() => document.getElementById('listing-reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="inline-flex items-center gap-1 font-semibold text-amber-500 hover:text-amber-300">
+                <span aria-hidden="true">★★★★★</span> Ratings & comments
+              </button>
               {location && <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-amber-500" />{location}</span>}
             </div>
             <p className={`mt-5 whitespace-pre-line text-sm leading-relaxed ${muted}`}>{post.description || 'Contact the seller for details about this piece.'}</p>
@@ -217,6 +220,16 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
               loading="eager"
             />
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsImageExpanded(false);
+              window.setTimeout(() => document.getElementById('listing-reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+            }}
+            className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-amber-400/50 bg-black/75 px-4 py-2 text-xs font-semibold text-amber-300"
+          >
+            View ratings & comments
+          </button>
         </div>
       )}
 

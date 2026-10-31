@@ -165,17 +165,19 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
   };
 
   return (
-    <section aria-labelledby={`${type}-reviews-heading`} className={`mt-8 rounded-2xl border p-4 sm:p-6 ${surface}`}>
+    <section id={`${type}-reviews`} aria-labelledby={`${type}-reviews-heading`} className={`mt-8 rounded-2xl border p-4 sm:p-6 ${surface}`}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Firsthand feedback</p>
           <h2 id={`${type}-reviews-heading`} className="mt-1 font-serif text-2xl font-bold">{type === 'listing' ? 'Listing reviews' : 'Seller reviews'}</h2>
           <p className={`mt-1 text-xs ${muted}`}>Feedback is moderated and is not purchase verified.</p>
         </div>
-        {summary.eligibleReviewCount > 0 && <div className="text-right">
-          <p className="flex items-center justify-end gap-1 text-xl font-bold"><Star className="h-4 w-4 fill-amber-400 text-amber-400" />{summary.rawAverage.toFixed(2)}</p>
-          <p className={`text-xs ${muted}`}>{summary.eligibleReviewCount} review{summary.eligibleReviewCount === 1 ? '' : 's'}</p>
-        </div>}
+        <div className="text-right">
+          <p className="flex items-center justify-end gap-0.5" aria-label={summary.eligibleReviewCount ? `${summary.rawAverage.toFixed(2)} out of 5 stars` : 'No ratings yet'}>
+            {[1, 2, 3, 4, 5].map(star => <Star key={star} className={`h-4 w-4 ${summary.rawAverage >= star ? 'fill-amber-400 text-amber-400' : 'text-neutral-500'}`} />)}
+          </p>
+          <p className={`mt-1 text-xs ${muted}`}>{summary.eligibleReviewCount ? `${summary.rawAverage.toFixed(2)} · ${summary.eligibleReviewCount} review${summary.eligibleReviewCount === 1 ? '' : 's'}` : 'No ratings yet'}</p>
+        </div>
       </div>
 
       {summary.eligibleReviewCount > 0 ? <div className="mt-5 space-y-1.5" aria-label="Rating distribution">

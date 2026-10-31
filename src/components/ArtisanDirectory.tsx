@@ -223,6 +223,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   }, [citySearch, filterCountry, filterState, locationRegions]);
 
   useEffect(() => {
+    if (!globeNearViewport) return;
     if (artisans.length === 0) {
       setResolvedLocationsById(new Map());
       return;
@@ -241,7 +242,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       }
     });
     return () => { active = false; };
-  }, [artisans]);
+  }, [artisans, globeNearViewport]);
 
   useEffect(() => {
     const panel = globePanelRef.current;

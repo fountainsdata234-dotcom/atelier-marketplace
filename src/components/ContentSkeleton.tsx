@@ -5,27 +5,15 @@ interface ContentSkeletonProps {
 }
 
 export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({ isDarkMode }) => (
-  <div className={`content-loading min-h-[calc(100vh-4rem)] w-full px-4 py-6 sm:px-6 lg:px-8 ${isDarkMode ? 'text-neutral-300' : 'text-slate-700'}`} aria-busy="true" aria-label="Loading Fabsattire">
-    <div className={`mb-6 flex min-h-24 items-center gap-4 rounded-3xl border p-4 sm:p-6 ${isDarkMode ? 'border-amber-500/20 bg-[#121316]' : 'border-amber-500/20 bg-white'}`}>
-      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center">
-        <span className="absolute inset-0 animate-spin rounded-2xl border-2 border-amber-400/15 border-t-amber-400" />
-        <img src="/logo.png" alt="" aria-hidden="true" className="h-9 w-9 rounded-xl object-cover" />
+  <div className={`content-loading flex min-h-[calc(100vh-4rem)] w-full items-center justify-center px-4 ${isDarkMode ? 'text-neutral-300' : 'text-slate-700'}`} aria-busy="true" aria-label="Loading Fabsattire">
+    <div className="text-center" role="status">
+      <div className="flex items-center justify-center" aria-hidden="true">
+        {'FABSATTIRE'.split('').map((letter, index) => (
+          <span key={`${letter}-${index}`} className="fab-loader-letter font-serif text-[clamp(1.45rem,8vw,3rem)] font-bold text-amber-400" style={{ animationDelay: `${index * 55}ms` }}>{letter}</span>
+        ))}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-amber-400">Fabsattire</p>
-        <p className={`mt-1 text-sm ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`} role="status">Preparing your marketplace…</p>
-        <div className="loading-wave mt-4 h-1.5 w-full max-w-sm rounded-full" />
-      </div>
-    </div>
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div key={index} className={`loading-wave rounded-3xl border p-3 sm:p-4 ${isDarkMode ? 'border-white/10' : 'border-neutral-200'}`}>
-          <div className="h-56 rounded-2xl bg-white/[0.08] sm:h-64" />
-          <div className="mt-5 h-3 w-2/3 rounded-full bg-white/10" />
-          <div className="mt-3 h-3 w-5/6 rounded-full bg-white/10" />
-          <div className="mt-5 h-10 rounded-xl bg-white/[0.08]" />
-        </div>
-      ))}
+      <div className="mx-auto mt-3 h-px w-28 bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-500">Preparing your marketplace</p>
     </div>
   </div>
 );

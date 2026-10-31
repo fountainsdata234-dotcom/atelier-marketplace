@@ -825,11 +825,10 @@ export default function App() {
           : forceNetworkRefresh ? api.refreshUsers() : api.getUsers();
         const postsRequest = forceNetworkRefresh ? api.refreshPosts() : api.getPosts();
         const plansRequest = forceNetworkRefresh ? api.refreshPromoPlans() : api.getPromoPlans();
-        let remotePosts: ClothPost[] | null = null;
-        try {
-          remotePosts = await postsRequest;
-        } catch (error) {
-          console.warn('Marketplace listings could not be refreshed.', error);
+        const [postsResult, usersResult, plansResult] = await Promise.allSettled([postsRequest, usersRequest, plansRequest]);
+        let remotePosts: ClothPost[] | null = postsResult.status === 'fulfilled' ? postsResult.value : null;
+        if (postsResult.status === 'rejected') {
+          console.warn('Marketplace listings could not be refreshed.', postsResult.reason);
           setPostsLoadError(availablePosts.length === 0);
         }
 
@@ -844,7 +843,6 @@ export default function App() {
         }
         if (showLoader) setIsDataLoading(false);
 
-        const [usersResult, plansResult] = await Promise.allSettled([usersRequest, plansRequest]);
         const remoteUsers = usersResult.status === 'fulfilled' ? usersResult.value : null;
         const remotePlans = plansResult.status === 'fulfilled' ? plansResult.value : null;
         if (remoteUsers !== null) {

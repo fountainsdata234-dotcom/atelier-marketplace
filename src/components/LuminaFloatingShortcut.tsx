@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Bot } from 'lucide-react';
 
 interface LuminaFloatingShortcutProps {
@@ -62,7 +63,7 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
     moved.current = false;
   };
 
-  return (
+  return createPortal((
     <button
       type="button"
       aria-label="Open Lumina assistant"
@@ -71,7 +72,7 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
-      className={`fixed z-[120] flex h-13 w-13 touch-none items-center justify-center rounded-full border shadow-2xl transition-transform hover:scale-105 ${
+      className={`fixed z-[2147483000] flex h-13 w-13 touch-none items-center justify-center rounded-full border shadow-2xl transition-transform hover:scale-105 ${
         isDarkMode
           ? 'border-amber-300/50 bg-amber-400 text-neutral-950 shadow-amber-500/30'
           : 'border-amber-600/40 bg-amber-500 text-white shadow-amber-500/30'
@@ -81,5 +82,5 @@ export const LuminaFloatingShortcut: React.FC<LuminaFloatingShortcutProps> = ({ 
       <Bot className="h-6 w-6" aria-hidden="true" />
       <span className="absolute -bottom-5 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider text-amber-400">Lumina</span>
     </button>
-  );
+  ), document.body);
 };
