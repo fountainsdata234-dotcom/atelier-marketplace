@@ -78,7 +78,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
 }
 
 const registerServiceWorker = async () => {
-  if (!('serviceWorker' in navigator)) return;
+  if (import.meta.env.DEV || !('serviceWorker' in navigator)) return;
 
   try {
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });

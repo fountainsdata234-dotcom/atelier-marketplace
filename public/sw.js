@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabsattire-v14';
+const CACHE_NAME = 'fabsattire-v15';
 
 const isStaticAssetRequest = (url) => {
   return url.pathname.startsWith('/assets/') || /\.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|map|json|txt|wasm)$/i.test(url.pathname);
