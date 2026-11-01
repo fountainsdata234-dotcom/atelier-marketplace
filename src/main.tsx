@@ -78,23 +78,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
 }
 
 const registerServiceWorker = async () => {
-  if (import.meta.env.DEV || !('serviceWorker' in navigator)) return;
-
-  try {
-    const registration = await navigator.serviceWorker.register('/sw.js', {
-      scope: '/',
-      updateViaCache: 'none',
-    });
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      const reloadKey = 'fabsattire_sw_reloaded';
-      if (sessionStorage.getItem(reloadKey)) return;
-      sessionStorage.setItem(reloadKey, '1');
-      window.location.reload();
-    }, { once: true });
-    await registration.update();
-  } catch (error) {
-    console.warn('Service worker registration failed', error);
-  }
+  return;
 };
 
 const root = document.getElementById('root')!;

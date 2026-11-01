@@ -68,6 +68,19 @@
   </head>
   <body class="bg-[#0c0d10] text-[#f4f4f6] antialiased selection:bg-amber-500/30 selection:text-amber-200">
     <div id="root"></div>
+    <script>
+      (async () => {
+        if (!('serviceWorker' in navigator) || sessionStorage.getItem('fabsattire_sw_cleanup')) return;
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        if (!registrations.length) return;
+        sessionStorage.setItem('fabsattire_sw_cleanup', '1');
+        await Promise.all(registrations.map(registration => registration.unregister()));
+        if ('caches' in window) {
+          await Promise.all((await caches.keys()).map(cacheName => caches.delete(cacheName)));
+        }
+        window.location.replace(`${location.pathname}?_sw_cleanup=${Date.now()}${location.hash}`);
+      })().catch(() => undefined);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

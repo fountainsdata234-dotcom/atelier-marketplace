@@ -1,22 +1,22 @@
-const CACHE_NAME = 'fabsattire-v16';
-
-const isStaticAssetRequest = (url) => {
-  return url.pathname.startsWith('/assets/') || /\.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|map|json|txt|wasm)$/i.test(url.pathname);
-};
+const CACHE_NAME = 'fabsattire-v17';
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys
-        .filter((key) => key !== CACHE_NAME)
-        .map((key) => caches.delete(key))
-    )).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+      .then(() => self.registration.unregister())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => clients.forEach((client) => client.navigate(client.url)))
   );
 });
+
+const isStaticAssetRequest = (url) => {
+  return url.pathname.startsWith('/assets/') || /\.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|map|json|txt|wasm)$/i.test(url.pathname);
+};
 
 self.addEventListener('push', (event) => {
   if (!event.data) return;
