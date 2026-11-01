@@ -10,6 +10,7 @@ interface MarketplaceReviewsProps {
   currentUser: User | null;
   onOpenAuth: () => void;
   contextListingId?: string;
+  targetOwnerId?: string;
   isDarkMode: boolean;
 }
 
@@ -30,6 +31,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
   currentUser,
   onOpenAuth,
   contextListingId,
+  targetOwnerId,
   isDarkMode,
 }) => {
   const [page, setPage] = useState<MarketplaceReviewsPage | null>(null);
@@ -72,6 +74,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
   const summary = page?.summary || emptySummary;
   const ownReview = page?.ownReview || null;
   const editable = !ownReview || (Date.now() - new Date(ownReview.createdAt).getTime() <= 14 * 24 * 60 * 60 * 1000);
+  const isOwnTarget = Boolean(currentUser && targetOwnerId && currentUser.id === targetOwnerId);
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white';
   const muted = isDarkMode ? 'text-neutral-400' : 'text-neutral-600';
 
@@ -192,7 +195,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
         })}
       </div> : !loading && <p className={`mt-4 text-sm ${muted}`}>No reviews yet.</p>}
 
-      {currentUser && editable && <form onSubmit={submitReview} className="mt-5 space-y-3 border-t border-neutral-700/30 pt-5">
+      {currentUser && !isOwnTarget && editable && <form onSubmit={submitReview} className="mt-5 space-y-3 border-t border-neutral-700/30 pt-5">
         <h3 className="text-sm font-semibold">{ownReview ? 'Edit your feedback' : 'Share your firsthand experience'}</h3>
         <div role="group" aria-label="Rating from 1 to 5 stars" className="flex gap-1">
           {[1, 2, 3, 4, 5].map(stars => <button key={stars} type="button" aria-label={`${stars} star${stars === 1 ? '' : 's'}`} aria-pressed={rating === stars} onClick={() => setRating(stars)} className="rounded p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
@@ -209,6 +212,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
         <button type="submit" disabled={busy || !rating || !attested} className="rounded-lg bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Submitting…' : ownReview ? 'Resubmit for moderation' : 'Submit review'}</button>
       </form>}
       {!currentUser && <button type="button" onClick={onOpenAuth} className="mt-5 rounded-lg bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950">Sign in to leave firsthand feedback</button>}
+      {currentUser && isOwnTarget && <p className={`mt-5 border-t border-neutral-700/30 pt-5 text-xs ${muted}`}>You cannot review your own {type === 'listing' ? 'listing' : 'seller profile'}.</p>}
       {ownReview && !editable && <p className={`mt-4 text-xs ${muted}`}>Your review is outside the 14-day editing window.</p>}
       {ownReview?.moderationStatus === 'pending' && <p className="mt-3 text-xs text-amber-500">Your review is being synchronized. Refresh shortly if it does not appear publicly.</p>}
       {ownReview && ['rejected', 'removed'].includes(ownReview.moderationStatus) && <div className="mt-3">

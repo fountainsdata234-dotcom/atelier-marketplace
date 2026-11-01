@@ -241,6 +241,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
         type="listing"
         targetId={post.id}
         contextListingId={post.id}
+        targetOwnerId={post.authorId}
         currentUser={currentUser}
         onOpenAuth={onOpenAuth}
         isDarkMode={isDarkMode}

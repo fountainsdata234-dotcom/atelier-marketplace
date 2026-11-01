@@ -176,6 +176,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
       <MarketplaceReviews
         type="seller"
         targetId={seller.id}
+        targetOwnerId={seller.id}
         currentUser={currentUser}
         onOpenAuth={onOpenAuth}
         isDarkMode={isDarkMode}
