@@ -734,7 +734,18 @@ function reviewRoute(handler: (req: AuthenticatedRequest, res: Response) => Prom
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
       const message = error instanceof Error ? error.message : 'Review request failed.';
       if (code === '42501') {
-        res.status(403).json({ error: "You don't have permission to perform this action.", code: 'FORBIDDEN' });
+        if (message === 'Service role required') {
+          res.status(503).json({
+            error: 'Reviews are temporarily unavailable while the review service is being configured. Please try again shortly.',
+            code: 'REVIEWS_TEMPORARILY_UNAVAILABLE',
+          });
+        } else if (message === 'This listing cannot receive your review' || message === 'This seller cannot receive your review') {
+          res.status(403).json({ error: 'You cannot review your own listing or seller profile.', code: 'SELF_REVIEW_FORBIDDEN' });
+        } else if (message === 'This account cannot submit reviews') {
+          res.status(403).json({ error: 'This account is not eligible to submit reviews.', code: 'REVIEW_ACCOUNT_FORBIDDEN' });
+        } else {
+          res.status(403).json({ error: "You don't have permission to perform this action.", code: 'FORBIDDEN' });
+        }
       } else if (code === '22023') {
         const safeMessage = message === 'Review submission limit reached. Try again tomorrow.'
           || message === 'The 14-day review edit window has ended'
