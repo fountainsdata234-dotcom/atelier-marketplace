@@ -74,8 +74,7 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
   const method = (options.method || 'GET').toUpperCase();
   const isPublicRead = method === 'GET'
     && (['/api/posts', '/api/users', '/api/promo-plans'].includes(path)
-      || path.startsWith('/api/location/')
-      || isPublicMarketplaceRead(path, method));
+      || path.startsWith('/api/location/'));
   let token: string | null;
   try {
     token = isPublicRead ? null : await getAuthTokenForRequest();

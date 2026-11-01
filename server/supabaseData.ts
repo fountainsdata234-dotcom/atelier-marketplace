@@ -894,7 +894,12 @@ export async function getMarketplaceReviews(options: {
   if (ownReviewResult.error) throw normalizeError(ownReviewResult.error);
 
   const allReviews = reviewsResult.data || [];
-  const reviews = allReviews.slice(0, limit);
+  const ownReview = ownReviewResult.data || null;
+  const publishedReviews = allReviews.slice(0, limit);
+  const reviews = ownReview && ownReview.moderation_status !== 'published'
+    && !publishedReviews.some(review => String(review.id) === String(ownReview.id))
+    ? [ownReview, ...publishedReviews]
+    : publishedReviews;
   const reviewIds = reviews.map(review => String(review.id));
   const helpfulResult = await supabase.rpc('get_marketplace_review_helpful_counts', {
     p_review_type: options.type,
@@ -930,7 +935,7 @@ export async function getMarketplaceReviews(options: {
           id: String(reviews[reviews.length - 1].id),
         })).toString('base64url')
       : null,
-    ownReview: ownReviewResult.data ? { ...ownReviewResult.data, review_type: options.type } : null,
+    ownReview: ownReview ? { ...ownReview, review_type: options.type } : null,
   };
 }
 

@@ -220,7 +220,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
       {error && <div role="alert" className="mt-5 text-sm text-red-500">{error}<button type="button" onClick={() => void load()} className="ml-3 font-semibold underline">Retry</button></div>}
       {page?.reviews.map(review => <article key={review.id} className="mt-5 border-t border-neutral-700/30 pt-5">
         <div className="flex items-start justify-between gap-3">
-          <div><p className="text-sm font-semibold">{review.reviewer?.name || 'Marketplace member'}</p><p className={`mt-0.5 text-[11px] ${muted}`}>{new Date(review.createdAt).toLocaleDateString()} · Firsthand feedback · Not purchase verified</p></div>
+          <div><p className="text-sm font-semibold">{review.reviewer?.name || 'Marketplace member'}</p><p className={`mt-0.5 text-[11px] ${muted}`}>{new Date(review.createdAt).toLocaleDateString()} · Firsthand feedback · Not purchase verified{review.moderationStatus !== 'published' ? ' · Awaiting moderation' : ''}</p></div>
           <span className="inline-flex items-center gap-1 text-sm font-bold" aria-label={`${review.rating} out of 5 stars`}>{review.rating}<Star className="h-4 w-4 fill-amber-400 text-amber-400" /></span>
         </div>
         {review.reviewText && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">{review.reviewText}</p>}

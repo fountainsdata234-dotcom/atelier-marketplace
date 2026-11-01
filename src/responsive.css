@@ -141,46 +141,6 @@
     text-overflow: ellipsis;
   }
 
-  footer {
-    margin-top: 1.5rem;
-  }
-
-  footer > div {
-    padding: 1.5rem 1rem;
-  }
-
-  footer > div > .grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1.5rem 0.75rem;
-  }
-
-  footer > div > .grid > div:first-child {
-    grid-column: 1 / -1;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  footer > div > .grid > div:first-child .font-display {
-    font-size: clamp(1rem, 5vw, 1.25rem);
-    letter-spacing: 0.04em;
-  }
-
-  footer > div > .grid > div:nth-child(4) > div > div {
-    align-items: flex-start;
-  }
-
-  footer > div > .grid > div:nth-child(4) span {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-
-  footer > div > div:last-child {
-    margin-top: 1.5rem;
-    padding-top: 1rem;
-    font-size: 0.7rem;
-  }
-
   .fixed.bottom-0.z-40 {
     padding-top: 0.5rem !important;
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
@@ -215,12 +175,4 @@
     padding-left: 0.5rem;
   }
 
-  footer > div > .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.25rem 0.75rem;
-  }
-
-  footer > div > .grid > div:nth-child(4) {
-    grid-column: 1 / -1;
-  }
 }

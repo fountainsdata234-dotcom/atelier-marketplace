@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { MessageSquare, Sparkles } from 'lucide-react';
 
 interface FooterProps {
@@ -7,26 +7,13 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
-  const footerRef = useRef<HTMLElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
   const mutedText = isDarkMode ? 'text-neutral-400' : 'text-neutral-600';
   const border = isDarkMode ? 'border-neutral-800' : 'border-neutral-200';
 
-  useEffect(() => {
-    const footer = footerRef.current;
-    if (!footer || !('IntersectionObserver' in window)) {
-      setIsVisible(true);
-      return;
-    }
-    const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting), { threshold: 0.05 });
-    observer.observe(footer);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <footer ref={footerRef} className={`site-footer ${isVisible ? 'site-footer-visible' : ''} mt-8 border-t transition-colors ${border} ${isDarkMode ? 'bg-[#0c0d10]/80 text-neutral-300' : 'bg-white/90 text-neutral-700 shadow-sm'}`}>
-      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
-        <div className="flex items-center gap-3">
+    <footer className={`site-footer mt-8 w-full border-t transition-colors ${border} ${isDarkMode ? 'bg-[#0c0d10]/80 text-neutral-300' : 'bg-[#fbf9f5] text-neutral-700'}`}>
+      <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-center gap-3 text-center">
           <img src="/logo.png" alt="Fabsattire logo" className="h-9 w-9 shrink-0 rounded-xl object-cover" />
           <div className="min-w-0">
             <p className="font-display text-base font-black tracking-[0.06em] text-amber-400">Fabsattire</p>
@@ -34,7 +21,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4 sm:gap-5">
+        <div className="mx-auto mt-4 grid max-w-2xl grid-cols-3 gap-x-3 gap-y-3 text-center sm:gap-x-8">
           <nav aria-label="Explore">
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-400">Explore</p>
             <ul className="space-y-1.5 text-xs">
@@ -53,18 +40,24 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
             </ul>
           </nav>
 
-          <div className="col-span-2 sm:col-span-2">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-400">Connect</p>
-            <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${mutedText}`}>
-              <span className="inline-flex items-center gap-2"><MessageSquare className="h-3.5 w-3.5 shrink-0 text-amber-500" />In-app messaging</span>
-              <a href="mailto:fountainsdsata234@gmail.com" className="inline-flex min-w-0 items-center gap-2 break-all transition hover:text-amber-400">
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500" />fountainsdsata234@gmail.com
-              </a>
-            </div>
-          </div>
+          <nav aria-label="Discover">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-400">Discover</p>
+            <ul className="space-y-1.5 text-xs">
+              <li><button type="button" onClick={() => onNavigate?.('landing')} className="transition hover:text-amber-400">Home</button></li>
+              <li><button type="button" onClick={() => onNavigate?.('artisan')} className="transition hover:text-amber-400">Artisans</button></li>
+              <li><button type="button" onClick={() => onNavigate?.('collections')} className="transition hover:text-amber-400">Collections</button></li>
+            </ul>
+          </nav>
+
         </div>
 
-        <div className={`mt-4 border-t pt-3 text-center text-[10px] leading-relaxed ${border} text-neutral-500`}>
+        <div className={`mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t pt-3 text-center text-[11px] ${border} ${mutedText}`}>
+          <span className="inline-flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5 text-amber-500" />In-app messaging</span>
+          <a href="mailto:fountainsdsata234@gmail.com" className="inline-flex items-center gap-1.5 break-all transition hover:text-amber-400">
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />fountainsdsata234@gmail.com
+          </a>
+        </div>
+        <div className="mt-2 text-center text-[10px] leading-relaxed text-neutral-500">
           © 2026 Fabsattire. Crafted for bespoke fashion and premium fabric discovery.
         </div>
       </div>

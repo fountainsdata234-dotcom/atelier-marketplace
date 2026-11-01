@@ -66,7 +66,7 @@
     color: var(--color-text-light);
     transition: background-color 0.3s ease, color 0.3s ease;
     overflow-x: hidden;
-    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-bottom: 0;
   }
 
   h1, h2, h3, .font-serif-luxury {
@@ -601,12 +601,6 @@
 }
 
 .site-footer {
-  opacity: 0;
-  transform: translate3d(0, 1.25rem, 0);
-  transition: opacity 420ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.site-footer-visible {
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }
