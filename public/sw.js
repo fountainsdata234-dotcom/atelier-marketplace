@@ -1,14 +1,10 @@
-const CACHE_NAME = 'fabsattire-v13';
-const APP_SHELL = ['/index.html', '/manifest.webmanifest'];
+const CACHE_NAME = 'fabsattire-v14';
 
 const isStaticAssetRequest = (url) => {
   return url.pathname.startsWith('/assets/') || /\.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|map|json|txt|wasm)$/i.test(url.pathname);
 };
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL).catch(() => undefined))
-  );
   self.skipWaiting();
 });
 
@@ -106,34 +102,27 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', responseClone));
-          }
           return response;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(async () => await caches.match('/index.html') || new Response(
+          '<!doctype html><title>Fabsattire is offline</title><p>Please reconnect and reload.</p>',
+          { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+        ))
     );
     return;
   }
 
   if (isStaticAssetRequest(requestUrl)) {
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) return cachedResponse;
-        return fetch(event.request).then((networkResponse) => {
-          if (networkResponse.ok) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          }
-          return networkResponse;
-        });
-      })
+      fetch(event.request).catch(async () => await caches.match(event.request) || new Response('', {
+        status: 503,
+        statusText: 'Asset temporarily unavailable',
+      }))
     );
     return;
   }
 
   event.respondWith(
-    fetch(event.request).catch(() => caches.match('/index.html'))
+    fetch(event.request).catch(async () => await caches.match('/index.html') || new Response('', { status: 503 }))
   );
 });

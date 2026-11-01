@@ -29,6 +29,29 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('FABSATTIRE interface error', error, info.componentStack);
+    if (/dynamically imported module|Failed to fetch/i.test(error.message)) {
+      void AppErrorBoundary.recoverFromStaleAssets();
+    }
+  }
+
+  private static async recoverFromStaleAssets() {
+    const recoveryKey = 'fabsattire_asset_recovery';
+    if (sessionStorage.getItem(recoveryKey)) return;
+    sessionStorage.setItem(recoveryKey, '1');
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(registration => registration.unregister()));
+      }
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.filter(name => name.startsWith('fabsattire-')).map(name => caches.delete(name)));
+      }
+    } finally {
+      const url = new URL(window.location.href);
+      url.searchParams.set('_asset_refresh', Date.now().toString());
+      window.location.replace(url.href);
+    }
   }
 
   render() {

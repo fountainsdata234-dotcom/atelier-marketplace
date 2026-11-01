@@ -42,6 +42,7 @@ import {
   submitMarketplaceReview,
   getReviewModerationQueue,
   moderateMarketplaceReview,
+  publishMarketplaceReview,
   respondToMarketplaceReview,
   toggleReviewHelpful,
   reportMarketplaceReview,
@@ -4065,6 +4066,7 @@ app.post('/api/reviews/:type/:targetId', requireAuth, requireActiveAccount, revi
     categoryBreakdown: (inputCategories || {}) as Record<string, number>,
     contextListingId,
   });
+  await publishMarketplaceReview(type as 'listing' | 'seller', String(review.id));
   invalidatePublicCaches();
   res.status(201).json(snakeToCamel(review));
 }));

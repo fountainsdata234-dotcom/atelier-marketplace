@@ -1005,6 +1005,14 @@ export async function submitMarketplaceReview(values: {
   return data as ProfileRecord;
 }
 
+export async function publishMarketplaceReview(type: MarketplaceReviewType, reviewId: string): Promise<void> {
+  const table = type === 'listing' ? 'listing_reviews' : 'seller_reviews';
+  const { error } = await requireClient().from(table)
+    .update({ moderation_status: 'published', moderation_note: '' })
+    .eq('id', reviewId);
+  if (error) throw normalizeError(error);
+}
+
 export async function getReviewModerationQueue(): Promise<ProfileRecord[]> {
   const supabase = requireClient();
   const [listingReviews, sellerReviews, appeals, reports] = await Promise.all([

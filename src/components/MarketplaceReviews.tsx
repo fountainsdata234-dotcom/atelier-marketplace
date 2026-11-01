@@ -94,7 +94,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
         contextListingId,
         firsthandAttested: true,
       });
-      setMessage('Your feedback was submitted for moderation. It will appear publicly after approval.');
+      setMessage('Your rating and comment are now live.');
       await load();
     } catch (submitError) {
       setMessage(safeCustomerErrorMessage(submitError, "Your review couldn't be submitted. Please try again."));
@@ -210,7 +210,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
       </form>}
       {!currentUser && <button type="button" onClick={onOpenAuth} className="mt-5 rounded-lg bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950">Sign in to leave firsthand feedback</button>}
       {ownReview && !editable && <p className={`mt-4 text-xs ${muted}`}>Your review is outside the 14-day editing window.</p>}
-      {ownReview?.moderationStatus === 'pending' && <p className="mt-3 text-xs text-amber-500">Your review is awaiting moderation and is not public yet.</p>}
+      {ownReview?.moderationStatus === 'pending' && <p className="mt-3 text-xs text-amber-500">Your review is being synchronized. Refresh shortly if it does not appear publicly.</p>}
       {ownReview && ['rejected', 'removed'].includes(ownReview.moderationStatus) && <div className="mt-3">
         <p className="text-xs text-red-400">Moderation note: {ownReview.moderationNote || 'No additional note was provided.'}</p>
         <button type="button" disabled={busy} onClick={() => void appeal()} className="mt-2 text-xs font-semibold text-amber-500 underline">Appeal moderation decision</button>
