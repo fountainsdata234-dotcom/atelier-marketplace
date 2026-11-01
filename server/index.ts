@@ -748,6 +748,7 @@ function reviewRoute(handler: (req: AuthenticatedRequest, res: Response) => Prom
       } else if (code === '42883' || code.startsWith('PGRST')) {
         res.status(503).json({ error: 'Reviews are temporarily unavailable while the review service is being updated. Please try again shortly.', code: 'REVIEWS_TEMPORARILY_UNAVAILABLE' });
       } else {
+        console.error('Review request failed.', { code, message });
         next(error);
       }
     });

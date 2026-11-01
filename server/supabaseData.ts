@@ -28,8 +28,19 @@ function requireClient(): SupabaseClient {
   return client;
 }
 
-function normalizeError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
+function normalizeError(error: unknown): Error & { code?: string; details?: string; hint?: string } {
+  if (error instanceof Error) return error;
+  if (!error || typeof error !== 'object') return new Error(String(error));
+  const source = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
+  const normalized = new Error(typeof source.message === 'string' ? source.message : String(error)) as Error & {
+    code?: string;
+    details?: string;
+    hint?: string;
+  };
+  if (typeof source.code === 'string') normalized.code = source.code;
+  if (typeof source.details === 'string') normalized.details = source.details;
+  if (typeof source.hint === 'string') normalized.hint = source.hint;
+  return normalized;
 }
 
 export function isMissingRpcFunction(error: unknown, functionName: string): boolean {
