@@ -90,7 +90,7 @@
       "destination": "https://atelier-marketplace.onrender.com/api/$1"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|manifest\\.webmanifest$|sw\\.js$|favicon\\.svg$|logo\\.png$|pwa-icon-).*)",
       "destination": "/index.html"
     }
   ]
