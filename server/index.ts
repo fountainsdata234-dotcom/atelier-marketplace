@@ -4083,7 +4083,11 @@ app.post('/api/reviews/:type/:targetId', requireAuth, requireActiveAccount, revi
     categoryBreakdown: (inputCategories || {}) as Record<string, number>,
     contextListingId,
   });
-  await publishMarketplaceReview(type as 'listing' | 'seller', String(review.id));
+  try {
+    await publishMarketplaceReview(type as 'listing' | 'seller', String(review.id));
+  } catch (error) {
+    console.error('Review was saved but could not be published immediately.', error);
+  }
   invalidatePublicCaches();
   res.status(201).json(snakeToCamel(review));
 }));

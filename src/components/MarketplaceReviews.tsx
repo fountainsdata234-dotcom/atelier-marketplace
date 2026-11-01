@@ -94,7 +94,7 @@ export const MarketplaceReviews: React.FC<MarketplaceReviewsProps> = ({
         contextListingId,
         firsthandAttested: true,
       });
-      setMessage('Your rating and comment are now live.');
+      setMessage('Your rating and comment were submitted successfully.');
       await load();
     } catch (submitError) {
       setMessage(safeCustomerErrorMessage(submitError, "Your review couldn't be submitted. Please try again."));
