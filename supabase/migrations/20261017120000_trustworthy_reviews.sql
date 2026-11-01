@@ -465,7 +465,7 @@ begin
     ) then
     raise exception 'Invalid category breakdown' using errcode = '22023';
   end if;
-  if exists (select 1 from public.profiles where id = p_reviewer_id and (is_blocked or role in ('admin'))) then
+  if exists (select 1 from public.profiles where id = p_reviewer_id and is_blocked) then
     raise exception 'This account cannot submit reviews' using errcode = '42501';
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('review-submit:' || p_reviewer_id::text, 0));
