@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MessageSquare, Sparkles } from 'lucide-react';
 
 interface FooterProps {
@@ -7,12 +7,25 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
+  const footerRef = useRef<HTMLElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
   const mutedText = isDarkMode ? 'text-neutral-400' : 'text-neutral-600';
   const border = isDarkMode ? 'border-neutral-800' : 'border-neutral-200';
 
+  useEffect(() => {
+    const footer = footerRef.current;
+    if (!footer || !('IntersectionObserver' in window)) {
+      setIsVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting), { threshold: 0.05 });
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <footer className={`mt-8 border-t transition-colors ${border} ${isDarkMode ? 'bg-[#0c0d10]/80 text-neutral-300' : 'bg-white/90 text-neutral-700 shadow-sm'}`}>
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+    <footer ref={footerRef} className={`site-footer ${isVisible ? 'site-footer-visible' : ''} mt-8 border-t transition-colors ${border} ${isDarkMode ? 'bg-[#0c0d10]/80 text-neutral-300' : 'bg-white/90 text-neutral-700 shadow-sm'}`}>
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="Fabsattire logo" className="h-9 w-9 shrink-0 rounded-xl object-cover" />
           <div className="min-w-0">
@@ -21,7 +34,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 sm:gap-6">
+        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4 sm:gap-5">
           <nav aria-label="Explore">
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-400">Explore</p>
             <ul className="space-y-1.5 text-xs">
@@ -51,7 +64,7 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
           </div>
         </div>
 
-        <div className={`mt-5 border-t pt-3 text-center text-[10px] leading-relaxed ${border} text-neutral-500`}>
+        <div className={`mt-4 border-t pt-3 text-center text-[10px] leading-relaxed ${border} text-neutral-500`}>
           © 2026 Fabsattire. Crafted for bespoke fashion and premium fabric discovery.
         </div>
       </div>

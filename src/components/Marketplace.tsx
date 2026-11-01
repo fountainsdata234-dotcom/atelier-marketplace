@@ -14,6 +14,7 @@ import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { animateActionFeedback } from '../utils/actionFeedback';
 import { SearchableLocationField } from './SearchableLocationField';
 import { PostImage } from './PostImage';
+import { ContentSkeleton } from './ContentSkeleton';
 import { useTypingText } from '../hooks/useTypingText';
 
 interface MarketplaceProps {
@@ -1252,7 +1253,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     </div>
                     <p className="mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">{post.authorName} <span className="px-1 text-neutral-600">/</span> {formatLocation(post.authorLocation)}</p>
                     <h2 className="mt-2 line-clamp-2 font-serif text-2xl font-bold leading-tight text-white sm:text-3xl lg:text-4xl">{post.title}</h2>
-                    <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-neutral-300 sm:text-base">{post.description}</p>
+                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-neutral-300 sm:text-base">{post.description}</p>
                     <p className="mt-5 text-lg font-bold text-white">{post.pricing.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic.toLocaleString()}` : 'Price on enquiry'}</p>
                     {post.tags.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{post.tags.slice(0, 3).map(tag => <span key={tag} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-neutral-300">#{tag}</span>)}</div>}
                     <button type="button" onClick={() => openListing(post)} className="mt-6 inline-flex min-h-11 w-fit items-center gap-2 rounded-xl bg-amber-400 px-5 text-sm font-bold text-neutral-950 transition hover:bg-amber-300">
@@ -1588,18 +1589,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       <section id="marketplace-feed-panel" role="tabpanel" aria-labelledby={`marketplace-tab-${activeFeedView}`} className="space-y-5">
       {/* Server-paginated listings feed */}
       {feedLoading && filteredPosts.length === 0 ? (
-        <div aria-label="Loading listings" aria-busy="true" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }, (_, index) => (
-            <div key={index} className={`overflow-hidden rounded-3xl border ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white'}`}>
-              <div className="aspect-[4/3] animate-pulse bg-neutral-700/30" />
-              <div className="space-y-3 p-4">
-                <div className="h-3 w-1/3 animate-pulse rounded bg-neutral-700/30" />
-                <div className="h-5 w-3/4 animate-pulse rounded bg-neutral-700/30" />
-                <div className="h-3 w-full animate-pulse rounded bg-neutral-700/30" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <ContentSkeleton isDarkMode={isDarkMode} />
       ) : filteredPosts.length === 0 ? (
         <div className={`text-center py-16 px-6 rounded-3xl border ${
           isDarkMode ? 'bg-[#121316]/50 border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'
@@ -1933,20 +1923,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     View listing details and gallery
                   </button>
 
-                  {/* Tags */}
-                  {post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {post.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
                   {/* Seller price / negotiable state */}
                   <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-800/80 bg-neutral-900/30 p-2 text-[11px]">
                     <span className="text-[9px] uppercase font-bold tracking-wider text-amber-500/80">
@@ -1955,26 +1931,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <span className="text-right text-neutral-200">{priceLabel}</span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-neutral-400">
-                    <span className="capitalize">{post.availability === 'made_to_order' ? 'Made to order' : post.availability === 'limited' ? 'Limited availability' : 'Available'}</span>
-                    {typeof post.stockQuantity === 'number' && <span>{post.stockQuantity} in stock</span>}
-                    {typeof details.leadTimeDays === 'number' && <span>{details.leadTimeDays} day lead time</span>}
-                    {details.fulfilment === 'ready_made' && <span>Ready-made</span>}
-                    {details.fulfilment === 'made_to_order' && <span>Made to order</span>}
-                    {typeof details.material === 'string' && <span>{details.material}</span>}
-                    {typeof details.colour === 'string' && <span>{details.colour}</span>}
-                    {Array.isArray(details.sizes) && details.sizes.length > 0 && <span>Sizes: {details.sizes.slice(0, 4).join(', ')}</span>}
-                    {Array.isArray(details.customizationOptions) && details.customizationOptions.length > 0 && <span>Customization available</span>}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-0 text-[10px] font-mono text-neutral-400">
-                    <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                    <span>{saveCount} Saves</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-neutral-800/60 pt-2">
-                    <span className="text-[10px] text-neutral-500">Discover the full listing details</span>
-                    <button type="button" onClick={() => openListing(post)} className="text-[10px] font-semibold text-amber-500 hover:text-amber-300">View details</button>
-                  </div>
+                  <p className="text-[10px] text-neutral-500">{post.availability === 'limited' ? 'Limited availability' : 'Available'} · {saveCount} saves</p>
                 </div>
 
                 {/* Footer: Like Counter and WhatsApp Contact */}

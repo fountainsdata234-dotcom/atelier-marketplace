@@ -108,6 +108,8 @@ const configuredOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((or
 const allowedOrigins = new Set([
   ...configuredOrigins,
   'https://fabsattire.vercel.app',
+  'https://fabsattire.com',
+  'https://www.fabsattire.com',
   'http://localhost:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3000',
@@ -253,7 +255,7 @@ interface StoredMessage {
 const DISCOVERY_EVENT_TYPES = new Set(['VIEW', 'LIKE', 'SAVE', 'SHARE', 'ENQUIRY']);
 const PUBLIC_CACHE_TTL_MS = 60_000;
 const PUBLIC_CACHE_STALE_MS = 15 * 60_000;
-const WEB_APP_URL = process.env.APP_URL?.trim() || 'https://fabsattire.vercel.app';
+const WEB_APP_URL = process.env.APP_URL?.trim() || 'https://www.fabsattire.com';
 let postsCache: { expiresAt: number; staleUntil: number; value: unknown } | null = null;
 let usersCache: { expiresAt: number; value: unknown } | null = null;
 const marketplaceFeedCache = new Map<string, { expiresAt: number; staleUntil: number; value: unknown }>();
@@ -742,6 +744,8 @@ function reviewRoute(handler: (req: AuthenticatedRequest, res: Response) => Prom
         res.status(409).json({ error: 'A matching review, report, or appeal already exists.', code: 'ALREADY_EXISTS' });
       } else if (code === 'P0002') {
         res.status(404).json({ error: 'This review or listing is no longer available.', code: 'NOT_FOUND' });
+      } else if (code === '42883' || code.startsWith('PGRST')) {
+        res.status(503).json({ error: 'Reviews are temporarily unavailable while the review service is being updated. Please try again shortly.', code: 'REVIEWS_TEMPORARILY_UNAVAILABLE' });
       } else {
         next(error);
       }

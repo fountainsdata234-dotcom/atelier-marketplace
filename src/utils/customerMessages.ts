@@ -9,6 +9,7 @@ export function customerMessageForHttpError(status: number, rawMessage: unknown,
   const safeMessage = isSafeCustomerMessage(message) ? message : '';
 
   if (code === 'REVIEW_SUBMISSIONS_UNAVAILABLE') return 'Review submissions are temporarily unavailable. Please check back later.';
+  if (code === 'REVIEWS_TEMPORARILY_UNAVAILABLE') return 'Reviews are temporarily unavailable while the service is being updated. Please try again shortly.';
   if (code === 'IMAGE_DOWNLOAD_UNAVAILABLE') return "We couldn't download this image. Please try again.";
   if (code === 'IMAGE_NOT_FOUND') return 'This image is no longer available.';
   if (status === 400 || status === 422) return safeMessage || 'Please check the information and try again.';

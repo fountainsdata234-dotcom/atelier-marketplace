@@ -1,12 +1,12 @@
 {
   "packageId": "com.fabsattire.app",
-  "host": "fabsattire.vercel.app",
+  "host": "www.fabsattire.com",
   "name": "Fabsattire",
   "launcherName": "Fabsattire",
   "display": "standalone",
   "startUrl": "/",
-  "iconUrl": "https://fabsattire.vercel.app/pwa-icon-512.png",
-  "maskableIconUrl": "https://fabsattire.vercel.app/pwa-icon-512.png",
+  "iconUrl": "https://www.fabsattire.com/pwa-icon-512.png",
+  "maskableIconUrl": "https://www.fabsattire.com/pwa-icon-512.png",
   "themeColor": "#0c0d10",
   "themeColorDark": "#0c0d10",
   "navigationColor": "#0c0d10",
@@ -24,6 +24,6 @@
     "alias": "fabsattire"
   },
   "fingerprints": [],
-  "webManifestUrl": "https://fabsattire.vercel.app/manifest.webmanifest",
+  "webManifestUrl": "https://www.fabsattire.com/manifest.webmanifest",
   "generatorApp": "bubblewrap-cli"
 }
