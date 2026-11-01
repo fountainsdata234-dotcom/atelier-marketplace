@@ -331,7 +331,7 @@ begin
   end if;
   if not exists (
     select 1 from public.profiles
-    where id = new.reviewer_id and not is_blocked and role <> 'admin'
+    where id = new.reviewer_id and not is_blocked
   ) then
     raise exception 'This account cannot submit a review' using errcode = '42501';
   end if;

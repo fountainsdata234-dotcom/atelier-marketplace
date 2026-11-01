@@ -174,3 +174,33 @@ $$;
 
 revoke all on function public.submit_marketplace_review(text, uuid, uuid, smallint, text, jsonb, boolean, uuid) from public, anon, authenticated;
 grant execute on function public.submit_marketplace_review(text, uuid, uuid, smallint, text, jsonb, boolean, uuid) to service_role;
+
+create or replace function public.enforce_marketplace_review_abuse_controls()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if coalesce(auth.role(), '') <> 'service_role' then
+    raise exception 'Service role required for review mutations' using errcode = '42501';
+  end if;
+  if new.reviewer_id = new.seller_id then
+    raise exception 'Self-reviews are not allowed' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.profiles
+    where id = new.reviewer_id and not is_blocked
+  ) then
+    raise exception 'This account cannot submit a review' using errcode = '42501';
+  end if;
+  if exists (
+    select 1 from public.user_blocks block
+    where (block.blocker_id = new.reviewer_id and block.blocked_user_id = new.seller_id)
+       or (block.blocker_id = new.seller_id and block.blocked_user_id = new.reviewer_id)
+  ) then
+    raise exception 'This review target is unavailable' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
