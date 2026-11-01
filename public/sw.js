@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabsattire-v15';
+const CACHE_NAME = 'fabsattire-v16';
 
 const isStaticAssetRequest = (url) => {
   return url.pathname.startsWith('/assets/') || /\.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|map|json|txt|wasm)$/i.test(url.pathname);
@@ -14,9 +14,8 @@ self.addEventListener('activate', (event) => {
       keys
         .filter((key) => key !== CACHE_NAME)
         .map((key) => caches.delete(key))
-    ))
+    )).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('push', (event) => {

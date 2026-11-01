@@ -45,12 +45,12 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
       }
       if ('caches' in window) {
         const cacheNames = await caches.keys();
-        await Promise.all(cacheNames.filter(name => name.startsWith('fabsattire-')).map(name => caches.delete(name)));
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
       }
     } finally {
       const url = new URL(window.location.href);
       url.searchParams.set('_asset_refresh', Date.now().toString());
-      window.location.replace(url.href);
+      window.location.replace(`${url.pathname}${url.search}`);
     }
   }
 
@@ -81,7 +81,10 @@ const registerServiceWorker = async () => {
   if (import.meta.env.DEV || !('serviceWorker' in navigator)) return;
 
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const registration = await navigator.serviceWorker.register('/sw.js', {
+      scope: '/',
+      updateViaCache: 'none',
+    });
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       const reloadKey = 'fabsattire_sw_reloaded';
       if (sessionStorage.getItem(reloadKey)) return;
