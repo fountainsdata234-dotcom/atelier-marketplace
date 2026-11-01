@@ -901,15 +901,22 @@ export async function getMarketplaceReviews(options: {
     ? [ownReview, ...publishedReviews]
     : publishedReviews;
   const reviewIds = reviews.map(review => String(review.id));
-  const helpfulResult = await supabase.rpc('get_marketplace_review_helpful_counts', {
-    p_review_type: options.type,
-    p_review_ids: reviewIds,
-    p_viewer_id: options.viewerId || null,
-  });
-  if (helpfulResult.error) throw normalizeError(helpfulResult.error);
-  const helpfulCounts = helpfulResult.data && typeof helpfulResult.data === 'object'
-    ? helpfulResult.data as Record<string, { helpfulCount?: number; viewerFoundHelpful?: boolean }>
-    : {};
+  let helpfulCounts: Record<string, { helpfulCount?: number; viewerFoundHelpful?: boolean }> = {};
+  if (reviewIds.length) {
+    const helpfulResult = await supabase.rpc('get_marketplace_review_helpful_counts', {
+      p_review_type: options.type,
+      p_review_ids: reviewIds,
+      p_viewer_id: options.viewerId || null,
+    });
+    if (helpfulResult.error) {
+      if (!isMissingRpcFunction(helpfulResult.error, 'get_marketplace_review_helpful_counts')) {
+        throw normalizeError(helpfulResult.error);
+      }
+      console.warn('Review helpful-count tracking is unavailable; returning reviews without helpful counts.');
+    } else if (helpfulResult.data && typeof helpfulResult.data === 'object') {
+      helpfulCounts = helpfulResult.data as Record<string, { helpfulCount?: number; viewerFoundHelpful?: boolean }>;
+    }
+  }
 
   return {
     summary: summaryResult.data || {

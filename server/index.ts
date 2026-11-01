@@ -2370,20 +2370,34 @@ app.post('/api/marketplace/events', optionalAuth, async (req: AuthenticatedReque
       } catch (error) {
         if (!isMissingRpcFunction(error, 'record_marketplace_recommendation_impression')) throw error;
         console.warn('Recommendation impression tracking is not migrated; recording the base marketplace impression instead.');
+        try {
+          outcome = await recordMarketplaceEngagementEvent({
+            listingId,
+            eventType: 'IMPRESSION',
+            actorId: req.authUser?.uid || null,
+            sessionHash,
+          });
+        } catch (fallbackError) {
+          if (!isMissingRpcFunction(fallbackError, 'record_marketplace_engagement_event')) throw fallbackError;
+          console.warn('Marketplace engagement tracking is not migrated; skipping impression event.');
+          res.status(200).json({ recorded: false });
+          return;
+        }
+      }
+    } else {
+      try {
         outcome = await recordMarketplaceEngagementEvent({
           listingId,
-          eventType: 'IMPRESSION',
+          eventType: eventType as MarketplaceEngagementEventType,
           actorId: req.authUser?.uid || null,
           sessionHash,
         });
+      } catch (error) {
+        if (!isMissingRpcFunction(error, 'record_marketplace_engagement_event')) throw error;
+        console.warn('Marketplace engagement tracking is not migrated; skipping activity event.');
+        res.status(200).json({ recorded: false });
+        return;
       }
-    } else {
-      outcome = await recordMarketplaceEngagementEvent({
-        listingId,
-        eventType: eventType as MarketplaceEngagementEventType,
-        actorId: req.authUser?.uid || null,
-        sessionHash,
-      });
     }
     if (outcome === 'rate_limited') {
       res.status(429).json({ error: 'Too many marketplace events. Please try again shortly.' });
