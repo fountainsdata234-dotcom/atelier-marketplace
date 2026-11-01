@@ -2393,8 +2393,11 @@ app.post('/api/marketplace/events', optionalAuth, async (req: AuthenticatedReque
           sessionHash,
         });
       } catch (error) {
-        if (!isMissingRpcFunction(error, 'record_marketplace_engagement_event')) throw error;
-        console.warn('Marketplace engagement tracking is not migrated; skipping activity event.');
+        if (!isMissingRpcFunction(error, 'record_marketplace_engagement_event')) {
+          console.error('Marketplace engagement tracking failed; continuing without recording activity.', error);
+        } else {
+          console.warn('Marketplace engagement tracking is not migrated; skipping activity event.');
+        }
         res.status(200).json({ recorded: false });
         return;
       }
