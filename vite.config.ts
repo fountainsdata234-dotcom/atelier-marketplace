@@ -22,6 +22,8 @@ export default defineConfig(() => {
       },
       rollupOptions: {
         output: {
+          entryFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name].js',
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined;
 
