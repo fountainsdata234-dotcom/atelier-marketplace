@@ -13,4 +13,4 @@ Disallow: /profile/
 Disallow: /messages/
 Disallow: /collections
 
-Sitemap: https://fabsattire.com/sitemap.xml
+Sitemap: https://www.fabsattire.com/sitemap.xml
