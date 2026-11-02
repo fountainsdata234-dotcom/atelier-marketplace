@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Bot, Scissors, Trash2, Search, X, Flag } from 'lucide-react';
+import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Bot, Scissors, Trash2, Search, X, Flag, Activity, Database, Cloud, Gauge } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, MarketplaceAbuseFlag } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -8,6 +8,7 @@ import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 const LUMINA_WELCOME = "Hi? I’m Lumina ✨ What will you want me to help you with today, boss? 😂";
+type ProviderTelemetry = Awaited<ReturnType<typeof api.getProviderTelemetry>>;
 
 const normalizeAiMessages = (value: unknown): Array<{ role: 'admin' | 'assistant'; text: string }> => {
   if (!Array.isArray(value)) return [];
@@ -107,6 +108,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [abuseFlags, setAbuseFlags] = useState<MarketplaceAbuseFlag[]>([]);
   const [abuseQueueStatus, setAbuseQueueStatus] = useState<string | null>(null);
   const [isClosingLumina, setIsClosingLumina] = useState(false);
+  const [providerTelemetry, setProviderTelemetry] = useState<ProviderTelemetry | null>(null);
+  const [providerTelemetryError, setProviderTelemetryError] = useState<string | null>(null);
 
   const closeLumina = () => {
     if (isClosingLumina) return;
@@ -117,6 +120,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     setEditablePlans(safePromoPlans);
   }, [safePromoPlans]);
+
+  useEffect(() => {
+    if (isLuminaPage) return;
+    let active = true;
+    const loadTelemetry = async () => {
+      try {
+        const telemetry = await api.getProviderTelemetry();
+        if (active) {
+          setProviderTelemetry(telemetry);
+          setProviderTelemetryError(null);
+        }
+      } catch (error) {
+        if (active) setProviderTelemetryError(safeCustomerErrorMessage(error, 'Provider usage is temporarily unavailable.'));
+      }
+    };
+    void loadTelemetry();
+    const interval = window.setInterval(loadTelemetry, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [isLuminaPage]);
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
@@ -615,6 +640,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {!isLuminaPage && (
+        <section className={`rounded-3xl border p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-white shadow-sm'}`}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-bold"><Activity className="h-4 w-4 text-amber-400" /> Provider usage and health</h2>
+              <p className="mt-1 text-xs text-neutral-500">Refreshes every minute. Quotas are shown only when the provider exposes a verified value.</p>
+            </div>
+            {providerTelemetry?.updatedAt && <span className="text-[10px] text-neutral-500">Updated {new Date(providerTelemetry.updatedAt).toLocaleTimeString()}</span>}
+          </div>
+          {providerTelemetryError && <p className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">{providerTelemetryError}</p>}
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {(['supabase', 'cloudinary', 'gemini'] as const).map(providerKey => {
+              const provider = providerTelemetry?.providers[providerKey];
+              const Icon = providerKey === 'supabase' ? Database : providerKey === 'cloudinary' ? Cloud : Gauge;
+              const percent = provider?.usage?.percentUsed;
+              return (
+                <div key={providerKey} className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/60' : 'border-neutral-200 bg-neutral-50'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-xs font-semibold"><Icon className="h-4 w-4 text-amber-400" /> {provider?.label || providerKey}</span>
+                    <span className={`text-[10px] font-bold uppercase ${provider?.available ? 'text-emerald-400' : 'text-neutral-500'}`}>{provider?.available ? 'Verified' : 'Unavailable'}</span>
+                  </div>
+                  {provider?.usage ? (
+                    <>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-800"><div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.min(percent || 0, 100)}%` }} /></div>
+                      <p className="mt-2 text-xs text-neutral-300">{provider.usage.used.toLocaleString()} / {provider.usage.total.toLocaleString()} {provider.unit} · {provider.usage.remaining.toLocaleString()} remaining</p>
+                    </>
+                  ) : <p className="mt-3 text-xs leading-relaxed text-neutral-500">{provider?.details || 'Waiting for provider telemetry.'}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
         {/* Tab Navigation */}
         <div className={`${isLuminaPage ? 'hidden' : ''} flex flex-wrap gap-2 mt-6 pt-4 border-t border-amber-500/20 text-xs font-medium`}>

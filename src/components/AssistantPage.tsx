@@ -31,6 +31,7 @@ interface AssistantReply {
 }
 
 const STORAGE_KEY = 'atelier_local_assistant_conversation_v1';
+const SAVED_FACTS_KEY = 'atelier_local_assistant_saved_data_v1';
 const MAX_MESSAGES = 100;
 
 const cleanText = (value: string) => value
@@ -85,6 +86,14 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
     return saved.length > 0 ? saved : [getInitialMessage()];
   });
   const [draft, setDraft] = useState('');
+  const [savedFacts, setSavedFacts] = useState<Array<{ id: string; label: string; value: string; savedAt: string }>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVED_FACTS_KEY) || '[]');
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  });
   const [isThinking, setIsThinking] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -95,8 +104,9 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_MESSAGES)));
+    localStorage.setItem(SAVED_FACTS_KEY, JSON.stringify(savedFacts.slice(-20)));
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, savedFacts]);
 
   const findProfiles = (text: string) => {
     const normalized = cleanText(text);
@@ -260,6 +270,24 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
     localStorage.setItem(STORAGE_KEY, JSON.stringify([welcome]));
   };
 
+  const saveDataPoint = (value = draft) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const nextEntry = {
+      id: `saved-${Date.now()}`,
+      label: `Saved note ${savedFacts.length + 1}`,
+      value: trimmed,
+      savedAt: new Date().toISOString(),
+    };
+    setSavedFacts(current => [nextEntry, ...current].slice(0, 20));
+    setDraft('');
+  };
+
+  const saveLatestAssistantMessage = () => {
+    const latestAssistantMessage = [...messages].reverse().find(message => message.role === 'assistant');
+    if (latestAssistantMessage) saveDataPoint(latestAssistantMessage.text);
+  };
+
   const profileById = new Map(sellers.map(profile => [profile.id, profile]));
   const sendSuggestion = (suggestion: string) => {
     setDraft(suggestion);
@@ -294,9 +322,18 @@ export const AssistantPage: React.FC<AssistantPageProps> = ({
         <form onSubmit={sendMessage} className="border-t border-amber-500/15 p-4 sm:p-6">
           <div className={`flex items-center gap-2 rounded-2xl border p-2 ${isDarkMode ? 'border-neutral-700 bg-neutral-900/80' : 'border-neutral-200 bg-neutral-50'}`}>
             <input value={draft} onChange={event => setDraft(event.target.value)} placeholder="Try: abeg help me open @handle profile" className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-neutral-500" aria-label="Message the Fabsattire assistant" />
+            <button type="button" onClick={saveLatestAssistantMessage} disabled={!messages.some(message => message.role === 'assistant')} className="hidden shrink-0 rounded-xl border border-amber-500/30 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:border-amber-400 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40 sm:inline-flex" aria-label="Save the latest assistant answer">Save answer</button>
             <button type="submit" disabled={!draft.trim() || isThinking} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-neutral-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send message"><ArrowRight className="h-5 w-5" /></button>
           </div>
-          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-neutral-500"><Bot className="h-3.5 w-3.5" /> Your assistant conversation stays in this device’s local storage.</p>
+          {savedFacts.length > 0 && (
+            <div className="mt-3 rounded-xl border border-amber-500/15 bg-amber-500/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Saved on this device</p>
+              <div className="mt-2 space-y-1.5">
+                {savedFacts.slice(0, 3).map(fact => <p key={fact.id} className="truncate text-xs text-neutral-400">{fact.value}</p>)}
+              </div>
+            </div>
+          )}
+          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-neutral-500"><Bot className="h-3.5 w-3.5" /> Your conversation and saved notes stay in this device’s local storage.</p>
         </form>
       </div>
     </section>

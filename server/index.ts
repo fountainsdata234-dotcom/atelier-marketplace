@@ -9,6 +9,7 @@ import type { Transaction } from 'firebase-admin/firestore';
 import multer from 'multer';
 import sharp from 'sharp';
 import { GoogleGenAI } from '@google/genai';
+import { v2 as cloudinary } from 'cloudinary';
 import { listLocationCountries, listLocationCurrencies, listLocationRegions, resolveMapLocation, searchLocationCities } from './locationData.js';
 import { adminAuth, firebaseAdminEnabled, firestore } from './firebaseAdmin.js';
 import type { UserLocation, UserRole } from '../src/types.js';
@@ -101,6 +102,14 @@ import {
 const app = express();
 const port = Number(process.env.PORT || 8787);
 const gemini = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
+const cloudinaryConfigured = !!process.env.CLOUDINARY_CLOUD_NAME && !!process.env.CLOUDINARY_API_KEY && !!process.env.CLOUDINARY_API_SECRET;
+if (cloudinaryConfigured) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
 app.disable('x-powered-by');
 if (!supabaseDataEnabled) {
   throw new Error('Supabase server credentials are required to start the Atelier API.');
@@ -122,6 +131,19 @@ type LuminaConversationMessage = {
   role: 'user' | 'assistant';
   text: string;
 };
+
+const bossIdentity = {
+  name: process.env.BOSS_NAME?.trim() || 'Fountainsdata',
+  email: process.env.BOSS_EMAIL?.trim() || 'fountainsdata234@gmail.com',
+  phone: process.env.BOSS_PHONE?.trim() || 'Phone not published in environment config',
+};
+
+const geminiUsageTracker = {
+  usedTokens: 0,
+  limitTokens: Number(process.env.GEMINI_TOKEN_LIMIT || process.env.GEMINI_MONTHLY_TOKEN_LIMIT || 1_000_000),
+};
+
+const estimateTokenCount = (value: string) => Math.max(1, Math.ceil((value || '').length / 4));
 
 const generateLuminaMessage = async (
   prompt: string,
@@ -168,19 +190,25 @@ const generateLuminaMessage = async (
       `User request: ${prompt}`,
       history ? `Recent conversation:\n${history}` : '',
       `Live Fabsattire data (the source of truth; do not invent or omit relevant records):\n${JSON.stringify(liveContext)}`,
+      `The marketplace owner/boss identity is: name=${bossIdentity.name}; email=${bossIdentity.email}; phone=${bossIdentity.phone}. Use this for context when the user asks who the boss is or wants their contact details.`,
     ].filter(Boolean).join('\n\n'),
     config: {
       systemInstruction: [
         'You are Lumina, an intelligent full assistant inside Fabsattire, a fashion and fabric marketplace.',
+        'You are a general assistant for the whole marketplace, not only the admin area. You can help the public-facing team, admin operator, and store staff answer questions, navigate to profiles by name or handle, find data, summarize seller activity, and guide decision-making.',
+        'Do not reveal or send users to the admin-only page unless the user specifically needs to reach a protected admin screen; otherwise stay in the general marketplace assistant flow.',
         'Generate a fresh answer for every request using the live data supplied in this request and the recent conversation.',
         'You can explain, compare, search, summarize, recommend, and guide the user. Never claim an action was completed unless the application explicitly performs it.',
         'For marketplace facts, use only the supplied live data. If the data does not contain an answer, say that clearly instead of guessing.',
         'Understand spelling mistakes, informal language, and follow-up questions. Be concise but useful, and do not use canned greetings or fixed scripts.',
+        `The company boss is ${bossIdentity.name} (${bossIdentity.email}, ${bossIdentity.phone}). If the user asks about the boss, answer from this information and tell them that contact details are for the owner/admin contact only.`,
       ].join('\n'),
       temperature: 0.7,
       maxOutputTokens: 700,
     },
   });
+  const promptTokens = estimateTokenCount(prompt) + estimateTokenCount(JSON.stringify(liveContext)) + estimateTokenCount(history);
+  geminiUsageTracker.usedTokens += promptTokens;
   const message = response.text?.trim();
   if (!message) throw new Error('Gemini returned an empty Lumina response.');
   return message;
@@ -2660,6 +2688,94 @@ app.post('/api/assistant/command', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Lumina live assistant request failed.', error);
     res.status(503).json({ error: 'Lumina could not read live marketplace data right now. Please try again.' });
+  }
+});
+
+app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    type ProviderMetric = {
+      label: string;
+      unit: string;
+      available: boolean;
+      usage?: { used: number; total: number; remaining: number; percentUsed: number };
+      details?: string;
+    };
+    const providerMetrics: Record<string, ProviderMetric> = {
+      supabase: { label: 'Supabase', unit: 'GB', available: false },
+      cloudinary: { label: 'Cloudinary', unit: 'GB', available: false },
+      gemini: { label: 'Gemini API', unit: 'tokens', available: false },
+    };
+
+    const supabaseUrl = process.env.SUPABASE_URL?.trim();
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+      let storageError: Error | null = null;
+      let dbError: Error | null = null;
+      try {
+        storageError = (await supabase.storage.listBuckets()).error;
+      } catch {
+        storageError = new Error('Storage quota unavailable');
+      }
+      try {
+        dbError = (await supabase.from('profiles').select('id', { count: 'exact', head: true })).error;
+      } catch {
+        dbError = new Error('Database usage unavailable');
+      }
+      providerMetrics.supabase = {
+        label: 'Supabase',
+        unit: 'GB',
+        available: false,
+        details: !storageError && !dbError
+          ? 'Supabase is connected, but project storage and database quota are not exposed by the configured server credentials.'
+          : 'Supabase connectivity check failed; project quota is unavailable.',
+      };
+    }
+
+    if (cloudinaryConfigured) {
+      const cloudinaryMetrics = await cloudinary.api.usage({ resource_type: 'image' }).catch(() => null);
+      const cloudinaryUsage = cloudinaryMetrics && typeof cloudinaryMetrics === 'object'
+        ? (cloudinaryMetrics as Record<string, unknown>)
+        : null;
+      const used = typeof cloudinaryUsage?.credits_usage === 'number'
+        ? Number(cloudinaryUsage.credits_usage)
+        : null;
+      const limit = typeof cloudinaryUsage?.credits_limit === 'number'
+        ? Number(cloudinaryUsage.credits_limit)
+        : null;
+      const remaining = used !== null && limit !== null ? Math.max(limit - used, 0) : null;
+      providerMetrics.cloudinary = {
+        label: 'Cloudinary',
+        unit: 'credits',
+        available: used !== null && limit !== null,
+        usage: used !== null && limit !== null ? { used, total: limit, remaining: Math.max(limit - used, 0), percentUsed: limit > 0 ? Number(((used / limit) * 100).toFixed(2)) : 0 } : undefined,
+        details: used !== null && limit !== null
+          ? `${used} used of ${limit} credits.`
+          : 'Cloudinary quota is not available from the current account configuration.',
+      };
+    }
+
+    if (process.env.GEMINI_API_KEY) {
+      providerMetrics.gemini = {
+        label: 'Gemini API',
+        unit: 'tokens',
+        available: true,
+        usage: {
+          used: geminiUsageTracker.usedTokens,
+          total: geminiUsageTracker.limitTokens,
+          remaining: Math.max(geminiUsageTracker.limitTokens - geminiUsageTracker.usedTokens, 0),
+          percentUsed: geminiUsageTracker.limitTokens > 0
+            ? Number(((geminiUsageTracker.usedTokens / geminiUsageTracker.limitTokens) * 100).toFixed(2))
+            : 0,
+        },
+        details: 'Application-side token estimate since the last server restart; not provider billing or quota data.',
+      };
+    }
+
+    res.json({ ok: true, providers: providerMetrics, updatedAt: new Date().toISOString() });
+  } catch (error) {
+    console.error('Provider telemetry could not be loaded.', error);
+    res.status(503).json({ error: 'Provider telemetry is temporarily unavailable.' });
   }
 });
 

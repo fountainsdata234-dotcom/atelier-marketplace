@@ -13,6 +13,7 @@ const ArtisanDirectory = lazy(() => import('./components/ArtisanDirectory').then
 const Marketplace = lazy(() => import('./components/Marketplace').then(module => ({ default: module.Marketplace })));
 const PostDetailPage = lazy(() => import('./components/PostDetailPage').then(module => ({ default: module.PostDetailPage })));
 const TailorDashboard = lazy(() => import('./components/TailorDashboard').then(module => ({ default: module.TailorDashboard })));
+const AssistantPage = lazy(() => import('./components/AssistantPage').then(module => ({ default: module.AssistantPage })));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 const DirectMessaging = lazy(() => import('./components/DirectMessaging').then(module => ({ default: module.DirectMessaging })));
 const AuthModal = lazy(() => import('./components/AuthModal').then(module => ({ default: module.AuthModal })));
@@ -42,6 +43,7 @@ const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
   '/profile': 'profile',
   '/collections': 'collections',
   '/dashboard': 'dashboard',
+  '/assistant': 'assistant',
   '/admin': 'admin',
 };
 
@@ -134,6 +136,7 @@ export default function App() {
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>(getInitialView);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [assistantWelcome, setAssistantWelcome] = useState<string>('');
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [sharedSeller, setSharedSeller] = useState<User | null>(null);
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
@@ -453,6 +456,15 @@ export default function App() {
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   };
+
+  const openPublicAssistant = useCallback(() => {
+    setSharedSeller(null);
+    setSharedPostId(null);
+    setSelectedPostId(null);
+    setCurrentView('assistant');
+    window.history.pushState({ view: 'assistant' }, '', '/assistant');
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -1173,14 +1185,12 @@ export default function App() {
       >
         <ArrowUp className="h-5 w-5" />
       </button>
-      {currentUser?.isSuperAdmin && (
-        <LuminaFloatingShortcut isDarkMode={isDarkMode} onOpen={() => {
+      <LuminaFloatingShortcut isDarkMode={isDarkMode} onOpen={() => {
           setSharedSeller(null);
           setSharedPostId(null);
           setSelectedPostId(null);
-          navigateToView('lumina');
+          navigateToView('assistant');
         }} />
-      )}
 
       {!isOnline && (
         <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200" role="status">
@@ -1327,6 +1337,25 @@ export default function App() {
                   setSocialShareOpen(true);
                 }}
                 isDarkMode={isDarkMode}
+              />
+            </motion.div>
+          )}
+
+          {currentView === 'assistant' && (
+            <motion.div
+              key="assistant"
+              initial={{ opacity: 0, x: '7%', rotateY: 2 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              exit={{ opacity: 0, x: '-7%', rotateY: -2 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              style={{ transformOrigin: 'left center', perspective: 1200 }}
+            >
+              <AssistantPage
+                users={users}
+                posts={posts}
+                currentUser={currentUser}
+                isDarkMode={isDarkMode}
+                onSelectSeller={handleSelectSeller}
               />
             </motion.div>
           )}

@@ -214,6 +214,17 @@ export const api = {
   },
   getAdminUsers: () => request<User[]>('/api/admin/users'),
   refreshAdminUsers: () => request<User[]>('/api/admin/users', { cache: 'no-store' }),
+  getProviderTelemetry: () => request<{
+    ok: boolean;
+    updatedAt: string;
+    providers: Record<string, {
+      label: string;
+      unit: string;
+      available: boolean;
+      usage?: { used: number; total: number; remaining: number; percentUsed: number };
+      details?: string;
+    }>;
+  }>('/api/admin/telemetry/providers', { cache: 'no-store' }),
   getProfile: () => request<Partial<User>>('/api/profile'),
   getSellerCollections: () => request<SellerCollection[]>('/api/seller-collections'),
   saveSellerCollection: (collection: Pick<SellerCollection, 'title' | 'description' | 'imageUrls'>) => request<SellerCollection>('/api/seller-collections', { method: 'POST', body: JSON.stringify(collection) }),
