@@ -2700,6 +2700,7 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
       usage?: { used: number; total: number; remaining: number; percentUsed: number };
       details?: string;
       raw?: Record<string, unknown>;
+      metrics?: string;
     };
     const providerMetrics: Record<string, ProviderMetric> = {
       supabase: { label: 'Supabase', unit: 'GB', available: false },
@@ -2710,36 +2711,25 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
     const supabaseUrl = process.env.SUPABASE_URL?.trim();
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
     const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF?.trim();
-    const supabaseAccessToken = process.env.SUPABASE_ACCESS_TOKEN?.trim();
-    let managementUsage: Record<string, unknown> | null = null;
+    let metricsText: string | null = null;
     let managementUsageError: string | null = null;
-    if (supabaseProjectRef && supabaseAccessToken) {
-      const usageEndpoints = [
-        `https://api.supabase.com/v1/projects/${encodeURIComponent(supabaseProjectRef)}/usage`,
-        `https://api.supabase.com/v1/projects/${encodeURIComponent(supabaseProjectRef)}/billing/usage`,
-      ];
-      for (const usageEndpoint of usageEndpoints) {
-        try {
-          const usageResponse = await fetch(usageEndpoint, {
-            headers: { Authorization: `Bearer ${supabaseAccessToken}`, Accept: 'application/json' },
-          });
-          if (usageResponse.ok) {
-            const usagePayload = await usageResponse.json() as unknown;
-            if (usagePayload && typeof usagePayload === 'object' && !Array.isArray(usagePayload)) {
-              managementUsage = usagePayload as Record<string, unknown>;
-              break;
-            }
-            managementUsageError = 'Supabase usage API returned an unsupported response.';
-          } else {
-            const errorBody = await usageResponse.text().catch(() => '');
-            managementUsageError = `Supabase usage API returned HTTP ${usageResponse.status}${errorBody ? `: ${errorBody.slice(0, 160)}` : '.'}`;
-          }
-        } catch {
-          managementUsageError = 'Supabase usage API could not be reached.';
+    if (supabaseProjectRef && supabaseKey) {
+      try {
+        const credentials = Buffer.from(`service_role:${supabaseKey}`).toString('base64');
+        const metricsResponse = await fetch(`https://${encodeURIComponent(supabaseProjectRef)}.supabase.co/customer/v1/privileged/metrics`, {
+          headers: { Authorization: `Basic ${credentials}`, Accept: 'text/plain' },
+        });
+        if (metricsResponse.ok) {
+          metricsText = await metricsResponse.text();
+        } else {
+          const errorBody = await metricsResponse.text().catch(() => '');
+          managementUsageError = `Supabase Metrics API returned HTTP ${metricsResponse.status}${errorBody ? `: ${errorBody.slice(0, 160)}` : '.'}`;
         }
+      } catch {
+        managementUsageError = 'Supabase Metrics API could not be reached.';
       }
     } else {
-      managementUsageError = 'SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN are not configured.';
+      managementUsageError = 'SUPABASE_PROJECT_REF and SUPABASE_SERVICE_ROLE_KEY are not configured.';
     }
     if (supabaseUrl && supabaseKey) {
       const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
@@ -2758,13 +2748,13 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
       providerMetrics.supabase = {
         label: 'Supabase',
         unit: 'GB',
-        available: Boolean(managementUsage),
-        details: managementUsage
-          ? 'Live usage response received from the Supabase Management API.'
+        available: Boolean(metricsText),
+        details: metricsText
+          ? 'Live Supabase Metrics API connected. Project quota and billing limits are not included in this feed.'
           : managementUsageError || (!storageError && !dbError
             ? 'Supabase is connected, but project usage is unavailable.'
             : 'Supabase connectivity check failed; project quota is unavailable.'),
-        ...(managementUsage ? { raw: managementUsage } : {}),
+        ...(metricsText ? { metrics: metricsText.slice(0, 200_000) } : {}),
       };
     }
 
