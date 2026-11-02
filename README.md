@@ -68,6 +68,7 @@ It is especially useful for communities where shoppers want to:
 6. Run checks:
    `npm run lint`
    `npm run server:check`
+   `npm test`
 
 For the Render API deployment, set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, and `GEMINI_MODEL` in the service environment. The Vercel frontend uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; its `/api` rewrite forwards API requests to Render. If the Vercel project uses a direct API URL, set the production-only `VITE_API_URL` to the Render service URL and redeploy the frontend.
 

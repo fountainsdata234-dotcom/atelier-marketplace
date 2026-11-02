@@ -12,6 +12,7 @@
     "preview": "node ./node_modules/vite/bin/vite.js preview",
     "server": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs server/index.ts",
     "start": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs server/index.ts",
+    "test": "node ./node_modules/vitest/vitest.mjs run",
     "migrate:firebase-to-supabase": "node --env-file-if-exists=.env.local scripts/migrate-firebase-to-supabase.mjs",
     "server:check": "node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.server.json",
     "android:twa:update": "node ./node_modules/@bubblewrap/cli/bin/bubblewrap.js update --manifest=twa-manifest.json --directory=android --skipVersionUpgrade",
