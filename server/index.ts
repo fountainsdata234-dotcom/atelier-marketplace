@@ -2714,22 +2714,29 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
     let managementUsage: Record<string, unknown> | null = null;
     let managementUsageError: string | null = null;
     if (supabaseProjectRef && supabaseAccessToken) {
-      try {
-        const usageResponse = await fetch(`https://api.supabase.com/v1/projects/${encodeURIComponent(supabaseProjectRef)}/usage`, {
-          headers: { Authorization: `Bearer ${supabaseAccessToken}`, Accept: 'application/json' },
-        });
-        if (!usageResponse.ok) {
-          managementUsageError = `Supabase usage API returned HTTP ${usageResponse.status}.`;
-        } else {
-          const usagePayload = await usageResponse.json() as unknown;
-          if (usagePayload && typeof usagePayload === 'object' && !Array.isArray(usagePayload)) {
-            managementUsage = usagePayload as Record<string, unknown>;
-          } else {
+      const usageEndpoints = [
+        `https://api.supabase.com/v1/projects/${encodeURIComponent(supabaseProjectRef)}/usage`,
+        `https://api.supabase.com/v1/projects/${encodeURIComponent(supabaseProjectRef)}/billing/usage`,
+      ];
+      for (const usageEndpoint of usageEndpoints) {
+        try {
+          const usageResponse = await fetch(usageEndpoint, {
+            headers: { Authorization: `Bearer ${supabaseAccessToken}`, Accept: 'application/json' },
+          });
+          if (usageResponse.ok) {
+            const usagePayload = await usageResponse.json() as unknown;
+            if (usagePayload && typeof usagePayload === 'object' && !Array.isArray(usagePayload)) {
+              managementUsage = usagePayload as Record<string, unknown>;
+              break;
+            }
             managementUsageError = 'Supabase usage API returned an unsupported response.';
+          } else {
+            const errorBody = await usageResponse.text().catch(() => '');
+            managementUsageError = `Supabase usage API returned HTTP ${usageResponse.status}${errorBody ? `: ${errorBody.slice(0, 160)}` : '.'}`;
           }
+        } catch {
+          managementUsageError = 'Supabase usage API could not be reached.';
         }
-      } catch {
-        managementUsageError = 'Supabase usage API could not be reached.';
       }
     } else {
       managementUsageError = 'SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN are not configured.';
