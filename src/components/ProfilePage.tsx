@@ -27,16 +27,17 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
   const [avatarImageFailed, setAvatarImageFailed] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const uploadAvatar = async (file: File | undefined) => {
     const userId = await getAuthUserId();
     if (!file || !userId) return;
     setIsUploadingAvatar(true);
+    setAvatarUploadProgress(0);
     setStatus(null);
     try {
-      const uploadedUrl = await uploadUserImage(file, userId, 'profiles', `avatar-${Date.now()}.jpg`);
+      const uploadedUrl = await uploadUserImage(file, userId, 'profiles', `avatar-${Date.now()}.jpg`, false, setAvatarUploadProgress);
       setAvatarUrl(uploadedUrl);
       setAvatarImageFailed(false);
       setStatus('Profile picture ready. Save your profile to publish it.');
@@ -45,6 +46,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
     } finally {
       setIsUploadingAvatar(false);
     }
+  };
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    void uploadAvatar(event.target.files?.[0]);
+    event.target.value = '';
   };
 
   const acknowledgeWarning = async () => {
@@ -113,11 +118,17 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           <div className="flex items-center gap-4">
             <div className="relative">
               {avatarUrl && !avatarImageFailed ? <img src={avatarUrl} alt="Profile" onError={() => setAvatarImageFailed(true)} className="h-16 w-16 rounded-2xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-xl font-black text-neutral-950">{getProfileInitials(form.name || currentUser.name)}</div>}
-              <label className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-amber-300 bg-amber-400 text-neutral-950 shadow-lg" title="Change profile picture">
+              <label
+                className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-amber-300 bg-amber-400 text-neutral-950 shadow-lg"
+                title="Change profile picture"
+                onDragOver={event => event.preventDefault()}
+                onDrop={event => { event.preventDefault(); void uploadAvatar(event.dataTransfer.files?.[0]); }}
+              >
                 <Camera className="h-4 w-4" />
                 <input type="file" accept="image/*" onChange={handleAvatarChange} disabled={isUploadingAvatar} className="hidden" />
               </label>
             </div>
+            {isUploadingAvatar && <div className="mt-2 text-[10px] text-amber-400">{avatarUploadProgress}% uploaded</div>}
             <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Your profile</p><h1 className="mt-1 text-2xl font-serif font-bold sm:text-3xl">{form.name || currentUser.name}</h1><p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-500">{getRoleLabel(currentUser.role)}</p><p className="text-xs text-neutral-400">{currentUser.email}</p></div>
           </div>
           <button type="button" onClick={onLogout} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-semibold text-red-300 hover:bg-red-500/20"><LogOut className="h-4 w-4" /> Log out</button>

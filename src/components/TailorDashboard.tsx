@@ -93,6 +93,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   // Image Program State
   const [imageUrl, setImageUrl] = useState('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
   const [compressionStats, setCompressionStats] = useState<ProcessedImageResult | null>(null);
   const [postStatus, setPostStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [fabricRequests, setFabricRequests] = useState<FabricRequest[]>([]);
@@ -174,11 +175,11 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   };
 
   // Handle file upload through Image Link Program
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  const processImageUpload = async (files: File[]) => {
     if (!files.length) return;
 
     setIsProcessingImage(true);
+    setImageUploadProgress(0);
     setPostStatus(null);
     try {
       if (files.length > 1) throw new Error('A standard post can include one photo. Add multiple photos to a collection instead.');
@@ -190,7 +191,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       if (file.size > 8 * 1024 * 1024) throw new Error(`${file.name} exceeds the 8 MB image limit.`);
       const result = await compressAndGenerateImageLink(file);
       if (!result.blob) throw new Error('Please sign in again before uploading an image.');
-      const uploadedAsset = await api.uploadListingImage(result.blob, `${Date.now()}-${file.name}`);
+      const uploadedAsset = await api.uploadListingImage(result.blob, `${Date.now()}-${file.name}`, setImageUploadProgress);
       URL.revokeObjectURL(result.url);
       lastCompression = result;
       setImageAssets([uploadedAsset]);
@@ -202,9 +203,12 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         message: safeCustomerErrorMessage(err, "We couldn't prepare this image. Please try another file.")
       });
     } finally {
-      e.target.value = '';
       setIsProcessingImage(false);
     }
+  };
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await processImageUpload(Array.from(e.target.files || []));
+    e.target.value = '';
   };
 
   // Submit Post
@@ -802,13 +806,18 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
                   {postStep === 0 && <div className="space-y-4">
                     <label className="block text-xs font-medium text-neutral-400">{listingType === 'FABRIC' ? 'Fabric images *' : 'Garment / portfolio images *'}</label>
-                    <div className="rounded-2xl border-2 border-dashed border-neutral-700 bg-neutral-900/30 p-6 text-center transition-all hover:border-amber-500/60">
+                    <div
+                      className="rounded-2xl border-2 border-dashed border-neutral-700 bg-neutral-900/30 p-6 text-center transition-all hover:border-amber-500/60"
+                      onDragOver={event => event.preventDefault()}
+                      onDrop={event => { event.preventDefault(); void processImageUpload(Array.from(event.dataTransfer.files)); }}
+                    >
                     <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="tailor-file-input" disabled={currentUser.isBlocked || isProcessingImage} onChange={handleFileUpload} className="hidden" />
                       <label htmlFor="tailor-file-input" className="flex cursor-pointer flex-col items-center justify-center">
                         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400"><ImageIcon className="h-6 w-6" /></div>
-                        <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? 'Processing and securely uploading…' : 'Upload a product image'}</span>
+                        <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? `Uploading ${imageUploadProgress}%…` : 'Upload a product image'}</span>
                         <span className="mt-1 text-[10px] text-neutral-500">One JPEG, PNG, WebP, or GIF photo, up to 8 MB. You can replace it before publishing.</span>
                       </label>
+                      {isProcessingImage && <div className="mx-auto mt-3 max-w-sm"><div className="h-1.5 overflow-hidden rounded-full bg-neutral-800"><div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${imageUploadProgress}%` }} /></div><p className="mt-1 text-[10px] text-amber-300">{imageUploadProgress}% uploaded</p></div>}
                     </div>
                     {imageAssets.length > 0 && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{imageAssets.map((asset, index) => (
                       <div key={asset.url} className="relative aspect-square overflow-hidden rounded-lg border border-neutral-700">

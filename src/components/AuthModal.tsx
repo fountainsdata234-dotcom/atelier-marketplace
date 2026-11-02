@@ -44,6 +44,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
 
   // Location Cascading State
   const [selectedCountryCode, setSelectedCountryCode] = useState('');
@@ -412,7 +413,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     let storedAvatarUrl = authUser.avatarUrl;
     if (avatarFile) {
       try {
-        storedAvatarUrl = await uploadUserImage(avatarFile, authUser.id, 'profiles', `avatar-${Date.now()}.${fileExtension(avatarFile)}`);
+        setAvatarUploadProgress(0);
+        storedAvatarUrl = await uploadUserImage(avatarFile, authUser.id, 'profiles', `avatar-${Date.now()}.${fileExtension(avatarFile)}`, false, setAvatarUploadProgress);
       } catch {
         avatarUploadFailed = true;
       }
@@ -696,11 +698,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
+              <div
+                className="flex items-center gap-3 rounded-xl border border-dashed border-neutral-800 bg-neutral-900/40 p-3"
+                onDragOver={event => event.preventDefault()}
+                onDrop={event => { event.preventDefault(); handleAvatarUpload(event.dataTransfer.files?.[0]); }}
+              >
                 {avatarUrl ? <img src={avatarUrl} alt="Profile preview" className="h-14 w-14 rounded-full object-cover ring-2 ring-amber-400/60" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/20 text-lg font-bold text-amber-300 ring-2 ring-amber-500/30">{avatarInitials}</div>}
                 <div className="min-w-0 flex-1">
                   <label className="block text-xs font-semibold text-neutral-200">Profile picture</label>
                   <p className="mt-0.5 text-[10px] text-neutral-500">Use a clear photo or your initials will be used.</p>
+                  {isSubmitting && avatarFile && <p className="mt-1 text-[10px] text-amber-400">{avatarUploadProgress}% uploaded</p>}
                   <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => handleAvatarUpload(e.target.files?.[0])} className="mt-2 block w-full text-[10px] text-neutral-400 file:mr-2 file:rounded-lg file:border-0 file:bg-amber-400 file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-neutral-950" />
                 </div>
               </div>

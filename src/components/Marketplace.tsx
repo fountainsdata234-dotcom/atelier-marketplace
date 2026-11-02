@@ -1015,7 +1015,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     : suggestion.user ? <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-[10px] font-black text-neutral-950">{getProfileInitials(suggestion.user.name)}</span>
                       : suggestion.post ? <PostImage src={suggestion.post.imageUrl} alt={suggestion.post.title || 'Marketplace listing'} className="h-9 w-9 rounded-lg" watermark={false} />
                         : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10"><Search className="h-3.5 w-3.5 text-amber-500" /></span>}
-                  <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.type === 'recent' ? 'Recent search · this session' : suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? (suggestion.post?.isPromoted ? 'Sponsored listing' : 'Marketplace listing') : 'Category'}</small></span>
+                  <span className="min-w-0"><strong className="block truncate">{suggestion.label}</strong><small className="text-[10px] text-neutral-400">{suggestion.type === 'recent' ? 'Recent search · this session' : suggestion.user ? getRoleLabel(suggestion.user.role) : suggestion.type === 'post' ? (suggestion.post?.isPromoted ? 'Promoted listing' : 'Marketplace listing') : 'Category'}</small></span>
                 </button>
               ))}
             </div>
@@ -1249,7 +1249,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   <div className="flex flex-col justify-center border-t border-white/10 bg-gradient-to-br from-[#171615] via-[#111112] to-[#1c1710] p-5 sm:p-7 md:border-l md:border-t-0 md:p-8 lg:p-10">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">Curated atelier pick</span>
-                      {post.isPromoted && <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">Sponsored</span>}
+                      {post.isPromoted && <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">Promoted</span>}
                     </div>
                     <p className="mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">{post.authorName} <span className="px-1 text-neutral-600">/</span> {formatLocation(post.authorLocation)}</p>
                     <h2 className="mt-2 line-clamp-2 font-serif text-2xl font-bold leading-tight text-white sm:text-3xl lg:text-4xl">{post.title}</h2>
@@ -1376,7 +1376,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         ? <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="aspect-[4/3] w-full" imageClassName="brightness-110 saturate-110" loading="lazy" decoding="async" onError={() => handlePostImageError(post, imageSource)} />
                         : <div role="img" aria-label={`Image unavailable for ${post.title}`} className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-neutral-900/80 text-neutral-500"><Scissors aria-hidden="true" className="h-8 w-8 text-amber-500/70" /><span className="text-xs">Listing image unavailable</span></div>}
                       <span className="absolute left-2.5 top-2.5 rounded-md border border-orange-300/30 bg-neutral-950/90 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-orange-200">{activeTrendCategoryLabel}</span>
-                      {post.isPromoted && <span className="absolute right-2.5 top-2.5 rounded-md bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Sponsored</span>}
+                      {post.isPromoted && <span className="absolute right-2.5 top-2.5 rounded-md bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Promoted</span>}
                       <button type="button" onClick={event => handleSave(post, event.currentTarget)} disabled={pendingActions.has(post.id)} aria-pressed={isSaved} aria-label={`${isSaved ? 'Remove saved listing' : 'Save listing'}: ${post.title}`} className={`absolute right-2.5 bottom-2.5 rounded-xl p-2 transition ${isSaved ? 'bg-amber-500 text-neutral-950' : 'border border-white/20 bg-black/70 text-white hover:bg-black'}`}>
                         <Bookmark className={`h-4 w-4 ${isSaved ? 'fill-neutral-950' : ''}`} />
                       </button>
@@ -1760,7 +1760,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                             title="Paid placement"
                             className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 uppercase tracking-tighter ring-1 ring-amber-500/25"
                           >
-                            Sponsored
+                            Promoted
                           </span>
                         )}
                       </div>

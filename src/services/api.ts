@@ -1,6 +1,7 @@
 import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences, NearbySellerMatch, ReverseGeocodedBusinessLocation, BusinessLocationSearchResult } from '../types';
 
 import { getAuthToken, isSupabaseAuthReady } from './auth';
+import { uploadFormDataWithProgress } from './mediaUpload';
 import { customerMessageForHttpError, customerMessageForNetworkError, safeCustomerErrorMessage } from '../utils/customerMessages';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
@@ -446,21 +447,12 @@ export const api = {
   setListingStatus: (listingId: string, action: 'publish' | 'pause' | 'archive' | 'sold_out') => request<ClothPost>(`/api/posts/${listingId}/status`, { method: 'PATCH', body: JSON.stringify({ action }) }),
   moderateListing: (listingId: string, decision: 'approve' | 'reject', reason?: string) => request<ClothPost>(`/api/admin/listings/${listingId}/moderation`, { method: 'PATCH', body: JSON.stringify({ decision, reason }) }),
   reportListing: (listingId: string, reason: string, details?: string) => request<{ ok: boolean }>(`/api/posts/${listingId}/report`, { method: 'POST', body: JSON.stringify({ reason, details }) }),
-  uploadListingImage: async (file: Blob, fileName: string): Promise<ListingImageAsset> => {
+  uploadListingImage: async (file: Blob, fileName: string, onProgress?: (progress: number) => void): Promise<ListingImageAsset> => {
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
     formData.append('image', file, fileName.replace(/\.[^.]+$/, '') + '.jpg');
     formData.append('folder', 'posts');
-    const response = await fetch(`${API_URL}/api/upload`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      body: formData,
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(customerMessageForHttpError(response.status, body.error, '/api/upload', body.code));
-    }
-    const asset = await response.json() as ListingImageAsset;
+    const asset = await uploadFormDataWithProgress<ListingImageAsset>(`${API_URL}/api/upload`, formData, token, onProgress);
     if (!asset.url || !asset.thumbnailUrl) throw new Error("We couldn't finish uploading your image. Please try again.");
     return asset;
   },

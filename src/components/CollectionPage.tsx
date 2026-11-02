@@ -12,6 +12,7 @@ interface CollectionUploadItem {
   name: string;
   preview: string;
   status: 'queued' | 'uploading' | 'done' | 'error';
+  progress: number;
   url?: string;
   error?: string;
 }
@@ -143,6 +144,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
       name: file.name,
       preview: URL.createObjectURL(file),
       status: 'queued',
+      progress: 0,
     }));
 
     setUploadQueue((previous) => [...previous, ...nextQueue]);
@@ -154,15 +156,17 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
       const item = nextQueue[index];
       if (!file || !item) continue;
 
-      setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'uploading' } : entry));
+      setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'uploading', progress: 0 } : entry));
 
       try {
-        const uploadedUrl = await uploadUserImage(file, currentUser.id, 'atelier', `collection-${Date.now()}-${item.name.replace(/\s+/g, '-').toLowerCase()}`);
+        const uploadedUrl = await uploadUserImage(file, currentUser.id, 'atelier', `collection-${Date.now()}-${item.name.replace(/\s+/g, '-').toLowerCase()}`, false, progress => {
+          setUploadQueue(previous => previous.map(entry => entry.id === item.id ? { ...entry, progress } : entry));
+        });
         setCollectionImages((images) => {
           const nextImages = [...images.filter(Boolean), uploadedUrl];
           return Array.from(new Set(nextImages)).slice(0, 12);
         });
-        setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'done', url: uploadedUrl } : entry));
+        setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'done', progress: 100, url: uploadedUrl } : entry));
       } catch (error) {
         const message = safeCustomerErrorMessage(error, "We couldn't upload this image. Please try again.");
         setUploadQueue((previous) => previous.map((entry) => entry.id === item.id ? { ...entry, status: 'error', error: message } : entry));
@@ -277,6 +281,12 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
                         {item.status === 'uploading' && <span className="text-amber-400">Uploading</span>}
                         {item.status === 'error' && <span className="text-red-400">Failed</span>}
                       </div>
+                      {(item.status === 'uploading' || item.status === 'done') && (
+                        <div className="px-2.5 pb-2.5">
+                          <div className="h-1.5 overflow-hidden rounded-full bg-neutral-800"><div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${item.progress}%` }} /></div>
+                          <p className="mt-1 text-[10px] text-neutral-500">{item.progress}% uploaded</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
