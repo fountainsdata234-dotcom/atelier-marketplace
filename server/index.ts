@@ -2701,13 +2701,13 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
       details?: string;
       raw?: Record<string, unknown>;
       metrics?: string;
+      measurements?: Array<{ label: string; value: number; unit: string }>;
     };
     const providerMetrics: Record<string, ProviderMetric> = {
       supabase: { label: 'Supabase', unit: 'GB', available: false },
       cloudinary: { label: 'Cloudinary', unit: 'GB', available: false },
       gemini: { label: 'Gemini API', unit: 'tokens', available: false },
     };
-
     const supabaseUrl = process.env.SUPABASE_URL?.trim();
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
     const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF?.trim();
@@ -2730,6 +2730,27 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
       }
     } else {
       managementUsageError = 'SUPABASE_PROJECT_REF and SUPABASE_SERVICE_ROLE_KEY are not configured.';
+    }
+    const measurements: Array<{ label: string; value: number; unit: string }> = [];
+    if (metricsText) {
+      const metricAliases: Array<{ label: string; unit: string; names: string[]; divisor?: number }> = [
+        { label: 'Database size', unit: 'GB', names: ['pg_database_size_bytes', 'supabase_db_size_bytes'], divisor: 1_073_741_824 },
+        { label: 'Active connections', unit: 'connections', names: ['pg_stat_database_numbackends', 'pg_stat_database_numbackends_total'] },
+        { label: 'Transactions committed', unit: 'transactions', names: ['pg_stat_database_xact_commit', 'pg_stat_database_xact_commit_total'] },
+        { label: 'Transactions rolled back', unit: 'transactions', names: ['pg_stat_database_xact_rollback', 'pg_stat_database_xact_rollback_total'] },
+        { label: 'Blocks read', unit: 'blocks', names: ['pg_stat_database_blks_read', 'pg_stat_database_blks_read_total'] },
+        { label: 'Blocks cache hit', unit: 'blocks', names: ['pg_stat_database_blks_hit', 'pg_stat_database_blks_hit_total'] },
+      ];
+      const lines = metricsText.split(/\r?\n/);
+      for (const alias of metricAliases) {
+        const line = lines.find(candidate => alias.names.some(name => candidate.startsWith(`${name}{`) || candidate.startsWith(`${name} `)));
+        if (!line) continue;
+        const valueMatch = line.match(/\s(-?(?:\d+(?:\.\d+)?|Inf|NaN))\s*$/);
+        if (!valueMatch) continue;
+        const value = Number(valueMatch[1]);
+        if (!Number.isFinite(value)) continue;
+        measurements.push({ label: alias.label, value: alias.divisor ? value / alias.divisor : value, unit: alias.unit });
+      }
     }
     if (supabaseUrl && supabaseKey) {
       const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
@@ -2754,7 +2775,7 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
           : managementUsageError || (!storageError && !dbError
             ? 'Supabase is connected, but project usage is unavailable.'
             : 'Supabase connectivity check failed; project quota is unavailable.'),
-        ...(metricsText ? { metrics: metricsText.slice(0, 200_000) } : {}),
+        ...(metricsText ? { metrics: metricsText.slice(0, 200_000), measurements } : {}),
       };
     }
 

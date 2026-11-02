@@ -225,6 +225,7 @@ export const api = {
       details?: string;
       raw?: Record<string, unknown>;
       metrics?: string;
+      measurements?: Array<{ label: string; value: number; unit: string }>;
     }>;
   }>('/api/admin/telemetry/providers', { cache: 'no-store' }),
   getProfile: () => request<Partial<User>>('/api/profile'),

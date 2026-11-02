@@ -667,7 +667,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-800"><div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.min(percent || 0, 100)}%` }} /></div>
                       <p className="mt-2 text-xs text-neutral-300">{provider.usage.used.toLocaleString()} / {provider.usage.total.toLocaleString()} {provider.unit} · {provider.usage.remaining.toLocaleString()} remaining</p>
                     </>
-                  ) : <p className="mt-3 text-xs leading-relaxed text-neutral-500">{provider?.details || 'Waiting for provider telemetry.'}</p>}
+                  ) : (
+                    <>
+                      <p className="mt-3 text-xs leading-relaxed text-neutral-500">{provider?.details || 'Waiting for provider telemetry.'}</p>
+                      {providerKey === 'supabase' && provider?.measurements && provider.measurements.length > 0 && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          {provider.measurements.map(measurement => (
+                            <div key={measurement.label} className="rounded-lg border border-neutral-800/80 px-2.5 py-2">
+                              <p className="truncate text-[10px] text-neutral-500">{measurement.label}</p>
+                              <p className="mt-1 text-xs font-semibold text-neutral-200">{measurement.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="font-normal text-neutral-500">{measurement.unit}</span></p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               );
             })}
