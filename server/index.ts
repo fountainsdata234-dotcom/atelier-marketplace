@@ -2702,6 +2702,7 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
       raw?: Record<string, unknown>;
       metrics?: string;
       measurements?: Array<{ label: string; value: number; unit: string }>;
+      analytics?: Array<{ label: string; endpoint: string; available: boolean; data?: unknown; details?: string }>;
     };
     const providerMetrics: Record<string, ProviderMetric> = {
       supabase: { label: 'Supabase', unit: 'GB', available: false },
@@ -2711,6 +2712,7 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
     const supabaseUrl = process.env.SUPABASE_URL?.trim();
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
     const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF?.trim();
+    const supabaseAccessToken = process.env.SUPABASE_ACCESS_TOKEN?.trim();
     let metricsText: string | null = null;
     let managementUsageError: string | null = null;
     if (supabaseProjectRef && supabaseKey) {
@@ -2732,6 +2734,7 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
       managementUsageError = 'SUPABASE_PROJECT_REF and SUPABASE_SERVICE_ROLE_KEY are not configured.';
     }
     const measurements: Array<{ label: string; value: number; unit: string }> = [];
+    const analytics: Array<{ label: string; endpoint: string; available: boolean; data?: unknown; details?: string }> = [];
     if (metricsText) {
       const metricAliases: Array<{ label: string; unit: string; names: string[]; divisor?: number }> = [
         { label: 'Database size', unit: 'GB', names: ['pg_database_size_bytes', 'supabase_db_size_bytes'], divisor: 1_073_741_824 },
@@ -2750,6 +2753,43 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
         const value = Number(valueMatch[1]);
         if (!Number.isFinite(value)) continue;
         measurements.push({ label: alias.label, value: alias.divisor ? value / alias.divisor : value, unit: alias.unit });
+      }
+      if (supabaseProjectRef && supabaseAccessToken) {
+        const analyticsEndpoints = [
+          { label: 'API request counts', path: 'usage.api-counts' },
+          { label: 'Edge Function statistics', path: 'functions.combined-stats' },
+        ];
+        for (const endpoint of analyticsEndpoints) {
+          const path = `/v1/projects/${encodeURIComponent(supabaseProjectRef)}/analytics/endpoints/${endpoint.path}`;
+          try {
+            const response = await fetch(`https://api.supabase.com${path}`, {
+              headers: { Authorization: `Bearer ${supabaseAccessToken}`, Accept: 'application/json' },
+            });
+            const body = await response.text();
+            let data: unknown;
+            try {
+              data = JSON.parse(body);
+            } catch {
+              data = body.slice(0, 10_000);
+            }
+            analytics.push({
+              label: endpoint.label,
+              endpoint: path,
+              available: response.ok,
+              data: response.ok ? data : undefined,
+              details: response.ok ? undefined : `Supabase Analytics API returned HTTP ${response.status}.`,
+            });
+          } catch {
+            analytics.push({ label: endpoint.label, endpoint: path, available: false, details: 'Supabase Analytics API could not be reached.' });
+          }
+        }
+      } else {
+        analytics.push({
+          label: 'Management Analytics',
+          endpoint: '/v1/projects/{project-ref}/analytics/endpoints/*',
+          available: false,
+          details: 'SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN are required for Management Analytics.',
+        });
       }
     }
     if (supabaseUrl && supabaseKey) {
@@ -2776,6 +2816,7 @@ app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req
             ? 'Supabase is connected, but project usage is unavailable.'
             : 'Supabase connectivity check failed; project quota is unavailable.'),
         ...(metricsText ? { metrics: metricsText.slice(0, 200_000), measurements } : {}),
+        analytics,
       };
     }
 

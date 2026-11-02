@@ -680,6 +680,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           ))}
                         </div>
                       )}
+                      {providerKey === 'supabase' && provider?.analytics && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Live activity</p>
+                          {provider.analytics.map(item => (
+                            <div key={item.endpoint} className="rounded-lg border border-neutral-800/80 px-2.5 py-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="truncate text-[10px] text-neutral-400">{item.label}</span>
+                                <span className={`shrink-0 text-[10px] font-bold uppercase ${item.available ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                                  {item.available ? 'Connected' : 'Unavailable'}
+                                </span>
+                              </div>
+                              {item.available && item.data && typeof item.data === 'object' && !Array.isArray(item.data) && (
+                                <div className="mt-2 grid grid-cols-2 gap-1">
+                                  {Object.entries(item.data as Record<string, unknown>)
+                                    .filter(([, value]) => typeof value === 'number' || typeof value === 'string')
+                                    .slice(0, 6)
+                                    .map(([key, value]) => <span key={key} className="truncate text-[10px] text-neutral-500">{key}: <strong className="text-neutral-300">{String(value)}</strong></span>)}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
