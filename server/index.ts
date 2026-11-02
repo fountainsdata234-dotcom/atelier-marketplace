@@ -999,8 +999,25 @@ function buildProfileUpdate(input: Record<string, unknown>) {
   return updates;
 }
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'atelier-api' });
+app.get('/api/health', async (_req, res) => {
+  const supabaseConfigured = Boolean(process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+  const cloudinaryConfiguredForTelemetry = Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME?.trim()
+      && process.env.CLOUDINARY_API_KEY?.trim()
+      && process.env.CLOUDINARY_API_SECRET?.trim(),
+  );
+  const telemetryConfigured = Boolean(process.env.SUPABASE_PROJECT_REF?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    ok: true,
+    service: 'atelier-api',
+    dependencies: {
+      supabase: supabaseConfigured ? 'configured' : 'missing_configuration',
+      cloudinaryTelemetry: cloudinaryConfiguredForTelemetry ? 'configured' : 'not_configured',
+      supabaseMetrics: telemetryConfigured ? 'configured' : 'not_configured',
+    },
+    checkedAt: new Date().toISOString(),
+  });
 });
 
 app.get('/api/location/countries', (_req, res) => {
@@ -2693,6 +2710,7 @@ app.post('/api/assistant/command', async (req: Request, res: Response) => {
 
 app.get('/api/admin/telemetry/providers', requireAuth, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
   try {
+    res.set('Cache-Control', 'no-store');
     type ProviderMetric = {
       label: string;
       unit: string;
@@ -4705,7 +4723,7 @@ app.post('/api/posts/:postId/save', requireAuth, requireActiveAccount, async (re
   res.json({ isSaved, savesCount: savesSnapshot.size });
 });
 
-app.delete('/api/posts/:postId', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.delete('/api/posts/:postId', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
   if (supabaseDataEnabled) {
     const listing = await getPost(req.params.postId);
     if (!listing) {
