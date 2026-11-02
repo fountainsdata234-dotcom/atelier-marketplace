@@ -671,17 +671,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <>
                       <p className="mt-3 text-xs leading-relaxed text-neutral-500">{provider?.details || 'Waiting for provider telemetry.'}</p>
                       {providerKey === 'supabase' && provider?.measurements && provider.measurements.length > 0 && (
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          {provider.measurements.map(measurement => (
-                            <div key={measurement.label} className="rounded-lg border border-neutral-800/80 px-2.5 py-2">
-                              <p className="truncate text-[10px] text-neutral-500">{measurement.label}</p>
-                              <p className="mt-1 text-xs font-semibold text-neutral-200">{measurement.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="font-normal text-neutral-500">{measurement.unit}</span></p>
-                            </div>
-                          ))}
+                        <div className="mt-3 max-h-44 overflow-y-auto pr-1">
+                          <div className="grid grid-cols-2 gap-2">
+                            {provider.measurements.map(measurement => (
+                              <div key={measurement.label} className="rounded-lg border border-neutral-800/80 px-2.5 py-2">
+                                <p className="truncate text-[10px] text-neutral-500">{measurement.label}</p>
+                                <p className="mt-1 text-xs font-semibold text-neutral-200">{measurement.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="font-normal text-neutral-500">{measurement.unit}</span></p>
+                                <p className="mt-1 text-[9px] text-neutral-600">Plan limit unavailable</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                       {providerKey === 'supabase' && provider?.analytics && (
-                        <div className="mt-3 space-y-2">
+                        <div className="mt-3 max-h-36 space-y-2 overflow-y-auto pr-1">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Live activity</p>
                           {provider.analytics.map(item => (
                             <div key={item.endpoint} className="rounded-lg border border-neutral-800/80 px-2.5 py-2">
