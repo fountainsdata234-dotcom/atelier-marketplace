@@ -1610,8 +1610,18 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
   }
 
   if (supabaseDataEnabled) {
-    await writeProfile(uid, updates);
-    if (typeof req.body?.isPromoted === 'boolean') await updateAuthorPromotion(uid, req.body.isPromoted);
+    if (typeof req.body?.isPromoted === 'boolean') {
+      const promoted = req.body.isPromoted;
+      await writeProfile(uid, updates);
+      try {
+        await updateAuthorPromotion(uid, promoted);
+      } catch (error) {
+        await writeProfile(uid, { isPromoted: existing.isPromoted === true }).catch(() => undefined);
+        throw error;
+      }
+    } else {
+      await writeProfile(uid, updates);
+    }
     res.json({ id: uid, ...(await readProfile(uid) || {}) });
     return;
   }

@@ -472,12 +472,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Toggle Promote Tailor
   const handleTogglePromote = async (tailor: User) => {
     const updated = !tailor.isPromoted;
+    setAdminStatus(null);
     storageService.updateUser(tailor.id, { isPromoted: updated });
 
     try {
       await api.updateUserProfile(tailor.id, { isPromoted: updated });
+      setAdminStatus(`${tailor.shopName || tailor.name} is now ${updated ? 'promoted' : 'no longer promoted'}.`);
     } catch (error) {
+      storageService.updateUser(tailor.id, { isPromoted: !updated });
       console.error('Profile sync failed while updating promotion state', error);
+      setAdminStatus(safeCustomerErrorMessage(error, "The promotion status couldn't be updated. Please try again."));
     }
   };
 
