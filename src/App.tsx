@@ -415,10 +415,11 @@ export default function App() {
     document.querySelector('meta[name="description"]')?.setAttribute('content', description);
     document.querySelector('meta[property="og:title"]')?.setAttribute('content', sellerTitle || meta.title);
     document.querySelector('meta[property="og:description"]')?.setAttribute('content', description);
-    document.querySelector('meta[property="og:url"]')?.setAttribute('content', `${window.location.origin}${window.location.pathname}`);
+    const canonicalUrl = new URL(window.location.pathname + window.location.search, 'https://www.fabsattire.com');
+    document.querySelector('meta[property="og:url"]')?.setAttribute('content', canonicalUrl.href);
     document.querySelector('meta[name="twitter:title"]')?.setAttribute('content', sellerTitle || meta.title);
     document.querySelector('meta[name="twitter:description"]')?.setAttribute('content', description);
-    document.querySelector('link[rel="canonical"]')?.setAttribute('href', `${window.location.origin}${window.location.pathname}`);
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', canonicalUrl.href);
     document.querySelector('meta[name="robots"]')?.setAttribute('content', isPrivateView ? 'noindex, nofollow' : 'index, follow, max-image-preview:large');
   }, [currentView, sharedSeller]);
 
