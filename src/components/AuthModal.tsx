@@ -279,7 +279,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
     if (!isRegistering) {
-      const authUser = await signInWithEmail(email.trim(), password);
+      if (!email.trim() || !email.includes('@')) {
+        setError('Enter the email address you used for your FABSATTIRE account.');
+        return;
+      }
+      if (!password) {
+        setError('Enter your password to continue.');
+        return;
+      }
+      let authUser: Awaited<ReturnType<typeof signInWithEmail>>;
+      try {
+        authUser = await signInWithEmail(email.trim().toLowerCase(), password);
+      } catch (loginError) {
+        setError(getAuthErrorMessage(loginError));
+        return;
+      }
       const cachedProfile = storageService.getUsers().find(user => user.id === authUser.id);
       const user = storageService.upsertUser({
         id: authUser.id,
@@ -570,7 +584,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             >
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
+                <span>{error.trim() || "We couldn't complete that request. Please try again."}</span>
               </div>
               <button
                 type="button"

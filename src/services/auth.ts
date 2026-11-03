@@ -192,6 +192,10 @@ export const getAuthErrorMessage = (error: unknown) => {
   const message = typeof authError.message === 'string' ? authError.message : '';
   const normalizedMessage = message.toLowerCase();
 
+  if (/supabase authentication is not configured/.test(normalizedMessage)) {
+    return 'Sign-in is temporarily unavailable because the site configuration is incomplete. Please refresh or contact support.';
+  }
+
   if (status === 429 || /rate.?limit|too many requests|over_email_send_rate_limit|over_request_rate_limit/.test(`${code} ${normalizedMessage}`)) {
     return 'Too many sign-up attempts were made recently. Wait a few minutes before trying again. If you have already created an account, sign in or reset your password instead.';
   }
@@ -214,8 +218,17 @@ export const getAuthErrorMessage = (error: unknown) => {
   if (code === 'invalid_credentials' || /invalid login credentials|invalid email or password/.test(normalizedMessage)) {
     return 'The email or password is incorrect. Check your details or reset your password.';
   }
-  if (/failed to fetch|network error|fetch failed/.test(normalizedMessage)) {
-    return 'We could not reach the sign-up service. Check your internet connection and try again.';
+  if (/failed to fetch|network error|fetch failed|networkrequestfailed|load failed/.test(normalizedMessage)) {
+    return 'We could not reach the sign-in service. Check your mobile internet or Wi-Fi connection, then try again.';
+  }
+  if (/javascript|unexpected token|invalid json|json parse/.test(normalizedMessage)) {
+    return 'The sign-in service returned an unreadable response. Refresh the page and try again.';
+  }
+  if (status === 403 || /not allowed|forbidden/.test(normalizedMessage)) {
+    return 'Sign-in is temporarily blocked by the account security settings. Wait a moment, refresh the page, and try again.';
+  }
+  if (status === 400 || /bad request/.test(normalizedMessage)) {
+    return 'The sign-in details could not be accepted. Check your email and password, then try again.';
   }
 
   const supabaseMessages: Record<string, string> = {
