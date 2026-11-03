@@ -146,6 +146,12 @@ export default function App() {
   const landingPostsRequestStarted = useRef(false);
   const landingPromoPlansRequestStarted = useRef(false);
 
+  useEffect(() => {
+    if (!isDataLoading) return;
+    const timeout = window.setTimeout(() => setIsDataLoading(false), 12_000);
+    return () => window.clearTimeout(timeout);
+  }, [isDataLoading]);
+
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>(() => storageService.getUsers());

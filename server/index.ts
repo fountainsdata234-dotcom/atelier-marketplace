@@ -1631,6 +1631,7 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
     } else {
       await writeProfile(uid, updates);
     }
+    invalidatePublicCaches();
     res.json({ id: uid, ...(await readProfile(uid) || {}) });
     return;
   }
@@ -1786,10 +1787,12 @@ app.put('/api/profile', requireAuth, requireActiveAccount, async (req: Authentic
         type: 'general',
       });
     }
+    invalidatePublicCaches();
     res.json(saved);
     return;
   }
   await firestore.collection('profiles').doc(req.authUser!.uid).set(profileValues, { merge: true });
+  invalidatePublicCaches();
   const welcomeSnapshot = await firestore.collection('messages')
     .where('recipientId', '==', req.authUser!.uid)
     .limit(200)
@@ -2570,6 +2573,7 @@ app.get('/api/users', async (_req, res) => {
           whatsappNumber: String(profile.whatsapp_number || ''), shopName: String(profile.shop_name || ''), bio: String(profile.bio || ''),
           handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
           avatarUrl: String(profile.avatar_url || ''), isPromoted: profile.is_promoted === true, isBlocked: profile.is_blocked === true,
+          promotionTargeting: profile.promotion_targeting && typeof profile.promotion_targeting === 'object' ? profile.promotion_targeting : undefined,
           followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
           createdAt: String(profile.created_at || new Date().toISOString()),
         };

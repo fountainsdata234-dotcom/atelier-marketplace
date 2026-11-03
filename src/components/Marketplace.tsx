@@ -388,14 +388,23 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       }).then(page => {
         if (cancelled || generation !== feedGeneration.current) return;
         hasLoadedServerFeed.current = true;
-        setFeedPosts(page.items.length > 0 || hasActiveFeedFilters || postsRef.current.length === 0
+        setFeedPosts(page.items.length > 0
           ? page.items
-          : postsRef.current.slice(0, 16));
+          : hasActiveFeedFilters
+            ? []
+            : postsRef.current.slice(0, 16));
         setFeedCursor(page.nextCursor);
         setFeedHasMore(page.hasMore);
         if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
       }).catch(error => {
-        if (!cancelled && generation === feedGeneration.current) setFeedError(safeCustomerErrorMessage(error, "We couldn't load listings. Please try again."));
+        if (!cancelled && generation === feedGeneration.current) {
+          setFeedPosts(postsRef.current.slice(0, 16));
+          setFeedCursor(null);
+          setFeedHasMore(false);
+          setFeedError(hasActiveFeedFilters
+            ? safeCustomerErrorMessage(error, "We couldn't load listings. Please try again.")
+            : null);
+        }
       }).finally(() => {
         if (!cancelled && generation === feedGeneration.current) setFeedLoading(false);
       });
