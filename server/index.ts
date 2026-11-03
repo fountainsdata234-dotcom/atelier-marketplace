@@ -987,6 +987,15 @@ function buildProfileUpdate(input: Record<string, unknown>) {
   if (typeof input.bio === 'string') updates.bio = input.bio.trim().slice(0, 1000);
   if (typeof input.handle === 'string') updates.handle = input.handle.trim().slice(0, 60);
   if (typeof input.avatarUrl === 'string') updates.avatarUrl = input.avatarUrl.slice(0, 2_000_000);
+  if (input.promotionTargeting && typeof input.promotionTargeting === 'object' && !Array.isArray(input.promotionTargeting)) {
+    const targeting = input.promotionTargeting as Record<string, unknown>;
+    updates.promotionTargeting = {
+      locations: Array.isArray(targeting.locations) ? targeting.locations.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean).slice(0, 20) : [],
+      categories: Array.isArray(targeting.categories) ? targeting.categories.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean).slice(0, 20) : [],
+      audiences: Array.isArray(targeting.audiences) ? targeting.audiences.filter((item): item is string => ['Men', 'Women', 'Children'].includes(item)).slice(0, 3) : [],
+      objective: ['Profile visits', 'Project views', 'Enquiries'].includes(String(targeting.objective)) ? targeting.objective : 'Profile visits',
+    };
+  }
   if (typeof input.isPromoted === 'boolean') updates.isPromoted = input.isPromoted;
   if (typeof input.isBlocked === 'boolean') updates.isBlocked = input.isBlocked;
   if (typeof input.isWarned === 'boolean') updates.isWarned = input.isWarned;

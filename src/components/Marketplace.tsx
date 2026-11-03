@@ -1075,7 +1075,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className={`text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             {activeFeedView === 'for-you'
-              ? 'An optional, privacy-conscious mix of eligible listings. Personalization is off until you enable it; sponsored listings stay labeled.'
+              ? 'An optional, privacy-conscious mix of eligible listings. Personalization is off until you enable it; promoted listings stay clearly labelled.'
               : activeFeedView === 'tailors'
                 ? 'Explore published work from tailor profiles.'
                 : activeFeedView === 'fabrics'

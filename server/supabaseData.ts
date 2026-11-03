@@ -89,7 +89,7 @@ export async function listProfiles(): Promise<ProfileRecord[]> {
 export async function getUsers(includePrivate = false): Promise<ProfileRecord[]> {
   const query = includePrivate
     ? requireClient().from('profiles').select('*')
-    : requireClient().from('profiles').select('id,name,role,shop_name,bio,handle,avatar_url,location,whatsapp_number,is_promoted,is_blocked,followers,created_at');
+    : requireClient().from('profiles').select('id,name,role,shop_name,bio,handle,avatar_url,location,whatsapp_number,is_promoted,promotion_targeting,is_blocked,followers,created_at');
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw normalizeError(error);
   return data || [];

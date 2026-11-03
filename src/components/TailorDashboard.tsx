@@ -26,6 +26,28 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   onOpenImage,
   isDarkMode
 }) => {
+  const [promotionLocations, setPromotionLocations] = useState(currentUser.promotionTargeting?.locations.join(', ') || '');
+  const [promotionCategories, setPromotionCategories] = useState(currentUser.promotionTargeting?.categories.join(', ') || '');
+  const [promotionAudiences, setPromotionAudiences] = useState<Array<'Men' | 'Women' | 'Children'>>(currentUser.promotionTargeting?.audiences || ['Men', 'Women']);
+  const [promotionObjective, setPromotionObjective] = useState<'Profile visits' | 'Project views' | 'Enquiries'>(currentUser.promotionTargeting?.objective || 'Profile visits');
+  const [targetingStatus, setTargetingStatus] = useState('');
+
+  const savePromotionTargeting = async () => {
+    const targeting = {
+      locations: promotionLocations.split(',').map(value => value.trim()).filter(Boolean),
+      categories: promotionCategories.split(',').map(value => value.trim()).filter(Boolean),
+      audiences: promotionAudiences,
+      objective: promotionObjective,
+    };
+    try {
+      await api.saveProfile({ promotionTargeting: targeting });
+      storageService.updateUser(currentUser.id, { promotionTargeting: targeting });
+      setTargetingStatus('Promotion targeting saved.');
+    } catch (error) {
+      setTargetingStatus(safeCustomerErrorMessage(error, "Promotion targeting couldn't be saved."));
+    }
+  };
+
   // Post Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -953,6 +975,39 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 </div>
               ))}
             </div>
+            {currentUser.isPromoted && (
+              <div className={`mt-6 rounded-2xl border p-5 ${isDarkMode ? 'border-amber-500/25 bg-amber-500/[0.05]' : 'border-amber-300 bg-amber-50'}`}>
+                <h3 className="font-serif text-xl font-bold">Promotion targeting</h3>
+                <p className="mt-1 text-xs text-neutral-500">Choose who should see your featured profile and project placements.</p>
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <label className="text-xs font-semibold">Locations
+                    <input value={promotionLocations} onChange={event => setPromotionLocations(event.target.value)} placeholder="Aba, Lagos, Abuja" className="mt-2 w-full rounded-xl border border-neutral-700 bg-transparent px-3 py-3 text-sm outline-none focus:border-amber-400" />
+                  </label>
+                  <label className="text-xs font-semibold">Fashion categories
+                    <input value={promotionCategories} onChange={event => setPromotionCategories(event.target.value)} placeholder="Suits, Agbada, Wedding" className="mt-2 w-full rounded-xl border border-neutral-700 bg-transparent px-3 py-3 text-sm outline-none focus:border-amber-400" />
+                  </label>
+                  <fieldset>
+                    <legend className="text-xs font-semibold">Audience</legend>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(['Men', 'Women', 'Children'] as const).map(audience => (
+                        <button key={audience} type="button" onClick={() => setPromotionAudiences(current => current.includes(audience) ? current.filter(value => value !== audience) : [...current, audience])} className={`rounded-full border px-3 py-2 text-xs font-semibold ${promotionAudiences.includes(audience) ? 'border-amber-400 bg-amber-400 text-neutral-950' : 'border-neutral-700 text-neutral-400'}`}>{audience}</button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <label className="text-xs font-semibold">Campaign objective
+                    <select value={promotionObjective} onChange={event => setPromotionObjective(event.target.value as typeof promotionObjective)} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-3 text-sm outline-none focus:border-amber-400">
+                      <option>Profile visits</option>
+                      <option>Project views</option>
+                      <option>Enquiries</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={() => void savePromotionTargeting()} className="rounded-xl bg-amber-400 px-5 py-3 text-xs font-bold text-neutral-950 hover:bg-amber-300">Save targeting</button>
+                  {targetingStatus && <span className="text-xs text-neutral-400">{targetingStatus}</span>}
+                </div>
+              </div>
+            )}
           </section>
         )}
       </div>

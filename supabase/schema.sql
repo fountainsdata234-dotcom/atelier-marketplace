@@ -17,6 +17,7 @@ create table if not exists public.profiles (
   handle text not null default '',
   avatar_url text,
   is_promoted boolean not null default false,
+  promotion_targeting jsonb not null default '{}'::jsonb,
   is_blocked boolean not null default false,
   is_warned boolean not null default false,
   warning_note text not null default '',

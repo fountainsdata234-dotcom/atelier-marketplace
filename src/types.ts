@@ -108,6 +108,7 @@ export interface User {
   handle: string;
   avatarUrl?: string;
   isPromoted: boolean;
+  promotionTargeting?: PromotionTargeting;
   isBlocked: boolean;
   isWarned?: boolean;
   warningNote?: string;
@@ -115,6 +116,13 @@ export interface User {
   createdAt: string;
   isSuperAdmin?: boolean;
   addedByEmail?: string;
+}
+
+export interface PromotionTargeting {
+  locations: string[];
+  categories: string[];
+  audiences: Array<'Men' | 'Women' | 'Children'>;
+  objective: 'Profile visits' | 'Project views' | 'Enquiries';
 }
 
 export interface SavedPhoto {
