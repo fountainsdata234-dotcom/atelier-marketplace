@@ -590,6 +590,7 @@ export default function App() {
             handle: profileValue('handle', `@${authUser.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`),
             avatarUrl: profileValue('avatarUrl', authUser.avatarUrl),
             isPromoted: profileValue('isPromoted', false),
+            promotionExpiresAt: profileValue('promotionExpiresAt', undefined),
             promotionTargeting: profileValue('promotionTargeting', undefined),
             isBlocked: profileValue('isBlocked', false),
             followers: profileValue('followers', []),

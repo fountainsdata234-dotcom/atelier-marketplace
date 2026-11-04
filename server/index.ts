@@ -274,6 +274,52 @@ function paystackSupabase() {
     : null;
 }
 
+async function reconcilePromotionExpiry() {
+  const supabase = paystackSupabase();
+  if (!supabase) return;
+  const now = new Date();
+  const inThreeDays = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+  const { data: expiredProfiles, error: expiredError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('is_promoted', true)
+    .not('promotion_expires_at', 'is', null)
+    .lte('promotion_expires_at', now.toISOString());
+  if (expiredError) throw expiredError;
+  for (const profile of expiredProfiles || []) {
+    await supabase.from('profiles').update({ is_promoted: false, updated_at: now.toISOString() }).eq('id', profile.id);
+    await supabase.from('posts').update({ is_promoted: false, updated_at: now.toISOString() }).eq('author_id', profile.id);
+  }
+
+  const { data: upcomingProfiles, error: upcomingError } = await supabase
+    .from('profiles')
+    .select('id,name,shop_name,promotion_expires_at')
+    .eq('is_promoted', true)
+    .gt('promotion_expires_at', now.toISOString())
+    .lte('promotion_expires_at', inThreeDays.toISOString());
+  if (upcomingError) throw upcomingError;
+
+  for (const profile of upcomingProfiles || []) {
+    const expiresAt = new Date(String(profile.promotion_expires_at));
+    const hoursRemaining = (expiresAt.getTime() - now.getTime()) / (60 * 60 * 1000);
+    let reminder: string;
+    if (hoursRemaining <= 24) reminder = '1-day promotion expiry reminder';
+    else if (hoursRemaining <= 72 && hoursRemaining > 48) reminder = '3-day promotion expiry reminder';
+    else continue;
+    const title = `${reminder}: ${expiresAt.toISOString().slice(0, 10)}`;
+    const { data: existing } = await supabase.from('notifications').select('id').eq('user_id', profile.id).eq('title', title).limit(1);
+    if (existing?.length) continue;
+    await supabase.from('notifications').insert({
+      user_id: profile.id,
+      title,
+      body: `Your promotion expires ${expiresAt.toLocaleString()}. Renew before then to keep your promoted tag and priority visibility.`,
+      type: 'system',
+      action_url: '/dashboard?tab=plans',
+    });
+  }
+}
+
 async function activatePaystackPayment(reference: string, paymentData?: Record<string, unknown>) {
   const supabase = paystackSupabase();
   if (!supabase) throw new Error('Supabase is required for premium payments.');
@@ -303,6 +349,7 @@ async function activatePaystackPayment(reference: string, paymentData?: Record<s
     promotion_expires_at: expiresAt,
     updated_at: new Date().toISOString(),
   }).eq('id', payment.user_id);
+  await updateAuthorPromotion(payment.user_id, true);
   return payment;
 }
 
@@ -5253,4 +5300,14 @@ app.listen(port, () => {
   void refreshTrends();
   const trendRefreshTimer = setInterval(() => { void refreshTrends(); }, 10 * 60 * 1000);
   trendRefreshTimer.unref();
+  const reconcilePromotions = async () => {
+    try {
+      await reconcilePromotionExpiry();
+    } catch (error) {
+      console.error('Unable to reconcile promotion expiry.', error instanceof Error ? error.message : error);
+    }
+  };
+  void reconcilePromotions();
+  const promotionReconcileTimer = setInterval(() => { void reconcilePromotions(); }, 5 * 60 * 1000);
+  promotionReconcileTimer.unref();
 });

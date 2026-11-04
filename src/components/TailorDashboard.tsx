@@ -986,6 +986,11 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Boost studio visibility, priority ranking, and direct buyer attention through a clean promotion dashboard.</p>
               </div>
             </div>
+            {currentUser.isPromoted && currentUser.promotionExpiresAt && (
+              <div className={`rounded-xl border px-4 py-3 text-sm ${isDarkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
+                Promoted until {new Date(currentUser.promotionExpiresAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               {promoPlans.map(plan => (

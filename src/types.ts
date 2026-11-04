@@ -108,6 +108,7 @@ export interface User {
   handle: string;
   avatarUrl?: string;
   isPromoted: boolean;
+  promotionExpiresAt?: string;
   promotionTargeting?: PromotionTargeting;
   isBlocked: boolean;
   isWarned?: boolean;
