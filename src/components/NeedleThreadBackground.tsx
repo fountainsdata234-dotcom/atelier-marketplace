@@ -359,11 +359,11 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
     const renderWeather = () => {
       const hour = new Date().getHours();
       const night = hour >= 18 || hour < 6;
-      const bodyWidth = Math.max(width * 0.16, 84);
+      const bodyWidth = Math.max(width * 0.16, mobile ? 112 : 84);
       const bodyX = width * (mobile ? 0.76 : 0.82)
         + Math.sin(frame * 0.0025) * width * (mobile ? 0.035 : 0.055)
         + tiltRef.current.x * (mobile ? 42 : 76);
-      const bodyY = height * (mobile ? 0.14 : 0.17)
+      const bodyY = height * (mobile ? 0.18 : 0.17)
         + Math.cos(frame * 0.0018) * height * (mobile ? 0.022 : 0.035)
         + tiltRef.current.y * (mobile ? 24 : 42);
       ctx.clearRect(0, 0, width, height);
@@ -438,7 +438,7 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   }, [isDarkMode]);
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
+    <div className="fixed inset-0 pointer-events-none z-[20] overflow-hidden select-none">
       <canvas ref={canvasRef} className="w-full h-full block" />
       <canvas ref={weatherCanvasRef} aria-hidden="true" className="absolute inset-0 h-full w-full opacity-90 mix-blend-screen" />
       <button

@@ -14,6 +14,7 @@ interface PostImageProps {
   draggable?: boolean;
   onClick?: React.MouseEventHandler<HTMLImageElement>;
   onContextMenu?: React.MouseEventHandler<HTMLImageElement>;
+  fit?: 'contain' | 'cover';
 }
 
 export const PostImage: React.FC<PostImageProps> = ({
@@ -30,6 +31,7 @@ export const PostImage: React.FC<PostImageProps> = ({
   draggable,
   onClick,
   onContextMenu,
+  fit = 'contain',
 }) => (
   <div data-post-image="true" className={`relative isolate overflow-hidden bg-neutral-950 ${className}`}>
     <img
@@ -43,7 +45,7 @@ export const PostImage: React.FC<PostImageProps> = ({
     <img
       src={src}
       alt={alt}
-      className={`relative z-10 block h-full w-full object-contain ${imageClassName}`}
+      className={`relative z-10 block h-full w-full ${fit === 'cover' ? 'object-cover' : 'object-contain'} ${imageClassName}`}
       loading={loading}
       decoding={decoding}
       fetchPriority={fetchPriority}

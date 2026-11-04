@@ -1060,7 +1060,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   );
 
   return (
-    <div ref={marketplaceRootRef} className="relative z-10 w-full px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+    <div ref={marketplaceRootRef} className="relative z-10 w-full px-2 sm:px-6 lg:px-8 py-6 space-y-8">
       {/* Top Header & Search Bar */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-amber-500/15 pb-6">
         <div>
@@ -1364,7 +1364,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 >
                   <div className="group/curated-image relative flex min-h-[260px] items-center justify-center overflow-hidden bg-[#f1ece3] p-3 sm:min-h-[340px] md:min-h-0 md:p-6">
                     <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center p-3 sm:p-5">
-                      {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500 group-hover/curated-image:scale-[1.025]" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
+                      {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500 group-hover/curated-image:scale-[1.025]" fit="cover" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
                     </button>
                     <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:top-6">
                       {post.isPromoted && <span className="rounded-full bg-amber-400 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-neutral-950 shadow-sm">Promoted</span>}
@@ -1861,50 +1861,34 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
                 } ${post.isPromoted ? 'border-amber-400/70 shadow-[0_18px_42px_rgba(251,191,36,0.14)]' : ''}`}
               >
-                {/* Compact identity strip: the image remains the primary marketplace experience. */}
-                <div className="flex items-center justify-between gap-2 border-b border-neutral-800/40 px-3 py-2.5">
-                  <button type="button" onClick={() => {
-                    const author = userById.get(post.authorId);
-                    if (author) onSelectSeller(author);
-                  }} className="flex min-w-0 items-center gap-2.5 text-left">
-                    <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-amber-500/40 bg-amber-500/20 text-xs font-bold text-amber-400 flex items-center justify-center">
+                {/* Garment Image with High-Res Zoom / Save */}
+                <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const author = userById.get(post.authorId);
+                      if (author) onSelectSeller(author);
+                    }}
+                    className="absolute left-2.5 top-2.5 z-20 flex max-w-[calc(100%-6rem)] items-center gap-2 rounded-full border border-white/15 bg-black/65 p-1.5 pr-2.5 text-left text-white shadow-lg backdrop-blur-md"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-400 text-[10px] font-black text-neutral-950">
                       {authorAvatar && !failedAvatarUrls.has(authorAvatar)
                         ? <img
                           src={authorAvatar}
-                          alt={`${post.authorName || 'Seller'} avatar`}
+                          alt=""
                           className="h-full w-full object-cover"
                           onError={() => setFailedAvatarUrls(current => new Set(current).add(authorAvatar))}
                         />
                         : post.authorName.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="max-w-[145px] truncate text-xs font-semibold leading-tight">{post.authorName}</span>
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1">
+                        <span className="max-w-[92px] truncate text-[10px] font-bold">{post.authorName}</span>
                         {post.isPromoted && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 py-0.5 text-[8px] font-black uppercase text-neutral-950">Promoted</span>}
-                      </div>
-                      <span className="block text-[9px] text-neutral-500">{new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                    </div>
+                      </span>
+                      <span className="block text-[8px] text-white/65">{new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                    </span>
                   </button>
-
-                  {/* Essential card actions only. */}
-                  <div className="flex items-center gap-1">
-                    {(() => {
-                      const author = users.find(user => user.id === post.authorId);
-                      const isFollowing = Boolean(currentUser && author?.followers?.includes(currentUser.id));
-                      return author && author.id !== currentUser?.id ? (
-                        <button type="button" onClick={() => handleFollow(author.id)} className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${isFollowing ? 'border-emerald-500/40 text-emerald-300' : 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10'}`}>
-                          {isFollowing ? 'Following' : 'Follow'}
-                        </button>
-                      ) : null;
-                    })()}
-                    <button type="button" onClick={() => { recordTrendEvent(post.id, 'SHARE', post.authorId); onSharePost(post); }} title="Share listing" aria-label={`Share ${post.title}`} className="p-1.5 rounded-lg text-neutral-400 hover:text-amber-400 hover:bg-neutral-800/50 transition-colors">
-                      <Share2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Garment Image with High-Res Zoom / Save */}
-                <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
                   {postImageSource ? (
                     <PostImage
                       src={postImageSource}
@@ -1914,6 +1898,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       referrerPolicy="no-referrer"
                       loading="lazy"
                       decoding="async"
+                      fit="cover"
                       draggable={false}
                       onContextMenu={(event) => event.preventDefault()}
                       onClick={() => openListing(post)}
@@ -1984,6 +1969,43 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <EyeOff className="h-4 w-4" />
                   </button>}
 
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%] bg-gradient-to-t from-black via-black/75 to-transparent" />
+                  <div className="absolute bottom-2.5 left-3 right-3 z-20">
+                    <div className="mb-2 flex items-end justify-between gap-2 text-white drop-shadow-md">
+                      <button type="button" onClick={() => openListing(post)} className="min-w-0 text-left">
+                        <h3 className="truncate text-sm font-bold leading-tight">{post.title}</h3>
+                        <span className="mt-0.5 block text-[8px] text-white/70">{listingTypeLabel}</span>
+                      </button>
+                      <span className="max-w-[42%] shrink-0 truncate text-xs font-black text-amber-300">{priceLabel}</span>
+                    </div>
+                    <div className="flex items-end justify-between gap-2">
+                    <button
+                      type="button"
+                      disabled={pendingActions.has(post.id)}
+                      aria-label={`${isLiked ? 'Unlike' : 'Like'} ${post.title}`}
+                      aria-pressed={isLiked}
+                      onClick={() => handleLike(post.id)}
+                      className={`flex h-9 items-center gap-1.5 rounded-full border px-2.5 text-xs font-bold backdrop-blur-xl shadow-lg ${
+                        isLiked ? 'border-red-300/50 bg-red-500 text-white' : 'border-white/25 bg-black/65 text-white'
+                      }`}
+                    >
+                      <Heart className={`h-4 w-4 ${isLiked ? 'fill-white' : ''}`} />
+                      {likeCount > 0 && <span>{likeCount}</span>}
+                    </button>
+                    <div className="flex items-center gap-2">
+                      {getWhatsAppUrl(post) && (
+                        <button type="button" onClick={() => openWhatsApp(post)} className="flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-2.5 text-xs font-bold text-white shadow-lg">
+                          <Phone className="h-4 w-4" />
+                          <span className="hidden min-[390px]:inline">WhatsApp</span>
+                        </button>
+                      )}
+                      <button type="button" onClick={() => openListing(post)} className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-neutral-950 shadow-lg" aria-label={`Open ${post.title} details`}>
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                  </div>
+
                 </div>
                 {downloadMessage?.listingId === post.id && (
                   <p role="alert" className="border-t border-red-500/20 px-3 py-2 text-xs text-red-400">
@@ -1991,34 +2013,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </p>
                 )}
 
-                {/* Only essential listing context lives below the photograph. */}
-                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <button type="button" onClick={() => openListing(post)} className="min-w-0 text-left">
-                    <h3 className="truncate font-serif text-sm font-bold leading-snug sm:text-base">{post.title}</h3>
-                    <span className="mt-0.5 block text-[10px] text-neutral-500">Tap to view full details</span>
-                  </button>
-                  <span className="max-w-[42%] text-right text-xs font-bold text-amber-400">{priceLabel}</span>
-                </div>
-                {/* Footer: Like Counter and WhatsApp Contact */}
-                <div className="flex items-center justify-between gap-2 border-t border-neutral-800/60 bg-neutral-900/20 px-3 py-2">
-                  <button
-                    type="button"
-                    disabled={pendingActions.has(post.id)}
-                    aria-label={`${isLiked ? 'Unlike' : 'Like'} ${post.title}`}
-                    aria-pressed={isLiked}
-                    onClick={() => handleLike(post.id)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      isLiked
-                        ? 'text-red-400 bg-red-500/15 border border-red-500/30'
-                        : 'text-neutral-400 hover:text-red-400 bg-neutral-800/40 hover:bg-neutral-800'
-                    }`}
-                  >
-                    <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-400' : ''}`} />
-                    <span>{likeCount}</span>
-                  </button>
-
-                  {getWhatsAppUrl(post) ? <button type="button" onClick={() => openWhatsApp(post)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500" title="Contact seller on WhatsApp"><Phone className="h-3.5 w-3.5" /><span>WhatsApp</span></button> : <span className="text-[10px] text-neutral-500">WhatsApp unavailable</span>}
-                </div>
               </motion.article>
               {(postIndex + 1) % 12 === 0 && postIndex + 1 < filteredPosts.length && (
                 <div className="md:col-span-2 lg:col-span-3">

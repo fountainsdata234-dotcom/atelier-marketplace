@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, Download, MapPin, MessageCircle, Share2, Flag, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Download, MapPin, MessageCircle, Share2, Flag, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
@@ -38,6 +38,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
 }) => {
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(post?.imageUrl || null);
   const [isImageExpanded, setIsImageExpanded] = useState(false);
+  const [imageZoom, setImageZoom] = useState(1);
   const [isReporting, setIsReporting] = useState(false);
   const [reportReason, setReportReason] = useState('Misleading content');
   const [reportDetails, setReportDetails] = useState('');
@@ -75,6 +76,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
   useEffect(() => {
     setSelectedImageUrl(post?.imageUrl || null);
     setIsImageExpanded(false);
+    setImageZoom(1);
   }, [post?.id]);
 
   useEffect(() => {
@@ -228,13 +230,38 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
             <X className="h-5 w-5" />
           </button>
           <div className="h-full max-h-[92vh] w-full max-w-[96vw]" onClick={event => event.stopPropagation()}>
-            <PostImage
-              src={selectedImageUrl || post.imageUrl}
-              alt={post.imageAlt || post.title}
-              className="h-full w-full rounded-xl"
-              imageClassName="max-h-[92vh] cursor-zoom-out"
-              loading="eager"
-            />
+            <div className="h-full w-full overflow-auto" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
+              <div className="h-full w-full origin-center transition-transform duration-200" style={{ transform: `scale(${imageZoom})` }}>
+                <PostImage
+                  src={selectedImageUrl || post.imageUrl}
+                  alt={post.imageAlt || post.title}
+                  className="h-full w-full rounded-xl"
+                  imageClassName="max-h-[92vh] cursor-zoom-out"
+                  loading="eager"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="absolute bottom-5 left-4 flex items-center gap-2 sm:left-6">
+            <button
+              type="button"
+              onClick={() => setImageZoom(current => Math.max(1, Number((current - 0.25).toFixed(2))))}
+              disabled={imageZoom <= 1}
+              aria-label="Zoom out"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/75 text-white disabled:opacity-40"
+            >
+              <ZoomOut className="h-5 w-5" />
+            </button>
+            <span className="min-w-12 text-center text-xs font-semibold text-white">{Math.round(imageZoom * 100)}%</span>
+            <button
+              type="button"
+              onClick={() => setImageZoom(current => Math.min(4, Number((current + 0.25).toFixed(2))))}
+              disabled={imageZoom >= 4}
+              aria-label="Zoom in"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/75 text-white disabled:opacity-40"
+            >
+              <ZoomIn className="h-5 w-5" />
+            </button>
           </div>
           <button
             type="button"
