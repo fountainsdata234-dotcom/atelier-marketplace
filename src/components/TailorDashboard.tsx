@@ -31,6 +31,35 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [promotionAudiences, setPromotionAudiences] = useState<Array<'Men' | 'Women' | 'Children'>>(currentUser.promotionTargeting?.audiences || ['Men', 'Women']);
   const [promotionObjective, setPromotionObjective] = useState<'Profile visits' | 'Project views' | 'Enquiries'>(currentUser.promotionTargeting?.objective || 'Profile visits');
   const [targetingStatus, setTargetingStatus] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('');
+  const [paymentLoadingPlan, setPaymentLoadingPlan] = useState('');
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get('reference') || params.get('trxref');
+    if (!window.location.pathname.startsWith('/premium/verify') || !reference) return;
+    setPaymentStatus('Verifying your payment...');
+    api.verifyPaystackPayment(reference)
+      .then(result => {
+        setPaymentStatus(result.status === 'successful' ? 'Payment successful. Your promotion is active.' : 'Payment is still processing. Please check again shortly.');
+      })
+      .catch(() => setPaymentStatus('Payment verification is not complete yet. Please check your payment history.'));
+  }, []);
+
+  const startPaystackPayment = async (planId: string) => {
+    const planKey = { 'promo-1': 'starter', 'promo-2': 'professional', 'promo-3': 'premium' }[planId] || '';
+    if (!planKey) return;
+    setPaymentLoadingPlan(planId);
+    setPaymentStatus('');
+    try {
+      const result = await api.initializePaystackPayment(planKey);
+      window.location.assign(result.authorizationUrl);
+    } catch (error) {
+      setPaymentStatus(safeCustomerErrorMessage(error, 'Payment could not be started. Please try again.'));
+    } finally {
+      setPaymentLoadingPlan('');
+    }
+  };
 
   const savePromotionTargeting = async () => {
     const targeting = {
@@ -968,13 +997,24 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                       <span className="text-3xl font-serif font-bold text-amber-400">${plan.amount}</span>
                       <span className="text-xs text-neutral-400 font-mono">/ {plan.timeRange}</span>
                     </div>
-                    <a href={`https://wa.me/${plan.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello Admin! I am tailor ${currentUser.name} (${currentUser.handle}) on FABSATTIRE. I would like to purchase the "${plan.caption}" plan for $${plan.amount} (${plan.timeRange}). Please activate my promoted studio.`)}`} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500">
-                      <Phone className="h-3.5 w-3.5" />Request Plan on WhatsApp
-                    </a>
+                    <button
+                      type="button"
+                      onClick={() => startPaystackPayment(plan.id)}
+                      disabled={Boolean(paymentLoadingPlan)}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <Phone className="h-3.5 w-3.5" />
+                      {paymentLoadingPlan === plan.id ? 'Opening secure checkout...' : `Pay NGN ${plan.id === 'promo-1' ? '5,000' : plan.id === 'promo-2' ? '25,000' : '60,000'}`}
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
+            {paymentStatus && (
+              <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${isDarkMode ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}`}>
+                {paymentStatus}
+              </div>
+            )}
             {currentUser.isPromoted && (
               <div className={`mt-6 rounded-2xl border p-5 ${isDarkMode ? 'border-amber-500/25 bg-amber-500/[0.05]' : 'border-amber-300 bg-amber-50'}`}>
                 <h3 className="font-serif text-xl font-bold">Promotion targeting</h3>

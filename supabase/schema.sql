@@ -18,12 +18,29 @@ create table if not exists public.profiles (
   avatar_url text,
   is_promoted boolean not null default false,
   promotion_targeting jsonb not null default '{}'::jsonb,
+  promotion_expires_at timestamptz,
   is_blocked boolean not null default false,
   is_warned boolean not null default false,
   warning_note text not null default '',
   followers uuid[] not null default array[]::uuid[],
   is_super_admin boolean not null default false,
   added_by_email text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.premium_payments (
+  id uuid primary key default gen_random_uuid(),
+  reference text not null unique,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  plan_id text not null check (plan_id in ('starter', 'professional', 'premium')),
+  amount bigint not null check (amount > 0),
+  currency text not null default 'NGN',
+  status text not null default 'pending' check (status in ('pending', 'successful', 'failed', 'abandoned', 'refunded')),
+  email text not null default '',
+  provider_data jsonb not null default '{}'::jsonb,
+  activated_at timestamptz,
+  expires_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

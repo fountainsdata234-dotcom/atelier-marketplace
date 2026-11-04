@@ -183,6 +183,11 @@ async function performRequest<T>(
 }
 
 export const api = {
+  initializePaystackPayment: (planId: string) => request<{ authorizationUrl: string; reference: string }>('/api/paystack/initialize', {
+    method: 'POST',
+    body: JSON.stringify({ planId }),
+  }),
+  verifyPaystackPayment: (reference: string) => request<{ status: string; expiresAt?: string }>(`/api/paystack/verify?reference=${encodeURIComponent(reference)}`),
   getLocationCountries: () => request<LocationCountry[]>('/api/location/countries'),
   getLocationCurrencies: () => request<LocationCurrency[]>('/api/location/currencies'),
   resolveMapLocations: (locations: Array<{ id: string; location: UserLocation }>) => request<Array<{ id: string; location: UserLocation }>>('/api/location/resolve', {

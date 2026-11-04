@@ -261,6 +261,84 @@ app.use((_req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
+
+const PAYSTACK_PLANS = {
+  starter: { amount: 500000, durationDays: 30 },
+  professional: { amount: 2500000, durationDays: 180 },
+  premium: { amount: 6000000, durationDays: 365 },
+} as const;
+
+function paystackSupabase() {
+  return supabaseDataEnabled
+    ? createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
+    : null;
+}
+
+async function activatePaystackPayment(reference: string, paymentData?: Record<string, unknown>) {
+  const supabase = paystackSupabase();
+  if (!supabase) throw new Error('Supabase is required for premium payments.');
+
+  const { data: payment, error } = await supabase
+    .from('premium_payments')
+    .select('*')
+    .eq('reference', reference)
+    .maybeSingle();
+  if (error) throw error;
+  if (!payment || payment.status === 'refunded') return null;
+
+  const plan = PAYSTACK_PLANS[payment.plan_id as keyof typeof PAYSTACK_PLANS];
+  if (!plan) throw new Error('Unknown premium plan.');
+
+  const expiresAt = new Date(Date.now() + plan.durationDays * 24 * 60 * 60 * 1000).toISOString();
+  await supabase.from('premium_payments').update({
+    status: 'successful',
+    activated_at: payment.activated_at || new Date().toISOString(),
+    expires_at: expiresAt,
+    provider_data: paymentData || payment.provider_data || {},
+    updated_at: new Date().toISOString(),
+  }).eq('reference', reference).neq('status', 'refunded');
+  await supabase.from('profiles').update({
+    is_promoted: true,
+    promotion_expires_at: expiresAt,
+    updated_at: new Date().toISOString(),
+  }).eq('id', payment.user_id);
+  return payment;
+}
+
+app.post('/api/paystack/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
+  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
+  if (!secret) {
+    res.status(503).json({ error: 'Paystack is not configured.' });
+    return;
+  }
+  const signature = String(req.headers['x-paystack-signature'] || '');
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
+  const expected = createHmac('sha512', secret).update(rawBody).digest('hex');
+  if (!signature || signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    res.status(401).send('Invalid signature');
+    return;
+  }
+
+  let event: { event?: string; data?: Record<string, unknown> };
+  try {
+    event = JSON.parse(rawBody.toString('utf8'));
+  } catch {
+    res.status(400).send('Invalid JSON');
+    return;
+  }
+  if (event.event === 'charge.success') {
+    const reference = String(event.data?.reference || '');
+    const amount = Number(event.data?.amount);
+    const currency = String(event.data?.currency || '').toUpperCase();
+    const supabase = paystackSupabase();
+    const { data: payment } = await supabase!.from('premium_payments').select('*').eq('reference', reference).maybeSingle();
+    if (payment && payment.amount === amount && payment.currency === currency && String(event.data?.status || '').toLowerCase() === 'success') {
+      await activatePaystackPayment(reference, event.data);
+    }
+  }
+  res.sendStatus(200);
+});
+
 app.use(express.json({ limit: '1mb' }));
 
 interface AuthenticatedRequest extends Request {
@@ -1569,6 +1647,79 @@ app.get('/api/promo-plans', async (_req, res) => {
   }
   const snapshot = await firestore.collection('settings').doc('promoPlans').get();
   res.json(snapshot.exists && Array.isArray(snapshot.data()?.plans) ? snapshot.data()?.plans : []);
+});
+
+app.post('/api/paystack/initialize', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res: Response) => {
+  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
+  if (!secret) {
+    res.status(503).json({ error: 'Online payments are temporarily unavailable.' });
+    return;
+  }
+  const planId = String(req.body?.planId || '').trim().toLowerCase();
+  const plan = PAYSTACK_PLANS[planId as keyof typeof PAYSTACK_PLANS];
+  if (!plan) {
+    res.status(400).json({ error: 'Please select a valid premium plan.' });
+    return;
+  }
+  const supabase = paystackSupabase();
+  if (!supabase) {
+    res.status(503).json({ error: 'Payment records are temporarily unavailable.' });
+    return;
+  }
+  const reference = `FABS-${randomUUID().replace(/-/g, '').slice(0, 24).toUpperCase()}`;
+  const profileResult = await supabase.from('profiles').select('email').eq('id', req.authUser!.uid).maybeSingle();
+  const email = String(profileResult.data?.email || req.authUser!.email || '').trim();
+  if (!email) {
+    res.status(400).json({ error: 'A valid account email is required for payment.' });
+    return;
+  }
+  const { error: insertError } = await supabase.from('premium_payments').insert({
+    reference, user_id: req.authUser!.uid, plan_id: planId, amount: plan.amount, currency: 'NGN', status: 'pending', email,
+  });
+  if (insertError) {
+    console.error('Unable to create payment record.', insertError);
+    res.status(503).json({ error: 'Payment could not be started. Please try again.' });
+    return;
+  }
+
+  const callbackUrl = process.env.PAYSTACK_CALLBACK_URL || 'https://www.fabsattire.com/premium/verify';
+  const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, amount: plan.amount, currency: 'NGN', reference, callback_url: callbackUrl, metadata: { user_id: req.authUser!.uid, plan_id: planId } }),
+  });
+  const paystack = await paystackResponse.json() as { status?: boolean; message?: string; data?: { authorization_url?: string } };
+  if (!paystackResponse.ok || !paystack.status || !paystack.data?.authorization_url) {
+    await supabase.from('premium_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('reference', reference);
+    res.status(502).json({ error: paystack.message || 'Payment provider could not start checkout.' });
+    return;
+  }
+  res.json({ authorizationUrl: paystack.data.authorization_url, reference });
+});
+
+app.get('/api/paystack/verify', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const reference = String(req.query.reference || '').trim().slice(0, 100);
+  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
+  if (!reference || !secret) {
+    res.status(400).json({ error: 'A valid payment reference is required.' });
+    return;
+  }
+  const providerResponse = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+    headers: { Authorization: `Bearer ${secret}` },
+  });
+  const provider = await providerResponse.json() as { status?: boolean; data?: { status?: string; amount?: number; currency?: string } };
+  if (!providerResponse.ok || !provider.status || provider.data?.status !== 'success') {
+    res.json({ status: 'pending' });
+    return;
+  }
+  const supabase = paystackSupabase();
+  const { data: payment } = await supabase!.from('premium_payments').select('*').eq('reference', reference).maybeSingle();
+  if (!payment || payment.user_id !== req.authUser!.uid || payment.amount !== provider.data.amount || payment.currency !== provider.data.currency) {
+    res.status(400).json({ error: 'This payment does not belong to your account.' });
+    return;
+  }
+  await activatePaystackPayment(reference, provider.data as Record<string, unknown>);
+  res.json({ status: 'successful', expiresAt: (await supabase!.from('premium_payments').select('expires_at').eq('reference', reference).single()).data?.expires_at });
 });
 
 app.put('/api/promo-plans', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
