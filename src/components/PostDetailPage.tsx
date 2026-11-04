@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, MapPin, MessageCircle, Share2, Flag, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Download, MapPin, MessageCircle, Share2, Flag, X } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
@@ -117,6 +117,22 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
     }
   };
 
+  const downloadExpandedImage = async () => {
+    const imageUrl = selectedImageUrl || post.imageUrl;
+    const response = await fetch(imageUrl, { mode: 'cors' }).catch(() => null);
+    if (response?.ok) {
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `${post.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'atelier-listing'}.jpg`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+      return;
+    }
+    window.open(imageUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const renderRelatedCard = (relatedPost: ClothPost) => (
     <button key={relatedPost.id} type="button" onClick={() => onSelectPost(relatedPost)} className={`group min-w-0 overflow-hidden rounded-xl border text-left transition-colors hover:border-amber-500/50 ${surface}`}>
       <PostImage src={relatedPost.imageAssets?.[0]?.thumbnailUrl || relatedPost.imageUrl} alt={relatedPost.title} className="aspect-[4/3]" imageClassName="brightness-110 saturate-110" />
@@ -226,9 +242,17 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
               setIsImageExpanded(false);
               window.setTimeout(() => document.getElementById('listing-reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
             }}
-            className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-amber-400/50 bg-black/75 px-4 py-2 text-xs font-semibold text-amber-300"
+            className="absolute bottom-5 left-1/2 hidden -translate-x-1/2 rounded-full border border-amber-400/50 bg-black/75 px-4 py-2 text-xs font-semibold text-amber-300 sm:block"
           >
             View ratings & comments
+          </button>
+          <button
+            type="button"
+            onClick={() => void downloadExpandedImage()}
+            className="absolute bottom-5 right-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-white/20 bg-black/75 px-4 text-xs font-semibold text-white sm:right-6"
+          >
+            <Download className="h-4 w-4 text-amber-300" />
+            Download
           </button>
         </div>
       )}

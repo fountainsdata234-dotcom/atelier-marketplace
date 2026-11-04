@@ -1861,13 +1861,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
                 } ${post.isPromoted ? 'border-amber-400/70 shadow-[0_18px_42px_rgba(251,191,36,0.14)]' : ''}`}
               >
-                {/* Post Header: Tailor Handle, Location & Promoted Symbol */}
-                <div className="p-3 flex items-center justify-between border-b border-neutral-800/40">
+                {/* Compact identity strip: the image remains the primary marketplace experience. */}
+                <div className="flex items-center justify-between gap-2 border-b border-neutral-800/40 px-3 py-2.5">
                   <button type="button" onClick={() => {
                     const author = userById.get(post.authorId);
                     if (author) onSelectSeller(author);
                   }} className="flex min-w-0 items-center gap-2.5 text-left">
-                    <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-bold text-xs flex items-center justify-center overflow-hidden">
+                    <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-amber-500/40 bg-amber-500/20 text-xs font-bold text-amber-400 flex items-center justify-center">
                       {authorAvatar && !failedAvatarUrls.has(authorAvatar)
                         ? <img
                           src={authorAvatar}
@@ -1877,44 +1877,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         />
                         : post.authorName.charAt(0)}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold block leading-tight">
-                          {post.authorName}
-                        </span>
-                        {post.isPromoted && (
-                          <span
-                            title="Paid placement"
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-300 uppercase tracking-tighter ring-1 ring-amber-500/25"
-                          >
-                            Promoted
-                          </span>
-                        )}
+                        <span className="max-w-[145px] truncate text-xs font-semibold leading-tight">{post.authorName}</span>
+                        {post.isPromoted && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 py-0.5 text-[8px] font-black uppercase text-neutral-950">Promoted</span>}
                       </div>
-                      <div className="flex flex-col items-start gap-0.5 text-[10px] text-neutral-400">
-                        <span className="font-semibold uppercase tracking-[0.12em] text-amber-500">{getRoleLabel(post.authorRole)}</span>
-                        <span>{post.authorHandle}</span>
-                      </div>
-                      {(locationLabel || distanceKm !== null) && (
-                        <div className="flex items-center gap-1 text-[10px] text-neutral-400">
-                          <MapPin className="w-2.5 h-2.5 text-amber-500" />
-                          {locationLabel && <span>{locationLabel}</span>}
-                          {distanceKm !== null && <span className="text-amber-400 font-mono">({distanceKm} km away)</span>}
-                        </div>
-                      )}
-                      {post.searchLocationHint && (
-                        <span className={`block text-[10px] ${post.searchLocationMatch ? 'text-emerald-400' : 'text-amber-400'}`}>
-                          {post.searchLocationMatch
-                            ? `Matches ${post.searchLocationHint}`
-                            : locationLabel
-                              ? `Outside ${post.searchLocationHint} · ask about delivery`
-                              : 'Seller location not provided · ask about delivery'}
-                        </span>
-                      )}
+                      <span className="block text-[9px] text-neutral-500">{new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                     </div>
                   </button>
 
-                  {/* Share post */}
+                  {/* Essential card actions only. */}
                   <div className="flex items-center gap-1">
                     {(() => {
                       const author = users.find(user => user.id === post.authorId);
@@ -1937,7 +1909,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <PostImage
                       src={postImageSource}
                       alt={post.title}
-                      className="aspect-[4/3] w-full cursor-pointer"
+                      className="aspect-[4/5] w-full cursor-pointer sm:aspect-[4/5]"
                       imageClassName="brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
                       referrerPolicy="no-referrer"
                       loading="lazy"
@@ -1951,7 +1923,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <div
                       role="img"
                       aria-label={`Image unavailable for ${post.title}`}
-                      className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-neutral-900/80 text-neutral-500"
+                      className="flex aspect-[4/5] flex-col items-center justify-center gap-2 bg-neutral-900/80 text-neutral-500"
                     >
                       <Scissors aria-hidden="true" className="h-8 w-8 text-amber-500/70" />
                       <span className="text-xs">Listing image unavailable</span>
@@ -2012,18 +1984,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <EyeOff className="h-4 w-4" />
                   </button>}
 
-                  {/* Quick Preview trigger */}
-                  <div className="absolute bottom-2.5 right-2.5 flex gap-1.5 opacity-0 transition-opacity group-hover/img:opacity-100">
-                    <button
-                      type="button"
-                      onClick={event => void downloadImage(post, event.currentTarget)}
-                      title="Download image to device"
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-semibold backdrop-blur-md bg-black/70 hover:bg-black text-amber-300 border border-amber-500/30 flex items-center gap-1"
-                    >
-                      <Download className="w-3 h-3" />
-                      <span>Download</span>
-                    </button>
-                  </div>
                 </div>
                 {downloadMessage?.listingId === post.id && (
                   <p role="alert" className="border-t border-red-500/20 px-3 py-2 text-xs text-red-400">
@@ -2031,36 +1991,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </p>
                 )}
 
-                {/* Post Body: Title, Description, Tags, Custom Pricing */}
-                <div className="flex-1 space-y-2 p-3">
-                  <div>
-                    <h3 className="font-serif font-bold text-base leading-snug">
-                      {post.title}
-                    </h3>
-                    <p className={`mt-1 line-clamp-1 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>
-                      {post.description}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => openListing(post)}
-                    className="min-h-9 rounded-lg border border-amber-500/30 px-3 text-left text-[11px] font-semibold text-amber-400 hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                  >
-                    View listing details and gallery
+                {/* Only essential listing context lives below the photograph. */}
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <button type="button" onClick={() => openListing(post)} className="min-w-0 text-left">
+                    <h3 className="truncate font-serif text-sm font-bold leading-snug sm:text-base">{post.title}</h3>
+                    <span className="mt-0.5 block text-[10px] text-neutral-500">Tap to view full details</span>
                   </button>
-
-                  {/* Seller price / negotiable state */}
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-neutral-800/80 bg-neutral-900/30 p-2 text-[11px]">
-                    <span className="text-[9px] uppercase font-bold tracking-wider text-amber-500/80">
-                      Price
-                    </span>
-                    <span className="text-right text-neutral-200">{priceLabel}</span>
-                  </div>
-
-                  <p className="text-[10px] text-neutral-500">{post.availability === 'limited' ? 'Limited availability' : 'Available'} · {saveCount} saves</p>
+                  <span className="max-w-[42%] text-right text-xs font-bold text-amber-400">{priceLabel}</span>
                 </div>
-
                 {/* Footer: Like Counter and WhatsApp Contact */}
                 <div className="flex items-center justify-between gap-2 border-t border-neutral-800/60 bg-neutral-900/20 px-3 py-2">
                   <button

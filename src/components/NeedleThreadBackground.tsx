@@ -393,12 +393,12 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
       ctx.beginPath();
       ctx.arc(0, 0, mobile ? 24 : 32, 0, Math.PI * 2);
       const sunGradient = ctx.createRadialGradient(mobile ? -8 : -11, mobile ? -10 : -14, 2, 0, 0, mobile ? 24 : 32);
-      sunGradient.addColorStop(0, '#fff4bf');
-      sunGradient.addColorStop(0.38, '#ffd782');
-      sunGradient.addColorStop(0.72, '#f6a64b');
-      sunGradient.addColorStop(1, '#df6842');
+      sunGradient.addColorStop(0, '#f8d675');
+      sunGradient.addColorStop(0.32, '#d9a441');
+      sunGradient.addColorStop(0.68, '#ad7040');
+      sunGradient.addColorStop(1, '#5f3828');
       ctx.fillStyle = night ? '#dce8ff' : sunGradient;
-      ctx.shadowColor = night ? '#9bbcff' : 'rgba(255, 174, 91, 0.95)';
+      ctx.shadowColor = night ? '#9bbcff' : 'rgba(194, 122, 62, 0.78)';
       ctx.shadowBlur = night ? (mobile ? 34 : 48) : (mobile ? 46 : 68);
       ctx.fill();
       if (night) {
