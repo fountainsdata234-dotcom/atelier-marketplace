@@ -1690,15 +1690,31 @@ app.post('/api/paystack/initialize', requireAuth, requireActiveAccount, async (r
   }
 
   const callbackUrl = process.env.PAYSTACK_CALLBACK_URL || 'https://www.fabsattire.com/premium/verify';
-  const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+  let paystackResponse: globalThis.Response;
+  try {
+    paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, amount: plan.amount, currency: 'NGN', reference, callback_url: callbackUrl, metadata: { user_id: req.authUser!.uid, plan_id: planId } }),
-  });
-  const paystack = await paystackResponse.json() as { status?: boolean; message?: string; data?: { authorization_url?: string } };
+    });
+  } catch (error) {
+    console.error('Paystack checkout initialization failed.', error instanceof Error ? error.message : error);
+    await supabase.from('premium_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('reference', reference);
+    res.status(503).json({ error: 'Payment provider is temporarily unavailable. Please try again.' });
+    return;
+  }
+  let paystack: { status?: boolean; message?: string; data?: { authorization_url?: string } };
+  try {
+    paystack = await paystackResponse.json() as { status?: boolean; message?: string; data?: { authorization_url?: string } };
+  } catch (error) {
+    console.error('Paystack returned an invalid checkout response.', error instanceof Error ? error.message : error);
+    await supabase.from('premium_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('reference', reference);
+    res.status(503).json({ error: 'Payment provider could not start checkout. Please try again.' });
+    return;
+  }
   if (!paystackResponse.ok || !paystack.status || !paystack.data?.authorization_url) {
     await supabase.from('premium_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('reference', reference);
-    res.status(502).json({ error: paystack.message || 'Payment provider could not start checkout.' });
+    res.status(503).json({ error: paystack.message || 'Payment provider could not start checkout.' });
     return;
   }
   res.json({ authorizationUrl: paystack.data.authorization_url, reference });
