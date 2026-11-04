@@ -74,7 +74,7 @@ function invalidatePublicReadCache(path: string) {
 async function request<T>(path: string, options: RequestInit = {}, hasRetried = false) {
   const method = (options.method || 'GET').toUpperCase();
   const isPublicRead = method === 'GET'
-    && (['/api/posts', '/api/users', '/api/promo-plans'].includes(path)
+    && (['/api/posts', '/api/users', '/api/promo-plans', '/api/public/seller-collections'].includes(path)
       || path.startsWith('/api/location/'));
   let token: string | null;
   try {
@@ -237,6 +237,7 @@ export const api = {
   }>('/api/admin/telemetry/providers', { cache: 'no-store' }),
   getProfile: () => request<Partial<User>>('/api/profile'),
   getSellerCollections: () => request<SellerCollection[]>('/api/seller-collections'),
+  getPublicSellerCollections: () => request<SellerCollection[]>('/api/public/seller-collections'),
   saveSellerCollection: (collection: Pick<SellerCollection, 'title' | 'description' | 'imageUrls'>) => request<SellerCollection>('/api/seller-collections', { method: 'POST', body: JSON.stringify(collection) }),
   deleteSellerCollection: (collectionId: string) => request<void>(`/api/seller-collections/${encodeURIComponent(collectionId)}`, { method: 'DELETE' }),
   initializeCollectionSlotPayment: () => request<{ authorizationUrl: string; reference: string }>('/api/collection-slots/initialize', { method: 'POST' }),

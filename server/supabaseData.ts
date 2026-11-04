@@ -136,6 +136,16 @@ export async function getSellerCollections(userId: string): Promise<ProfileRecor
   return data || [];
 }
 
+export async function getAllSellerCollections(limit = 200): Promise<ProfileRecord[]> {
+  const { data, error } = await requireClient()
+    .from('seller_collections')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw normalizeError(error);
+  return data || [];
+}
+
 export async function removeUserFromFollowers(userId: string): Promise<void> {
   const supabase = requireClient();
   const affectedProfiles: Array<{ id: string; followers: string[] }> = [];

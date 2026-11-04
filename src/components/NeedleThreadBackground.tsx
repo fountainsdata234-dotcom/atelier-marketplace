@@ -14,6 +14,7 @@ interface NeedleThreadBackgroundProps {
 
 export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ isDarkMode }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const weatherCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const mouseRef = useRef<{ x: number; y: number; prevX: number; prevY: number; angle: number; isMoving: boolean; lastMoveTime: number }>({
     x: typeof window !== 'undefined' ? window.innerWidth / 2 : 400,
     y: typeof window !== 'undefined' ? window.innerHeight / 3 : 300,
@@ -296,9 +297,117 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
     };
   }, [isDarkMode]);
 
+  useEffect(() => {
+    const canvas = weatherCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let width = 0;
+    let height = 0;
+    let frame = 0;
+    let animationFrameId = 0;
+
+    const resize = () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = width * pixelRatio;
+      canvas.height = height * pixelRatio;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    };
+
+    resize();
+    window.addEventListener('resize', resize);
+    const mobile = width < 768;
+    const particleCount = reduceMotion ? 8 : mobile ? 24 : 52;
+    const particles = Array.from({ length: particleCount }, (_, index) => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      radius: 1 + Math.random() * (mobile ? 2.2 : 3.4),
+      speed: 0.12 + Math.random() * 0.4,
+      drift: (Math.random() - 0.5) * 0.35,
+      phase: index * 0.7 + Math.random() * 6,
+    }));
+
+    const renderWeather = () => {
+      const hour = new Date().getHours();
+      const night = hour >= 18 || hour < 6;
+      const bodyWidth = Math.max(width * 0.16, 84);
+      const bodyX = width * 0.82 + Math.sin(frame * 0.0025) * width * 0.055;
+      const bodyY = height * 0.17 + Math.cos(frame * 0.0018) * height * 0.035;
+      ctx.clearRect(0, 0, width, height);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const light = ctx.createRadialGradient(bodyX, bodyY, 0, bodyX, bodyY, Math.max(width * 0.38, 260));
+      light.addColorStop(0, night ? 'rgba(205, 224, 255, 0.34)' : 'rgba(255, 226, 128, 0.42)');
+      light.addColorStop(0.16, night ? 'rgba(168, 196, 255, 0.16)' : 'rgba(255, 193, 73, 0.18)');
+      light.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = light;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.translate(bodyX, bodyY);
+      ctx.rotate(frame * (night ? 0.00012 : -0.0002));
+      ctx.strokeStyle = night ? 'rgba(208, 226, 255, 0.12)' : 'rgba(255, 224, 142, 0.16)';
+      ctx.lineWidth = mobile ? 12 : 18;
+      for (let ray = 0; ray < 16; ray += 1) {
+        ctx.rotate(Math.PI / 8);
+        ctx.beginPath();
+        ctx.moveTo(bodyWidth * 0.35, 0);
+        ctx.lineTo(Math.max(width * 0.38, 260), 0);
+        ctx.stroke();
+      }
+      ctx.rotate(-frame * (night ? 0.00012 : -0.0002));
+
+      ctx.beginPath();
+      ctx.arc(0, 0, mobile ? 18 : 28, 0, Math.PI * 2);
+      ctx.fillStyle = night ? '#dce8ff' : '#ffe08a';
+      ctx.shadowColor = night ? '#9bbcff' : '#ffc95c';
+      ctx.shadowBlur = night ? 42 : 58;
+      ctx.fill();
+      if (night) {
+        ctx.beginPath();
+        ctx.arc(mobile ? 8 : 12, mobile ? -4 : -7, mobile ? 17 : 27, 0, Math.PI * 2);
+        ctx.fillStyle = isDarkMode ? '#101827' : '#dfe7f3';
+        ctx.fill();
+      }
+      ctx.restore();
+
+      particles.forEach(particle => {
+        particle.y += night ? particle.speed * 0.75 : particle.speed * 0.45;
+        particle.x += particle.drift + Math.sin(frame * 0.008 + particle.phase) * 0.3;
+        if (particle.y > height + 12) {
+          particle.y = -12;
+          particle.x = Math.random() * width;
+        }
+        if (particle.x > width + 12) particle.x = -12;
+        if (particle.x < -12) particle.x = width + 12;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+        ctx.fillStyle = night ? `rgba(220, 235, 255, ${0.35 + particle.radius * 0.12})` : `rgba(255, 210, 110, ${0.22 + particle.radius * 0.07})`;
+        ctx.shadowColor = night ? '#dceaff' : '#ffd978';
+        ctx.shadowBlur = night ? 8 : 10;
+        ctx.fill();
+      });
+
+      frame += 1;
+      if (!reduceMotion) animationFrameId = requestAnimationFrame(renderWeather);
+    };
+
+    renderWeather();
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [isDarkMode]);
+
   return (
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
       <canvas ref={canvasRef} className="w-full h-full block" />
+      <canvas ref={weatherCanvasRef} aria-hidden="true" className="absolute inset-0 h-full w-full opacity-90 mix-blend-screen" />
       
       {/* Interactive Needle Indicator Badge */}
       <div className="absolute top-20 right-4 pointer-events-none hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border backdrop-blur-md opacity-60 bg-neutral-900/40 text-amber-300 border-amber-500/20">

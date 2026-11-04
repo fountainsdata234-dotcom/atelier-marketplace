@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ChevronLeft, ChevronRight, TrendingUp, EyeOff, Flame } from 'lucide-react';
-import { ClothPost, CountryGeo, DiscoveryEvent, MarketplaceFeedView, MarketplaceSort, MarketplaceTrendCategory, MarketplaceTrendingPage, RecommendationEventType, RecommendationPreferences, User, UserLocation } from '../types';
+import { ClothPost, CountryGeo, DiscoveryEvent, MarketplaceFeedView, MarketplaceSort, MarketplaceTrendCategory, MarketplaceTrendingPage, RecommendationEventType, RecommendationPreferences, SellerCollection, User, UserLocation } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
@@ -53,6 +53,79 @@ const TREND_CATEGORY_LABELS: Partial<Record<MarketplaceTrendCategory, string>> =
   MOST_VIEWED: 'Most Viewed',
 };
 
+const DISCOVERY_POST_THRESHOLD = 6;
+
+const DISCOVERY_CATEGORIES: Array<{ title: string; keywords: string[] }> = [
+  { title: 'Bridal Wear', keywords: ['bridal', 'bride', 'wedding', 'white wedding'] },
+  { title: 'Office Wear', keywords: ['office', 'corporate', 'workwear', 'business wear'] },
+  { title: 'Evening & Occasion Wear', keywords: ['evening', 'party', 'occasion', 'gown', 'cocktail'] },
+  { title: 'Traditional & Native Wear', keywords: ['traditional', 'native', 'ankara', 'agbada', 'kaftan'] },
+  { title: 'Casual Wear', keywords: ['casual', 'everyday', 'streetwear'] },
+];
+
+const discoveryImage = (post: ClothPost) => post.imageAssets?.find(asset => asset.thumbnailUrl || asset.url)?.thumbnailUrl
+  || post.imageAssets?.[0]?.url
+  || post.imageUrl;
+
+interface DiscoveryCarouselProps {
+  title: string;
+  subtitle: string;
+  posts: ClothPost[];
+  isDarkMode: boolean;
+  onSelectPost: (post: ClothPost) => void;
+}
+
+const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, posts, isDarkMode, onSelectPost }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const availablePosts = posts.filter(post => Boolean(discoveryImage(post)));
+
+  useEffect(() => {
+    if (availablePosts.length < 2) return;
+    const timer = window.setInterval(() => setActiveIndex(index => (index + 1) % availablePosts.length), 12000);
+    return () => window.clearInterval(timer);
+  }, [availablePosts.length]);
+
+  useEffect(() => {
+    if (activeIndex >= availablePosts.length) setActiveIndex(0);
+  }, [activeIndex, availablePosts.length]);
+
+  if (availablePosts.length < DISCOVERY_POST_THRESHOLD) return null;
+  const activePost = availablePosts[activeIndex % availablePosts.length];
+
+  return (
+    <section className={`overflow-hidden rounded-[1.75rem] border ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+      <div className="flex items-end justify-between gap-4 border-b border-neutral-800/50 px-5 py-4 sm:px-6">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">{subtitle}</p>
+          <h2 className="mt-1 font-serif text-xl font-bold sm:text-2xl">{title}</h2>
+        </div>
+        {availablePosts.length > 1 && (
+          <div className="flex gap-2">
+            <button type="button" aria-label={`Previous ${title}`} onClick={() => setActiveIndex(index => (index - 1 + availablePosts.length) % availablePosts.length)} className="rounded-full border border-neutral-700 p-2"><ChevronLeft className="h-4 w-4" /></button>
+            <button type="button" aria-label={`Next ${title}`} onClick={() => setActiveIndex(index => (index + 1) % availablePosts.length)} className="rounded-full border border-neutral-700 p-2"><ChevronRight className="h-4 w-4" /></button>
+          </div>
+        )}
+      </div>
+      <button type="button" onClick={() => onSelectPost(activePost)} className="group relative block h-[330px] w-full overflow-hidden text-left sm:h-[420px]">
+        <motion.img key={activePost.id} initial={{ opacity: 0.45, scale: 1.02 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.45 }} src={discoveryImage(activePost)} alt={activePost.imageAlt || activePost.title} className="absolute inset-0 h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-transparent" />
+        <div className="absolute bottom-0 left-0 p-5 text-white sm:p-7">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-300">{activePost.authorName}</p>
+          <h3 className="mt-1 max-w-xl font-serif text-2xl font-bold sm:text-3xl">{activePost.title}</h3>
+          <span className="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold text-neutral-950">View piece</span>
+        </div>
+      </button>
+      <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-6 lg:grid-cols-8">
+        {availablePosts.slice(0, 8).map((post, index) => (
+          <button key={post.id} type="button" aria-label={`Show ${post.title}`} onClick={() => setActiveIndex(index)} className={`aspect-square overflow-hidden rounded-xl border-2 ${index === activeIndex ? 'border-amber-400' : 'border-transparent opacity-70'}`}>
+            <img src={discoveryImage(post)} alt="" className="h-full w-full object-cover" />
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 export const Marketplace: React.FC<MarketplaceProps> = ({
   posts,
   postsLoadError,
@@ -98,6 +171,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [feedLoadingMore, setFeedLoadingMore] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [feedRetry, setFeedRetry] = useState(0);
+  const [publicCollections, setPublicCollections] = useState<SellerCollection[]>([]);
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const [downloadMessage, setDownloadMessage] = useState<{ listingId: string; message: string } | null>(null);
   const reportedAnalyticsFailures = useRef(new Set<string>());
@@ -276,6 +350,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [trendingRetry, setTrendingRetry] = useState(0);
   const activeTrendingPage = trendingPage?.category === activeTrendCategory ? trendingPage : null;
 
+  useEffect(() => {
+    let active = true;
+    void api.getPublicSellerCollections()
+      .then(collections => {
+        if (active) setPublicCollections(Array.isArray(collections) ? collections.filter(collection => collection.imageUrls.some(Boolean)) : []);
+      })
+      .catch(error => console.warn('Public seller collections could not be loaded.', error));
+    return () => { active = false; };
+  }, []);
+
   const trendScores = useMemo(() => new Map(
     (activeTrendingPage && !activeTrendingPage.fallback ? activeTrendingPage.items : []).map(post => [post.id, {
       score: post.trendScore || 0,
@@ -326,6 +410,40 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }), [sourcePosts, users, failedPostImageUrls]);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
   const tailorPosts = sellerPosts;
+  const discoveryCategorySections = useMemo(() => DISCOVERY_CATEGORIES.map(category => ({
+    ...category,
+    posts: tailorPosts.filter(post => {
+      const haystack = [
+        post.categoryId || '',
+        post.title,
+        post.description,
+        ...(post.tags || []),
+        'garmentType' in (post.listingDetails || {}) ? String((post.listingDetails as { garmentType?: string }).garmentType || '') : '',
+      ].join(' ').toLowerCase();
+      return Boolean(discoveryImage(post)) && category.keywords.some(keyword => haystack.includes(keyword));
+    }),
+  })).filter(category => category.posts.length >= DISCOVERY_POST_THRESHOLD), [tailorPosts]);
+  const topTailors = useMemo(() => {
+    const counts = new Map<string, ClothPost[]>();
+    tailorPosts.forEach(post => {
+      if (!discoveryImage(post)) return;
+      counts.set(post.authorId, [...(counts.get(post.authorId) || []), post]);
+    });
+    return Array.from(counts.entries())
+      .map(([sellerId, sellerPostsForTailor]) => ({
+        seller: userById.get(sellerId),
+        posts: sellerPostsForTailor,
+      }))
+      .filter((entry): entry is { seller: User; posts: ClothPost[] } =>
+        Boolean(entry.seller && entry.posts.length >= DISCOVERY_POST_THRESHOLD))
+      .sort((a, b) => b.posts.length - a.posts.length)
+      .slice(0, 8);
+  }, [tailorPosts, userById]);
+  const visibleSellerCollections = useMemo(() => (
+    sellerPosts.length >= DISCOVERY_POST_THRESHOLD
+      ? publicCollections.filter(collection => collection.imageUrls.filter(Boolean).length > 0).slice(0, 8)
+      : []
+  ), [publicCollections, sellerPosts.length]);
   const formatLocation = (location?: Partial<UserLocation>) => [location?.city, location?.state, location?.country].filter(Boolean).join(', ');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [filterCountry, setFilterCountry] = useState<string>('all');
@@ -1223,7 +1341,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </form>
       </details>}
 
-      {carouselPosts.length > 0 && (
+      {carouselPosts.length >= DISCOVERY_POST_THRESHOLD && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1969,6 +2087,52 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   <MarketplaceInterlude posts={filteredPosts} users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
                 </div>
               )}
+              {(postIndex + 1) % 6 === 0 && postIndex + 1 < filteredPosts.length && (() => {
+                const discoveryBatch = (postIndex + 1) / 6;
+                const category = discoveryCategorySections[(discoveryBatch - 1) % Math.max(discoveryCategorySections.length, 1)];
+                const collection = visibleSellerCollections[(discoveryBatch - 1) % Math.max(visibleSellerCollections.length, 1)];
+                const tailor = topTailors[(discoveryBatch - 1) % Math.max(topTailors.length, 1)];
+                return (
+                  <div className="md:col-span-2 lg:col-span-3">
+                    {discoveryBatch % 3 === 1 && category && (
+                      <DiscoveryCarousel title={category.title} subtitle="Explore the collection" posts={category.posts} isDarkMode={isDarkMode} onSelectPost={openListing} />
+                    )}
+                    {discoveryBatch % 3 === 2 && collection && (
+                      <section className={`overflow-hidden rounded-[1.75rem] border ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+                        <div className="grid gap-0 md:grid-cols-[0.8fr_1.2fr]">
+                          <div className="grid h-72 grid-cols-2 gap-1 bg-neutral-950 md:h-full">
+                            {collection.imageUrls.filter(Boolean).slice(0, 4).map((url, index) => <img key={`${collection.id}-${index}`} src={url} alt={index === 0 ? collection.title : ''} className="h-full min-h-0 w-full object-cover" />)}
+                          </div>
+                          <div className="flex flex-col justify-center p-5 sm:p-7">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">From a tailor's wardrobe</p>
+                            <h2 className="mt-1 font-serif text-2xl font-bold sm:text-3xl">{collection.title}</h2>
+                            {collection.description && <p className="mt-3 line-clamp-3 text-sm text-neutral-500">{collection.description}</p>}
+                            <button type="button" onClick={() => {
+                              const seller = userById.get(collection.sellerId);
+                              if (seller) onSelectSeller(seller);
+                            }} className="mt-5 min-h-11 w-fit rounded-full bg-amber-400 px-5 text-xs font-bold text-neutral-950">Explore the collection</button>
+                          </div>
+                        </div>
+                      </section>
+                    )}
+                    {discoveryBatch % 3 === 0 && tailor && (
+                      <section className={`overflow-hidden rounded-[1.75rem] border p-4 sm:p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Top tailor to watch</p>
+                        <div className="mt-3 grid gap-4 sm:grid-cols-[minmax(220px,0.75fr)_1fr]">
+                          <button type="button" onClick={() => onSelectSeller(tailor.seller)} className="overflow-hidden rounded-2xl">
+                            <img src={discoveryImage(tailor.posts[0])} alt={tailor.seller.shopName || tailor.seller.name} className="h-64 w-full object-cover sm:h-full sm:min-h-72" />
+                          </button>
+                          <div className="flex flex-col justify-center">
+                            <h2 className="font-serif text-2xl font-bold">{tailor.seller.shopName || tailor.seller.name}</h2>
+                            <p className="mt-2 text-sm text-neutral-500">{tailor.posts.length} published pieces in this artisan's collection</p>
+                            <button type="button" onClick={() => onSelectSeller(tailor.seller)} className="mt-5 min-h-11 w-fit rounded-full border border-amber-500 px-5 text-xs font-bold text-amber-500">View tailor profile</button>
+                          </div>
+                        </div>
+                      </section>
+                    )}
+                  </div>
+                );
+              })()}
               </React.Fragment>
             );
           })}

@@ -75,6 +75,7 @@ import {
   getPromoPlans,
   getPromoPlansData,
   getSellerCollections,
+  getAllSellerCollections,
   removeUserFromFollowers,
   getUsers,
   findNearbySellers,
@@ -1480,6 +1481,15 @@ app.get('/api/seller-collections', requireAuth, async (req: AuthenticatedRequest
   }
   const snapshot = await firestore.collection('profiles').doc(req.authUser!.uid)
     .collection('sellerCollections').orderBy('createdAt', 'desc').limit(50).get();
+  res.json(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) })));
+});
+
+app.get('/api/public/seller-collections', async (req: Request, res: Response) => {
+  if (supabaseDataEnabled) {
+    res.json(snakeToCamel(await getAllSellerCollections()));
+    return;
+  }
+  const snapshot = await firestore.collectionGroup('sellerCollections').orderBy('createdAt', 'desc').limit(200).get();
   res.json(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) })));
 });
 
