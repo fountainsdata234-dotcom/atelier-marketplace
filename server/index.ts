@@ -1696,6 +1696,7 @@ app.post('/api/paystack/initialize', requireAuth, requireActiveAccount, async (r
     method: 'POST',
     headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, amount: plan.amount, currency: 'NGN', reference, callback_url: callbackUrl, metadata: { user_id: req.authUser!.uid, plan_id: planId } }),
+    signal: AbortSignal.timeout(15_000),
     });
   } catch (error) {
     console.error('Paystack checkout initialization failed.', error instanceof Error ? error.message : error);
@@ -1714,6 +1715,7 @@ app.post('/api/paystack/initialize', requireAuth, requireActiveAccount, async (r
   }
   if (!paystackResponse.ok || !paystack.status || !paystack.data?.authorization_url) {
     await supabase.from('premium_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('reference', reference);
+    console.error('Paystack checkout rejected.', { status: paystackResponse.status, message: paystack.message || 'No provider message' });
     res.status(503).json({ error: paystack.message || 'Payment provider could not start checkout.' });
     return;
   }
