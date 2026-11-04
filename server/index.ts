@@ -1729,6 +1729,29 @@ app.get('/api/paystack/verify', requireAuth, async (req: AuthenticatedRequest, r
   res.json({ status: 'successful', expiresAt: (await supabase!.from('premium_payments').select('expires_at').eq('reference', reference).single()).data?.expires_at });
 });
 
+app.get('/api/paystack/config-status', async (_req: Request, res: Response) => {
+  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
+  if (!secret) {
+    res.json({ configured: false, keyMode: null, providerReachable: false });
+    return;
+  }
+  let providerReachable = false;
+  try {
+    const response = await fetch('https://api.paystack.co/bank', {
+      headers: { Authorization: `Bearer ${secret}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    providerReachable = response.ok;
+  } catch {
+    providerReachable = false;
+  }
+  res.json({
+    configured: true,
+    keyMode: secret.startsWith('sk_live_') ? 'live' : secret.startsWith('sk_test_') ? 'test' : 'invalid',
+    providerReachable,
+  });
+});
+
 app.put('/api/promo-plans', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   const plans = Array.isArray(req.body?.plans) ? req.body.plans.slice(0, 3).map((plan: Record<string, unknown>, index: number) => ({
     id: typeof plan.id === 'string' ? plan.id.slice(0, 80) : `promo-${index + 1}`,
