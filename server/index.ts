@@ -340,7 +340,13 @@ app.post('/api/paystack/webhook', express.raw({ type: 'application/json', limit:
   res.sendStatus(200);
 });
 
-app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  if (req.path === '/api/paystack/webhook') {
+    next();
+    return;
+  }
+  express.json({ limit: '1mb' })(req, res, next);
+});
 
 interface AuthenticatedRequest extends Request {
   authUser?: {
