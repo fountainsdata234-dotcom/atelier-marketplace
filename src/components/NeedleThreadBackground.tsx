@@ -15,6 +15,7 @@ interface NeedleThreadBackgroundProps {
 export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ isDarkMode }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const weatherCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const tiltRef = useRef({ x: 0, y: 0 });
   const mouseRef = useRef<{ x: number; y: number; prevX: number; prevY: number; angle: number; isMoving: boolean; lastMoveTime: number }>({
     x: typeof window !== 'undefined' ? window.innerWidth / 2 : 400,
     y: typeof window !== 'undefined' ? window.innerHeight / 3 : 300,
@@ -28,6 +29,29 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   const [interactiveMode, setInteractiveMode] = useState<boolean>(true);
   const stitchesRef = useRef<{ x: number; y: number; opacity: number }[]>([]);
   const threadNodesRef = useRef<Point[]>([]);
+
+  const enableTilt = () => {
+    const orientation = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+      requestPermission?: () => Promise<'granted' | 'denied'>;
+    };
+    if (typeof orientation.requestPermission !== 'function') return;
+    void orientation.requestPermission().then(permission => {
+      if (permission !== 'granted') return;
+      window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
+    }).catch(() => undefined);
+  };
+
+  const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+    const gamma = Math.max(-35, Math.min(35, event.gamma || 0));
+    const beta = Math.max(-35, Math.min(35, (event.beta || 0) - 35));
+    tiltRef.current.x += (gamma / 35 - tiltRef.current.x) * 0.08;
+    tiltRef.current.y += (beta / 35 - tiltRef.current.y) * 0.08;
+  };
+
+  useEffect(() => {
+    window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
+    return () => window.removeEventListener('deviceorientation', handleDeviceOrientation);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -336,8 +360,12 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
       const hour = new Date().getHours();
       const night = hour >= 18 || hour < 6;
       const bodyWidth = Math.max(width * 0.16, 84);
-      const bodyX = width * 0.82 + Math.sin(frame * 0.0025) * width * 0.055;
-      const bodyY = height * 0.17 + Math.cos(frame * 0.0018) * height * 0.035;
+      const bodyX = width * (mobile ? 0.76 : 0.82)
+        + Math.sin(frame * 0.0025) * width * (mobile ? 0.035 : 0.055)
+        + tiltRef.current.x * (mobile ? 42 : 76);
+      const bodyY = height * (mobile ? 0.14 : 0.17)
+        + Math.cos(frame * 0.0018) * height * (mobile ? 0.022 : 0.035)
+        + tiltRef.current.y * (mobile ? 24 : 42);
       ctx.clearRect(0, 0, width, height);
 
       ctx.save();
@@ -363,14 +391,19 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
       ctx.rotate(-frame * (night ? 0.00012 : -0.0002));
 
       ctx.beginPath();
-      ctx.arc(0, 0, mobile ? 18 : 28, 0, Math.PI * 2);
-      ctx.fillStyle = night ? '#dce8ff' : '#ffe08a';
-      ctx.shadowColor = night ? '#9bbcff' : '#ffc95c';
-      ctx.shadowBlur = night ? 42 : 58;
+      ctx.arc(0, 0, mobile ? 24 : 32, 0, Math.PI * 2);
+      const sunGradient = ctx.createRadialGradient(mobile ? -8 : -11, mobile ? -10 : -14, 2, 0, 0, mobile ? 24 : 32);
+      sunGradient.addColorStop(0, '#fff4bf');
+      sunGradient.addColorStop(0.38, '#ffd782');
+      sunGradient.addColorStop(0.72, '#f6a64b');
+      sunGradient.addColorStop(1, '#df6842');
+      ctx.fillStyle = night ? '#dce8ff' : sunGradient;
+      ctx.shadowColor = night ? '#9bbcff' : 'rgba(255, 174, 91, 0.95)';
+      ctx.shadowBlur = night ? (mobile ? 34 : 48) : (mobile ? 46 : 68);
       ctx.fill();
       if (night) {
         ctx.beginPath();
-        ctx.arc(mobile ? 8 : 12, mobile ? -4 : -7, mobile ? 17 : 27, 0, Math.PI * 2);
+        ctx.arc(mobile ? 10 : 12, mobile ? -5 : -7, mobile ? 22 : 31, 0, Math.PI * 2);
         ctx.fillStyle = isDarkMode ? '#101827' : '#dfe7f3';
         ctx.fill();
       }
@@ -408,6 +441,14 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
     <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
       <canvas ref={canvasRef} className="w-full h-full block" />
       <canvas ref={weatherCanvasRef} aria-hidden="true" className="absolute inset-0 h-full w-full opacity-90 mix-blend-screen" />
+      <button
+        type="button"
+        onClick={enableTilt}
+        className="pointer-events-auto absolute right-3 top-3 rounded-full border border-white/15 bg-neutral-950/55 px-3 py-2 text-[10px] font-semibold text-white/80 backdrop-blur-md md:hidden"
+        aria-label="Enable sun and moon tilt movement"
+      >
+        Tilt motion
+      </button>
       
       {/* Interactive Needle Indicator Badge */}
       <div className="absolute top-20 right-4 pointer-events-none hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border backdrop-blur-md opacity-60 bg-neutral-900/40 text-amber-300 border-amber-500/20">

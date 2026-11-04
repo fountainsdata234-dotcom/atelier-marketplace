@@ -77,14 +77,11 @@ interface DiscoveryCarouselProps {
 
 const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, posts, isDarkMode, onSelectPost }) => {
   const [activeIndex, setActiveIndex] = useState(0);
-  const touchStartX = useRef<number | null>(null);
   const availablePosts = posts.filter(post => Boolean(discoveryImage(post)));
 
   useEffect(() => {
     if (availablePosts.length < 2) return;
-    const timer = window.setInterval(() => {
-      if (!document.hidden) setActiveIndex(index => (index + 1) % availablePosts.length);
-    }, 12000);
+    const timer = window.setInterval(() => setActiveIndex(index => (index + 1) % availablePosts.length), 12000);
     return () => window.clearInterval(timer);
   }, [availablePosts.length]);
 
@@ -109,22 +106,7 @@ const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, 
           </div>
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => onSelectPost(activePost)}
-        onTouchStart={event => { touchStartX.current = event.touches[0]?.clientX ?? null; }}
-        onTouchEnd={event => {
-          if (touchStartX.current === null) return;
-          const touchEndX = event.changedTouches[0]?.clientX ?? touchStartX.current;
-          const distance = touchStartX.current - touchEndX;
-          touchStartX.current = null;
-          if (Math.abs(distance) < 45 || availablePosts.length < 2) return;
-          setActiveIndex(index => distance > 0
-            ? (index + 1) % availablePosts.length
-            : (index - 1 + availablePosts.length) % availablePosts.length);
-        }}
-        className="group relative block h-[330px] w-full overflow-hidden text-left touch-pan-y sm:h-[420px]"
-      >
+      <button type="button" onClick={() => onSelectPost(activePost)} className="group relative block h-[330px] w-full overflow-hidden text-left sm:h-[420px]">
         <motion.img key={activePost.id} initial={{ opacity: 0.45, scale: 1.02 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.45 }} src={discoveryImage(activePost)} alt={activePost.imageAlt || activePost.title} className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-transparent" />
         <div className="absolute bottom-0 left-0 p-5 text-white sm:p-7">
@@ -136,7 +118,7 @@ const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, 
       <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-6 lg:grid-cols-8">
         {availablePosts.slice(0, 8).map((post, index) => (
           <button key={post.id} type="button" aria-label={`Show ${post.title}`} onClick={() => setActiveIndex(index)} className={`aspect-square overflow-hidden rounded-xl border-2 ${index === activeIndex ? 'border-amber-400' : 'border-transparent opacity-70'}`}>
-            <img src={discoveryImage(post)} alt="" loading="lazy" className="h-full w-full object-cover" />
+            <img src={discoveryImage(post)} alt="" className="h-full w-full object-cover" />
           </button>
         ))}
       </div>
