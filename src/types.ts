@@ -109,6 +109,7 @@ export interface User {
   avatarUrl?: string;
   isPromoted: boolean;
   promotionExpiresAt?: string;
+  collectionSlotsPurchased?: number;
   promotionTargeting?: PromotionTargeting;
   isBlocked: boolean;
   isWarned?: boolean;

@@ -22,6 +22,7 @@ import {
   createNotifications,
   createPostWithUser,
   createSellerCollection,
+  deleteSellerCollection,
   createListingReport,
   deleteUserUploads,
   deleteMessage,
@@ -382,6 +383,16 @@ app.post('/api/paystack/webhook', express.raw({ type: 'application/json', limit:
     const { data: payment } = await supabase!.from('premium_payments').select('*').eq('reference', reference).maybeSingle();
     if (payment && payment.amount === amount && payment.currency === currency && String(event.data?.status || '').toLowerCase() === 'success') {
       await activatePaystackPayment(reference, event.data);
+    }
+  }
+  if (event.event === 'charge.success' && String(event.data?.reference || '').startsWith('FABS-SLOT-')) {
+    const reference = String(event.data?.reference || '');
+    const amount = Number(event.data?.amount);
+    const currency = String(event.data?.currency || '').toUpperCase();
+    const supabase = paystackSupabase();
+    const { data: slotPayment } = await supabase!.from('collection_slot_payments').select('*').eq('reference', reference).maybeSingle();
+    if (slotPayment && slotPayment.amount === amount && slotPayment.currency === currency && String(event.data?.status || '').toLowerCase() === 'success') {
+      await activateCollectionSlot(reference, event.data);
     }
   }
   res.sendStatus(200);
@@ -1496,7 +1507,8 @@ app.post('/api/seller-collections', requireAuth, async (req: AuthenticatedReques
   const existingCollections = supabaseDataEnabled
     ? await getSellerCollections(req.authUser!.uid)
     : (await firestore.collection('profiles').doc(req.authUser!.uid).collection('sellerCollections').get()).docs;
-  const collectionLimit = profile.isPromoted === true ? 50 : 3;
+  const purchasedSlots = Math.min(28, Math.max(0, Number(profile.collectionSlotsPurchased || 0)));
+  const collectionLimit = Math.min(30, (profile.isPromoted === true ? 10 : 2) + purchasedSlots);
   if (existingCollections.length >= collectionLimit) {
     res.status(403).json({ error: `Your account has reached its ${collectionLimit}-collection limit.` });
     return;
@@ -1522,6 +1534,20 @@ app.post('/api/seller-collections', requireAuth, async (req: AuthenticatedReques
     });
   const saved = await collection.get();
   res.status(201).json({ id: saved.id, ...(saved.data() as Record<string, unknown>) });
+});
+
+app.delete('/api/seller-collections/:collectionId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const collectionId = String(req.params.collectionId || '').trim();
+  if (!collectionId) {
+    res.status(400).json({ error: 'A collection is required.' });
+    return;
+  }
+  if (supabaseDataEnabled) {
+    await deleteSellerCollection(req.authUser!.uid, collectionId);
+  } else {
+    await firestore.collection('profiles').doc(req.authUser!.uid).collection('sellerCollections').doc(collectionId).delete();
+  }
+  res.status(204).send();
 });
 
 app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -1792,6 +1818,105 @@ app.get('/api/paystack/verify', requireAuth, async (req: AuthenticatedRequest, r
   }
   await activatePaystackPayment(reference, provider.data as Record<string, unknown>);
   res.json({ status: 'successful', expiresAt: (await supabase!.from('premium_payments').select('expires_at').eq('reference', reference).single()).data?.expires_at });
+});
+
+async function activateCollectionSlot(reference: string, providerData: Record<string, unknown> = {}) {
+  const supabase = paystackSupabase();
+  if (!supabase) throw new Error('Supabase is required for collection slots.');
+  const { data: payment } = await supabase.from('collection_slot_payments').select('*').eq('reference', reference).maybeSingle();
+  if (!payment || payment.status === 'successful' || payment.status === 'refunded') return payment;
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('collection_slots_purchased')
+    .eq('id', payment.user_id)
+    .single();
+  if (profileError) throw profileError;
+  const purchasedSlots = Math.min(28, Number(profile.collection_slots_purchased || 0) + 1);
+  const { error: profileUpdateError } = await supabase.from('profiles').update({
+    collection_slots_purchased: purchasedSlots,
+    updated_at: new Date().toISOString(),
+  }).eq('id', payment.user_id);
+  if (profileUpdateError) throw profileUpdateError;
+  await supabase.from('collection_slot_payments').update({
+    status: 'successful',
+    provider_data: providerData,
+    updated_at: new Date().toISOString(),
+  }).eq('reference', reference);
+  return { ...payment, purchasedSlots };
+}
+
+app.post('/api/collection-slots/initialize', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res: Response) => {
+  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
+  const supabase = paystackSupabase();
+  if (!secret || !supabase) {
+    res.status(503).json({ error: 'Collection slot payments are temporarily unavailable.' });
+    return;
+  }
+  const profile = await readProfile(req.authUser!.uid);
+  const purchasedSlots = Math.min(28, Math.max(0, Number(profile?.collectionSlotsPurchased || 0)));
+  if (purchasedSlots >= 28) {
+    res.status(403).json({ error: 'You have reached the maximum of 30 collection slots.' });
+    return;
+  }
+  const email = String(req.authUser!.email || profile?.email || '').trim();
+  if (!email) {
+    res.status(400).json({ error: 'A valid account email is required for payment.' });
+    return;
+  }
+  const reference = `FABS-SLOT-${randomUUID().replace(/-/g, '').slice(0, 18).toUpperCase()}`;
+  const { error: insertError } = await supabase.from('collection_slot_payments').insert({
+    reference, user_id: req.authUser!.uid, amount: 50000, currency: 'NGN', status: 'pending', email,
+  });
+  if (insertError) {
+    console.error('Unable to create collection slot payment.', insertError);
+    res.status(503).json({ error: 'The collection slot payment could not be started.' });
+    return;
+  }
+  try {
+    const callbackUrl = `${process.env.PAYSTACK_CALLBACK_URL?.replace('/premium/verify', '') || 'https://www.fabsattire.com'}/collections`;
+    const providerResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, amount: 50000, currency: 'NGN', reference, callback_url: callbackUrl, metadata: { user_id: req.authUser!.uid, purchase: 'collection_slot' } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const provider = await providerResponse.json() as { status?: boolean; message?: string; data?: { authorization_url?: string } };
+    if (!providerResponse.ok || !provider.status || !provider.data?.authorization_url) {
+      await supabase.from('collection_slot_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('reference', reference);
+      res.status(503).json({ error: provider.message || 'Payment provider could not start checkout.' });
+      return;
+    }
+    res.json({ authorizationUrl: provider.data.authorization_url, reference });
+  } catch (error) {
+    console.error('Collection slot checkout initialization failed.', error instanceof Error ? error.message : error);
+    await supabase.from('collection_slot_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('reference', reference);
+    res.status(503).json({ error: 'Payment provider is temporarily unavailable.' });
+  }
+});
+
+app.get('/api/collection-slots/verify', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const reference = String(req.query.reference || '').trim().slice(0, 100);
+  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
+  const supabase = paystackSupabase();
+  if (!reference || !secret || !supabase) {
+    res.status(400).json({ error: 'A valid collection slot payment reference is required.' });
+    return;
+  }
+  const providerResponse = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+    headers: { Authorization: `Bearer ${secret}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const provider = await providerResponse.json() as { status?: boolean; data?: { status?: string; amount?: number; currency?: string } };
+  const { data: payment } = await supabase.from('collection_slot_payments').select('*').eq('reference', reference).maybeSingle();
+  if (!providerResponse.ok || !provider.status || provider.data?.status !== 'success' || !payment || payment.user_id !== req.authUser!.uid || payment.amount !== provider.data.amount || provider.data.currency !== 'NGN') {
+    res.status(400).json({ error: 'This collection slot payment could not be verified.' });
+    return;
+  }
+  const activated = await activateCollectionSlot(reference, provider.data as Record<string, unknown>);
+  const { data: profile } = await supabase.from('profiles').select('collection_slots_purchased').eq('id', req.authUser!.uid).single();
+  void activated;
+  res.json({ purchasedSlots: Number(profile?.collection_slots_purchased || 0) });
 });
 
 app.get('/api/paystack/config-status', async (_req: Request, res: Response) => {

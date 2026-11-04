@@ -33,6 +33,8 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
   const [dragActive, setDragActive] = useState(false);
   const [uploadQueue, setUploadQueue] = useState<CollectionUploadItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingCollectionId, setDeletingCollectionId] = useState<string | null>(null);
+  const [buyingSlot, setBuyingSlot] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -87,6 +89,16 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
     };
   }, [currentUser?.id]);
 
+  useEffect(() => {
+    const reference = new URLSearchParams(window.location.search).get('reference') || new URLSearchParams(window.location.search).get('trxref');
+    if (!reference?.startsWith('FABS-SLOT-')) return;
+    setBuyingSlot(true);
+    void api.verifyCollectionSlotPayment(reference)
+      .then(() => setCollectionStatus('Collection slot purchased permanently.'))
+      .catch(error => setCollectionStatus(safeCustomerErrorMessage(error, 'The collection slot payment could not be verified.')))
+      .finally(() => setBuyingSlot(false));
+  }, []);
+
   const collectionLimit = currentUser?.isPromoted ? 50 : collectionState.unlockedSlots;
   const canAddMore = savedPhotos.length < collectionLimit;
 
@@ -112,7 +124,8 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
   }), [savedPhotos.length, collectionLimit, currentUser]);
 
   const canCreateSellerCollection = currentUser?.role === 'tailor' || currentUser?.role === 'fabric_seller';
-  const sellerCollectionLimit = currentUser?.isPromoted ? 50 : 3;
+  const purchasedCollectionSlots = Math.min(28, Math.max(0, Number(currentUser?.collectionSlotsPurchased || 0)));
+  const sellerCollectionLimit = Math.min(30, (currentUser?.isPromoted ? 10 : 2) + purchasedCollectionSlots);
   const addCollectionImage = () => setCollectionImages(images => images.length >= 12 ? images : [...images, '']);
   const updateCollectionImage = (index: number, value: string) => setCollectionImages(images => images.map((image, imageIndex) => imageIndex === index ? value : image));
   const removeCollectionImage = (index: number) => setCollectionImages(images => images.filter((_, imageIndex) => imageIndex !== index));
@@ -187,7 +200,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
       return;
     }
     if (sellerCollections.length >= sellerCollectionLimit) {
-      setCollectionStatus(currentUser.isPromoted ? 'You have reached the 50-collection promoted limit.' : 'Promoted access unlocks up to 50 collections without the ad-supported limit.');
+      setCollectionStatus(sellerCollectionLimit >= 30 ? 'You have reached the 30 collection maximum.' : 'Buy an additional permanent collection slot or remove a collection first.');
       return;
     }
     try {
@@ -209,6 +222,31 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
       setCollectionStatus('Collection published to your storefront.');
     } catch (error) {
       setCollectionStatus(safeCustomerErrorMessage(error, "We couldn't publish this collection. Please try again."));
+    }
+  };
+
+  const deleteSellerCollection = async (collectionId: string) => {
+    setDeletingCollectionId(collectionId);
+    try {
+      await api.deleteSellerCollection(collectionId);
+      storageService.replaceSellerCollections(currentUser!.id, sellerCollections.filter(collection => collection.id !== collectionId));
+      setSellerCollections(sellerCollections.filter(collection => collection.id !== collectionId));
+      setCollectionStatus('Collection deleted.');
+    } catch (error) {
+      setCollectionStatus(safeCustomerErrorMessage(error, "The collection couldn't be deleted."));
+    } finally {
+      setDeletingCollectionId(null);
+    }
+  };
+
+  const buyCollectionSlot = async () => {
+    setBuyingSlot(true);
+    try {
+      const result = await api.initializeCollectionSlotPayment();
+      window.location.assign(result.authorizationUrl);
+    } catch (error) {
+      setCollectionStatus(safeCustomerErrorMessage(error, 'The collection slot payment could not be started.'));
+      setBuyingSlot(false);
     }
   };
 
@@ -237,7 +275,14 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
               <h1 className="mt-2 text-2xl font-serif font-bold sm:text-3xl">Curate your storefront</h1>
               <p className="mt-1 max-w-2xl text-xs text-neutral-400">Group a complete edit by theme, season, or material. Each collection can carry up to 12 images.</p>
             </div>
-            <span className="text-xs text-neutral-400">{sellerCollections.length}/{sellerCollectionLimit} collection{sellerCollections.length === 1 ? '' : 's'} published</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-neutral-400">{sellerCollections.length}/{sellerCollectionLimit} collection{sellerCollections.length === 1 ? '' : 's'} published</span>
+              {sellerCollectionLimit < 30 && (
+                <button type="button" onClick={() => void buyCollectionSlot()} disabled={buyingSlot} className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-300 disabled:opacity-50">
+                  {buyingSlot ? 'Opening checkout...' : 'Buy 1 slot — ₦500'}
+                </button>
+              )}
+            </div>
           </div>
 
           <form onSubmit={createSellerCollection} className="mt-5 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
@@ -315,9 +360,18 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
         <section className={`rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold"><Layers className="h-4 w-4 text-amber-400" /> Published collections</div>
           <div className="grid gap-4 md:grid-cols-2">
-            {sellerCollections.map(collection => <article key={collection.id} className="overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/30">
+            {sellerCollections.map((collection, index) => <article key={collection.id} className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/30">
+              <button
+                type="button"
+                onClick={() => void deleteSellerCollection(collection.id)}
+                disabled={deletingCollectionId === collection.id}
+                aria-label={`Delete ${collection.title}`}
+                className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-red-500/40 bg-neutral-950/90 text-red-400 shadow-lg hover:bg-red-500 hover:text-white disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
               <div className="flex h-36 gap-0.5 overflow-x-auto bg-neutral-950">{collection.imageUrls.map(image => <PostImage key={image} src={image} alt="" className="h-full w-1/3 min-w-[33.333%]" />)}</div>
-              <div className="p-3"><h2 className="text-sm font-semibold">{collection.title}</h2><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{collection.description || 'A curated seller collection.'}</p><p className="mt-2 text-[10px] text-amber-400">{collection.imageUrls.length} gallery images</p></div>
+              <div className="p-3"><h2 className="text-sm font-semibold">{collection.title}</h2><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{collection.description || 'A curated seller collection.'}</p><p className="mt-2 text-[10px] text-amber-400">{collection.imageUrls.length} gallery images</p>{index >= sellerCollectionLimit && <p className="mt-1 text-[10px] font-bold text-red-400">Disabled until promotion or more slots are purchased.</p>}</div>
             </article>)}
           </div>
         </section>

@@ -591,6 +591,7 @@ export default function App() {
             avatarUrl: profileValue('avatarUrl', authUser.avatarUrl),
             isPromoted: profileValue('isPromoted', false),
             promotionExpiresAt: profileValue('promotionExpiresAt', undefined),
+            collectionSlotsPurchased: profileValue('collectionSlotsPurchased', 0),
             promotionTargeting: profileValue('promotionTargeting', undefined),
             isBlocked: profileValue('isBlocked', false),
             followers: profileValue('followers', []),

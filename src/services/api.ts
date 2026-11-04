@@ -238,6 +238,9 @@ export const api = {
   getProfile: () => request<Partial<User>>('/api/profile'),
   getSellerCollections: () => request<SellerCollection[]>('/api/seller-collections'),
   saveSellerCollection: (collection: Pick<SellerCollection, 'title' | 'description' | 'imageUrls'>) => request<SellerCollection>('/api/seller-collections', { method: 'POST', body: JSON.stringify(collection) }),
+  deleteSellerCollection: (collectionId: string) => request<void>(`/api/seller-collections/${encodeURIComponent(collectionId)}`, { method: 'DELETE' }),
+  initializeCollectionSlotPayment: () => request<{ authorizationUrl: string; reference: string }>('/api/collection-slots/initialize', { method: 'POST' }),
+  verifyCollectionSlotPayment: (reference: string) => request<{ purchasedSlots: number }>(`/api/collection-slots/verify?reference=${encodeURIComponent(reference)}`),
   getPromoPlans: () => request<AdminPromoPlan[]>('/api/promo-plans'),
   refreshPromoPlans: () => {
     publicReadCache.delete('/api/promo-plans');

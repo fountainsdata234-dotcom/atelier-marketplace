@@ -181,6 +181,11 @@ export async function createSellerCollection(userId: string, values: ProfileReco
   return data;
 }
 
+export async function deleteSellerCollection(userId: string, collectionId: string): Promise<void> {
+  const { error } = await requireClient().from('seller_collections').delete().eq('id', collectionId).eq('seller_id', userId);
+  if (error) throw normalizeError(error);
+}
+
 export async function updateAuthorPromotion(uid: string, isPromoted: boolean): Promise<void> {
   const { error } = await requireClient().from('posts').update({ is_promoted: isPromoted, updated_at: new Date().toISOString() }).eq('author_id', uid);
   if (error) throw normalizeError(error);

@@ -19,6 +19,7 @@ create table if not exists public.profiles (
   is_promoted boolean not null default false,
   promotion_targeting jsonb not null default '{}'::jsonb,
   promotion_expires_at timestamptz,
+  collection_slots_purchased integer not null default 0 check (collection_slots_purchased >= 0 and collection_slots_purchased <= 28),
   is_blocked boolean not null default false,
   is_warned boolean not null default false,
   warning_note text not null default '',
@@ -146,6 +147,19 @@ create table if not exists public.seller_collections (
   description text not null default '',
   image_urls text[] not null default array[]::text[],
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.collection_slot_payments (
+  id uuid primary key default gen_random_uuid(),
+  reference text not null unique,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  amount bigint not null default 50000 check (amount = 50000),
+  currency text not null default 'NGN',
+  status text not null default 'pending' check (status in ('pending', 'successful', 'failed', 'refunded')),
+  email text not null default '',
+  provider_data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.post_likes (
