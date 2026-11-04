@@ -26,10 +26,17 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   onOpenImage,
   isDarkMode
 }) => {
-  const [promotionLocations, setPromotionLocations] = useState(currentUser.promotionTargeting?.locations.join(', ') || '');
-  const [promotionCategories, setPromotionCategories] = useState(currentUser.promotionTargeting?.categories.join(', ') || '');
-  const [promotionAudiences, setPromotionAudiences] = useState<Array<'Men' | 'Women' | 'Children'>>(currentUser.promotionTargeting?.audiences || ['Men', 'Women']);
-  const [promotionObjective, setPromotionObjective] = useState<'Profile visits' | 'Project views' | 'Enquiries'>(currentUser.promotionTargeting?.objective || 'Profile visits');
+  const [promotionLocations, setPromotionLocations] = useState(Array.isArray(currentUser.promotionTargeting?.locations) ? currentUser.promotionTargeting.locations.join(', ') : '');
+  const [promotionCategories, setPromotionCategories] = useState(Array.isArray(currentUser.promotionTargeting?.categories) ? currentUser.promotionTargeting.categories.join(', ') : '');
+  const [promotionAudiences, setPromotionAudiences] = useState<Array<'Men' | 'Women' | 'Children'>>(
+    Array.isArray(currentUser.promotionTargeting?.audiences) ? currentUser.promotionTargeting.audiences : ['Men', 'Women'],
+  );
+  const targetingObjective = currentUser.promotionTargeting?.objective;
+  const [promotionObjective, setPromotionObjective] = useState<'Profile visits' | 'Project views' | 'Enquiries'>(
+    targetingObjective === 'Profile visits' || targetingObjective === 'Project views' || targetingObjective === 'Enquiries'
+      ? targetingObjective
+      : 'Profile visits',
+  );
   const [targetingStatus, setTargetingStatus] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('');
   const [paymentLoadingPlan, setPaymentLoadingPlan] = useState('');
