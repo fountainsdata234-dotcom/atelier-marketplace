@@ -289,7 +289,8 @@ async function activatePaystackPayment(reference: string, paymentData?: Record<s
   const plan = PAYSTACK_PLANS[payment.plan_id as keyof typeof PAYSTACK_PLANS];
   if (!plan) throw new Error('Unknown premium plan.');
 
-  const expiresAt = new Date(Date.now() + plan.durationDays * 24 * 60 * 60 * 1000).toISOString();
+  const activationDate = payment.activated_at ? new Date(payment.activated_at) : new Date();
+  const expiresAt = payment.expires_at || new Date(activationDate.getTime() + plan.durationDays * 24 * 60 * 60 * 1000).toISOString();
   await supabase.from('premium_payments').update({
     status: 'successful',
     activated_at: payment.activated_at || new Date().toISOString(),

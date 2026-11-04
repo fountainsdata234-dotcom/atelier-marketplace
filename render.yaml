@@ -32,3 +32,9 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_CALLBACK_URL
+        value: https://www.fabsattire.com/premium/verify

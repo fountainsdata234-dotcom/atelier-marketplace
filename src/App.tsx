@@ -43,6 +43,7 @@ const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
   '/profile': 'profile',
   '/collections': 'collections',
   '/dashboard': 'dashboard',
+  '/premium/verify': 'dashboard',
   '/assistant': 'assistant',
   '/admin': 'admin',
 };
