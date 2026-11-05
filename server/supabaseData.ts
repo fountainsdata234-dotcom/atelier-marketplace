@@ -84,19 +84,27 @@ export async function listActiveStories(): Promise<StoryRecord[]> {
 }
 
 export async function createStory(values: StoryRecord): Promise<StoryRecord> {
-  const { data, error } = await requireClient().from('tailor_stories').insert(toDatabaseRecord(values)).select('*').single();
-  if (error && String(error.message || '').toLowerCase().includes('column')) {
-    const legacyValues = { ...values };
-    delete legacyValues.thumbnailUrl;
-    delete legacyValues.caption;
-    delete legacyValues.viewCount;
-    delete legacyValues.likeCount;
-    const retry = await requireClient().from('tailor_stories').insert(toDatabaseRecord(legacyValues)).select('*').single();
-    if (retry.error) throw normalizeError(retry.error);
-    return retry.data;
+  const record = { ...values };
+  const optionalColumns: Record<string, string[]> = {
+    thumbnail_url: ['thumbnailUrl'],
+    caption: ['caption'],
+    view_count: ['viewCount'],
+    like_count: ['likeCount'],
+  };
+
+  for (let attempt = 0; attempt <= Object.keys(optionalColumns).length; attempt += 1) {
+    const { data, error } = await requireClient().from('tailor_stories').insert(toDatabaseRecord(record)).select('*').single();
+    if (!error) return data;
+
+    const normalized = normalizeError(error);
+    const missingColumn = String(normalized.message || '').match(/['"]([a-z_]+)['"]\s+column|column\s+['"]([a-z_]+)['"]/i);
+    const columnName = missingColumn?.[1] || missingColumn?.[2];
+    const fields = columnName ? optionalColumns[columnName] : undefined;
+    if (!fields?.some(field => Object.prototype.hasOwnProperty.call(record, field))) throw normalized;
+    fields.forEach(field => delete record[field]);
   }
-  if (error) throw normalizeError(error);
-  return data;
+
+  throw new Error('Story insert exceeded the legacy schema fallback limit.');
 }
 
 export async function deleteStory(storyId: string, tailorId: string): Promise<boolean> {
