@@ -1,4 +1,4 @@
-import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences, NearbySellerMatch, ReverseGeocodedBusinessLocation, BusinessLocationSearchResult } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences, NearbySellerMatch, ReverseGeocodedBusinessLocation, BusinessLocationSearchResult, TailorStory } from '../types';
 
 import { getAuthToken, isSupabaseAuthReady } from './auth';
 import { uploadFormDataWithProgress } from './mediaUpload';
@@ -183,6 +183,14 @@ async function performRequest<T>(
 }
 
 export const api = {
+  getStories: () => request<TailorStory[]>('/api/stories'),
+  createStory: async (file: File, onProgress?: (progress: number) => void) => {
+    const token = await getAuthTokenForRequest();
+    const formData = new FormData();
+    formData.append('media', file, file.name);
+    return uploadFormDataWithProgress<TailorStory>(`${API_URL}/api/stories`, formData, token, onProgress);
+  },
+  deleteStory: (storyId: string) => request<void>(`/api/stories/${encodeURIComponent(storyId)}`, { method: 'DELETE' }),
   initializePaystackPayment: (planId: string) => request<{ authorizationUrl: string; reference: string }>('/api/paystack/initialize', {
     method: 'POST',
     body: JSON.stringify({ planId }),

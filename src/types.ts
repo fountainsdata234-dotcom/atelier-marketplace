@@ -120,6 +120,17 @@ export interface User {
   addedByEmail?: string;
 }
 
+export interface TailorStory {
+  id: string;
+  tailorId: string;
+  mediaUrl: string;
+  thumbnailUrl?: string;
+  mediaType: 'image' | 'video';
+  cloudinaryPublicId: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface PromotionTargeting {
   locations: string[];
   categories: string[];

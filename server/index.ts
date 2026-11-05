@@ -98,6 +98,11 @@ import {
   uploadImage,
   updateProfile,
   upsertProfile,
+  listActiveStories,
+  createStory,
+  deleteStory,
+  listExpiredStories,
+  deleteExpiredStoriesByIds,
   type ProfileRecord,
 } from './supabaseData.js';
 
@@ -237,6 +242,11 @@ function isLocalNetworkOrigin(origin: string) {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
+});
+
+const storyUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 app.use(cors({
@@ -1593,6 +1603,112 @@ app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest,
     tokenRef.delete(),
   ]);
   res.status(204).send();
+});
+
+app.get('/api/stories', async (_req, res) => {
+  try {
+    const expired = await listExpiredStories();
+    if (expired.length) {
+      if (cloudinaryConfigured) {
+        await Promise.all(expired.map(story => cloudinary.uploader.destroy(String(story.cloudinary_public_id || ''), {
+          resource_type: story.media_type === 'video' ? 'video' : 'image',
+          invalidate: true,
+        }).catch(() => undefined)));
+      }
+      await deleteExpiredStoriesByIds(expired.map(story => String(story.id)));
+    }
+    const stories = await listActiveStories();
+    res.json(stories.map(story => ({
+      id: String(story.id),
+      tailorId: String(story.tailor_id),
+      mediaUrl: String(story.media_url),
+      thumbnailUrl: String(story.thumbnail_url || story.media_url),
+      mediaType: story.media_type === 'video' ? 'video' : 'image',
+      cloudinaryPublicId: String(story.cloudinary_public_id),
+      createdAt: String(story.created_at),
+      expiresAt: String(story.expires_at),
+    })));
+  } catch (error) {
+    console.error('Story list failed', error);
+    res.status(500).json({ error: 'Stories could not be loaded.' });
+  }
+});
+
+app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('media'), async (req: AuthenticatedRequest, res) => {
+  if (!req.file || !req.file.mimetype?.startsWith('image/') && !req.file.mimetype?.startsWith('video/')) {
+    res.status(400).json({ error: 'Upload a photo or video story.' });
+    return;
+  }
+  if (!cloudinaryConfigured) {
+    res.status(503).json({ error: 'Story uploads are not configured yet.' });
+    return;
+  }
+  try {
+    const profile = await readProfile(req.authUser!.uid);
+    const promotionValid = profile?.is_promoted === true && typeof profile.promotion_expires_at === 'string'
+      && new Date(String(profile.promotion_expires_at)).getTime() > Date.now();
+    if (profile?.role !== 'tailor' || !promotionValid) {
+      res.status(403).json({ error: 'Only an active promoted tailor can add a story.' });
+      return;
+    }
+    const resourceType = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
+    const uploadResult = await new Promise<{ secure_url?: string; public_id?: string }>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream({
+        folder: 'atelier/stories',
+        resource_type: resourceType === 'video' ? 'video' : 'image',
+        timeout: 120_000,
+        transformation: resourceType === 'image' ? [{ width: 1080, height: 1920, crop: 'limit', quality: 'auto:good' }] : undefined,
+      }, (error, result) => error ? reject(error) : resolve(result as { secure_url?: string; public_id?: string }));
+      stream.end(req.file!.buffer);
+    });
+    if (!uploadResult.secure_url || !uploadResult.public_id) throw new Error('Cloudinary returned incomplete story data.');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const story = await createStory({
+      tailorId: req.authUser!.uid,
+      mediaUrl: uploadResult.secure_url,
+      thumbnailUrl: resourceType === 'video'
+        ? uploadResult.secure_url.replace('/upload/', '/upload/so_0,w_720,h_1280,c_fill,f_jpg/')
+        : uploadResult.secure_url,
+      mediaType: resourceType,
+      cloudinaryPublicId: uploadResult.public_id,
+      expiresAt,
+    });
+    res.status(201).json({
+      id: String(story.id),
+      tailorId: String(story.tailor_id),
+      mediaUrl: String(story.media_url),
+      thumbnailUrl: String(story.thumbnail_url || story.media_url),
+      mediaType: story.media_type === 'video' ? 'video' : 'image',
+      cloudinaryPublicId: String(story.cloudinary_public_id),
+      createdAt: String(story.created_at),
+      expiresAt: String(story.expires_at),
+    });
+  } catch (error) {
+    console.error('Story upload failed', error);
+    res.status(500).json({ error: 'The story could not be published.' });
+  }
+});
+
+app.delete('/api/stories/:storyId', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  try {
+    const story = await listActiveStories();
+    const target = story.find(item => String(item.id) === String(req.params.storyId));
+    if (!target || String(target.tailor_id) !== req.authUser!.uid) {
+      res.status(404).json({ error: 'Story not found.' });
+      return;
+    }
+    await deleteStory(String(req.params.storyId), req.authUser!.uid);
+    if (cloudinaryConfigured) {
+      await cloudinary.uploader.destroy(String(target.cloudinary_public_id), {
+        resource_type: target.media_type === 'video' ? 'video' : 'image',
+        invalidate: true,
+      }).catch(() => undefined);
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Story delete failed', error);
+    res.status(500).json({ error: 'The story could not be removed.' });
+  }
 });
 
 app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('image_upload'), upload.single('image'), async (req: AuthenticatedRequest, res) => {

@@ -136,6 +136,7 @@ export default function App() {
 
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>(getInitialView);
+  const [dashboardInitialTab, setDashboardInitialTab] = useState<'overview' | 'posts' | 'plans'>('overview');
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [assistantWelcome, setAssistantWelcome] = useState<string>('');
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -637,7 +638,14 @@ export default function App() {
     const handlePlansUpdate = () => setPromoPlans(storageService.getPromoPlans());
     const handleAuthChange = (e: any) => setCurrentUser(e.detail);
     const handleBroadcastsUpdate = () => setBroadcasts(storageService.getBroadcasts());
-    const handleNavigateTab = (e: any) => navigateToView(e.detail);
+    const handleNavigateTab = (e: any) => {
+      if (typeof e.detail === 'object' && e.detail?.view) {
+        if (e.detail.tab === 'plans') setDashboardInitialTab('plans');
+        navigateToView(e.detail.view);
+        return;
+      }
+      navigateToView(e.detail);
+    };
     const handleNotificationsUpdate = () => {
       if (!currentUser) {
         setNotifications([]);
@@ -1258,6 +1266,7 @@ export default function App() {
                 onSelectSeller={handleSelectSeller}
                 isDarkMode={isDarkMode}
                 enableGreetingTyping={!isDataLoading && !showIntro}
+                onOpenPromotionPlans={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'dashboard', tab: 'plans' } }))}
               />
             </motion.div>
           )}
@@ -1342,6 +1351,7 @@ export default function App() {
             >
               <TailorDashboard
                 currentUser={currentUser}
+                initialStudioTab={dashboardInitialTab}
                 posts={posts}
                 promoPlans={promoPlans}
                 onOpenImage={(src, alt) => openImageViewer(src, alt, true)}

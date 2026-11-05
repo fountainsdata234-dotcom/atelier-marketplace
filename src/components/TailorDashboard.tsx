@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Scissors, Sparkles, Upload, Image as ImageIcon, Share2, Star, AlertTriangle, CheckCircle, Trash2, Heart, Bookmark, Phone, MessageSquare, DollarSign, Tag, Clock, Eye, Pause, Archive, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, FabricRequest, ListingImageAsset, ListingType } from '../types';
@@ -11,6 +11,7 @@ import { PostImage } from './PostImage';
 
 interface TailorDashboardProps {
   currentUser: User;
+  initialStudioTab?: 'overview' | 'posts' | 'plans';
   posts: ClothPost[];
   promoPlans: AdminPromoPlan[];
   onOpenSocialShare: (handle: string, name: string) => void;
@@ -24,7 +25,8 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   promoPlans,
   onOpenSocialShare,
   onOpenImage,
-  isDarkMode
+  isDarkMode,
+  initialStudioTab,
 }) => {
   const [promotionLocations, setPromotionLocations] = useState(Array.isArray(currentUser.promotionTargeting?.locations) ? currentUser.promotionTargeting.locations.join(', ') : '');
   const [promotionCategories, setPromotionCategories] = useState(Array.isArray(currentUser.promotionTargeting?.categories) ? currentUser.promotionTargeting.categories.join(', ') : '');
@@ -161,7 +163,10 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     Boolean(currentUser.isWarned && currentUser.warningNote)
     && localStorage.getItem(warningNoticeKey) !== 'dismissed'
   ));
-  const [activeStudioTab, setActiveStudioTab] = useState<'overview' | 'posts' | 'plans'>('overview');
+  const [activeStudioTab, setActiveStudioTab] = useState<'overview' | 'posts' | 'plans'>(initialStudioTab || 'overview');
+  useEffect(() => {
+    if (initialStudioTab) setActiveStudioTab(initialStudioTab);
+  }, [initialStudioTab]);
   const [postStep, setPostStep] = useState(0);
 
   // Filter posts belonging to this tailor/seller

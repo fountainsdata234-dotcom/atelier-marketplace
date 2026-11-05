@@ -3,6 +3,20 @@
 
 create extension if not exists "pgcrypto";
 
+create table if not exists public.tailor_stories (
+  id uuid primary key default gen_random_uuid(),
+  tailor_id uuid not null references public.profiles(id) on delete cascade,
+  media_url text not null,
+  thumbnail_url text not null default '',
+  media_type text not null check (media_type in ('image', 'video')),
+  cloudinary_public_id text not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '24 hours')
+);
+
+create index if not exists tailor_stories_active_idx
+  on public.tailor_stories (expires_at desc, created_at desc, tailor_id);
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,

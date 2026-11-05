@@ -16,6 +16,7 @@ import { SearchableLocationField } from './SearchableLocationField';
 import { PostImage } from './PostImage';
 import { ContentSkeleton } from './ContentSkeleton';
 import { useTypingText } from '../hooks/useTypingText';
+import { StoryRail } from './StoryRail';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -32,6 +33,7 @@ interface MarketplaceProps {
   onSelectSeller: (user: User) => void;
   isDarkMode: boolean;
   enableGreetingTyping: boolean;
+  onOpenPromotionPlans: () => void;
 }
 
 const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -141,6 +143,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onSelectSeller,
   isDarkMode,
   enableGreetingTyping,
+  onOpenPromotionPlans,
 }) => {
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -1159,6 +1162,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           )}
         </div>
       </div>
+
+      <StoryRail
+        users={users}
+        currentUser={currentUser}
+        isDarkMode={isDarkMode}
+        onOpenPlans={onOpenPromotionPlans}
+      />
 
       <section aria-label="Marketplace discovery views" className={`rounded-2xl border p-3 sm:p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>
         <div role="tablist" aria-label="Browse marketplace listings" className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]">

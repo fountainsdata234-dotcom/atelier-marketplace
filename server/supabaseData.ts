@@ -62,6 +62,52 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&');
 }
 
+export type StoryRecord = Record<string, unknown>;
+
+export async function listActiveStories(): Promise<StoryRecord[]> {
+  const { data, error } = await requireClient()
+    .from('tailor_stories')
+    .select('*')
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: false });
+  if (error) throw normalizeError(error);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createStory(values: StoryRecord): Promise<StoryRecord> {
+  const { data, error } = await requireClient().from('tailor_stories').insert(toDatabaseRecord(values)).select('*').single();
+  if (error) throw normalizeError(error);
+  return data;
+}
+
+export async function deleteStory(storyId: string, tailorId: string): Promise<boolean> {
+  const { data, error } = await requireClient()
+    .from('tailor_stories')
+    .delete()
+    .eq('id', storyId)
+    .eq('tailor_id', tailorId)
+    .select('id')
+    .maybeSingle();
+  if (error) throw normalizeError(error);
+  return Boolean(data);
+}
+
+export async function listExpiredStories(limit = 100): Promise<StoryRecord[]> {
+  const { data, error } = await requireClient()
+    .from('tailor_stories')
+    .select('id,cloudinary_public_id,media_type')
+    .lte('expires_at', new Date().toISOString())
+    .limit(limit);
+  if (error) throw normalizeError(error);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function deleteExpiredStoriesByIds(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const { error } = await requireClient().from('tailor_stories').delete().in('id', ids);
+  if (error) throw normalizeError(error);
+}
+
 export async function getProfile(uid: string): Promise<ProfileRecord | null> {
   const { data, error } = await requireClient().from('profiles').select('*').eq('id', uid).maybeSingle();
   if (error) throw normalizeError(error);
