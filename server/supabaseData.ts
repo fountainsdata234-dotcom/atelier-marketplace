@@ -70,7 +70,16 @@ export async function listActiveStories(): Promise<StoryRecord[]> {
     .select('*')
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
-  if (error) throw normalizeError(error);
+  if (error) {
+    const fallback = await requireClient()
+      .from('tailor_stories')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (fallback.error) throw normalizeError(fallback.error);
+    return (Array.isArray(fallback.data) ? fallback.data : []).filter(story =>
+      !story.expires_at || new Date(String(story.expires_at)).getTime() > Date.now()
+    );
+  }
   return Array.isArray(data) ? data : [];
 }
 

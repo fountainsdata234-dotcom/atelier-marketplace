@@ -1605,6 +1605,7 @@ app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest,
 });
 
 app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
+  res.set('Cache-Control', 'private, no-store, max-age=0');
   try {
     try {
       const expired = await listExpiredStories();
@@ -1623,7 +1624,12 @@ app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
     } catch (error) {
       console.warn('Expired story lookup failed', error);
     }
-    const stories = await listActiveStories();
+    let stories: Awaited<ReturnType<typeof listActiveStories>> = [];
+    try {
+      stories = await listActiveStories();
+    } catch (error) {
+      console.warn('Stories table unavailable', error);
+    }
     let counts = new Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>();
     try {
       counts = await getStoryCounts(stories.map(story => String(story.id)), req.authUser?.uid);
