@@ -324,6 +324,7 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   useEffect(() => {
     const canvas = weatherCanvasRef.current;
     if (!canvas) return;
+    if (window.matchMedia('(max-width: 767px)').matches) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -439,8 +440,8 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
 
   return (
     <div className="fixed inset-0 pointer-events-none z-[20] overflow-hidden select-none">
-      <canvas ref={canvasRef} className="w-full h-full block" />
-      <canvas ref={weatherCanvasRef} aria-hidden="true" className="absolute inset-0 h-full w-full opacity-90 mix-blend-screen" />
+      <canvas ref={canvasRef} className="w-full h-full block max-md:hidden" />
+      <canvas ref={weatherCanvasRef} aria-hidden="true" className="absolute inset-0 hidden h-full w-full opacity-90 mix-blend-screen md:block" />
       <button
         type="button"
         onClick={enableTilt}

@@ -1088,6 +1088,7 @@ export default function App() {
       handleOpenAuthWithRole('buyer');
       return;
     }
+    if (seller.id === currentUser.id) return;
     const previousFollowers = Array.isArray(seller.followers) ? [...seller.followers] : [];
     storageService.toggleFollowUser(seller.id, currentUser.id);
     const locallyUpdated = storageService.getUsers().find(user => user.id === seller.id);

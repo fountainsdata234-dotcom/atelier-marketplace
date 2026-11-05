@@ -110,6 +110,7 @@ export async function findNearbySellers(latitude: number, longitude: number, rad
 }
 
 export async function toggleFollow(targetId: string, userId: string): Promise<{ followers: string[]; isFollowing: boolean }> {
+  if (targetId === userId) throw new Error('You cannot follow your own account.');
   const { data, error } = await requireClient().from('profiles').select('followers').eq('id', targetId).single();
   if (error) throw normalizeError(error);
   const followers = Array.isArray(data.followers) ? data.followers.filter((id: unknown) => typeof id === 'string') : [];

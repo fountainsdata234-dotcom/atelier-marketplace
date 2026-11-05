@@ -1436,6 +1436,12 @@
 
   .feed-card-image {
     min-height: calc(100vw * 1.08);
+    contain: layout paint;
+  }
+
+  .feed-card-image img {
+    backface-visibility: hidden;
+    transform: translateZ(0);
   }
 }
 

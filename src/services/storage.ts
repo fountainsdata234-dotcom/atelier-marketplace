@@ -745,6 +745,7 @@ export const storageService = {
   },
 
   toggleFollowUser(targetUserId: string, currentUserId: string): { followersCount: number; isFollowing: boolean } {
+    if (targetUserId === currentUserId) return { followersCount: 0, isFollowing: false };
     const users = this.getUsers();
     const target = users.find(u => u.id === targetUserId);
     if (!target) return { followersCount: 0, isFollowing: false };
