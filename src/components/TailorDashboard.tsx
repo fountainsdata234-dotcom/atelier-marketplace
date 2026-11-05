@@ -1005,17 +1005,12 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   </div>
 
                   <div className="border-t border-neutral-800/80 pt-4">
-                    <div className="mb-4 flex items-baseline gap-1">
-                      <span className="text-3xl font-serif font-bold text-amber-400">${plan.amount}</span>
-                      <span className="text-xs text-neutral-400 font-mono">/ {plan.timeRange}</span>
-                    </div>
                     <button
                       type="button"
                       onClick={() => startPaystackPayment(plan.id)}
                       disabled={Boolean(paymentLoadingPlan)}
                       className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
                     >
-                      <DollarSign className="h-3.5 w-3.5" />
                       {paymentLoadingPlan === plan.id ? 'Opening secure checkout...' : `Pay securely — ₦${plan.id === 'promo-1' ? '5,000' : plan.id === 'promo-2' ? '25,000' : '60,000'}`}
                     </button>
                   </div>

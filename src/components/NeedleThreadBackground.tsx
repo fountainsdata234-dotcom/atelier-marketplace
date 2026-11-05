@@ -30,17 +30,6 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   const stitchesRef = useRef<{ x: number; y: number; opacity: number }[]>([]);
   const threadNodesRef = useRef<Point[]>([]);
 
-  const enableTilt = () => {
-    const orientation = DeviceOrientationEvent as typeof DeviceOrientationEvent & {
-      requestPermission?: () => Promise<'granted' | 'denied'>;
-    };
-    if (typeof orientation.requestPermission !== 'function') return;
-    void orientation.requestPermission().then(permission => {
-      if (permission !== 'granted') return;
-      window.addEventListener('deviceorientation', handleDeviceOrientation, { passive: true });
-    }).catch(() => undefined);
-  };
-
   const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
     const gamma = Math.max(-35, Math.min(35, event.gamma || 0));
     const beta = Math.max(-35, Math.min(35, (event.beta || 0) - 35));
@@ -442,15 +431,6 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
     <div className="fixed inset-0 pointer-events-none z-[20] overflow-hidden select-none">
       <canvas ref={canvasRef} className="w-full h-full block max-md:hidden" />
       <canvas ref={weatherCanvasRef} aria-hidden="true" className="absolute inset-0 hidden h-full w-full opacity-90 mix-blend-screen md:block" />
-      <button
-        type="button"
-        onClick={enableTilt}
-        className="pointer-events-auto absolute right-3 top-3 rounded-full border border-white/15 bg-neutral-950/55 px-3 py-2 text-[10px] font-semibold text-white/80 backdrop-blur-md md:hidden"
-        aria-label="Enable sun and moon tilt movement"
-      >
-        Tilt motion
-      </button>
-      
       {/* Interactive Needle Indicator Badge */}
       <div className="absolute top-20 right-4 pointer-events-none hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border backdrop-blur-md opacity-60 bg-neutral-900/40 text-amber-300 border-amber-500/20">
         <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
