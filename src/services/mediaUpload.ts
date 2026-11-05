@@ -24,13 +24,16 @@ export function uploadFormDataWithProgress<T>(
       try {
         const body = JSON.parse(request.responseText) as T & { error?: string; code?: string };
         if (request.status < 200 || request.status >= 300) {
-          reject(new Error(customerMessageForHttpError(request.status, body.error, '/api/upload', body.code)));
+          const message = body.error || request.statusText || 'The upload could not be completed.';
+          reject(new Error(customerMessageForHttpError(request.status, message, '/api/stories', body.code)));
           return;
         }
         onProgress?.(100);
         resolve(body);
       } catch {
-        reject(new Error("We couldn't finish uploading your image. Please try again."));
+        reject(new Error(request.status >= 400
+          ? 'The story upload service returned an error. Please try again.'
+          : "We couldn't finish uploading your story. Please try again."));
       }
     });
     request.send(formData);

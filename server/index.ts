@@ -1610,18 +1610,29 @@ app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest,
 
 app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
   try {
-    const expired = await listExpiredStories();
-    if (expired.length) {
-      if (cloudinaryConfigured) {
-        await Promise.all(expired.map(story => cloudinary.uploader.destroy(String(story.cloudinary_public_id || ''), {
-          resource_type: story.media_type === 'video' ? 'video' : 'image',
-          invalidate: true,
-        }).catch(() => undefined)));
+    try {
+      const expired = await listExpiredStories();
+      if (expired.length) {
+        if (cloudinaryConfigured) {
+          await Promise.all(expired.map(story => cloudinary.uploader.destroy(String(story.cloudinary_public_id || ''), {
+            resource_type: story.media_type === 'video' ? 'video' : 'image',
+            invalidate: true,
+          }).catch(() => undefined)));
+        }
+        await deleteExpiredStoriesByIds(expired.map(story => String(story.id))).catch(error => {
+          console.warn('Expired story cleanup failed', error);
+        });
       }
-      await deleteExpiredStoriesByIds(expired.map(story => String(story.id)));
+    } catch (error) {
+      console.warn('Expired story lookup failed', error);
     }
     const stories = await listActiveStories();
-    const counts = await getStoryCounts(stories.map(story => String(story.id)), req.authUser?.uid);
+    let counts = new Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>();
+    try {
+      counts = await getStoryCounts(stories.map(story => String(story.id)), req.authUser?.uid);
+    } catch (error) {
+      console.warn('Story counts unavailable', error);
+    }
     res.json(stories.map(story => ({
       id: String(story.id),
       tailorId: String(story.tailor_id),
