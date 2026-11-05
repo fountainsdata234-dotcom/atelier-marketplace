@@ -1653,8 +1653,9 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
   }
   try {
     const profile = await readProfile(req.authUser!.uid);
-    const promotionValid = profile?.is_promoted === true && typeof profile.promotion_expires_at === 'string'
-      && new Date(String(profile.promotion_expires_at)).getTime() > Date.now();
+    const promotionExpiry = profile?.promotion_expires_at;
+    const promotionValid = profile?.is_promoted === true
+      && (promotionExpiry == null || new Date(String(promotionExpiry)).getTime() > Date.now());
     if (profile?.role !== 'tailor' || !promotionValid) {
       res.status(403).json({ error: 'Only an active promoted tailor can add a story.' });
       return;
@@ -1664,8 +1665,8 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
       const stream = cloudinary.uploader.upload_stream({
         folder: 'atelier/stories',
         resource_type: resourceType === 'video' ? 'video' : 'image',
-        timeout: 120_000,
-        transformation: resourceType === 'image' ? [{ width: 1080, height: 1920, crop: 'limit', quality: 'auto:good' }] : undefined,
+        timeout: 180_000,
+        transformation: resourceType === 'image' ? [{ quality: 'auto:good' }] : undefined,
       }, (error, result) => error ? reject(error) : resolve(result as { secure_url?: string; public_id?: string }));
       stream.end(req.file!.buffer);
     });
@@ -1675,7 +1676,7 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
       tailorId: req.authUser!.uid,
       mediaUrl: uploadResult.secure_url,
       thumbnailUrl: resourceType === 'video'
-        ? uploadResult.secure_url.replace('/upload/', '/upload/so_0,w_720,h_1280,c_fill,f_jpg/')
+        ? uploadResult.secure_url.replace('/upload/', '/upload/so_0,w_720,h_1280,c_limit,f_jpg/')
         : uploadResult.secure_url,
       mediaType: resourceType,
       cloudinaryPublicId: uploadResult.public_id,
@@ -3100,6 +3101,7 @@ app.get('/api/users', async (_req, res) => {
           whatsappNumber: String(profile.whatsapp_number || ''), shopName: String(profile.shop_name || ''), bio: String(profile.bio || ''),
           handle: String(profile.handle || `@${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'atelier_member'}`),
           avatarUrl: String(profile.avatar_url || ''), isPromoted: profile.is_promoted === true, isBlocked: profile.is_blocked === true,
+          promotionExpiresAt: profile.promotion_expires_at ? String(profile.promotion_expires_at) : undefined,
           promotionTargeting: profile.promotion_targeting && typeof profile.promotion_targeting === 'object' ? profile.promotion_targeting : undefined,
           followers: Array.isArray(profile.followers) ? profile.followers.filter((value): value is string => typeof value === 'string') : [],
           createdAt: String(profile.created_at || new Date().toISOString()),

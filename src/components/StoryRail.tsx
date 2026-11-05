@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, X, ChevronLeft, ChevronRight, LoaderCircle, Trash2, Eye, Heart, Send, Maximize2 } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, LoaderCircle, Trash2, Eye, Heart, Send } from 'lucide-react';
 import { TailorStory, User } from '../types';
 import { api } from '../services/api';
 
@@ -19,7 +19,6 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [draftFile, setDraftFile] = useState<File | null>(null);
   const [draftUrl, setDraftUrl] = useState('');
   const [draftCaption, setDraftCaption] = useState('');
-  const [mediaZoom, setMediaZoom] = useState(100);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
 
   const loadStories = () => {
@@ -52,7 +51,6 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     setDraftFile(file);
     setDraftUrl(URL.createObjectURL(file));
     setDraftCaption('');
-    setMediaZoom(100);
   };
   const uploadStory = async () => {
     if (!draftFile) return;
@@ -134,12 +132,11 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
               </div>
               <div className="relative mx-4 mt-4 aspect-[9/16] max-h-[54dvh] overflow-hidden rounded-2xl bg-black">
                 {draftFile.type.startsWith('video/')
-                  ? <video src={draftUrl} controls playsInline className="h-full w-full object-cover" style={{ transform: `scale(${mediaZoom / 100})` }} />
-                  : <img src={draftUrl} alt="Story preview" className="h-full w-full object-cover" style={{ transform: `scale(${mediaZoom / 100})` }} />}
+                  ? <video src={draftUrl} controls playsInline className="h-full w-full object-contain" />
+                  : <img src={draftUrl} alt="Story preview" className="h-full w-full object-contain" />}
                 {draftCaption && <p className="absolute bottom-5 left-5 right-5 rounded-xl bg-black/55 px-3 py-2 text-center text-sm font-semibold backdrop-blur">{draftCaption}</p>}
               </div>
               <div className="px-4 py-4">
-                <label className="flex items-center gap-2 text-xs text-neutral-400"><Maximize2 className="h-4 w-4" />Crop zoom<input aria-label="Story crop zoom" type="range" min="100" max="150" value={mediaZoom} onChange={event => setMediaZoom(Number(event.target.value))} className="ml-auto w-36 accent-amber-400" /></label>
                 <textarea value={draftCaption} onChange={event => setDraftCaption(event.target.value.slice(0, 280))} rows={3} placeholder="Add a message to your story..." className="mt-4 w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm outline-none focus:border-amber-400" />
                 <button type="button" disabled={uploading} onClick={() => void uploadStory()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-neutral-950 disabled:opacity-60"><Send className="h-4 w-4" />{uploading ? 'Publishing...' : 'Share story'}</button>
               </div>

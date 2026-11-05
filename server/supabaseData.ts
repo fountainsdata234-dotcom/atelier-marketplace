@@ -76,6 +76,15 @@ export async function listActiveStories(): Promise<StoryRecord[]> {
 
 export async function createStory(values: StoryRecord): Promise<StoryRecord> {
   const { data, error } = await requireClient().from('tailor_stories').insert(toDatabaseRecord(values)).select('*').single();
+  if (error && String(error.message || '').toLowerCase().includes('column')) {
+    const legacyValues = { ...values };
+    delete legacyValues.caption;
+    delete legacyValues.viewCount;
+    delete legacyValues.likeCount;
+    const retry = await requireClient().from('tailor_stories').insert(toDatabaseRecord(legacyValues)).select('*').single();
+    if (retry.error) throw normalizeError(retry.error);
+    return retry.data;
+  }
   if (error) throw normalizeError(error);
   return data;
 }
@@ -127,14 +136,19 @@ export async function toggleStoryLike(storyId: string, userId: string): Promise<
 
 export async function getStoryCounts(storyIds: string[], userId?: string): Promise<Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>> {
   const supabase = requireClient();
+  const missingTable = (error: unknown) => {
+    const code = (error as { code?: unknown } | null)?.code;
+    const message = String((error as { message?: unknown } | null)?.message || '').toLowerCase();
+    return code === '42P01' || code === 'PGRST205' || message.includes('does not exist') || message.includes('could not find the table');
+  };
   const [views, likes, viewerLikes] = await Promise.all([
     supabase.from('tailor_story_views').select('story_id'),
     supabase.from('tailor_story_likes').select('story_id'),
     userId ? supabase.from('tailor_story_likes').select('story_id').eq('user_id', userId).in('story_id', storyIds) : Promise.resolve({ data: [] as { story_id: string }[] }),
   ]);
-  if (views.error) throw normalizeError(views.error);
-  if (likes.error) throw normalizeError(likes.error);
-  if ('error' in viewerLikes && viewerLikes.error) throw normalizeError(viewerLikes.error);
+  if (views.error && !missingTable(views.error)) throw normalizeError(views.error);
+  if (likes.error && !missingTable(likes.error)) throw normalizeError(likes.error);
+  if ('error' in viewerLikes && viewerLikes.error && !missingTable(viewerLikes.error)) throw normalizeError(viewerLikes.error);
   const result = new Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>();
   storyIds.forEach(storyId => result.set(storyId, {
     viewCount: (views.data || []).filter(row => String(row.story_id) === storyId).length,
@@ -171,7 +185,7 @@ export async function listProfiles(): Promise<ProfileRecord[]> {
 export async function getUsers(includePrivate = false): Promise<ProfileRecord[]> {
   const query = includePrivate
     ? requireClient().from('profiles').select('*')
-    : requireClient().from('profiles').select('id,name,role,shop_name,bio,handle,avatar_url,location,whatsapp_number,is_promoted,promotion_targeting,is_blocked,followers,created_at');
+    : requireClient().from('profiles').select('id,name,role,shop_name,bio,handle,avatar_url,location,whatsapp_number,is_promoted,promotion_expires_at,promotion_targeting,is_blocked,followers,created_at');
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw normalizeError(error);
   return data || [];
