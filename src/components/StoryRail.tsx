@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, X, ChevronLeft, ChevronRight, LoaderCircle, Trash2, Eye, Heart, Send, Play } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Trash2, Eye, Heart, Send, Play, Pause, BarChart3 } from 'lucide-react';
 import { TailorStory, User } from '../types';
 import { api } from '../services/api';
 
@@ -42,7 +42,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const groupedStories = useMemo(() => {
     const groups = new Map<string, TailorStory[]>();
     [...stories]
-      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+      .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
       .forEach(story => groups.set(story.tailorId, [...(groups.get(story.tailorId) || []), story]));
     return [...groups.entries()].filter(([tailorId]) => {
       const user = userById.get(tailorId);
@@ -105,12 +105,22 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
           {groupedStories.map(([tailorId, tailorStories]) => {
             const tailor = userById.get(tailorId);
             return (
-              <button key={tailorId} type="button" onClick={() => setActiveTailorId(tailorId)} className="flex min-w-[76px] flex-col items-center gap-1.5">
+              <button
+                key={tailorId}
+                type="button"
+                data-story-interaction
+                data-story-thumbnail
+                onClick={event => {
+                  event.stopPropagation();
+                  setActiveTailorId(tailorId);
+                }}
+                className="flex min-w-[76px] flex-col items-center gap-1.5"
+              >
                 <span className="rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
                   <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
                     {tailorStories[0].mediaType === 'video'
                       ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                      : <img src={tailorStories[0].mediaUrl} alt="" className="h-full w-full object-cover" />}
+                      : <img data-story-image src={tailorStories[0].mediaUrl} alt="" draggable={false} className="h-full w-full object-cover" />}
                   </span>
                 </span>
                 <span className="w-[76px] truncate text-[10px] font-bold">@{tailor?.handle || tailor?.shopName || tailor?.name || 'merchant'}</span>
@@ -123,7 +133,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
 
       <AnimatePresence>
         {activeTailorId && activeStories.length > 0 && (
-          <StoryViewer
+          <StoriesViewer
             stories={activeStories}
             tailor={userById.get(activeTailorId)}
             owner={currentUser?.id === activeTailorId}
@@ -141,7 +151,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
       </AnimatePresence>
       <AnimatePresence>
         {draftFile && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-end justify-center bg-black/75 sm:items-center">
+          <motion.div data-story-interaction initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-end justify-center bg-black/75 sm:items-center">
             <motion.div initial={{ y: 40 }} animate={{ y: 0 }} className="max-h-[96dvh] w-full max-w-[430px] overflow-y-auto rounded-t-[28px] bg-neutral-950 text-white sm:rounded-[28px]">
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                 <div><p className="text-[9px] font-bold uppercase tracking-[.18em] text-amber-400">New story</p><h2 className="font-serif text-lg font-bold">Preview & compose</h2></div>
@@ -205,7 +215,7 @@ export function PromotedTailorRail({ users, isDarkMode, onSelectSeller }: {
   );
 }
 
-function StoryViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevious, onNext }: {
+export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevious, onNext }: {
   stories: TailorStory[];
   tailor?: User;
   onClose: () => void;
@@ -217,62 +227,140 @@ function StoryViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevi
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const story = stories[activeIndex];
+  const [reply, setReply] = useState('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const touchStartX = useRef<number | null>(null);
+  const holdTimeout = useRef<number | null>(null);
+  const chronologicalStories = useMemo(
+    () => [...stories].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()),
+    [stories],
+  );
+  const story = chronologicalStories[activeIndex];
+  const [liked, setLiked] = useState(Boolean(story?.likedByViewer));
+
+  useEffect(() => {
+    setActiveIndex(0);
+    setIsPaused(false);
+  }, [tailor?.id]);
+
+  useEffect(() => {
+    setLiked(Boolean(story?.likedByViewer));
+    setReply('');
+  }, [story?.id]);
+
   useEffect(() => {
     setIsPaused(false);
-    void api.recordStoryView(story.id).catch(() => undefined);
-  }, [story.id]);
+    if (story) void api.recordStoryView(story.id).catch(() => undefined);
+  }, [story?.id]);
+
   useEffect(() => {
-    if (isPaused || story.mediaType === 'video') return;
+    if (!story || isPaused || story.mediaType === 'video') return;
     const timer = window.setTimeout(() => move(1), 7000);
     return () => window.clearTimeout(timer);
-  }, [activeIndex, isPaused, story.mediaType, story.id]);
+  }, [activeIndex, isPaused, story?.mediaType, story?.id]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !story) return;
+    if (isPaused) void video.pause();
+    else void video.play().catch(() => undefined);
+  }, [isPaused, story?.id]);
+
   const move = (direction: number) => {
     if (direction < 0 && activeIndex > 0) setActiveIndex(index => index - 1);
-    else if (direction > 0 && activeIndex < stories.length - 1) setActiveIndex(index => index + 1);
+    else if (direction > 0 && activeIndex < chronologicalStories.length - 1) setActiveIndex(index => index + 1);
     else direction < 0 ? onPrevious() : onNext();
+  };
+  const beginHold = () => {
+    holdTimeout.current = window.setTimeout(() => setIsPaused(true), 120);
+  };
+  const endHold = () => {
+    if (holdTimeout.current !== null) window.clearTimeout(holdTimeout.current);
+    holdTimeout.current = null;
+    setIsPaused(false);
+  };
+  const elapsed = (value: string) => {
+    const minutes = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
+
+  if (!story) return null;
+
+  const toggleLike = () => {
+    void api.toggleStoryLike(story.id).then(result => {
+      setLiked(result.isLiked);
+      story.likeCount = result.likeCount;
+      story.likedByViewer = result.isLiked;
+    }).catch(() => undefined);
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-start justify-center bg-black/95 px-0 pt-[12dvh] sm:px-6 sm:pt-[14dvh]" role="dialog" aria-modal="true">
-      <div className="relative aspect-[16/10] w-full max-h-[68dvh] overflow-hidden bg-neutral-950 shadow-[0_24px_80px_rgba(0,0,0,.65)] sm:max-w-[980px] sm:rounded-2xl">
-        <div className="absolute left-3 right-3 top-3 z-20 flex gap-1">
-          {stories.map((item, index) => <span key={item.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/35"><span className={`block h-full bg-gradient-to-r from-amber-300 via-orange-400 to-red-500 shadow-[0_0_8px_rgba(251,191,36,.8)] ${index < activeIndex ? 'w-full' : index === activeIndex ? 'animate-[story-progress_8s_linear_forwards]' : 'w-0'}`}></span></span>)}
-        </div>
+    <motion.div data-story-interaction data-stories-viewer initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black" role="dialog" aria-modal="true" aria-label="Story viewer">
+      <div
+        className="relative h-[100dvh] w-full overflow-hidden bg-neutral-950 sm:h-[94dvh] sm:max-w-[540px] sm:rounded-2xl"
+        onTouchStart={event => { touchStartX.current = event.changedTouches[0]?.clientX ?? null; }}
+        onTouchEnd={event => {
+          if (touchStartX.current === null) return;
+          const distance = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(distance) > 55) distance < 0 ? move(1) : move(-1);
+        }}
+        onPointerDown={beginHold}
+        onPointerUp={endHold}
+        onPointerCancel={endHold}
+        onPointerLeave={endHold}
+      >
         {story.mediaType === 'video'
-          ? <video key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-cover" onEnded={() => move(1)} />
-          : <img key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Tailor'} story`} className="h-full w-full object-cover" />}
-        <div className="absolute inset-x-0 top-7 z-20 flex items-center gap-3 px-4">
-          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-amber-300 bg-neutral-900 text-xs font-bold text-amber-300">
-            {tailor?.avatarUrl
-              ? <img src={tailor.avatarUrl} alt="" className="h-full w-full object-cover" />
-              : (tailor?.shopName || tailor?.name || '@').slice(0, 1).toUpperCase()}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-bold text-white drop-shadow">@{tailor?.handle || tailor?.shopName || tailor?.name || 'merchant'}</span>
-          <button type="button" aria-label="Close story" onClick={onClose} className="rounded-full border border-white/10 bg-black/45 p-2 text-amber-300 backdrop-blur-md"><X className="h-5 w-5" /></button>
+          ? <video ref={videoRef} data-story-image key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-contain" onEnded={() => move(1)} />
+          : <img data-story-image key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Merchant'} story`} draggable={false} className="h-full w-full object-contain" />}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/75" />
+        <div className="absolute left-3 right-3 top-3 z-20 flex gap-1">
+          {chronologicalStories.map((item, index) => (
+            <span key={item.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35">
+              <span
+                className={`block h-full bg-white ${index < activeIndex ? 'w-full' : index === activeIndex ? 'animate-[story-progress_7s_linear_forwards]' : 'w-0'}`}
+                style={{ animationPlayState: isPaused ? 'paused' : 'running' }}
+              />
+            </span>
+          ))}
         </div>
-        {story.caption && <p className="absolute bottom-24 left-5 right-5 z-20 rounded-xl bg-black/55 px-3 py-2 text-center text-sm font-semibold text-white backdrop-blur">{story.caption}</p>}
-        {owner && (
-          <div className="absolute bottom-6 left-3 right-3 z-30 flex items-center gap-2 rounded-2xl border border-white/10 bg-neutral-950/95 p-2.5 text-white shadow-2xl backdrop-blur-md sm:left-4 sm:right-4 sm:p-3">
-            <span className="flex items-center gap-1.5 text-xs"><Eye className="h-4 w-4 text-amber-400" />{story.viewCount} views</span>
-            <span className="flex items-center gap-1.5 text-xs"><Heart className="h-4 w-4 text-rose-400" />{story.likeCount}</span>
-            <button type="button" onClick={() => void onDelete(story.id)} className="ml-auto rounded-lg bg-red-500/15 p-2 text-red-300" aria-label="Delete story"><Trash2 className="h-4 w-4" /></button>
-            <button type="button" onClick={onAdd} className="rounded-lg bg-gradient-to-r from-amber-300 to-orange-500 px-3 py-2 text-xs font-bold text-neutral-950">Add another</button>
+        <div className="absolute inset-x-0 top-7 z-30 flex items-center gap-3 px-4">
+          <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full border border-amber-300 bg-neutral-900 text-sm font-bold text-amber-300">
+            {tailor?.avatarUrl ? <img src={tailor.avatarUrl} alt="" className="h-full w-full object-cover" /> : (tailor?.shopName || tailor?.name || '@').slice(0, 1).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-white">@{tailor?.handle || tailor?.shopName || tailor?.name || 'merchant'}</p>
+            <p className="text-[11px] text-white/70">{elapsed(story.createdAt)}</p>
+          </div>
+          <button type="button" aria-label="Close story" onClick={onClose} className="pointer-events-auto rounded-full bg-black/45 p-2 text-white backdrop-blur-md"><X className="h-5 w-5" /></button>
+        </div>
+        {story.caption && <p className="absolute bottom-28 left-5 right-5 z-20 rounded-xl bg-black/55 px-3 py-2 text-center text-sm font-semibold text-white backdrop-blur">{story.caption}</p>}
+        <button type="button" aria-label="Previous story" onClick={() => move(-1)} className="absolute bottom-32 left-2 z-40 grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white sm:bottom-1/2 sm:translate-y-1/2"><ChevronLeft className="h-5 w-5" /></button>
+        <button type="button" aria-label="Next story" onClick={() => move(1)} className="absolute bottom-32 right-2 z-40 grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white sm:bottom-1/2 sm:translate-y-1/2"><ChevronRight className="h-5 w-5" /></button>
+        <button type="button" aria-label={isPaused ? 'Resume story' : 'Pause story'} onClick={() => setIsPaused(value => !value)} className="absolute bottom-[92px] left-4 z-40 rounded-full bg-black/45 p-2 text-white backdrop-blur">
+          {isPaused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4 fill-current" />}
+        </button>
+        {!owner && (
+          <div className="absolute bottom-4 left-4 right-4 z-40 flex items-center gap-2">
+            <input value={reply} onChange={event => setReply(event.target.value)} placeholder={`Reply to @${tailor?.handle || 'merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur" />
+            <button type="button" aria-label="Send reply" disabled={!reply.trim()} onClick={() => setReply('')} className="grid h-11 w-11 place-items-center rounded-full bg-white text-neutral-950 disabled:opacity-50"><Send className="h-4 w-4" /></button>
+            <button type="button" aria-label={liked ? 'Unlike story' : 'Like story'} onClick={toggleLike} className="grid h-11 w-11 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+              <Heart className="h-5 w-5" fill={liked ? 'currentColor' : 'none'} />
+            </button>
           </div>
         )}
-        {!owner && (
-          <button type="button" onClick={() => {
-            void api.toggleStoryLike(story.id).then(result => {
-              story.likeCount = result.likeCount;
-              story.likedByViewer = result.isLiked;
-            }).catch(() => undefined);
-          }} className={`absolute bottom-8 right-5 z-30 grid h-12 w-12 place-items-center rounded-full backdrop-blur ${story.likedByViewer ? 'bg-rose-500 text-white' : 'bg-black/50 text-white'}`} aria-label="Like story">
-            <Heart className="h-5 w-5" fill={story.likedByViewer ? 'currentColor' : 'none'} />
-          </button>
+        {owner && (
+          <div className="absolute bottom-4 left-4 right-4 z-40 flex items-center gap-2 rounded-2xl bg-neutral-950/90 p-2 text-white backdrop-blur">
+            <span className="flex items-center gap-1.5 px-2 text-xs"><Eye className="h-4 w-4 text-amber-400" />{story.viewCount}</span>
+            <span className="flex items-center gap-1.5 px-2 text-xs"><Heart className="h-4 w-4 text-rose-400" />{story.likeCount}</span>
+            <button type="button" onClick={onAdd} className="ml-auto flex items-center gap-1 rounded-lg bg-amber-400 px-3 py-2 text-xs font-bold text-neutral-950"><Plus className="h-3.5 w-3.5" />Add story</button>
+            <button type="button" aria-label="Story insights" className="rounded-lg bg-white/10 p-2"><BarChart3 className="h-4 w-4" /></button>
+            <button type="button" onClick={() => void onDelete(story.id)} aria-label="Delete story" className="rounded-lg bg-red-500/15 p-2 text-red-300"><Trash2 className="h-4 w-4" /></button>
+          </div>
         )}
-        <button type="button" aria-label="Previous story" onClick={() => move(-1)} className="absolute left-2 top-1/2 z-40 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur sm:left-4 sm:h-12 sm:w-12"><ChevronLeft className="h-5 w-5" /></button>
-        <button type="button" aria-label="Next story" onClick={() => move(1)} className="absolute right-2 top-1/2 z-40 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur sm:right-4 sm:h-12 sm:w-12"><ChevronRight className="h-5 w-5" /></button>
-        <button type="button" aria-label={isPaused ? 'Resume story' : 'Pause story'} onClick={() => setIsPaused(paused => !paused)} className="absolute bottom-3 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/15 bg-black/55 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur sm:bottom-4">{isPaused ? 'Play' : 'Pause'}</button>
       </div>
       <style>{`@keyframes story-progress { from { width: 0%; } to { width: 100%; } }`}</style>
     </motion.div>

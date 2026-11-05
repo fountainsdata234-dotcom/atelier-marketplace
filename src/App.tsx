@@ -174,7 +174,7 @@ export default function App() {
       const image = event.target;
       if (!(image instanceof HTMLImageElement)
         || image.getAttribute('aria-hidden') === 'true'
-        || image.closest('[data-image-viewer], [data-open-image-on-click]')) return;
+        || image.closest('[data-image-viewer], [data-open-image-on-click], [data-story-interaction], [data-story-thumbnail], [data-story-image]')) return;
       const src = image.currentSrc || image.src;
       if (!src || new URL(src, window.location.href).pathname.endsWith('/logo.png')) return;
 
