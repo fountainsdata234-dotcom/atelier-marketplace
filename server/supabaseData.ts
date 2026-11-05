@@ -87,6 +87,7 @@ export async function createStory(values: StoryRecord): Promise<StoryRecord> {
   const { data, error } = await requireClient().from('tailor_stories').insert(toDatabaseRecord(values)).select('*').single();
   if (error && String(error.message || '').toLowerCase().includes('column')) {
     const legacyValues = { ...values };
+    delete legacyValues.thumbnailUrl;
     delete legacyValues.caption;
     delete legacyValues.viewCount;
     delete legacyValues.likeCount;

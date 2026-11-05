@@ -1697,7 +1697,14 @@ app.post('/api/stories', requireAuth, requireActiveAccount, async (req: Authenti
       likeCount: Number(story.like_count) || 0,
     });
   } catch (error) {
-    console.error('Story upload failed', error);
+    const details = error && typeof error === 'object' ? error as { code?: unknown; details?: unknown; hint?: unknown; message?: unknown } : {};
+    console.error('Story upload failed', {
+      message: details.message || error,
+      code: details.code,
+      details: details.details,
+      hint: details.hint,
+      tailorId: req.authUser!.uid,
+    });
     await deleteUpload(publicId).catch(() => undefined);
     res.status(500).json({ error: 'The story could not be published.' });
   }
