@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, X, ChevronLeft, ChevronRight, LoaderCircle, Trash2, Eye, Heart, Send } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, LoaderCircle, Trash2, Eye, Heart, Send, Play } from 'lucide-react';
 import { TailorStory, User } from '../types';
 import { api } from '../services/api';
 
@@ -72,35 +72,49 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   return (
     <>
       {(currentUser?.role === 'tailor' || groupedStories.length > 0) && (
-      <section aria-label="Tailor stories" className={`overflow-hidden rounded-2xl px-3 py-2 ${groupedStories.length > 0 || currentUser ? 'border border-transparent' : ''}`}>
-        <div className="flex gap-4 overflow-x-auto [scrollbar-width:none]">
+      <section aria-label="Tailor stories" className={`overflow-hidden rounded-2xl border px-3 pb-3 pt-2.5 sm:px-4 ${isDarkMode ? 'border-amber-400/15 bg-[#111214]' : 'border-amber-200 bg-white shadow-sm'}`}>
+        <div className="mb-3 flex items-center justify-between gap-3 px-1">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-amber-300 via-orange-400 to-amber-600 text-neutral-950 shadow-[0_6px_18px_rgba(245,158,11,.28)]"><Play className="h-4 w-4 fill-current" /></span>
+            <div className="min-w-0">
+              <h2 className="font-serif text-sm font-bold leading-tight">Stories</h2>
+              <p className={`text-[9px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-500'}`}>Discover looks from verified merchants</p>
+            </div>
+          </div>
+          {groupedStories.length > 0 && (
+            <button type="button" onClick={() => setActiveTailorId(groupedStories[0][0])} className="shrink-0 rounded-lg border border-amber-400/25 px-3 py-1.5 text-[10px] font-bold text-amber-500">View all</button>
+          )}
+        </div>
+        <div className="flex gap-4 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
           {currentUser?.role === 'tailor' && (
-            <div className="flex min-w-[68px] flex-col items-center gap-1.5 text-center">
-              <span className={`relative grid h-[62px] w-[62px] place-items-center rounded-full border-2 ${canAddStory ? 'border-amber-400' : 'border-neutral-500/60'} bg-neutral-900`}>
-                {uploading ? <LoaderCircle className="h-5 w-5 animate-spin text-amber-400" /> : (
-                  currentUser.avatarUrl
-                    ? <img src={currentUser.avatarUrl} alt="" className="h-full w-full rounded-full object-cover opacity-90" />
-                    : <span className="text-lg font-black text-amber-300">{(currentUser.shopName || currentUser.name || 'T').slice(0, 1).toUpperCase()}</span>
-                )}
+            <div className="flex min-w-[76px] flex-col items-center gap-1.5 text-center">
+              <span className={`relative grid h-[68px] w-[68px] place-items-center rounded-full p-[3px] ${canAddStory ? 'bg-gradient-to-tr from-amber-300 via-yellow-400 to-orange-600 shadow-[0_10px_24px_rgba(245,158,11,.22)]' : 'bg-neutral-700'}`}>
+                <span className="grid h-full w-full place-items-center overflow-hidden rounded-full border-[3px] border-neutral-950 bg-neutral-900">
+                  {uploading ? <LoaderCircle className="h-5 w-5 animate-spin text-amber-400" /> : (
+                    currentUser.avatarUrl
+                      ? <img src={currentUser.avatarUrl} alt="Your story" className="h-full w-full object-cover" />
+                      : <span className="text-lg font-black text-amber-300">{(currentUser.shopName || currentUser.name || 'T').slice(0, 1).toUpperCase()}</span>
+                  )}
+                </span>
                 {canAddStory && <input className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Add a story" type="file" accept="image/*,video/*" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; if (file) openComposer(file); event.target.value = ''; }} />}
                 {!canAddStory && <button type="button" aria-label="Choose a promotion plan to add a story" className="absolute inset-0 rounded-full" onClick={onOpenPlans} />}
-                <span className="absolute bottom-0 right-0 grid h-6 w-6 place-items-center rounded-full border-2 border-neutral-950 bg-amber-400 text-neutral-950"><Plus className="h-4 w-4" strokeWidth={3} /></span>
+                <span className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full border-[3px] border-neutral-950 bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950"><Plus className="h-4 w-4" strokeWidth={3} /></span>
               </span>
-              <span className="w-[68px] truncate text-[11px] font-semibold">Add story</span>
+              <span className="w-[76px] truncate text-[10px] font-bold">Your story</span>
             </div>
           )}
           {groupedStories.map(([tailorId, tailorStories]) => {
             const tailor = userById.get(tailorId);
             return (
-              <button key={tailorId} type="button" onClick={() => setActiveTailorId(tailorId)} className="flex min-w-[68px] flex-col items-center gap-1.5">
-                <span className="rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-fuchsia-500 p-[2px]">
-                  <span className="block rounded-full border-2 border-neutral-950 bg-neutral-900 p-[2px]">
+              <button key={tailorId} type="button" onClick={() => setActiveTailorId(tailorId)} className="flex min-w-[76px] flex-col items-center gap-1.5">
+                <span className="rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
+                  <span className={`block rounded-full border-[3px] p-[2px] ${isDarkMode ? 'border-neutral-950 bg-neutral-900' : 'border-white bg-neutral-100'}`}>
                     {tailor?.avatarUrl
-                      ? <img src={tailor.avatarUrl} alt="" className="h-[54px] w-[54px] rounded-full object-cover" />
-                      : <span className="grid h-[54px] w-[54px] place-items-center rounded-full bg-neutral-800 text-lg font-black text-amber-300">{(tailor?.shopName || tailor?.name || 'T').slice(0, 1).toUpperCase()}</span>}
+                      ? <img src={tailor.avatarUrl} alt="" className="h-[58px] w-[58px] rounded-full object-cover" />
+                      : <span className="grid h-[58px] w-[58px] place-items-center rounded-full bg-neutral-800 text-lg font-black text-amber-300">{(tailor?.shopName || tailor?.name || 'T').slice(0, 1).toUpperCase()}</span>}
                   </span>
                 </span>
-                <span className="w-[68px] truncate text-[11px] font-semibold">{tailor?.shopName || tailor?.name || 'Tailor'}</span>
+                <span className="w-[76px] truncate text-[10px] font-bold">{tailor?.shopName || tailor?.name || 'Tailor'}</span>
               </button>
             );
           })}
@@ -217,15 +231,15 @@ function StoryViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevi
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black" role="dialog" aria-modal="true">
       <div className="relative h-[100dvh] w-full max-w-[430px] overflow-hidden bg-neutral-950">
         <div className="absolute left-3 right-3 top-3 z-20 flex gap-1">
-          {stories.map((item, index) => <span key={item.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/35"><span className={`block h-full bg-white ${index < activeIndex ? 'w-full' : index === activeIndex ? 'animate-[story-progress_8s_linear_forwards]' : 'w-0'}`} /></span>)}
+          {stories.map((item, index) => <span key={item.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/35"><span className={`block h-full bg-gradient-to-r from-amber-300 via-orange-400 to-red-500 shadow-[0_0_8px_rgba(251,191,36,.8)] ${index < activeIndex ? 'w-full' : index === activeIndex ? 'animate-[story-progress_8s_linear_forwards]' : 'w-0'}`}></span></span>)}
         </div>
         {story.mediaType === 'video'
           ? <video key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-contain" onEnded={() => move(1)} />
           : <img key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Tailor'} story`} className="h-full w-full object-contain" />}
         <div className="absolute inset-x-0 top-7 z-20 flex items-center gap-3 px-4">
-          <span className="h-9 w-9 overflow-hidden rounded-full bg-neutral-800">{tailor?.avatarUrl && <img src={tailor.avatarUrl} alt="" className="h-full w-full object-cover" />}</span>
-          <span className="min-w-0 flex-1 truncate text-sm font-bold text-white">{tailor?.shopName || tailor?.name || 'Tailor'}</span>
-          <button type="button" aria-label="Close story" onClick={onClose} className="rounded-full bg-black/40 p-2 text-white"><X className="h-5 w-5" /></button>
+          <span className="h-10 w-10 overflow-hidden rounded-full border-2 border-amber-300 bg-neutral-900 shadow-[0_5px_18px_rgba(0,0,0,.45)]">{tailor?.avatarUrl && <img src={tailor.avatarUrl} alt="" className="h-full w-full object-cover" />}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-bold text-white drop-shadow">{tailor?.shopName || tailor?.name || 'Tailor'}</span>
+          <button type="button" aria-label="Close story" onClick={onClose} className="rounded-full border border-white/10 bg-black/45 p-2 text-amber-300 backdrop-blur-md"><X className="h-5 w-5" /></button>
         </div>
         {story.caption && <p className="absolute bottom-24 left-5 right-5 z-20 rounded-xl bg-black/55 px-3 py-2 text-center text-sm font-semibold text-white backdrop-blur">{story.caption}</p>}
         {owner && (
@@ -233,7 +247,7 @@ function StoryViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevi
             <span className="flex items-center gap-1.5 text-xs"><Eye className="h-4 w-4 text-amber-400" />{story.viewCount} views</span>
             <span className="flex items-center gap-1.5 text-xs"><Heart className="h-4 w-4 text-rose-400" />{story.likeCount}</span>
             <button type="button" onClick={() => void onDelete(story.id)} className="ml-auto rounded-lg bg-red-500/15 p-2 text-red-300" aria-label="Delete story"><Trash2 className="h-4 w-4" /></button>
-            <button type="button" onClick={onAdd} className="rounded-lg bg-amber-400 px-3 py-2 text-xs font-bold text-neutral-950">Add another</button>
+            <button type="button" onClick={onAdd} className="rounded-lg bg-gradient-to-r from-amber-300 to-orange-500 px-3 py-2 text-xs font-bold text-neutral-950">Add another</button>
           </div>
         )}
         {!owner && (
