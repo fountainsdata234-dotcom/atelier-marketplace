@@ -96,6 +96,7 @@ import {
   updateFabricRequest,
   updateAuthorPromotion,
   uploadImage,
+  deleteUpload,
   updateProfile,
   upsertProfile,
   listActiveStories,
@@ -243,11 +244,6 @@ function isLocalNetworkOrigin(origin: string) {
 }
 
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
-});
-
-const storyUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
 });
@@ -1618,6 +1614,7 @@ app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
             resource_type: story.media_type === 'video' ? 'video' : 'image',
             invalidate: true,
           }).catch(() => undefined)));
+            await Promise.all(expired.map(story => deleteUpload(String(story.cloudinary_public_id || '')).catch(() => undefined)));
         }
         await deleteExpiredStoriesByIds(expired.map(story => String(story.id))).catch(error => {
           console.warn('Expired story cleanup failed', error);
@@ -1653,16 +1650,14 @@ app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('media'), async (req: AuthenticatedRequest, res) => {
-  if (!req.file || !req.file.mimetype?.startsWith('image/') && !req.file.mimetype?.startsWith('video/')) {
-    res.status(400).json({ error: 'Upload a photo or video story.' });
+app.post('/api/stories', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const mediaUrl = String(req.body?.mediaUrl || '').trim();
+  const publicId = String(req.body?.cloudinaryPublicId || '').trim();
+  const mediaType = req.body?.mediaType === 'video' ? 'video' : 'image';
+  if (!mediaUrl || !publicId || !/^https?:\/\//i.test(mediaUrl)) {
+    res.status(400).json({ error: 'Upload a photo or video story first.' });
     return;
   }
-  if (!cloudinaryConfigured) {
-    res.status(503).json({ error: 'Story uploads are not configured yet.' });
-    return;
-  }
-  let uploadedPublicId = '';
   try {
     const profile = await readProfile(req.authUser!.uid);
     const promotionExpiry = profile?.promotionExpiresAt ?? profile?.promotion_expires_at;
@@ -1672,27 +1667,13 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
       res.status(403).json({ error: 'Only an active promoted tailor can add a story.' });
       return;
     }
-    const resourceType = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
-    const uploadResult = await new Promise<{ secure_url?: string; public_id?: string }>((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream({
-        folder: 'atelier/stories',
-        resource_type: resourceType === 'video' ? 'video' : 'image',
-        timeout: 180_000,
-        transformation: resourceType === 'image' ? [{ quality: 'auto:good' }] : undefined,
-      }, (error, result) => error ? reject(error) : resolve(result as { secure_url?: string; public_id?: string }));
-      stream.end(req.file!.buffer);
-    });
-    if (!uploadResult.secure_url || !uploadResult.public_id) throw new Error('Cloudinary returned incomplete story data.');
-    uploadedPublicId = uploadResult.public_id;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const story = await createStory({
       tailorId: req.authUser!.uid,
-      mediaUrl: uploadResult.secure_url,
-      thumbnailUrl: resourceType === 'video'
-        ? uploadResult.secure_url.replace('/upload/', '/upload/so_0,w_720,h_1280,c_limit,f_jpg/')
-        : uploadResult.secure_url,
-      mediaType: resourceType,
-      cloudinaryPublicId: uploadResult.public_id,
+      mediaUrl,
+      thumbnailUrl: mediaUrl,
+      mediaType,
+      cloudinaryPublicId: publicId,
       expiresAt,
       caption: String(req.body?.caption || '').trim().slice(0, 280),
     });
@@ -1711,10 +1692,7 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
     });
   } catch (error) {
     console.error('Story upload failed', error);
-    if (uploadedPublicId && cloudinaryConfigured) {
-      const mediaType = req.file?.mimetype.startsWith('video/') ? 'video' : 'image';
-      await cloudinary.uploader.destroy(uploadedPublicId, { resource_type: mediaType, invalidate: true }).catch(() => undefined);
-    }
+    await deleteUpload(publicId).catch(() => undefined);
     res.status(500).json({ error: 'The story could not be published.' });
   }
 });
@@ -1751,6 +1729,7 @@ app.delete('/api/stories/:storyId', requireAuth, requireActiveAccount, async (re
         resource_type: target.media_type === 'video' ? 'video' : 'image',
         invalidate: true,
       }).catch(() => undefined);
+      await deleteUpload(String(target.cloudinary_public_id)).catch(() => undefined);
     }
     res.status(204).send();
   } catch (error) {
@@ -1766,7 +1745,7 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
   }
 
   const requestedFolder = String(req.body?.folder || 'atelier');
-  const safeFolder = ['profiles', 'posts', 'atelier'].includes(requestedFolder) ? requestedFolder : 'atelier';
+  const safeFolder = ['profiles', 'posts', 'atelier', 'stories'].includes(requestedFolder) ? requestedFolder : 'atelier';
   if (safeFolder === 'posts') {
     if (req.authUser?.blocked) {
       res.status(403).json({ error: 'Blocked accounts cannot upload listing images.' });
@@ -1780,6 +1759,16 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
   }
 
   try {
+    if (safeFolder === 'stories' && req.file.mimetype.startsWith('video/')) {
+      if (!['video/mp4', 'video/webm', 'video/quicktime'].includes(req.file.mimetype) || req.file.size > 50 * 1024 * 1024) {
+        res.status(400).json({ error: 'Upload an MP4, WebM, or MOV video up to 50 MB.' });
+        return;
+      }
+      const fileName = `story-${createHash('sha256').update(req.file.buffer).digest('hex')}${req.file.mimetype === 'video/quicktime' ? '.mov' : req.file.mimetype === 'video/webm' ? '.webm' : '.mp4'}`;
+      const uploaded = await uploadImage(req.authUser!.uid, safeFolder, fileName, req.file.buffer, req.file.mimetype);
+      res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.path, mediaType: 'video', mimeType: req.file.mimetype });
+      return;
+    }
     const metadata = await sharp(req.file.buffer, { limitInputPixels: 40_000_000 }).metadata();
     if (!metadata.width || !metadata.height || !['jpeg', 'png', 'webp', 'gif'].includes(metadata.format || '')) {
       res.status(400).json({ error: 'Upload a valid JPEG, PNG, WebP, or GIF image.' });
@@ -1808,6 +1797,7 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
       url: original.url,
       thumbnailUrl: thumbnail.url,
       publicId: original.path,
+      mediaType: 'image',
       width: optimizedMetadata.width,
       height: optimizedMetadata.height,
       mimeType: 'image/jpeg',

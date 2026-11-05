@@ -185,11 +185,22 @@ async function performRequest<T>(
 export const api = {
   getStories: () => request<TailorStory[]>('/api/stories'),
   createStory: async (file: File, caption = '', onProgress?: (progress: number) => void) => {
+    const apiUrl = API_URL;
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
-    formData.append('media', file, file.name);
-    formData.append('caption', caption);
-    return uploadFormDataWithProgress<TailorStory>(`${API_URL}/api/stories`, formData, token, onProgress);
+    formData.append(file.type.startsWith('video/') ? 'image' : 'image', file, file.name);
+    formData.append('folder', 'stories');
+    const uploaded = await uploadFormDataWithProgress<{ url: string; publicId: string; mediaType?: string }>(`${apiUrl}/api/upload`, formData, token, onProgress);
+    if (!uploaded.url || !uploaded.publicId) throw new Error("We couldn't finish uploading your story. Please try again.");
+    return request<TailorStory>('/api/stories', {
+      method: 'POST',
+      body: JSON.stringify({
+        mediaUrl: uploaded.url,
+        cloudinaryPublicId: uploaded.publicId,
+        mediaType: uploaded.mediaType || (file.type.startsWith('video/') ? 'video' : 'image'),
+        caption,
+      }),
+    });
   },
   deleteStory: (storyId: string) => request<void>(`/api/stories/${encodeURIComponent(storyId)}`, { method: 'DELETE' }),
   recordStoryView: (storyId: string) => request<{ viewCount: number }>(`/api/stories/${encodeURIComponent(storyId)}/view`, { method: 'POST' }),

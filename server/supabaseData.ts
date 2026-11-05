@@ -1388,6 +1388,12 @@ export async function uploadImage(userId: string, folder: string, fileName: stri
   return { url: data.publicUrl, path };
 }
 
+export async function deleteUpload(publicId: string): Promise<void> {
+  if (!publicId || publicId.includes('..')) return;
+  const { error } = await requireClient().storage.from('uploads').remove([publicId]);
+  if (error) throw normalizeError(error);
+}
+
 export async function deleteUserUploads(userId: string): Promise<void> {
   const storage = requireClient().storage.from('uploads');
   const pendingFolders = ['profiles', 'posts', 'atelier'].map(folder => `${folder}/${userId}`);
