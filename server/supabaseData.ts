@@ -108,6 +108,42 @@ export async function deleteExpiredStoriesByIds(ids: string[]): Promise<void> {
   if (error) throw normalizeError(error);
 }
 
+export async function recordStoryView(storyId: string, userId: string): Promise<number> {
+  await requireClient().from('tailor_story_views').upsert({ story_id: storyId, user_id: userId }, { onConflict: 'story_id,user_id' });
+  const { count, error } = await requireClient().from('tailor_story_views').select('user_id', { count: 'exact', head: true }).eq('story_id', storyId);
+  if (error) throw normalizeError(error);
+  return count || 0;
+}
+
+export async function toggleStoryLike(storyId: string, userId: string): Promise<{ isLiked: boolean; likeCount: number }> {
+  const supabase = requireClient();
+  const { data: existing } = await supabase.from('tailor_story_likes').select('story_id').eq('story_id', storyId).eq('user_id', userId).maybeSingle();
+  if (existing) await supabase.from('tailor_story_likes').delete().eq('story_id', storyId).eq('user_id', userId);
+  else await supabase.from('tailor_story_likes').insert({ story_id: storyId, user_id: userId });
+  const { count, error } = await supabase.from('tailor_story_likes').select('user_id', { count: 'exact', head: true }).eq('story_id', storyId);
+  if (error) throw normalizeError(error);
+  return { isLiked: !existing, likeCount: count || 0 };
+}
+
+export async function getStoryCounts(storyIds: string[], userId?: string): Promise<Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>> {
+  const supabase = requireClient();
+  const [views, likes, viewerLikes] = await Promise.all([
+    supabase.from('tailor_story_views').select('story_id'),
+    supabase.from('tailor_story_likes').select('story_id'),
+    userId ? supabase.from('tailor_story_likes').select('story_id').eq('user_id', userId).in('story_id', storyIds) : Promise.resolve({ data: [] as { story_id: string }[] }),
+  ]);
+  if (views.error) throw normalizeError(views.error);
+  if (likes.error) throw normalizeError(likes.error);
+  if ('error' in viewerLikes && viewerLikes.error) throw normalizeError(viewerLikes.error);
+  const result = new Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>();
+  storyIds.forEach(storyId => result.set(storyId, {
+    viewCount: (views.data || []).filter(row => String(row.story_id) === storyId).length,
+    likeCount: (likes.data || []).filter(row => String(row.story_id) === storyId).length,
+    likedByViewer: (viewerLikes.data || []).some(row => String(row.story_id) === storyId),
+  }));
+  return result;
+}
+
 export async function getProfile(uid: string): Promise<ProfileRecord | null> {
   const { data, error } = await requireClient().from('profiles').select('*').eq('id', uid).maybeSingle();
   if (error) throw normalizeError(error);

@@ -184,13 +184,16 @@ async function performRequest<T>(
 
 export const api = {
   getStories: () => request<TailorStory[]>('/api/stories'),
-  createStory: async (file: File, onProgress?: (progress: number) => void) => {
+  createStory: async (file: File, caption = '', onProgress?: (progress: number) => void) => {
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
     formData.append('media', file, file.name);
+    formData.append('caption', caption);
     return uploadFormDataWithProgress<TailorStory>(`${API_URL}/api/stories`, formData, token, onProgress);
   },
   deleteStory: (storyId: string) => request<void>(`/api/stories/${encodeURIComponent(storyId)}`, { method: 'DELETE' }),
+  recordStoryView: (storyId: string) => request<{ viewCount: number }>(`/api/stories/${encodeURIComponent(storyId)}/view`, { method: 'POST' }),
+  toggleStoryLike: (storyId: string) => request<{ isLiked: boolean; likeCount: number }>(`/api/stories/${encodeURIComponent(storyId)}/like`, { method: 'POST' }),
   initializePaystackPayment: (planId: string) => request<{ authorizationUrl: string; reference: string }>('/api/paystack/initialize', {
     method: 'POST',
     body: JSON.stringify({ planId }),

@@ -11,7 +11,24 @@ create table if not exists public.tailor_stories (
   media_type text not null check (media_type in ('image', 'video')),
   cloudinary_public_id text not null,
   created_at timestamptz not null default now(),
-  expires_at timestamptz not null default (now() + interval '24 hours')
+  expires_at timestamptz not null default (now() + interval '24 hours'),
+  caption text not null default '',
+  view_count integer not null default 0,
+  like_count integer not null default 0
+);
+
+create table if not exists public.tailor_story_likes (
+  story_id uuid not null references public.tailor_stories(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (story_id, user_id)
+);
+
+create table if not exists public.tailor_story_views (
+  story_id uuid not null references public.tailor_stories(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  viewed_at timestamptz not null default now(),
+  primary key (story_id, user_id)
 );
 
 create index if not exists tailor_stories_active_idx

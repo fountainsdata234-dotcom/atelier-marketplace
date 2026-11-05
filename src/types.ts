@@ -129,6 +129,10 @@ export interface TailorStory {
   cloudinaryPublicId: string;
   createdAt: string;
   expiresAt: string;
+  caption?: string;
+  viewCount: number;
+  likeCount: number;
+  likedByViewer?: boolean;
 }
 
 export interface PromotionTargeting {

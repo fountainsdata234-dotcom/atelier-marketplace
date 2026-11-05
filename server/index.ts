@@ -103,6 +103,9 @@ import {
   deleteStory,
   listExpiredStories,
   deleteExpiredStoriesByIds,
+  recordStoryView,
+  toggleStoryLike,
+  getStoryCounts,
   type ProfileRecord,
 } from './supabaseData.js';
 
@@ -1605,7 +1608,7 @@ app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest,
   res.status(204).send();
 });
 
-app.get('/api/stories', async (_req, res) => {
+app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
   try {
     const expired = await listExpiredStories();
     if (expired.length) {
@@ -1618,6 +1621,7 @@ app.get('/api/stories', async (_req, res) => {
       await deleteExpiredStoriesByIds(expired.map(story => String(story.id)));
     }
     const stories = await listActiveStories();
+    const counts = await getStoryCounts(stories.map(story => String(story.id)), req.authUser?.uid);
     res.json(stories.map(story => ({
       id: String(story.id),
       tailorId: String(story.tailor_id),
@@ -1627,6 +1631,10 @@ app.get('/api/stories', async (_req, res) => {
       cloudinaryPublicId: String(story.cloudinary_public_id),
       createdAt: String(story.created_at),
       expiresAt: String(story.expires_at),
+      caption: String(story.caption || ''),
+      viewCount: counts.get(String(story.id))?.viewCount || Number(story.view_count) || 0,
+      likeCount: counts.get(String(story.id))?.likeCount || Number(story.like_count) || 0,
+      likedByViewer: counts.get(String(story.id))?.likedByViewer || false,
     })));
   } catch (error) {
     console.error('Story list failed', error);
@@ -1672,6 +1680,7 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
       mediaType: resourceType,
       cloudinaryPublicId: uploadResult.public_id,
       expiresAt,
+      caption: String(req.body?.caption || '').trim().slice(0, 280),
     });
     res.status(201).json({
       id: String(story.id),
@@ -1682,10 +1691,31 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
       cloudinaryPublicId: String(story.cloudinary_public_id),
       createdAt: String(story.created_at),
       expiresAt: String(story.expires_at),
+      caption: String(story.caption || ''),
+      viewCount: Number(story.view_count) || 0,
+      likeCount: Number(story.like_count) || 0,
     });
   } catch (error) {
     console.error('Story upload failed', error);
     res.status(500).json({ error: 'The story could not be published.' });
+  }
+});
+
+app.post('/api/stories/:storyId/view', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  try {
+    res.json({ viewCount: await recordStoryView(String(req.params.storyId), req.authUser!.uid) });
+  } catch (error) {
+    console.error('Story view failed', error);
+    res.status(500).json({ error: 'The story view could not be recorded.' });
+  }
+});
+
+app.post('/api/stories/:storyId/like', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  try {
+    res.json(await toggleStoryLike(String(req.params.storyId), req.authUser!.uid));
+  } catch (error) {
+    console.error('Story like failed', error);
+    res.status(500).json({ error: 'The story reaction could not be updated.' });
   }
 });
 
