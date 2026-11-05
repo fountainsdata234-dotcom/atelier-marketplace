@@ -16,7 +16,7 @@ import { SearchableLocationField } from './SearchableLocationField';
 import { PostImage } from './PostImage';
 import { ContentSkeleton } from './ContentSkeleton';
 import { useTypingText } from '../hooks/useTypingText';
-import { StoryRail } from './StoryRail';
+import { PromotedTailorRail, StoryRail } from './StoryRail';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -1828,6 +1828,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       ) : (
         <div className="marketplace-masonry grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3">
           {visiblePosts.map((post, postIndex) => {
+            const daySeed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+            const railInterval = 5 + ((daySeed * 7 + Math.max(0, visiblePosts.length) * 3) % 6);
+            const shouldShowPromotedRail = postIndex > 0 && postIndex % railInterval === 0;
             const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
             const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
             const likeCount = post.likeCount ?? post.likes.length;
@@ -1855,6 +1858,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
             return (
               <React.Fragment key={post.id}>
+              {shouldShowPromotedRail && (
+                <PromotedTailorRail users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
+              )}
               <motion.article
                 data-marketplace-listing-id={post.id}
                 data-marketplace-seller-id={post.authorId}
