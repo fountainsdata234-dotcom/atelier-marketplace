@@ -216,10 +216,17 @@ function StoryViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevi
   onAdd: () => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const story = stories[activeIndex];
   useEffect(() => {
+    setIsPaused(false);
     void api.recordStoryView(story.id).catch(() => undefined);
   }, [story.id]);
+  useEffect(() => {
+    if (isPaused || story.mediaType === 'video') return;
+    const timer = window.setTimeout(() => move(1), 7000);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, isPaused, story.mediaType, story.id]);
   const move = (direction: number) => {
     if (direction < 0 && activeIndex > 0) setActiveIndex(index => index - 1);
     else if (direction > 0 && activeIndex < stories.length - 1) setActiveIndex(index => index + 1);
@@ -227,8 +234,8 @@ function StoryViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevi
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black" role="dialog" aria-modal="true">
-      <div className="relative h-[100dvh] w-full max-w-[430px] overflow-hidden bg-neutral-950">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-start justify-center bg-black/95 px-0 pt-[12dvh] sm:px-6 sm:pt-[14dvh]" role="dialog" aria-modal="true">
+      <div className="relative aspect-[16/10] w-full max-h-[68dvh] overflow-hidden bg-neutral-950 shadow-[0_24px_80px_rgba(0,0,0,.65)] sm:max-w-[980px] sm:rounded-2xl">
         <div className="absolute left-3 right-3 top-3 z-20 flex gap-1">
           {stories.map((item, index) => <span key={item.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/35"><span className={`block h-full bg-gradient-to-r from-amber-300 via-orange-400 to-red-500 shadow-[0_0_8px_rgba(251,191,36,.8)] ${index < activeIndex ? 'w-full' : index === activeIndex ? 'animate-[story-progress_8s_linear_forwards]' : 'w-0'}`}></span></span>)}
         </div>
@@ -263,8 +270,9 @@ function StoryViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevi
             <Heart className="h-5 w-5" fill={story.likedByViewer ? 'currentColor' : 'none'} />
           </button>
         )}
-        <button type="button" aria-label="Previous story" onClick={() => move(-1)} className="absolute inset-y-20 left-0 w-[38%]"><ChevronLeft className="sr-only" /></button>
-        <button type="button" aria-label="Next story" onClick={() => move(1)} className="absolute inset-y-20 right-0 w-[38%]"><ChevronRight className="sr-only" /></button>
+        <button type="button" aria-label="Previous story" onClick={() => move(-1)} className="absolute left-2 top-1/2 z-40 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur sm:left-4 sm:h-12 sm:w-12"><ChevronLeft className="h-5 w-5" /></button>
+        <button type="button" aria-label="Next story" onClick={() => move(1)} className="absolute right-2 top-1/2 z-40 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur sm:right-4 sm:h-12 sm:w-12"><ChevronRight className="h-5 w-5" /></button>
+        <button type="button" aria-label={isPaused ? 'Resume story' : 'Pause story'} onClick={() => setIsPaused(paused => !paused)} className="absolute bottom-3 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/15 bg-black/55 px-3 py-1.5 text-[10px] font-bold text-white backdrop-blur sm:bottom-4">{isPaused ? 'Play' : 'Pause'}</button>
       </div>
       <style>{`@keyframes story-progress { from { width: 0%; } to { width: 100%; } }`}</style>
     </motion.div>
