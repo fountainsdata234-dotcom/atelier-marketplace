@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Bot, Scissors, Trash2, Search, X, Flag, Activity, Database, Cloud, Gauge } from 'lucide-react';
+import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Bot, Scissors, Trash2, Search, X, Flag, Activity, Database, Cloud, Gauge, Camera } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, MarketplaceAbuseFlag } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
@@ -721,6 +721,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Tab Navigation */}
         <div className={`${isLuminaPage ? 'hidden' : ''} flex flex-wrap gap-2 mt-6 pt-4 border-t border-amber-500/20 text-xs font-medium`}>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'marketplace' } }));
+              window.setTimeout(() => window.dispatchEvent(new Event('atelier_open_story_composer')), 350);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-300 to-orange-500 text-neutral-950 font-bold shadow cursor-pointer"
+          ><Camera className="mr-1.5 inline h-3.5 w-3.5" />Post a story</button>
           <button
             onClick={() => setActiveTab('sellers')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${

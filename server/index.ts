@@ -1669,8 +1669,8 @@ app.post('/api/stories', requireAuth, requireActiveAccount, async (req: Authenti
     const promotionExpiry = profile?.promotionExpiresAt ?? profile?.promotion_expires_at;
     const promotionValid = profile?.isPromoted === true
       && (promotionExpiry == null || new Date(String(promotionExpiry)).getTime() > Date.now());
-    if (profile?.role !== 'tailor' || !promotionValid) {
-      res.status(403).json({ error: 'Only an active promoted tailor can add a story.' });
+    if (profile?.role !== 'admin' && (profile?.role !== 'tailor' || !promotionValid)) {
+      res.status(403).json({ error: 'Only an admin or active promoted tailor can add a story.' });
       return;
     }
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();

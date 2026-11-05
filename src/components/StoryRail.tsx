@@ -41,16 +41,20 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
 
   const groupedStories = useMemo(() => {
     const groups = new Map<string, TailorStory[]>();
-    stories.forEach(story => groups.set(story.tailorId, [...(groups.get(story.tailorId) || []), story]));
+    [...stories]
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+      .forEach(story => groups.set(story.tailorId, [...(groups.get(story.tailorId) || []), story]));
     return [...groups.entries()].filter(([tailorId]) => {
       const user = userById.get(tailorId);
-      return user?.role === 'tailor' && user.isPromoted && (!user.promotionExpiresAt || new Date(user.promotionExpiresAt).getTime() > Date.now());
+      const isPromotedTailor = user?.role === 'tailor' && user.isPromoted && (!user.promotionExpiresAt || new Date(user.promotionExpiresAt).getTime() > Date.now());
+      return isPromotedTailor || user?.role === 'admin';
     });
   }, [stories, userById]);
 
-  const canAddStory = currentUser?.role === 'tailor'
-    && currentUser.isPromoted
-    && (!currentUser.promotionExpiresAt || new Date(currentUser.promotionExpiresAt).getTime() > Date.now());
+  const canAddStory = currentUser?.role === 'admin'
+    || (currentUser?.role === 'tailor'
+      && currentUser.isPromoted
+      && (!currentUser.promotionExpiresAt || new Date(currentUser.promotionExpiresAt).getTime() > Date.now()));
   const activeIndex = activeTailorId ? groupedStories.findIndex(([tailorId]) => tailorId === activeTailorId) : -1;
   const activeStories = activeTailorId ? groupedStories.find(([tailorId]) => tailorId === activeTailorId)?.[1] || [] : [];
   const openComposer = (file: File) => {
@@ -88,7 +92,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
               <p className={`text-[9px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-500'}`}>Discover looks from verified merchants</p>
             </div>
           </div>
-          {currentUser?.role === 'tailor' && (
+          {(currentUser?.role === 'tailor' || currentUser?.role === 'admin') && (
             canAddStory ? (
               <button type="button" onClick={() => storyFileInputRef.current?.click()} className="shrink-0 rounded-full bg-gradient-to-r from-amber-300 to-orange-500 px-3 py-1.5 text-[10px] font-extrabold text-neutral-950"><Plus className="mr-1 inline h-3 w-3" strokeWidth={3} />Post a story</button>
             ) : (
@@ -103,13 +107,13 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
             return (
               <button key={tailorId} type="button" onClick={() => setActiveTailorId(tailorId)} className="flex min-w-[76px] flex-col items-center gap-1.5">
                 <span className="rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
-                  <span className={`block rounded-full border-[3px] p-[2px] ${isDarkMode ? 'border-neutral-950 bg-neutral-900' : 'border-white bg-neutral-100'}`}>
-                    {tailor?.avatarUrl
-                      ? <img src={tailor.avatarUrl} alt="" className="h-[58px] w-[58px] rounded-full object-cover" />
-                      : <span className="grid h-[58px] w-[58px] place-items-center rounded-full bg-neutral-800 text-lg font-black text-amber-300">{(tailor?.shopName || tailor?.name || 'T').slice(0, 1).toUpperCase()}</span>}
+                  <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
+                    {tailorStories[0].mediaType === 'video'
+                      ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                      : <img src={tailorStories[0].mediaUrl} alt="" className="h-full w-full object-cover" />}
                   </span>
                 </span>
-                <span className="w-[76px] truncate text-[10px] font-bold">{tailor?.shopName || tailor?.name || 'Tailor'}</span>
+                <span className="w-[76px] truncate text-[10px] font-bold">@{tailor?.handle || tailor?.shopName || tailor?.name || 'merchant'}</span>
               </button>
             );
           })}
@@ -229,16 +233,20 @@ function StoryViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevi
           {stories.map((item, index) => <span key={item.id} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/35"><span className={`block h-full bg-gradient-to-r from-amber-300 via-orange-400 to-red-500 shadow-[0_0_8px_rgba(251,191,36,.8)] ${index < activeIndex ? 'w-full' : index === activeIndex ? 'animate-[story-progress_8s_linear_forwards]' : 'w-0'}`}></span></span>)}
         </div>
         {story.mediaType === 'video'
-          ? <video key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-contain" onEnded={() => move(1)} />
-          : <img key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Tailor'} story`} className="h-full w-full object-contain" />}
+          ? <video key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-cover" onEnded={() => move(1)} />
+          : <img key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Tailor'} story`} className="h-full w-full object-cover" />}
         <div className="absolute inset-x-0 top-7 z-20 flex items-center gap-3 px-4">
-          <span className="h-10 w-10 overflow-hidden rounded-full border-2 border-amber-300 bg-neutral-900 shadow-[0_5px_18px_rgba(0,0,0,.45)]">{tailor?.avatarUrl && <img src={tailor.avatarUrl} alt="" className="h-full w-full object-cover" />}</span>
-          <span className="min-w-0 flex-1 truncate text-sm font-bold text-white drop-shadow">{tailor?.shopName || tailor?.name || 'Tailor'}</span>
+          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-amber-300 bg-neutral-900 text-xs font-bold text-amber-300">
+            {tailor?.avatarUrl
+              ? <img src={tailor.avatarUrl} alt="" className="h-full w-full object-cover" />
+              : (tailor?.shopName || tailor?.name || '@').slice(0, 1).toUpperCase()}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm font-bold text-white drop-shadow">@{tailor?.handle || tailor?.shopName || tailor?.name || 'merchant'}</span>
           <button type="button" aria-label="Close story" onClick={onClose} className="rounded-full border border-white/10 bg-black/45 p-2 text-amber-300 backdrop-blur-md"><X className="h-5 w-5" /></button>
         </div>
         {story.caption && <p className="absolute bottom-24 left-5 right-5 z-20 rounded-xl bg-black/55 px-3 py-2 text-center text-sm font-semibold text-white backdrop-blur">{story.caption}</p>}
         {owner && (
-          <div className="absolute bottom-6 left-4 right-4 z-30 flex items-center gap-2 rounded-2xl bg-neutral-950/90 p-3 text-white backdrop-blur">
+          <div className="absolute bottom-6 left-3 right-3 z-30 flex items-center gap-2 rounded-2xl border border-white/10 bg-neutral-950/95 p-2.5 text-white shadow-2xl backdrop-blur-md sm:left-4 sm:right-4 sm:p-3">
             <span className="flex items-center gap-1.5 text-xs"><Eye className="h-4 w-4 text-amber-400" />{story.viewCount} views</span>
             <span className="flex items-center gap-1.5 text-xs"><Heart className="h-4 w-4 text-rose-400" />{story.likeCount}</span>
             <button type="button" onClick={() => void onDelete(story.id)} className="ml-auto rounded-lg bg-red-500/15 p-2 text-red-300" aria-label="Delete story"><Trash2 className="h-4 w-4" /></button>
