@@ -1168,6 +1168,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         currentUser={currentUser}
         isDarkMode={isDarkMode}
         onOpenPlans={onOpenPromotionPlans}
+        onSelectSeller={onSelectSeller}
       />
 
       <section aria-label="Marketplace discovery views" className={`rounded-2xl border p-3 sm:p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>

@@ -330,7 +330,7 @@ export const rankMarketplaceListings = (
     } else {
       takeEligible(organic, false);
     }
-    if (ordered.length % 5 === 0 && sponsored.length) takeEligible(sponsored, false);
+    if ((ordered.length === 0 || ordered.length % 4 === 0) && sponsored.length) takeEligible(sponsored, false);
     if (ordered.length === before) {
       if (organic.length) takeEligible(organic, false);
       else if (sponsored.length) takeEligible(sponsored, false);

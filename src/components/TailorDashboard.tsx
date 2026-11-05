@@ -1007,7 +1007,8 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                     </div>
                     <h3 className="mb-2 text-xl font-serif font-bold">Promoted Tailor Visibility</h3>
                     <ul className={`mb-4 space-y-2 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>
-                      <li>• Priority placement among promoted listings in marketplace discovery.</li>
+                      <li>• Promoted listings appear more frequently in marketplace discovery.</li>
+                      <li>• Your atelier portrait appears in the promoted-tailors rail on the marketplace.</li>
                       <li>• A “Promoted” badge on your listings and tailor profile.</li>
                       <li>• Access to share 24-hour photo and video stories.</li>
                       <li>• Up to 10 collection slots, plus any slots you purchase.</li>
