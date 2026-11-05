@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Scissors, Sparkles, Upload, Image as ImageIcon, Share2, Star, AlertTriangle, CheckCircle, Trash2, Heart, Bookmark, Phone, MessageSquare, DollarSign, Tag, Clock, Eye, Pause, Archive, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Scissors, Sparkles, Upload, Image as ImageIcon, Share2, Star, AlertTriangle, CheckCircle, Trash2, Heart, Bookmark, Phone, MessageSquare, DollarSign, Tag, Clock, Eye, Pause, Archive, RotateCcw, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, FabricRequest, ListingImageAsset, ListingType } from '../types';
 import { compressAndGenerateImageLink, ProcessedImageResult } from '../utils/imageProgram';
 import { storageService } from '../services/storage';
@@ -733,6 +733,10 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 <button type="button" onClick={() => setActiveStudioTab('posts')} className="flex w-full items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-left text-sm font-medium text-amber-200">
                   <span>Publish a new post</span>
                   <Scissors className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => { window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'marketplace' } })); window.setTimeout(() => window.dispatchEvent(new Event('atelier_open_story_composer')), 350); }} className="flex w-full items-center justify-between rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-3 text-left text-sm font-medium text-orange-200">
+                  <span>Post a story</span>
+                  <Camera className="h-4 w-4" />
                 </button>
                 <button type="button" onClick={() => setActiveStudioTab('plans')} className="flex w-full items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 text-left text-sm font-medium text-emerald-200">
                   <span>View promotion plans</span>

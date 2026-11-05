@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, X, ChevronLeft, ChevronRight, LoaderCircle, Trash2, Eye, Heart, Send, Play } from 'lucide-react';
 import { TailorStory, User } from '../types';
@@ -20,6 +20,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [draftUrl, setDraftUrl] = useState('');
   const [draftCaption, setDraftCaption] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const storyFileInputRef = useRef<HTMLInputElement>(null);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
 
   const loadStories = () => {
@@ -27,6 +28,12 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   };
 
   useEffect(loadStories, []);
+
+  useEffect(() => {
+    const openStoryPicker = () => storyFileInputRef.current?.click();
+    window.addEventListener('atelier_open_story_composer', openStoryPicker);
+    return () => window.removeEventListener('atelier_open_story_composer', openStoryPicker);
+  }, []);
 
   useEffect(() => () => {
     if (draftUrl) URL.revokeObjectURL(draftUrl);
@@ -81,28 +88,16 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
               <p className={`text-[9px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-500'}`}>Discover looks from verified merchants</p>
             </div>
           </div>
-          {groupedStories.length > 0 && (
-            <button type="button" onClick={() => setActiveTailorId(groupedStories[0][0])} className="shrink-0 rounded-lg border border-amber-400/25 px-3 py-1.5 text-[10px] font-bold text-amber-500">View all</button>
+          {currentUser?.role === 'tailor' && (
+            canAddStory ? (
+              <button type="button" onClick={() => storyFileInputRef.current?.click()} className="shrink-0 rounded-full bg-gradient-to-r from-amber-300 to-orange-500 px-3 py-1.5 text-[10px] font-extrabold text-neutral-950"><Plus className="mr-1 inline h-3 w-3" strokeWidth={3} />Post a story</button>
+            ) : (
+              <button type="button" onClick={onOpenPlans} className="shrink-0 rounded-full border border-amber-400/30 px-3 py-1.5 text-[10px] font-bold text-amber-500">Unlock stories</button>
+            )
           )}
         </div>
-        <div className="flex gap-4 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
-          {currentUser?.role === 'tailor' && (
-            <div className="flex min-w-[76px] flex-col items-center gap-1.5 text-center">
-              <span className={`relative grid h-[68px] w-[68px] place-items-center rounded-full p-[3px] ${canAddStory ? 'bg-gradient-to-tr from-amber-300 via-yellow-400 to-orange-600 shadow-[0_10px_24px_rgba(245,158,11,.22)]' : 'bg-neutral-700'}`}>
-                <span className="grid h-full w-full place-items-center overflow-hidden rounded-full border-[3px] border-neutral-950 bg-neutral-900">
-                  {uploading ? <LoaderCircle className="h-5 w-5 animate-spin text-amber-400" /> : (
-                    currentUser.avatarUrl
-                      ? <img src={currentUser.avatarUrl} alt="Your story" className="h-full w-full object-cover" />
-                      : <span className="text-lg font-black text-amber-300">{(currentUser.shopName || currentUser.name || 'T').slice(0, 1).toUpperCase()}</span>
-                  )}
-                </span>
-                {canAddStory && <input className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Add a story" type="file" accept="image/*,video/*" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; if (file) openComposer(file); event.target.value = ''; }} />}
-                {!canAddStory && <button type="button" aria-label="Choose a promotion plan to add a story" className="absolute inset-0 rounded-full" onClick={onOpenPlans} />}
-                <span className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full border-[3px] border-neutral-950 bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950"><Plus className="h-4 w-4" strokeWidth={3} /></span>
-              </span>
-              <span className="w-[76px] truncate text-[10px] font-bold">Your story</span>
-            </div>
-          )}
+        <input ref={storyFileInputRef} className="hidden" aria-label="Add a story" type="file" accept="image/*,video/*" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; if (file) openComposer(file); event.target.value = ''; }} />
+        <div className="flex snap-x gap-3.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:gap-4">
           {groupedStories.map(([tailorId, tailorStories]) => {
             const tailor = userById.get(tailorId);
             return (
@@ -133,7 +128,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
               loadStories();
               setActiveTailorId(null);
             }}
-            onAdd={() => document.querySelector<HTMLInputElement>('input[aria-label="Add a story"]')?.click()}
+            onAdd={() => storyFileInputRef.current?.click()}
             onClose={() => setActiveTailorId(null)}
             onPrevious={() => setActiveTailorId(groupedStories[Math.max(0, activeIndex - 1)]?.[0] || null)}
             onNext={() => setActiveTailorId(groupedStories[Math.min(groupedStories.length - 1, activeIndex + 1)]?.[0] || null)}
