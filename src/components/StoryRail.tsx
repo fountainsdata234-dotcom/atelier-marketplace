@@ -38,13 +38,6 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     && (!currentUser.promotionExpiresAt || new Date(currentUser.promotionExpiresAt).getTime() > Date.now());
   const activeIndex = activeTailorId ? groupedStories.findIndex(([tailorId]) => tailorId === activeTailorId) : -1;
   const activeStories = activeTailorId ? groupedStories.find(([tailorId]) => tailorId === activeTailorId)?.[1] || [] : [];
-  const promotedTailors = users.filter(user =>
-    user.role === 'tailor'
-    && !user.isBlocked
-    && user.isPromoted
-    && (!user.promotionExpiresAt || new Date(user.promotionExpiresAt).getTime() > Date.now()),
-  );
-
   const uploadStory = async (file: File) => {
     if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) return;
     setUploading(true);
@@ -58,32 +51,8 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
 
   return (
     <>
-      {promotedTailors.length > 0 && (
-        <section aria-label="Promoted tailors" className={`rounded-2xl border px-3 py-3 ${isDarkMode ? 'border-amber-500/20 bg-[#121316]/90' : 'border-amber-200 bg-white shadow-sm'}`}>
-          <div className="mb-3 flex items-center justify-between px-1">
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-500">Featured ateliers</p>
-              <h2 className="text-sm font-serif font-bold">Promoted Tailors</h2>
-            </div>
-            <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-500">Discover</span>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none]">
-            {promotedTailors.map(tailor => (
-              <button key={tailor.id} type="button" onClick={() => onSelectSeller(tailor)} className="flex min-w-[76px] flex-col items-center gap-1.5">
-                <span className="rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-yellow-200 p-[2px] shadow-[0_8px_20px_rgba(245,158,11,.18)]">
-                  <span className="block rounded-full border-2 border-neutral-950 bg-neutral-900 p-[2px]">
-                    {tailor.avatarUrl
-                      ? <img src={tailor.avatarUrl} alt={`${tailor.shopName || tailor.name} profile`} className="h-[58px] w-[58px] rounded-full object-cover" />
-                      : <span className="grid h-[58px] w-[58px] place-items-center rounded-full bg-neutral-800 text-lg font-black text-amber-300">{(tailor.shopName || tailor.name || 'T').slice(0, 1).toUpperCase()}</span>}
-                  </span>
-                </span>
-                <span className="w-[76px] truncate text-[10px] font-semibold">{tailor.shopName || tailor.name}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-      <section aria-label="Tailor stories" className={`overflow-hidden rounded-2xl border px-3 py-3 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/90' : 'border-neutral-200 bg-white shadow-sm'}`}>
+      {(currentUser?.role === 'tailor' || groupedStories.length > 0) && (
+      <section aria-label="Tailor stories" className={`overflow-hidden rounded-2xl px-3 py-2 ${groupedStories.length > 0 || currentUser ? 'border border-transparent' : ''}`}>
         <div className="flex gap-4 overflow-x-auto [scrollbar-width:none]">
           {currentUser?.role === 'tailor' && (
             <div className="flex min-w-[68px] flex-col items-center gap-1.5 text-center">
@@ -117,6 +86,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
           })}
         </div>
       </section>
+      )}
 
       <AnimatePresence>
         {activeTailorId && activeStories.length > 0 && (
@@ -130,6 +100,45 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+export function PromotedTailorRail({ users, isDarkMode, onSelectSeller }: {
+  users: User[];
+  isDarkMode: boolean;
+  onSelectSeller: (user: User) => void;
+}) {
+  const promotedTailors = users.filter(user =>
+    user.role === 'tailor'
+    && !user.isBlocked
+    && user.isPromoted
+    && (!user.promotionExpiresAt || new Date(user.promotionExpiresAt).getTime() > Date.now()),
+  );
+  if (!promotedTailors.length) return null;
+
+  return (
+    <section aria-label="Promoted tailors" className={`col-span-full rounded-2xl border px-3 py-3 ${isDarkMode ? 'border-amber-500/20 bg-[#121316]/90' : 'border-amber-200 bg-white shadow-sm'}`}>
+      <div className="mb-3 flex items-center justify-between px-1">
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-500">Featured ateliers</p>
+          <h2 className="text-sm font-serif font-bold">Promoted Tailors</h2>
+        </div>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none]">
+        {promotedTailors.map(tailor => (
+          <button key={tailor.id} type="button" onClick={() => onSelectSeller(tailor)} className="flex min-w-[76px] flex-col items-center gap-1.5">
+            <span className="rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-yellow-200 p-[2px] shadow-[0_8px_20px_rgba(245,158,11,.18)]">
+              <span className="block rounded-full border-2 border-neutral-950 bg-neutral-900 p-[2px]">
+                {tailor.avatarUrl
+                  ? <img src={tailor.avatarUrl} alt={`${tailor.shopName || tailor.name} profile`} className="h-[58px] w-[58px] rounded-full object-cover" />
+                  : <span className="grid h-[58px] w-[58px] place-items-center rounded-full bg-neutral-800 text-lg font-black text-amber-300">{(tailor.shopName || tailor.name || 'T').slice(0, 1).toUpperCase()}</span>}
+              </span>
+            </span>
+            <span className="w-[76px] truncate text-[10px] font-semibold">{tailor.shopName || tailor.name}</span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

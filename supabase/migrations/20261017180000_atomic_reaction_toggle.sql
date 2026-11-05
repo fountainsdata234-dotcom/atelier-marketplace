@@ -45,8 +45,13 @@ begin
     end if;
   end if;
 
-  select like_count, save_count into v_like_count, v_save_count
-  from public.posts where id = p_post_id;
+  select count(*)::integer into v_like_count
+  from public.post_likes where post_id = p_post_id;
+  select count(*)::integer into v_save_count
+  from public.post_saves where post_id = p_post_id;
+  update public.posts
+  set like_count = v_like_count, save_count = v_save_count, updated_at = now()
+  where id = p_post_id;
   return jsonb_build_object(
     'isActive', not v_active,
     'likesCount', coalesce(v_like_count, 0),
