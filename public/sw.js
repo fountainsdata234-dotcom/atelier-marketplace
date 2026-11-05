@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fabsattire-v17';
+const CACHE_NAME = 'fabsattire-shell-v18';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
@@ -7,10 +7,9 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
-      .then(() => self.registration.unregister())
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith('fabsattire-') && key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.matchAll({ type: 'window' }))
-      .then((clients) => clients.forEach((client) => client.navigate(client.url)))
+      .then((clients) => clients.forEach((client) => client.postMessage({ type: 'FABSATTIRE_SW_READY' })))
   );
 });
 
