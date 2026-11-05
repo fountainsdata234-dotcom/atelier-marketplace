@@ -986,9 +986,9 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-amber-400" />
-                  <h2 className="text-xl font-serif font-bold">Promotion & Premium Plans</h2>
+                  <h2 className="text-xl font-serif font-bold">Get More Eyes on Your Atelier</h2>
                 </div>
-                <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Boost studio visibility, priority ranking, and direct buyer attention through a clean promotion dashboard.</p>
+                <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Choose how long you want the same premium promotion package to work for your business.</p>
               </div>
             </div>
             {currentUser.isPromoted && currentUser.promotionExpiresAt && (
@@ -1005,8 +1005,13 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                       <span className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white" style={{ backgroundColor: plan.accentColor || '#d97706' }}>{plan.badgeLabel}</span>
                       <span className="flex items-center gap-1 text-xs text-neutral-400 font-mono"><Clock className="h-3 w-3 text-amber-500" />{plan.timeRange}</span>
                     </div>
-                    <h3 className="mb-2 text-xl font-serif font-bold">{plan.caption}</h3>
-                    <p className={`mb-4 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>{plan.description}</p>
+                    <h3 className="mb-2 text-xl font-serif font-bold">Promoted Tailor Visibility</h3>
+                    <ul className={`mb-4 space-y-2 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>
+                      <li>• Priority placement among promoted listings in marketplace discovery.</li>
+                      <li>• A “Promoted” badge on your listings and tailor profile.</li>
+                      <li>• Access to share 24-hour photo and video stories.</li>
+                      <li>• Up to 10 collection slots, plus any slots you purchase.</li>
+                    </ul>
                   </div>
 
                   <div className="border-t border-neutral-800/80 pt-4">

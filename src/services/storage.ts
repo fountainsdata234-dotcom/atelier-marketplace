@@ -36,9 +36,9 @@ const RECOMMENDATION_EVENT_LIMIT = 500;
 const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
   {
     id: 'promo-1',
-    caption: 'Atelier Spotlight Boost',
+    caption: 'Promoted Tailor Visibility',
     timeRange: '7 Days Active',
-    description: 'Feature your bespoke designs at the top of the marketplace carousel with a golden Atelier feature badge.',
+    description: 'Priority marketplace placement, promoted badges, 24-hour stories, and up to 10 collection slots.',
     amount: 25,
     currency: 'USD',
     whatsappNumber: '+2348000000001',
@@ -48,9 +48,9 @@ const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
   },
   {
     id: 'promo-2',
-    caption: 'Haute Runway Premiere',
+    caption: 'Promoted Tailor Visibility',
     timeRange: '30 Days Priority',
-    description: 'Maximum feed visibility, priority placement in location search results, and 3x customer direct inquiry routing.',
+    description: 'Priority marketplace placement, promoted badges, 24-hour stories, and up to 10 collection slots.',
     amount: 75,
     currency: 'USD',
     whatsappNumber: '+2348000000001',
@@ -60,9 +60,9 @@ const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
   },
   {
     id: 'promo-3',
-    caption: 'Couture Enterprise Suite',
+    caption: 'Promoted Tailor Visibility',
     timeRange: '90 Days VIP',
-    description: 'Full carousel placement, direct WhatsApp lead generation, featured banner in buyer digests, and an Atelier feature insignia.',
+    description: 'Priority marketplace placement, promoted badges, 24-hour stories, and up to 10 collection slots.',
     amount: 190,
     currency: 'USD',
     whatsappNumber: '+2348000000001',
