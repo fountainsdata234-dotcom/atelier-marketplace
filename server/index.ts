@@ -1651,10 +1651,11 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
     res.status(503).json({ error: 'Story uploads are not configured yet.' });
     return;
   }
+  let uploadedPublicId = '';
   try {
     const profile = await readProfile(req.authUser!.uid);
-    const promotionExpiry = profile?.promotion_expires_at;
-    const promotionValid = profile?.is_promoted === true
+    const promotionExpiry = profile?.promotionExpiresAt ?? profile?.promotion_expires_at;
+    const promotionValid = profile?.isPromoted === true
       && (promotionExpiry == null || new Date(String(promotionExpiry)).getTime() > Date.now());
     if (profile?.role !== 'tailor' || !promotionValid) {
       res.status(403).json({ error: 'Only an active promoted tailor can add a story.' });
@@ -1671,6 +1672,7 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
       stream.end(req.file!.buffer);
     });
     if (!uploadResult.secure_url || !uploadResult.public_id) throw new Error('Cloudinary returned incomplete story data.');
+    uploadedPublicId = uploadResult.public_id;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const story = await createStory({
       tailorId: req.authUser!.uid,
@@ -1698,6 +1700,10 @@ app.post('/api/stories', requireAuth, requireActiveAccount, storyUpload.single('
     });
   } catch (error) {
     console.error('Story upload failed', error);
+    if (uploadedPublicId && cloudinaryConfigured) {
+      const mediaType = req.file?.mimetype.startsWith('video/') ? 'video' : 'image';
+      await cloudinary.uploader.destroy(uploadedPublicId, { resource_type: mediaType, invalidate: true }).catch(() => undefined);
+    }
     res.status(500).json({ error: 'The story could not be published.' });
   }
 });

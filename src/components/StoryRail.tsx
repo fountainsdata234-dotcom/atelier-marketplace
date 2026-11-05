@@ -19,6 +19,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [draftFile, setDraftFile] = useState<File | null>(null);
   const [draftUrl, setDraftUrl] = useState('');
   const [draftCaption, setDraftCaption] = useState('');
+  const [uploadError, setUploadError] = useState('');
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
 
   const loadStories = () => {
@@ -55,11 +56,14 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const uploadStory = async () => {
     if (!draftFile) return;
     setUploading(true);
+    setUploadError('');
     try {
       await api.createStory(draftFile, draftCaption);
       setDraftFile(null);
       setDraftUrl('');
       loadStories();
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'The story could not be published.');
     } finally {
       setUploading(false);
     }
@@ -138,6 +142,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
               </div>
               <div className="px-4 py-4">
                 <textarea value={draftCaption} onChange={event => setDraftCaption(event.target.value.slice(0, 280))} rows={3} placeholder="Add a message to your story..." className="mt-4 w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm outline-none focus:border-amber-400" />
+                {uploadError && <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{uploadError}</p>}
                 <button type="button" disabled={uploading} onClick={() => void uploadStory()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-neutral-950 disabled:opacity-60"><Send className="h-4 w-4" />{uploading ? 'Publishing...' : 'Share story'}</button>
               </div>
             </motion.div>
