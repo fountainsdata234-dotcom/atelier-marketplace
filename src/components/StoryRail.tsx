@@ -93,12 +93,15 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
       .filter(story => new Date(story.expiresAt).getTime() > Date.now())
       .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
       .forEach(story => groups.set(story.tailorId, [...(groups.get(story.tailorId) || []), story]));
-    return [...groups.entries()].filter(([tailorId]) => {
-      const user = userById.get(tailorId);
-      const isPromotedTailor = user?.role === 'tailor' && user.isPromoted && (!user.promotionExpiresAt || new Date(user.promotionExpiresAt).getTime() > Date.now());
-      return !user || isPromotedTailor || user.role === 'admin';
-    });
-  }, [stories, userById]);
+    const entries = [...groups.entries()];
+    const currentUserIsMerchant = currentUser?.role === 'tailor' || currentUser?.role === 'fabric_seller';
+    if (currentUserIsMerchant) {
+      entries.sort(([leftId], [rightId]) => (
+        Number(rightId === currentUser.id) - Number(leftId === currentUser.id)
+      ));
+    }
+    return entries;
+  }, [stories, currentUser?.id, currentUser?.role]);
 
   const canAddStory = currentUser?.role === 'admin'
     || (currentUser?.role === 'tailor'
@@ -177,17 +180,17 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                   event.stopPropagation();
                   setActiveTailorId(tailorId);
                 }}
-                className="flex min-w-[76px] flex-col items-center gap-1.5"
+                className="flex min-w-[76px] flex-col items-center gap-1.5 md:min-w-[96px]"
               >
                 <span className="relative rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
                   {tailor?.role === 'admin' && <span className="admin-digital-name absolute left-1/2 top-[-18px] -translate-x-1/2 whitespace-nowrap text-[9px] text-amber-400">ADMIN</span>}
-                  <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
+                  <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 md:h-[78px] md:w-[78px] ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
                     {tailorStories[0].mediaType === 'video'
                       ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" onError={() => hideUnavailableStory(tailorStories[0].id)} className="h-full w-full object-cover" />
                       : <img data-story-image src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} alt="" draggable={false} onError={() => hideUnavailableStory(tailorStories[0].id)} className="h-full w-full object-cover" />}
                   </span>
                 </span>
-                <span className="w-[76px] truncate text-[10px] font-bold">
+                <span className="w-[76px] truncate text-[10px] font-bold md:w-[96px] md:text-xs">
                   {tailor?.role === 'admin' ? <span className="admin-digital-name">ADMIN</span> : formatHandle(tailor?.handle) || `@${tailor?.shopName || tailor?.name || 'merchant'}`}
                 </span>
               </button>
