@@ -31,11 +31,10 @@
 .landing-hero-image {
   opacity: 0;
   background: linear-gradient(120deg, #332319, #151311 70%);
-  transition: opacity 1100ms ease;
 }
 
 .landing-hero-image.is-active {
-  opacity: 1;
+  animation: landing-image-fade-in 1100ms ease both;
 }
 
 .landing-hero-image img {
@@ -70,7 +69,7 @@
 .landing-hero-content {
   position: relative;
   z-index: 2;
-  width: min(100% - 3rem, 1280px);
+  width: min(100% - 8rem, 1120px);
   margin: 0 auto;
   padding: 5.5rem 0 8rem;
   animation: landing-rise-in 850ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -108,7 +107,8 @@
   font-weight: 400;
   letter-spacing: -0.065em;
   line-height: 0.98;
-  text-wrap: balance;
+  text-align: left;
+  text-wrap: pretty;
 }
 
 .landing-hero h1 > span {
@@ -120,16 +120,21 @@
   color: #f1c276;
   font-style: italic;
   font-weight: 400;
+  text-align: left;
 }
 
 .landing-typewriter {
   display: grid;
+  justify-items: start;
   min-height: 1em;
+  text-align: left;
 }
 
 .landing-typewriter-reserve,
 .landing-typewriter-live {
   grid-area: 1 / 1;
+  justify-self: start;
+  text-align: left;
 }
 
 .landing-typewriter-reserve {
@@ -260,12 +265,13 @@
 .landing-hero-footer {
   position: absolute;
   z-index: 3;
-  right: max(1.5rem, calc((100vw - 1280px) / 2));
+  right: 1.5rem;
   bottom: 1.7rem;
-  left: max(1.5rem, calc((100vw - 1280px) / 2));
+  left: 1.5rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .landing-scroll-cue {
@@ -289,6 +295,7 @@
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  pointer-events: auto;
 }
 
 .landing-slide-count {
@@ -360,18 +367,35 @@
 }
 
 .landing-control-prev {
-  justify-self: start;
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: max(0.75rem, calc((100vw - 1280px) / 2));
+  transform: translateY(-50%);
 }
 
 .landing-control-next {
-  justify-self: end;
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  right: max(0.75rem, calc((100vw - 1280px) / 2));
+  transform: translateY(-50%);
 }
 
 .landing-control-button:hover {
-  transform: translateY(-2px);
   border-color: #f1c276;
   color: #191510;
   background: #f1c276;
+}
+
+.landing-control-prev:hover,
+.landing-control-next:hover {
+  transform: translateY(calc(-50% - 2px));
+}
+
+.landing-control-prev:active,
+.landing-control-next:active {
+  transform: translateY(-50%) scale(0.96);
 }
 
 .landing-featured {
@@ -722,6 +746,11 @@
   }
 }
 
+@keyframes landing-image-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes landing-caret-blink {
   to { opacity: 0; }
 }
@@ -765,7 +794,7 @@
   }
 
   .landing-hero-content {
-    width: calc(100% - 2.5rem);
+    width: calc(100% - 6.5rem);
     padding: clamp(8.5rem, 27vh, 12rem) 0 9rem;
   }
 
@@ -781,9 +810,13 @@
   }
 
   .landing-hero h1 {
-    max-width: 10ch;
-    font-size: clamp(3.15rem, 13vw, 5.15rem);
+    max-width: 12ch;
+    font-size: clamp(2.6rem, 10.8vw, 4rem);
     line-height: 0.98;
+  }
+
+  .landing-hero h1 > strong {
+    white-space: nowrap;
   }
 
   .landing-typewriter {
@@ -819,9 +852,9 @@
   }
 
   .landing-hero-footer {
-    right: 1.25rem;
+    right: 1rem;
     bottom: max(1rem, env(safe-area-inset-bottom));
-    left: 1.25rem;
+    left: 1rem;
   }
 
   .landing-slide-count {
@@ -848,6 +881,14 @@
     width: 2.35rem;
     height: 2.35rem;
     min-height: 2.35rem;
+  }
+
+  .landing-control-prev {
+    left: 0.45rem;
+  }
+
+  .landing-control-next {
+    right: 0.45rem;
   }
 
   .landing-carousel-controls {
@@ -943,16 +984,16 @@
 
 @media (max-width: 360px) {
   .landing-hero-content {
-    width: calc(100% - 2rem);
+    width: calc(100% - 5.5rem);
   }
 
   .landing-hero h1 {
-    font-size: 3rem;
+    font-size: 2.35rem;
   }
 
   .landing-hero-footer {
-    right: 0.8rem;
-    left: 0.8rem;
+    right: 0.65rem;
+    left: 0.65rem;
   }
 
   .landing-carousel-controls {
@@ -963,10 +1004,19 @@
     display: none;
   }
 
-  .landing-hero-footer > .landing-control-button {
+  .landing-control-prev,
+  .landing-control-next {
     width: 2.15rem;
     height: 2.15rem;
     min-height: 2.15rem;
+  }
+
+  .landing-control-prev {
+    left: 0.3rem;
+  }
+
+  .landing-control-next {
+    right: 0.3rem;
   }
 
   .landing-slide-count {
@@ -1008,6 +1058,10 @@
 
   .landing-hero-content {
     animation: none;
+  }
+
+  .landing-hero-image.is-active {
+    animation-duration: 0.01ms;
   }
 
   .landing-typewriter-caret {

@@ -90,12 +90,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
   const [typedHighlight, setTypedHighlight] = useState('');
+  const [loadedSlides, setLoadedSlides] = useState<Set<number>>(() => new Set());
+  const [revealedSlide, setRevealedSlide] = useState<number | null>(null);
   const [offeringsVisible, setOfferingsVisible] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const offeringsRef = useRef<HTMLElement | null>(null);
+
+  const showSlide = (index: number) => {
+    setTypedHighlight('');
+    setRevealedSlide(null);
+    setActiveSlide((index + slides.length) % slides.length);
+  };
 
   useEffect(() => {
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -107,12 +115,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
   useEffect(() => {
     if (isPressed || isHovered || prefersReducedMotion) return;
     const timer = window.setInterval(() => {
-      setActiveSlide(current => (current + 1) % slides.length);
+      showSlide(activeSlide + 1);
     }, 7000);
     return () => window.clearInterval(timer);
   }, [isPressed, isHovered, prefersReducedMotion, activeSlide]);
 
   useEffect(() => {
+    if (!loadedSlides.has(activeSlide) || revealedSlide !== activeSlide) return;
     if (prefersReducedMotion) {
       setTypedHighlight(slides[activeSlide].highlight);
       return;
@@ -127,7 +136,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
     }, 48);
 
     return () => window.clearInterval(timer);
-  }, [activeSlide, prefersReducedMotion]);
+  }, [activeSlide, loadedSlides, prefersReducedMotion, revealedSlide]);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -162,10 +171,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
     };
   }, [isPressed]);
 
-  const showSlide = (index: number) => {
-    setActiveSlide((index + slides.length) % slides.length);
-  };
-
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === 'ArrowRight') {
       event.preventDefault();
@@ -181,6 +186,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
     const distance = touchStart - event.changedTouches[0].clientX;
     if (Math.abs(distance) > 48) showSlide(activeSlide + (distance > 0 ? 1 : -1));
     setTouchStart(null);
+  };
+
+  const handleImageReveal = (event: React.AnimationEvent<HTMLDivElement>, index: number) => {
+    if (event.target === event.currentTarget && event.animationName === 'landing-image-fade-in') {
+      setRevealedSlide(index);
+    }
   };
 
   const slide = slides[activeSlide];
@@ -202,7 +213,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
       >
         <div className="landing-hero-images" aria-hidden="true">
           {slides.map((item, index) => (
-            <div className={`landing-hero-image ${index === activeSlide ? 'is-active' : ''}`} key={item.image}>
+            <div
+              className={`landing-hero-image ${index === activeSlide ? 'is-active' : ''}`}
+              key={item.image}
+              onAnimationEnd={event => handleImageReveal(event, index)}
+            >
               {(index === activeSlide || index === (activeSlide + 1) % slides.length) && (
                 <img
                   src={item.image}
@@ -210,6 +225,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
                   style={{ objectPosition: item.imagePosition }}
                   loading={index === activeSlide ? 'eager' : 'lazy'}
                   fetchPriority={index === 0 ? 'high' : 'auto'}
+                  onLoad={() => setLoadedSlides(current => new Set(current).add(index))}
                 />
               )}
             </div>
@@ -224,7 +240,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
               <strong className="landing-typewriter">
                 <span className="landing-typewriter-reserve" aria-hidden="true">{slide.highlight}</span>
                 <span className="landing-typewriter-live" aria-hidden="true">
-                  {typedHighlight}<span className="landing-typewriter-caret" />
+                {typedHighlight}
+                {typedHighlight.length > 0 && typedHighlight.length < slide.highlight.length && (
+                  <span className="landing-typewriter-caret" />
+                )}
                 </span>
               </strong>
             </h1>
@@ -249,9 +268,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
         )}
 
         <div className="landing-hero-footer">
-          <button type="button" className="landing-control-button landing-control-prev" aria-label="Previous story" onClick={() => showSlide(activeSlide - 1)}>
-            <ArrowLeft aria-hidden="true" size={17} />
-          </button>
           <div className="landing-carousel-controls" role="group" aria-label="Carousel position">
             <span className="landing-slide-count"><strong>0{activeSlide + 1}</strong><span />0{slides.length}</span>
             <div className="landing-slide-dots" role="group" aria-label="Choose a featured story">
@@ -267,10 +283,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
               ))}
             </div>
           </div>
-          <button type="button" className="landing-control-button landing-control-next" aria-label="Next story" onClick={() => showSlide(activeSlide + 1)}>
-            <ArrowRight aria-hidden="true" size={17} />
-          </button>
         </div>
+        <button type="button" className="landing-control-button landing-control-prev" aria-label="Previous story" onClick={() => showSlide(activeSlide - 1)}>
+          <ArrowLeft aria-hidden="true" size={17} />
+        </button>
+        <button type="button" className="landing-control-button landing-control-next" aria-label="Next story" onClick={() => showSlide(activeSlide + 1)}>
+          <ArrowRight aria-hidden="true" size={17} />
+        </button>
       </section>
 
       <section
