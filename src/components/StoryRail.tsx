@@ -5,6 +5,11 @@ import { Plus, X, ChevronLeft, ChevronRight, Trash2, Eye, Heart, Send, Play, Pau
 import { TailorStory, User } from '../types';
 import { api } from '../services/api';
 
+const formatHandle = (handle?: string) => {
+  const value = handle?.trim() || '';
+  return value ? `@${value.replace(/^@+/, '')}` : '';
+};
+
 interface StoryRailProps {
   users: User[];
   currentUser: User | null;
@@ -57,7 +62,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     return [...groups.entries()].filter(([tailorId]) => {
       const user = userById.get(tailorId);
       const isPromotedTailor = user?.role === 'tailor' && user.isPromoted && (!user.promotionExpiresAt || new Date(user.promotionExpiresAt).getTime() > Date.now());
-      return isPromotedTailor || user?.role === 'admin';
+      return !user || isPromotedTailor || user.role === 'admin';
     });
   }, [stories, userById]);
 
@@ -126,6 +131,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                 }}
                 className="flex min-w-[76px] flex-col items-center gap-1.5"
               >
+                {tailor?.role === 'admin' && <span className="text-[9px] font-black uppercase tracking-[0.12em] text-amber-400">Admin</span>}
                 <span className="rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
                   <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
                     {tailorStories[0].mediaType === 'video'
@@ -133,7 +139,9 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                       : <img data-story-image src={tailorStories[0].mediaUrl} alt="" draggable={false} className="h-full w-full object-cover" />}
                   </span>
                 </span>
-                <span className="w-[76px] truncate text-[10px] font-bold">@{tailor?.handle || tailor?.shopName || tailor?.name || 'merchant'}</span>
+                <span className="w-[76px] truncate text-[10px] font-bold">
+                  {tailor?.role === 'admin' ? 'OBA 👑' : formatHandle(tailor?.handle) || `@${tailor?.shopName || tailor?.name || 'merchant'}`}
+                </span>
               </button>
             );
           })}
@@ -344,7 +352,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
             {tailor?.avatarUrl ? <img src={tailor.avatarUrl} alt="" className="h-full w-full object-cover" /> : (tailor?.shopName || tailor?.name || '@').slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold text-white">@{tailor?.handle || tailor?.shopName || tailor?.name || 'merchant'}</p>
+            <p className="truncate text-sm font-bold text-white">{formatHandle(tailor?.handle) || `@${tailor?.shopName || tailor?.name || 'merchant'}`}</p>
             <p className="text-[11px] text-white/70">{elapsed(story.createdAt)}</p>
           </div>
           <button type="button" aria-label="Close story" onClick={onClose} className="pointer-events-auto rounded-full bg-black/45 p-2 text-white backdrop-blur-md"><X className="h-5 w-5" /></button>
@@ -357,7 +365,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         </button>
         {!owner && (
           <div className="absolute bottom-4 left-4 right-4 z-40 flex items-center gap-2">
-            <input value={reply} onChange={event => setReply(event.target.value)} placeholder={`Reply to @${tailor?.handle || 'merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur" />
+            <input value={reply} onChange={event => setReply(event.target.value)} placeholder={`Reply to ${formatHandle(tailor?.handle) || '@merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur" />
             <button type="button" aria-label="Send reply" disabled={!reply.trim()} onClick={() => setReply('')} className="grid h-11 w-11 place-items-center rounded-full bg-white text-neutral-950 disabled:opacity-50"><Send className="h-4 w-4" /></button>
             <button type="button" aria-label={liked ? 'Unlike story' : 'Like story'} onClick={toggleLike} className="grid h-11 w-11 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
               <Heart className="h-5 w-5" fill={liked ? 'currentColor' : 'none'} />

@@ -276,7 +276,7 @@ app.use((_req, res, next) => {
 const PAYSTACK_PLANS = {
   starter: { amount: 500000, durationDays: 30 },
   professional: { amount: 2500000, durationDays: 180 },
-  premium: { amount: 6000000, durationDays: 365 },
+  premium: { amount: 5000000, durationDays: 365 },
 } as const;
 
 function paystackSupabase() {
