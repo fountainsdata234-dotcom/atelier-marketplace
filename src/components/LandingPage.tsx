@@ -1,84 +1,341 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AtSign, ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, MapPin, Scissors, Smartphone } from 'lucide-react';
 import { User, ClothPost, UserRole } from '../types';
-import { useTypingText } from '../hooks/useTypingText';
+import './LandingPage.css';
 
 interface LandingPageProps {
   onOpenAuth: (defaultRole: UserRole) => void;
+  onNavigate: (view: string) => void;
   isDarkMode: boolean;
   promotedTailors: User[];
   promotedPosts: ClothPost[];
   onSelectSeller: (seller: User) => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, isDarkMode, promotedTailors, promotedPosts, onSelectSeller }) => {
-  const headline = 'Find your fit. Meet your merchant.';
-  const typedHeadline = useTypingText([headline], { enabled: true, typeDelayMs: 84 });
+const slides: { eyebrow: string; title: string; highlight: string; description: string; action: string; role: UserRole; image: string; imagePosition: string; note: string; imageCredit?: string; imageCreditUrl?: string }[] = [
+  {
+    eyebrow: 'Made for the way you dress',
+    title: 'Wear something',
+    highlight: 'made for you.',
+    description: 'Meet skilled tailors who turn your ideas, your measurements, and your favourite fabric into a fit that feels unmistakably yours.',
+    action: 'Find your tailor',
+    role: 'buyer',
+    image: '/assets/landing-fashion.jpg',
+    imagePosition: 'center 52%',
+    note: 'A better fit begins with a conversation',
+  },
+  {
+    eyebrow: 'A marketplace for makers',
+    title: 'Your craft deserves',
+    highlight: 'to be seen.',
+    description: 'Build your studio’s presence, share the details behind your work, and find people who value the skill in every stitch.',
+    action: 'Join as a tailor',
+    role: 'tailor',
+    image: '/assets/landing-sewing-machine.jpg',
+    imagePosition: 'center 48%',
+    note: 'For independent tailors and studios',
+    imageCredit: 'Photo: Orce Wiki · CC BY-SA 4.0',
+    imageCreditUrl: 'https://commons.wikimedia.org/wiki/File:Hand_sewing_machine_-_Macedonian_tailoring_craft.jpg',
+  },
+  {
+    eyebrow: 'The details make the design',
+    title: 'Find fabric worth',
+    highlight: 'creating for.',
+    description: 'Explore distinctive textiles and meet trusted fabric sellers who help bring your next one-of-a-kind look to life.',
+    action: 'Explore fabrics',
+    role: 'buyer',
+    image: '/assets/landing-textiles.jpg',
+    imagePosition: 'center 55%',
+    note: 'Discover textiles from independent sellers',
+  },
+];
+
+const offerings = [
+  {
+    category: 'Find your people',
+    title: 'Good craft, closer to home.',
+    description: 'Discover independent tailors and fabric merchants, and find the makers bringing style to your corner of the world.',
+    action: 'Explore the marketplace',
+    icon: MapPin,
+    onSelect: (onNavigate: (view: string) => void, onOpenAuth: (role: UserRole) => void) => onNavigate('marketplace'),
+  },
+  {
+    category: 'Make it yours',
+    title: 'A name and a space of your own.',
+    description: 'Give your studio a memorable handle, show off what you do, and make it easy for the right customers to find you.',
+    action: 'Create your tailor profile',
+    icon: AtSign,
+    onSelect: (_onNavigate: (view: string) => void, onOpenAuth: (role: UserRole) => void) => onOpenAuth('tailor'),
+  },
+  {
+    category: 'Show the story',
+    title: 'Let every stitch have a story.',
+    description: 'Share your latest looks, works in progress, and favourite fabrics through visual stories made for discovery.',
+    action: 'Meet the makers',
+    icon: BookOpen,
+    onSelect: (onNavigate: (view: string) => void, _onOpenAuth: (role: UserRole) => void) => onNavigate('artisan'),
+  },
+  {
+    category: 'Made for real life',
+    title: 'Your atelier, wherever you are.',
+    description: 'Browse, connect, and keep up with your favourite makers from the device already in your hand.',
+    action: 'Find your next favourite',
+    icon: Smartphone,
+    onSelect: (onNavigate: (view: string) => void, _onOpenAuth: (role: UserRole) => void) => onNavigate('marketplace'),
+  },
+];
+
+export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate, isDarkMode, promotedTailors, promotedPosts, onSelectSeller }) => {
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
+  const [typedHighlight, setTypedHighlight] = useState('');
+  const [offeringsVisible, setOfferingsVisible] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const offeringsRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updateMotionPreference = () => setPrefersReducedMotion(motionPreference.matches);
+    motionPreference.addEventListener('change', updateMotionPreference);
+    return () => motionPreference.removeEventListener('change', updateMotionPreference);
+  }, []);
+
+  useEffect(() => {
+    if (isPressed || isHovered || prefersReducedMotion) return;
+    const timer = window.setInterval(() => {
+      setActiveSlide(current => (current + 1) % slides.length);
+    }, 7000);
+    return () => window.clearInterval(timer);
+  }, [isPressed, isHovered, prefersReducedMotion, activeSlide]);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setTypedHighlight(slides[activeSlide].highlight);
+      return;
+    }
+
+    setTypedHighlight('');
+    let characterIndex = 0;
+    const timer = window.setInterval(() => {
+      characterIndex += 1;
+      setTypedHighlight(slides[activeSlide].highlight.slice(0, characterIndex));
+      if (characterIndex >= slides[activeSlide].highlight.length) window.clearInterval(timer);
+    }, 48);
+
+    return () => window.clearInterval(timer);
+  }, [activeSlide, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setOfferingsVisible(true);
+      return;
+    }
+
+    const section = offeringsRef.current;
+    if (!section) return;
+    if (!('IntersectionObserver' in window)) {
+      setOfferingsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setOfferingsVisible(true);
+      observer.disconnect();
+    }, { threshold: 0.18 });
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [prefersReducedMotion]);
+
+  useEffect(() => {
+    if (!isPressed) return;
+    const resumeSlideshow = () => setIsPressed(false);
+    window.addEventListener('pointerup', resumeSlideshow);
+    window.addEventListener('pointercancel', resumeSlideshow);
+    return () => {
+      window.removeEventListener('pointerup', resumeSlideshow);
+      window.removeEventListener('pointercancel', resumeSlideshow);
+    };
+  }, [isPressed]);
+
+  const showSlide = (index: number) => {
+    setActiveSlide((index + slides.length) % slides.length);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      showSlide(activeSlide + 1);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      showSlide(activeSlide - 1);
+    }
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
+    if (touchStart === null) return;
+    const distance = touchStart - event.changedTouches[0].clientX;
+    if (Math.abs(distance) > 48) showSlide(activeSlide + (distance > 0 ? 1 : -1));
+    setTouchStart(null);
+  };
+
+  const slide = slides[activeSlide];
 
   return (
-    <div>
-    <section className="relative isolate flex min-h-[68vh] items-center overflow-hidden px-5 py-16 sm:min-h-[72vh] sm:px-8 sm:py-20 lg:px-12">
-      <div aria-hidden="true" className="pointer-events-none absolute -right-32 top-1/2 -z-10 h-80 w-80 -translate-y-1/2 rounded-full bg-amber-500/10 blur-3xl sm:h-[30rem] sm:w-[30rem]" />
-      <div className={`grid w-full items-center gap-10 rounded-[2rem] border px-6 py-12 shadow-2xl sm:px-10 sm:py-16 lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-16 lg:px-16 ${isDarkMode ? 'border-white/10 bg-white/[0.03] shadow-black/20' : 'border-neutral-200 bg-white/75 shadow-neutral-900/5'}`}>
-        <div className="max-w-4xl">
-          <p className={`mb-5 text-xs font-semibold uppercase tracking-[0.28em] ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
-            Fabsattire · Tailoring & textiles
-          </p>
-          <h1 className={`min-h-[2em] overflow-visible text-5xl font-semibold leading-[0.98] tracking-[-0.065em] sm:text-6xl md:text-7xl lg:text-8xl ${isDarkMode ? 'text-white' : 'text-neutral-950'}`}>
-            <span aria-hidden="true" className="typing-caret">{typedHeadline}</span>
-            <span className="sr-only">{headline}</span>
-          </h1>
-          <p className={`mt-6 max-w-xl text-base leading-relaxed sm:text-lg ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>
-            Discover skilled tailors and distinctive fabrics, all in one place.
-          </p>
+    <div className={`landing-page ${isDarkMode ? 'landing-page-dark' : 'landing-page-light'}`}>
+      <section
+        className="landing-hero"
+        aria-label="Fabsattire introduction"
+        aria-roledescription="carousel"
+        onKeyDown={handleKeyDown}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onPointerDown={() => setIsPressed(true)}
+        onPointerUp={() => setIsPressed(false)}
+        onPointerCancel={() => setIsPressed(false)}
+        onTouchStart={event => setTouchStart(event.touches[0].clientX)}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="landing-hero-images" aria-hidden="true">
+          {slides.map((item, index) => (
+            <div className={`landing-hero-image ${index === activeSlide ? 'is-active' : ''}`} key={item.image}>
+              {(index === activeSlide || index === (activeSlide + 1) % slides.length) && (
+                <img
+                  src={item.image}
+                  alt=""
+                  style={{ objectPosition: item.imagePosition }}
+                  loading={index === activeSlide ? 'eager' : 'lazy'}
+                  fetchPriority={index === 0 ? 'high' : 'auto'}
+                />
+              )}
+            </div>
+          ))}
         </div>
-        <div className="flex items-center lg:justify-end">
-          <button
-            type="button"
-            onClick={() => onOpenAuth('buyer')}
-            className={`group inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-full bg-amber-400 px-7 py-4 text-sm font-semibold text-neutral-950 shadow-lg shadow-amber-500/20 transition hover:-translate-y-0.5 hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 sm:w-auto lg:w-full ${isDarkMode ? 'focus-visible:ring-offset-neutral-950' : 'focus-visible:ring-offset-white'}`}
-          >
-            Get started
-            <span aria-hidden="true" className="text-lg transition-transform group-hover:translate-x-1">→</span>
+        <div className="landing-hero-grain" aria-hidden="true" />
+        <div className="landing-hero-content" key={activeSlide}>
+          <div className="landing-hero-copy">
+            <p className="landing-eyebrow"><span />{slide.eyebrow}</p>
+            <h1 aria-label={`${slide.title} ${slide.highlight}`}>
+              <span aria-hidden="true">{slide.title}</span>
+              <strong className="landing-typewriter">
+                <span className="landing-typewriter-reserve" aria-hidden="true">{slide.highlight}</span>
+                <span className="landing-typewriter-live" aria-hidden="true">
+                  {typedHighlight}<span className="landing-typewriter-caret" />
+                </span>
+              </strong>
+            </h1>
+            <p className="landing-description">{slide.description}</p>
+            <div className="landing-actions">
+              <button type="button" className="landing-primary-action" onClick={() => onOpenAuth(slide.role)}>
+                {slide.action}
+                <ArrowUpRight aria-hidden="true" size={18} />
+              </button>
+              <span className="landing-action-note"><Scissors aria-hidden="true" size={15} /> Made with intention</span>
+            </div>
+          </div>
+        </div>
+        <div className="landing-hero-note" aria-hidden="true">
+          <span className="landing-note-rule" />
+          <span>{slide.note}</span>
+        </div>
+        {slide.imageCredit && slide.imageCreditUrl && (
+          <a className="landing-image-credit" href={slide.imageCreditUrl} target="_blank" rel="noreferrer">
+            {slide.imageCredit}
+          </a>
+        )}
+
+        <div className="landing-hero-footer">
+          <button type="button" className="landing-control-button landing-control-prev" aria-label="Previous story" onClick={() => showSlide(activeSlide - 1)}>
+            <ArrowLeft aria-hidden="true" size={17} />
+          </button>
+          <div className="landing-carousel-controls" role="group" aria-label="Carousel position">
+            <span className="landing-slide-count"><strong>0{activeSlide + 1}</strong><span />0{slides.length}</span>
+            <div className="landing-slide-dots" role="group" aria-label="Choose a featured story">
+              {slides.map((item, index) => (
+                <button
+                  type="button"
+                  key={item.eyebrow}
+                  className={index === activeSlide ? 'is-active' : ''}
+                  aria-label={`Show story ${index + 1}: ${item.eyebrow}`}
+                  aria-pressed={index === activeSlide}
+                  onClick={() => showSlide(index)}
+                />
+              ))}
+            </div>
+          </div>
+          <button type="button" className="landing-control-button landing-control-next" aria-label="Next story" onClick={() => showSlide(activeSlide + 1)}>
+            <ArrowRight aria-hidden="true" size={17} />
           </button>
         </div>
-      </div>
-    </section>
+      </section>
 
-    {promotedTailors.length > 0 && (
-      <section className="px-4 pb-12 sm:px-8 lg:px-12" aria-labelledby="featured-tailors-heading">
-        <div className="mb-5 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-500">Promoted studios</p>
-            <h2 id="featured-tailors-heading" className={`mt-1 font-serif text-2xl font-bold sm:text-3xl ${isDarkMode ? 'text-white' : 'text-neutral-950'}`}>Featured Tailors</h2>
-          </div>
-          <span className={`hidden text-xs sm:block ${isDarkMode ? 'text-neutral-500' : 'text-neutral-500'}`}>Swipe to explore</span>
+      <section
+        ref={offeringsRef}
+        className={`landing-offerings ${offeringsVisible ? 'is-visible' : ''}`}
+        aria-labelledby="landing-offerings-heading"
+      >
+        <div className="landing-offerings-heading">
+          <p className="landing-featured-eyebrow">A little more than a marketplace</p>
+          <h2 id="landing-offerings-heading">A place for the whole craft.</h2>
+          <p>Find inspiration, meet your people, and make a name for the work you love.</p>
         </div>
-        <div className="scrollbar-none grid snap-x snap-mandatory grid-flow-col auto-cols-[82%] gap-4 overflow-x-auto pb-4 sm:auto-cols-[42%] lg:auto-cols-[28%]">
-          {promotedTailors.map((tailor) => {
-            const project = promotedPosts.find(post => post.authorId === tailor.id && (post.imageUrl || post.imageAssets?.length));
-            const image = project?.imageUrl || project?.imageAssets?.[0]?.url || tailor.avatarUrl;
-            return (
-              <button
-                key={tailor.id}
-                type="button"
-                onClick={() => onSelectSeller(tailor)}
-                className={`group snap-start overflow-hidden rounded-[1.75rem] border text-left shadow-lg transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-amber-400 ${isDarkMode ? 'border-amber-500/30 bg-neutral-900' : 'border-amber-300 bg-white'}`}
-              >
-                <div className="relative m-2.5 overflow-hidden rounded-[1.35rem] border-2 border-amber-300/80 bg-neutral-950 p-1 shadow-[0_0_0_3px_rgba(251,191,36,0.12)]">
-                  {image ? <img src={image} alt={`${tailor.shopName || tailor.name} promotion`} className="aspect-[4/3] w-full rounded-[1rem] object-cover transition-transform duration-500 group-hover:scale-[1.03]" loading="lazy" /> : <div className="aspect-[4/3] bg-gradient-to-br from-amber-400/30 to-neutral-800" />}
-                  <span className="absolute right-3 top-3 rounded-full bg-amber-400 px-3 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-neutral-950 shadow-md">Promoted</span>
-                </div>
-                <div className="px-5 pb-5 pt-2">
-                  <h3 className={`truncate font-serif text-lg font-bold ${isDarkMode ? 'text-white' : 'text-neutral-950'}`}>{tailor.shopName || tailor.name}</h3>
-                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-neutral-500">{tailor.bio || 'Bespoke designer and fashion specialist'}</p>
-                  <p className="mt-3 text-[10px] font-semibold uppercase tracking-wider text-amber-500">{tailor.location?.city || tailor.location?.state || 'Featured tailor'}</p>
-                </div>
+        <div className="landing-offerings-grid">
+          {offerings.map(({ category, title, description, action, icon: Icon, onSelect }, index) => (
+            <article className="landing-offering-card" key={category} style={{ transitionDelay: `${index * 90}ms` }}>
+              <div className="landing-offering-card-top">
+                <span className="landing-offering-icon"><Icon aria-hidden="true" size={21} /></span>
+                <span className="landing-offering-index">0{index + 1}</span>
+              </div>
+              <p className="landing-offering-category">{category}</p>
+              <h3>{title}</h3>
+              <p className="landing-offering-description">{description}</p>
+              <button type="button" className="landing-offering-action" onClick={() => onSelect(onNavigate, onOpenAuth)}>
+                {action}<ArrowRight aria-hidden="true" size={15} />
               </button>
-            );
-          })}
+            </article>
+          ))}
         </div>
       </section>
-    )}
+
+      {promotedTailors.length > 0 && (
+        <section className="landing-featured" aria-labelledby="featured-tailors-heading">
+          <div className="landing-featured-heading">
+            <div>
+              <p className="landing-featured-eyebrow">Good work, worth discovering</p>
+              <h2 id="featured-tailors-heading">Meet the makers</h2>
+            </div>
+            <span>Swipe to explore <ArrowRight aria-hidden="true" size={14} /></span>
+          </div>
+          <div className="landing-featured-list">
+            {promotedTailors.map((tailor) => {
+              const project = promotedPosts.find(post => post.authorId === tailor.id && (post.imageUrl || post.imageAssets?.length));
+              const image = project?.imageUrl || project?.imageAssets?.[0]?.url || tailor.avatarUrl;
+              return (
+                <button
+                  key={tailor.id}
+                  type="button"
+                  onClick={() => onSelectSeller(tailor)}
+                  className="landing-tailor-card"
+                >
+                  <div className="landing-tailor-image">
+                    {image ? <img src={image} alt={`${tailor.shopName || tailor.name} promotion`} loading="lazy" /> : <div className="landing-tailor-placeholder" />}
+                    <span>Featured studio</span>
+                  </div>
+                  <div className="landing-tailor-details">
+                    <h3>{tailor.shopName || tailor.name}</h3>
+                    <p>{tailor.bio || 'Bespoke designer and fashion specialist'}</p>
+                    <span>{tailor.location?.city || tailor.location?.state || 'Independent studio'}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

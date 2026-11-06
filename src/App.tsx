@@ -1205,12 +1205,12 @@ export default function App() {
       >
         <ArrowUp className="h-5 w-5" />
       </button>
-      <LuminaFloatingShortcut isDarkMode={isDarkMode} onOpen={() => {
+      {currentView !== 'landing' && <LuminaFloatingShortcut isDarkMode={isDarkMode} onOpen={() => {
           setSharedSeller(null);
           setSharedPostId(null);
           setSelectedPostId(null);
           navigateToView('assistant');
-        }} />
+        }} />}
 
       {!isOnline && (
         <div className="sticky top-16 z-30 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs font-medium text-amber-200" role="status">
@@ -1234,6 +1234,7 @@ export default function App() {
             >
               <LandingPage
                 onOpenAuth={handleOpenAuthWithRole}
+                onNavigate={navigateToView}
                 isDarkMode={isDarkMode}
                 promotedTailors={users.filter(user => user.isPromoted && user.role === 'tailor').slice(0, 12)}
                 promotedPosts={posts.filter(post => post.isPromoted)}
