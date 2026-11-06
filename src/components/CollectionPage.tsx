@@ -6,6 +6,7 @@ import { uploadUserImage } from '../services/mediaUpload';
 import { api } from '../services/api';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { PostImage } from './PostImage';
+import { getImageSizeError } from '../utils/mediaLimits';
 
 interface CollectionUploadItem {
   id: string;
@@ -139,6 +140,11 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
     const validFiles = incomingFiles.filter((file) => file.type.startsWith('image/'));
     if (!validFiles.length) {
       setCollectionStatus('Choose valid image files for your collection.');
+      return;
+    }
+    const oversizedFile = validFiles.find(file => getImageSizeError(file));
+    if (oversizedFile) {
+      setCollectionStatus(getImageSizeError(oversizedFile));
       return;
     }
 

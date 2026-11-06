@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sun, Moon, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw, Share2, Info, Mail, House, UserRound } from 'lucide-react';
+import { Contrast, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw, Share2, Info, Mail, House, UserRound } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -51,7 +51,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           : 'bg-white/90 border-neutral-200/80 text-neutral-900 shadow-xs'
       }`}
     >
-      <div className="navbar-sunset-rays" aria-hidden="true"><span className="navbar-sunset-particles" /></div>
       <div className="relative z-10 mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-3 sm:px-6 lg:px-8">
         {/* Brand lockup */}
         <div
@@ -207,7 +206,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             aria-label="Toggle dark/light mode"
             className="p-2 rounded-xl border border-neutral-700/50 hover:border-amber-500/40 text-neutral-400 hover:text-amber-400 transition-all cursor-pointer"
           >
-            {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            <Contrast className="w-4 h-4" />
           </button>
 
           {/* User Auth or Profile */}
@@ -296,7 +295,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
                 <div className="mobile-nav-actions grid grid-cols-2 gap-2 border-t border-neutral-800 pt-2">
                   <button type="button" onClick={() => { setMobileMenuOpen(false); onRefresh(); }} disabled={isRefreshing} className="mobile-nav-item"><RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />Refresh</button>
-                  <button type="button" onClick={onToggleTheme} className="mobile-nav-item">{isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}Theme</button>
+                  <button type="button" onClick={onToggleTheme} className="mobile-nav-item"><Contrast className="h-4 w-4" />Theme</button>
                   <button type="button" onClick={() => { setMobileMenuOpen(false); onShare(); }} className="mobile-nav-item"><Share2 className="h-4 w-4" />Share</button>
                   {currentUser ? <button type="button" onClick={() => { setMobileMenuOpen(false); onLogout(); }} className="mobile-nav-item text-red-300"><LogOut className="h-4 w-4" />Logout</button> : <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item text-amber-300"><UserRound className="h-4 w-4" />Sign in</button>}
                 </div>

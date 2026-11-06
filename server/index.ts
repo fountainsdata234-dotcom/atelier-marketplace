@@ -112,6 +112,8 @@ import {
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
+const MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_STORY_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024;
 const gemini = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 const cloudinaryConfigured = !!process.env.CLOUDINARY_CLOUD_NAME && !!process.env.CLOUDINARY_API_KEY && !!process.env.CLOUDINARY_API_SECRET;
 if (cloudinaryConfigured) {
@@ -256,7 +258,7 @@ function isLocalNetworkOrigin(origin: string) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: MAX_STORY_VIDEO_UPLOAD_BYTES },
 });
 
 app.use(cors({
@@ -1615,23 +1617,100 @@ app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest,
   res.status(204).send();
 });
 
+async function removeStoryMedia(story: Record<string, unknown>) {
+  const mediaUrl = String(story.media_url || '');
+  const publicId = String(story.cloudinary_public_id || '');
+  const ownerId = String(story.tailor_id || story.tailorId || '');
+  if (!publicId || publicId.includes('..') || !ownerId || !publicId.startsWith(`stories/${ownerId}/`)) {
+    throw new Error('Story storage path is invalid; cleanup was not attempted.');
+  }
+  let isCloudinaryAsset = false;
+  try {
+    isCloudinaryAsset = new URL(mediaUrl).hostname === 'res.cloudinary.com';
+  } catch {
+    throw new Error('Story media URL is invalid; storage cleanup was not attempted.');
+  }
+
+  if (isCloudinaryAsset) {
+    if (!cloudinaryConfigured) throw new Error('Cloudinary is not configured to remove this story asset.');
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: story.media_type === 'video' ? 'video' : 'image',
+      invalidate: true,
+    });
+    if (result.result !== 'ok' && result.result !== 'not found') {
+      throw new Error(`Cloudinary did not confirm story cleanup (${result.result}).`);
+    }
+    return;
+  }
+
+  await deleteUpload(publicId);
+  if (story.media_type !== 'video' && /\.jpe?g$/i.test(publicId)) {
+    await deleteUpload(publicId.replace(/\.jpe?g$/i, '-thumb.jpg'));
+  }
+}
+
+function uploadCompressedStoryToCloudinary(buffer: Buffer, userId: string, mediaType: 'image' | 'video') {
+  return new Promise<{ url: string; publicId: string }>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream({
+      resource_type: mediaType,
+      folder: `stories/${userId}`,
+      public_id: `story-${randomUUID()}`,
+      transformation: [{
+        ...(mediaType === 'image' ? { width: 1400, height: 1400 } : { width: 1080, height: 1920 }),
+        crop: 'limit',
+        quality: 'auto:good',
+      }],
+    }, (error, result) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      if (!result?.secure_url || !result.public_id) {
+        reject(new Error('Cloudinary returned incomplete story upload data.'));
+        return;
+      }
+      resolve({ url: result.secure_url, publicId: result.public_id });
+    });
+    stream.end(buffer);
+  });
+}
+
+function canPublishStory(profile: ProfileRecord | null) {
+  const promotionExpiry = profile?.promotionExpiresAt ?? profile?.promotion_expires_at;
+  const promotionValid = profile?.isPromoted === true
+    && (promotionExpiry == null || new Date(String(promotionExpiry)).getTime() > Date.now());
+  return profile?.role === 'admin' || (profile?.role === 'tailor' && promotionValid);
+}
+
+let expiredStoryCleanupRunning = false;
+async function cleanupExpiredStories() {
+  if (expiredStoryCleanupRunning) return;
+  expiredStoryCleanupRunning = true;
+  try {
+    const expired = await listExpiredStories();
+    const cleanedIds: string[] = [];
+    await Promise.all(expired.map(async story => {
+      try {
+        await removeStoryMedia(story);
+        cleanedIds.push(String(story.id));
+      } catch (error) {
+        console.warn('Expired story media cleanup failed; record retained for retry.', {
+          storyId: story.id,
+          error,
+        });
+      }
+    }));
+    await deleteExpiredStoriesByIds(cleanedIds);
+  } finally {
+    expiredStoryCleanupRunning = false;
+  }
+}
+
 app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
   res.set('Cache-Control', 'private, no-store, max-age=0');
   try {
     try {
-      const expired = await listExpiredStories();
-      if (expired.length) {
-        if (cloudinaryConfigured) {
-          await Promise.all(expired.map(story => cloudinary.uploader.destroy(String(story.cloudinary_public_id || ''), {
-            resource_type: story.media_type === 'video' ? 'video' : 'image',
-            invalidate: true,
-          }).catch(() => undefined)));
-            await Promise.all(expired.map(story => deleteUpload(String(story.cloudinary_public_id || '')).catch(() => undefined)));
-        }
-        await deleteExpiredStoriesByIds(expired.map(story => String(story.id))).catch(error => {
-          console.warn('Expired story cleanup failed', error);
-        });
-      }
+      await cleanupExpiredStories();
     } catch (error) {
       console.warn('Expired story lookup failed', error);
     }
@@ -1669,18 +1748,20 @@ app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
 
 app.post('/api/stories', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
   const mediaUrl = String(req.body?.mediaUrl || '').trim();
+  const thumbnailUrl = String(req.body?.thumbnailUrl || mediaUrl).trim();
   const publicId = String(req.body?.cloudinaryPublicId || '').trim();
   const mediaType = req.body?.mediaType === 'video' ? 'video' : 'image';
   if (!mediaUrl || !publicId || !/^https?:\/\//i.test(mediaUrl)) {
     res.status(400).json({ error: 'Upload a photo or video story first.' });
     return;
   }
+  if (!/^https?:\/\//i.test(thumbnailUrl)) {
+    res.status(400).json({ error: 'The story thumbnail URL is invalid.' });
+    return;
+  }
   try {
     const profile = await readProfile(req.authUser!.uid);
-    const promotionExpiry = profile?.promotionExpiresAt ?? profile?.promotion_expires_at;
-    const promotionValid = profile?.isPromoted === true
-      && (promotionExpiry == null || new Date(String(promotionExpiry)).getTime() > Date.now());
-    if (profile?.role !== 'admin' && (profile?.role !== 'tailor' || !promotionValid)) {
+    if (!canPublishStory(profile)) {
       res.status(403).json({ error: 'Only an admin or active promoted tailor can add a story.' });
       return;
     }
@@ -1688,7 +1769,7 @@ app.post('/api/stories', requireAuth, requireActiveAccount, async (req: Authenti
     const story = await createStory({
       tailorId: req.authUser!.uid,
       mediaUrl,
-      thumbnailUrl: mediaUrl,
+      thumbnailUrl,
       mediaType,
       cloudinaryPublicId: publicId,
       expiresAt,
@@ -1716,7 +1797,14 @@ app.post('/api/stories', requireAuth, requireActiveAccount, async (req: Authenti
       hint: details.hint,
       tailorId: req.authUser!.uid,
     });
-    await deleteUpload(publicId).catch(() => undefined);
+    await removeStoryMedia({
+      media_url: mediaUrl,
+      cloudinary_public_id: publicId,
+      media_type: mediaType,
+      tailor_id: req.authUser!.uid,
+    }).catch(cleanupError => {
+      console.error('Failed to remove an unpublished story upload.', cleanupError);
+    });
     res.status(500).json({ error: 'The story could not be published.' });
   }
 });
@@ -1747,14 +1835,8 @@ app.delete('/api/stories/:storyId', requireAuth, requireActiveAccount, async (re
       res.status(404).json({ error: 'Story not found.' });
       return;
     }
+    await removeStoryMedia(target);
     await deleteStory(String(req.params.storyId), req.authUser!.uid);
-    if (cloudinaryConfigured) {
-      await cloudinary.uploader.destroy(String(target.cloudinary_public_id), {
-        resource_type: target.media_type === 'video' ? 'video' : 'image',
-        invalidate: true,
-      }).catch(() => undefined);
-      await deleteUpload(String(target.cloudinary_public_id)).catch(() => undefined);
-    }
     res.status(204).send();
   } catch (error) {
     console.error('Story delete failed', error);
@@ -1770,6 +1852,22 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
 
   const requestedFolder = String(req.body?.folder || 'atelier');
   const safeFolder = ['profiles', 'posts', 'atelier', 'stories'].includes(requestedFolder) ? requestedFolder : 'atelier';
+  const isVideo = req.file.mimetype.startsWith('video/');
+  if (isVideo && safeFolder !== 'stories') {
+    res.status(400).json({ error: 'Video uploads are only supported for stories.' });
+    return;
+  }
+  const fileSizeLimit = safeFolder === 'stories' && isVideo
+    ? MAX_STORY_VIDEO_UPLOAD_BYTES
+    : MAX_IMAGE_UPLOAD_BYTES;
+  if (req.file.size > fileSizeLimit) {
+    res.status(413).json({
+      error: safeFolder === 'stories' && isVideo
+        ? 'Story videos must be 50 MB or smaller.'
+        : 'Images must be 8 MB or smaller.',
+    });
+    return;
+  }
   if (safeFolder === 'posts') {
     if (req.authUser?.blocked) {
       res.status(403).json({ error: 'Blocked accounts cannot upload listing images.' });
@@ -1781,14 +1879,26 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
       return;
     }
   }
+  if (safeFolder === 'stories') {
+    const profile = await readProfile(req.authUser!.uid);
+    if (!canPublishStory(profile)) {
+      res.status(403).json({ error: 'Only an admin or active promoted tailor can upload a story.' });
+      return;
+    }
+  }
 
   try {
     if (safeFolder === 'stories' && req.file.mimetype.startsWith('video/')) {
-      if (!['video/mp4', 'video/webm', 'video/quicktime'].includes(req.file.mimetype) || req.file.size > 50 * 1024 * 1024) {
+      if (!['video/mp4', 'video/webm', 'video/quicktime'].includes(req.file.mimetype)) {
         res.status(400).json({ error: 'Upload an MP4, WebM, or MOV video up to 50 MB.' });
         return;
       }
-      const fileName = `story-${createHash('sha256').update(req.file.buffer).digest('hex')}${req.file.mimetype === 'video/quicktime' ? '.mov' : req.file.mimetype === 'video/webm' ? '.webm' : '.mp4'}`;
+      if (cloudinaryConfigured) {
+        const uploaded = await uploadCompressedStoryToCloudinary(req.file.buffer, req.authUser!.uid, 'video');
+        res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.publicId, mediaType: 'video', mimeType: req.file.mimetype });
+        return;
+      }
+      const fileName = `story-${randomUUID()}${req.file.mimetype === 'video/quicktime' ? '.mov' : req.file.mimetype === 'video/webm' ? '.webm' : '.mp4'}`;
       const uploaded = await uploadImage(req.authUser!.uid, safeFolder, fileName, req.file.buffer, req.file.mimetype);
       res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.path, mediaType: 'video', mimeType: req.file.mimetype });
       return;
@@ -1798,14 +1908,18 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
       res.status(400).json({ error: 'Upload a valid JPEG, PNG, WebP, or GIF image.' });
       return;
     }
+    if (safeFolder === 'stories' && cloudinaryConfigured) {
+      const uploaded = await uploadCompressedStoryToCloudinary(req.file.buffer, req.authUser!.uid, 'image');
+      res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.publicId, mediaType: 'image', mimeType: req.file.mimetype });
+      return;
+    }
+    const imagePipeline = () => sharp(req.file!.buffer, { limitInputPixels: 40_000_000 }).rotate();
     const [optimizedBuffer, thumbnailBuffer] = await Promise.all([
-      sharp(req.file.buffer, { limitInputPixels: 40_000_000 })
-        .rotate()
+      imagePipeline()
         .resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 78, progressive: true, mozjpeg: true })
         .toBuffer(),
-      sharp(req.file.buffer, { limitInputPixels: 40_000_000 })
-        .rotate()
+      imagePipeline()
         .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 72, progressive: true, mozjpeg: true })
         .toBuffer(),
@@ -5603,7 +5717,7 @@ app.delete('/api/admin/sellers/:uid', requireAuth, requireAdmin, async (req: Aut
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-    res.status(413).json({ error: 'Images must be 8 MB or smaller.', code: 'IMAGE_TOO_LARGE' });
+    res.status(413).json({ error: 'Images must be 8 MB or smaller; story videos must be 50 MB or smaller.', code: 'UPLOAD_TOO_LARGE' });
     return;
   }
   console.error('API error', error);
@@ -5620,6 +5734,18 @@ app.listen(port, () => {
     }
   };
   void refreshTrends();
+  if (supabaseDataEnabled) {
+    const cleanupStories = async () => {
+      try {
+        await cleanupExpiredStories();
+      } catch (error) {
+        console.error('Unable to clean up expired story media.', error);
+      }
+    };
+    void cleanupStories();
+    const storyCleanupTimer = setInterval(() => { void cleanupStories(); }, 5 * 60 * 1000);
+    storyCleanupTimer.unref();
+  }
   const trendRefreshTimer = setInterval(() => { void refreshTrends(); }, 10 * 60 * 1000);
   trendRefreshTimer.unref();
   const reconcilePromotions = async () => {

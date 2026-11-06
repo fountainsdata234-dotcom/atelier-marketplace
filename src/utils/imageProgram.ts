@@ -1,5 +1,5 @@
 /**
- * Compresses uploaded images before they are stored in Firebase Storage.
+ * Compresses listing images before they are sent to the upload API.
  */
 
 export interface ProcessedImageResult {
@@ -53,7 +53,7 @@ export async function compressAndGenerateImageLink(
   }
   const originalSizeKb = Math.round(file.size / 1024);
 
-  // Compress in the browser, then upload the resulting Blob to Firebase Storage.
+  // Compress in the browser, then upload the resulting Blob to the server.
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {

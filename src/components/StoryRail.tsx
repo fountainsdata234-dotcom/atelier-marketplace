@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, X, ChevronLeft, ChevronRight, Trash2, Eye, Heart, Send, Play, Pause, BarChart3 } from 'lucide-react';
 import { TailorStory, User } from '../types';
 import { api } from '../services/api';
-import { getPublicUserName } from '../utils/profile';
+import { getStoryUploadSizeError } from '../utils/mediaLimits';
 
 const formatHandle = (handle?: string) => {
   const value = handle?.trim() || '';
@@ -31,10 +31,30 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
 
   const loadStories = () => {
-    api.getStories().then(setStories).catch(() => setStories([]));
+    api.getStories().then(setStories).catch(error => {
+      console.error('Unable to load stories.', error);
+      setStories([]);
+    });
   };
 
-  useEffect(loadStories, []);
+  useEffect(() => {
+    loadStories();
+    const refresh = window.setInterval(loadStories, 60_000);
+    return () => window.clearInterval(refresh);
+  }, []);
+
+  useEffect(() => {
+    const nextExpiry = stories
+      .map(story => new Date(story.expiresAt).getTime())
+      .filter(expiry => Number.isFinite(expiry) && expiry > Date.now())
+      .sort((left, right) => left - right)[0];
+    if (nextExpiry === undefined) return;
+    const timer = window.setTimeout(() => {
+      setStories(current => current.filter(story => new Date(story.expiresAt).getTime() > Date.now()));
+      loadStories();
+    }, nextExpiry - Date.now());
+    return () => window.clearTimeout(timer);
+  }, [stories]);
 
   useEffect(() => {
     const openStoryPicker = () => storyFileInputRef.current?.click();
@@ -58,6 +78,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const groupedStories = useMemo(() => {
     const groups = new Map<string, TailorStory[]>();
     [...stories]
+      .filter(story => new Date(story.expiresAt).getTime() > Date.now())
       .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
       .forEach(story => groups.set(story.tailorId, [...(groups.get(story.tailorId) || []), story]));
     return [...groups.entries()].filter(([tailorId]) => {
@@ -73,8 +94,21 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
       && (!currentUser.promotionExpiresAt || new Date(currentUser.promotionExpiresAt).getTime() > Date.now()));
   const activeIndex = activeTailorId ? groupedStories.findIndex(([tailorId]) => tailorId === activeTailorId) : -1;
   const activeStories = activeTailorId ? groupedStories.find(([tailorId]) => tailorId === activeTailorId)?.[1] || [] : [];
+  useEffect(() => {
+    if (activeTailorId && activeStories.length === 0) setActiveTailorId(null);
+  }, [activeTailorId, activeStories.length]);
+
   const openComposer = (file: File) => {
-    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) return;
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+      setUploadError('Choose an image or video file for your story.');
+      return;
+    }
+    const sizeError = getStoryUploadSizeError(file);
+    if (sizeError) {
+      setUploadError(sizeError);
+      return;
+    }
+    setUploadError('');
     if (draftUrl) URL.revokeObjectURL(draftUrl);
     setDraftFile(file);
     setDraftUrl(URL.createObjectURL(file));
@@ -117,6 +151,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
           )}
         </div>
         <input ref={storyFileInputRef} className="hidden" aria-label="Add a story" type="file" accept="image/*,video/*" disabled={uploading} onChange={event => { const file = event.target.files?.[0]; if (file) openComposer(file); event.target.value = ''; }} />
+        {uploadError && !draftFile && <p role="alert" className="mx-1 mb-2 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-600">{uploadError}</p>}
         <div className="flex snap-x gap-3.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:gap-4">
           {groupedStories.map(([tailorId, tailorStories]) => {
             const tailor = userById.get(tailorId);
@@ -136,8 +171,8 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                   {tailor?.role === 'admin' && <span className="admin-digital-name absolute left-1/2 top-[-18px] -translate-x-1/2 whitespace-nowrap text-[9px] text-amber-400">ADMIN</span>}
                   <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
                     {tailorStories[0].mediaType === 'video'
-                      ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                      : <img data-story-image src={tailorStories[0].mediaUrl} alt="" draggable={false} className="h-full w-full object-cover" />}
+                      ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" onError={event => { event.currentTarget.style.display = 'none'; }} className="h-full w-full object-cover" />
+                      : <img data-story-image src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} alt="" draggable={false} onError={event => { event.currentTarget.style.display = 'none'; }} className="h-full w-full object-cover" />}
                   </span>
                 </span>
                 <span className="w-[76px] truncate text-[10px] font-bold">
@@ -249,6 +284,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [reply, setReply] = useState('');
+  const [unavailableMedia, setUnavailableMedia] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const touchStartX = useRef<number | null>(null);
   const holdTimeout = useRef<number | null>(null);
@@ -267,6 +303,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   useEffect(() => {
     setLiked(Boolean(story?.likedByViewer));
     setReply('');
+    setUnavailableMedia(false);
   }, [story?.id]);
 
   useEffect(() => {
@@ -334,9 +371,11 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         onPointerCancel={endHold}
         onPointerLeave={endHold}
       >
-        {story.mediaType === 'video'
-          ? <video ref={videoRef} data-story-image key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-contain" onEnded={() => move(1)} />
-          : <img data-story-image key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Merchant'} story`} draggable={false} className="h-full w-full object-contain" />}
+        {unavailableMedia
+          ? <div role="status" className="flex h-full w-full items-center justify-center px-8 text-center text-sm text-white/70">This story media is no longer available.</div>
+          : story.mediaType === 'video'
+            ? <video ref={videoRef} data-story-image key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-contain" onError={() => setUnavailableMedia(true)} onEnded={() => move(1)} />
+            : <img data-story-image key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Merchant'} story`} draggable={false} className="h-full w-full object-contain" onError={() => setUnavailableMedia(true)} />}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/75" />
         <div className="absolute left-3 right-3 top-3 z-20 flex gap-1">
           {chronologicalStories.map((item, index) => (

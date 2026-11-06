@@ -313,7 +313,6 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   useEffect(() => {
     const canvas = weatherCanvasRef.current;
     if (!canvas) return;
-    if (window.matchMedia('(max-width: 767px)').matches) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -349,55 +348,7 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
     const renderWeather = () => {
       const hour = new Date().getHours();
       const night = hour >= 18 || hour < 6;
-      const bodyWidth = Math.max(width * 0.16, mobile ? 112 : 84);
-      const bodyX = width * (mobile ? 0.76 : 0.82)
-        + Math.sin(frame * 0.0025) * width * (mobile ? 0.035 : 0.055)
-        + tiltRef.current.x * (mobile ? 42 : 76);
-      const bodyY = height * (mobile ? 0.18 : 0.17)
-        + Math.cos(frame * 0.0018) * height * (mobile ? 0.022 : 0.035)
-        + tiltRef.current.y * (mobile ? 24 : 42);
       ctx.clearRect(0, 0, width, height);
-
-      ctx.save();
-      ctx.globalCompositeOperation = 'screen';
-      const light = ctx.createRadialGradient(bodyX, bodyY, 0, bodyX, bodyY, Math.max(width * 0.38, 260));
-      light.addColorStop(0, night ? 'rgba(205, 224, 255, 0.34)' : 'rgba(255, 226, 128, 0.42)');
-      light.addColorStop(0.16, night ? 'rgba(168, 196, 255, 0.16)' : 'rgba(255, 193, 73, 0.18)');
-      light.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = light;
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.translate(bodyX, bodyY);
-      ctx.rotate(frame * (night ? 0.00012 : -0.0002));
-      ctx.strokeStyle = night ? 'rgba(208, 226, 255, 0.12)' : 'rgba(255, 224, 142, 0.16)';
-      ctx.lineWidth = mobile ? 12 : 18;
-      for (let ray = 0; ray < 16; ray += 1) {
-        ctx.rotate(Math.PI / 8);
-        ctx.beginPath();
-        ctx.moveTo(bodyWidth * 0.35, 0);
-        ctx.lineTo(Math.max(width * 0.38, 260), 0);
-        ctx.stroke();
-      }
-      ctx.rotate(-frame * (night ? 0.00012 : -0.0002));
-
-      ctx.beginPath();
-      ctx.arc(0, 0, mobile ? 24 : 32, 0, Math.PI * 2);
-      const sunGradient = ctx.createRadialGradient(mobile ? -8 : -11, mobile ? -10 : -14, 2, 0, 0, mobile ? 24 : 32);
-      sunGradient.addColorStop(0, '#f8d675');
-      sunGradient.addColorStop(0.32, '#d9a441');
-      sunGradient.addColorStop(0.68, '#ad7040');
-      sunGradient.addColorStop(1, '#5f3828');
-      ctx.fillStyle = night ? '#dce8ff' : sunGradient;
-      ctx.shadowColor = night ? '#9bbcff' : 'rgba(194, 122, 62, 0.78)';
-      ctx.shadowBlur = night ? (mobile ? 34 : 48) : (mobile ? 46 : 68);
-      ctx.fill();
-      if (night) {
-        ctx.beginPath();
-        ctx.arc(mobile ? 10 : 12, mobile ? -5 : -7, mobile ? 22 : 31, 0, Math.PI * 2);
-        ctx.fillStyle = isDarkMode ? '#101827' : '#dfe7f3';
-        ctx.fill();
-      }
-      ctx.restore();
 
       particles.forEach(particle => {
         particle.y += night ? particle.speed * 0.75 : particle.speed * 0.45;
@@ -410,9 +361,9 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
         if (particle.x < -12) particle.x = width + 12;
         ctx.beginPath();
         ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-        ctx.fillStyle = night ? `rgba(220, 235, 255, ${0.35 + particle.radius * 0.12})` : `rgba(255, 210, 110, ${0.22 + particle.radius * 0.07})`;
-        ctx.shadowColor = night ? '#dceaff' : '#ffd978';
-        ctx.shadowBlur = night ? 8 : 10;
+        ctx.fillStyle = night ? `rgba(230, 240, 255, ${0.38 + particle.radius * 0.12})` : `rgba(255, 132, 79, ${0.24 + particle.radius * 0.07})`;
+        ctx.shadowColor = night ? '#e6f0ff' : '#ff8754';
+        ctx.shadowBlur = night ? 5 : 6;
         ctx.fill();
       });
 
@@ -430,7 +381,7 @@ export const NeedleThreadBackground: React.FC<NeedleThreadBackgroundProps> = ({ 
   return (
     <div className="fixed inset-0 pointer-events-none z-[20] overflow-hidden select-none">
       <canvas ref={canvasRef} className="w-full h-full block max-md:hidden" />
-      <canvas ref={weatherCanvasRef} aria-hidden="true" className="absolute inset-0 hidden h-full w-full opacity-90 mix-blend-screen md:block" />
+      <canvas ref={weatherCanvasRef} aria-hidden="true" className="absolute inset-0 block h-full w-full opacity-90 mix-blend-screen" />
       {/* Interactive Needle Indicator Badge */}
       <div className="absolute top-20 right-4 pointer-events-none hidden md:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border backdrop-blur-md opacity-60 bg-neutral-900/40 text-amber-300 border-amber-500/20">
         <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />

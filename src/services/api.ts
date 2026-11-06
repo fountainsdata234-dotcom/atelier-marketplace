@@ -3,6 +3,7 @@ import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMes
 import { getAuthToken, isSupabaseAuthReady } from './auth';
 import { uploadFormDataWithProgress } from './mediaUpload';
 import { customerMessageForHttpError, customerMessageForNetworkError, safeCustomerErrorMessage } from '../utils/customerMessages';
+import { MAX_IMAGE_UPLOAD_BYTES, getStoryUploadSizeError } from '../utils/mediaLimits';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 const PUBLIC_READ_CACHE_TTL_MS = 60_000;
@@ -185,12 +186,14 @@ async function performRequest<T>(
 export const api = {
   getStories: () => request<TailorStory[]>('/api/stories'),
   createStory: async (file: File, caption = '', onProgress?: (progress: number) => void) => {
+    const sizeError = getStoryUploadSizeError(file);
+    if (sizeError) throw new Error(sizeError);
     const apiUrl = API_URL;
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
     formData.append(file.type.startsWith('video/') ? 'image' : 'image', file, file.name);
     formData.append('folder', 'stories');
-    const uploaded = await uploadFormDataWithProgress<{ url: string; publicId: string; mediaType?: string }>(`${apiUrl}/api/upload`, formData, token, onProgress);
+    const uploaded = await uploadFormDataWithProgress<{ url: string; thumbnailUrl?: string; publicId: string; mediaType?: string }>(`${apiUrl}/api/upload`, formData, token, onProgress);
     if (!uploaded.url || !uploaded.publicId) throw new Error("We couldn't finish uploading your story. Please try again.");
     return request<TailorStory>('/api/stories', {
       method: 'POST',
@@ -198,6 +201,7 @@ export const api = {
         mediaUrl: uploaded.url,
         cloudinaryPublicId: uploaded.publicId,
         mediaType: uploaded.mediaType || (file.type.startsWith('video/') ? 'video' : 'image'),
+        thumbnailUrl: uploaded.thumbnailUrl || uploaded.url,
         caption,
       }),
     });
@@ -479,6 +483,7 @@ export const api = {
   moderateListing: (listingId: string, decision: 'approve' | 'reject', reason?: string) => request<ClothPost>(`/api/admin/listings/${listingId}/moderation`, { method: 'PATCH', body: JSON.stringify({ decision, reason }) }),
   reportListing: (listingId: string, reason: string, details?: string) => request<{ ok: boolean }>(`/api/posts/${listingId}/report`, { method: 'POST', body: JSON.stringify({ reason, details }) }),
   uploadListingImage: async (file: Blob, fileName: string, onProgress?: (progress: number) => void): Promise<ListingImageAsset> => {
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) throw new Error('Post images must be 8 MB or smaller.');
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
     formData.append('image', file, fileName.replace(/\.[^.]+$/, '') + '.jpg');
