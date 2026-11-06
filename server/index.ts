@@ -1195,6 +1195,80 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
+const CONTACT_RECIPIENT = 'fountainsdata234@gmail.com';
+const contactSubmissions = new Map<string, number[]>();
+app.post('/api/contact', async (req: Request, res: Response) => {
+  const input = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body as Record<string, unknown>
+    : {};
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
+  const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
+  const subject = typeof input.subject === 'string' ? input.subject.trim() : '';
+  const message = typeof input.message === 'string' ? input.message.trim() : '';
+  const honeypot = typeof input.website === 'string' ? input.website.trim() : '';
+  if (honeypot) {
+    res.status(200).json({ ok: true });
+    return;
+  }
+  if (name.length < 2 || name.length > 100
+    || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    || !['Account support', 'Seller or listing question', 'Partnership opportunity', 'Payments and plans', 'Something else'].includes(subject)
+    || message.length < 10 || message.length > 4000) {
+    res.status(400).json({ error: 'Please check your name, email, topic, and message, then try again.' });
+    return;
+  }
+
+  const now = Date.now();
+  const recentAttempts = (contactSubmissions.get(email) || []).filter(timestamp => now - timestamp < 15 * 60_000);
+  if (recentAttempts.length >= 5) {
+    res.status(429).json({ error: 'Too many messages were sent from this email. Please try again in 15 minutes.' });
+    return;
+  }
+  recentAttempts.push(now);
+  contactSubmissions.set(email, recentAttempts);
+  for (const [key, timestamps] of contactSubmissions) {
+    if (!timestamps.some(timestamp => now - timestamp < 15 * 60_000)) contactSubmissions.delete(key);
+  }
+
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.CONTACT_FROM_EMAIL?.trim();
+  if (!resendApiKey || !from) {
+    res.status(503).json({ error: 'The contact form is temporarily unavailable. Please use WhatsApp instead.' });
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [CONTACT_RECIPIENT],
+        reply_to: email,
+        subject: `[FABSATTIRE Contact] ${subject}`,
+        text: `Name: ${name}\nEmail: ${email}\nTopic: ${subject}\n\nMessage:\n${message}`,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      console.error('Contact email provider rejected a message.', { status: response.status });
+      res.status(502).json({ error: 'We could not deliver your message right now. Please try WhatsApp or try again shortly.' });
+      return;
+    }
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error('Contact email delivery failed.', error);
+    res.status(502).json({ error: 'We could not deliver your message right now. Please try WhatsApp or try again shortly.' });
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
 app.get('/api/location/countries', (_req, res) => {
   res.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
   res.json(listLocationCountries());

@@ -184,6 +184,11 @@ async function performRequest<T>(
 }
 
 export const api = {
+  submitContactMessage: (message: { name: string; email: string; subject: string; message: string; website?: string }) =>
+    request<{ ok: boolean }>('/api/contact', {
+      method: 'POST',
+      body: JSON.stringify(message),
+    }),
   getStories: () => request<TailorStory[]>('/api/stories'),
   createStory: async (file: File, caption = '', onProgress?: (progress: number) => void) => {
     const sizeError = getStoryUploadSizeError(file);

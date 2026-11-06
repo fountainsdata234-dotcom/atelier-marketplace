@@ -72,6 +72,8 @@ It is especially useful for communities where shoppers want to:
 
 For the Render API deployment, set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, and `GEMINI_MODEL` in the service environment. The Vercel frontend uses `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; its `/api` rewrite forwards API requests to Render. If the Vercel project uses a direct API URL, set the production-only `VITE_API_URL` to the Render service URL and redeploy the frontend.
 
+The public Contact form sends messages through Resend to `fountainsdata234@gmail.com`. Configure the server-only `RESEND_API_KEY` and `CONTACT_FROM_EMAIL` Render environment variables; the sender address must belong to a domain verified in Resend. These credentials must never use a `VITE_` prefix or be placed in frontend configuration.
+
 New accounts are directed to the sign-in form after creation. To allow immediate sign-in without an email confirmation step, turn off **Confirm email** in the Supabase project's Authentication email-provider settings. This is a Supabase project setting and cannot be changed safely by the public client application.
 
 To import legacy Firebase records once, place the Firebase Admin service-account JSON at the ignored path `server/firebase-service-account.json`, confirm the Supabase SQL files have been applied, and run `npm run migrate:firebase-to-supabase`. The migration is additive and safe to rerun. Firebase passwords cannot be exported as plain text, so migrated users must reset their password before signing in. Firebase is not required for normal app startup or Supabase-backed marketplace operations.
