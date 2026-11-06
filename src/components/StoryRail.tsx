@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, X, ChevronLeft, ChevronRight, Trash2, Eye, Heart, Send, Play, Pause, BarChart3 } from 'lucide-react';
 import { TailorStory, User } from '../types';
 import { api } from '../services/api';
+import { getPublicUserName } from '../utils/profile';
 
 const formatHandle = (handle?: string) => {
   const value = handle?.trim() || '';
@@ -132,7 +133,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                 className="flex min-w-[76px] flex-col items-center gap-1.5"
               >
                 <span className="relative rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
-                  {tailor?.role === 'admin' && <span className="absolute left-1/2 top-[-18px] -translate-x-1/2 whitespace-nowrap text-[9px] font-black uppercase tracking-[0.12em] text-amber-400">Admin</span>}
+                  {tailor?.role === 'admin' && <span className="admin-digital-name absolute left-1/2 top-[-18px] -translate-x-1/2 whitespace-nowrap text-[9px] text-amber-400">ADMIN</span>}
                   <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
                     {tailorStories[0].mediaType === 'video'
                       ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />
@@ -140,7 +141,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                   </span>
                 </span>
                 <span className="w-[76px] truncate text-[10px] font-bold">
-                  {tailor?.role === 'admin' ? 'OBA 👑' : formatHandle(tailor?.handle) || `@${tailor?.shopName || tailor?.name || 'merchant'}`}
+                  {tailor?.role === 'admin' ? <span className="admin-digital-name">ADMIN</span> : formatHandle(tailor?.handle) || `@${tailor?.shopName || tailor?.name || 'merchant'}`}
                 </span>
               </button>
             );

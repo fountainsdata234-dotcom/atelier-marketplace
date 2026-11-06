@@ -9,6 +9,7 @@ import { uploadUserImage } from '../services/mediaUpload';
 import { getAuthErrorMessage, resetAuthPassword, signInWithEmail, signOutAuth, signUpWithEmail } from '../services/auth';
 import { api } from '../services/api';
 import { SearchableLocationField } from './SearchableLocationField';
+import { validatePublicIdentity } from '../utils/profile';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -391,6 +392,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const userHandle = handle.trim() 
       ? (handle.startsWith('@') ? handle.trim() : `@${handle.trim()}`)
       : `@${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    const identityError = validatePublicIdentity(name, userHandle, shopName);
+    if (identityError) {
+      setError(identityError);
+      return;
+    }
 
     const location = {
       country: selectedCountry.name,

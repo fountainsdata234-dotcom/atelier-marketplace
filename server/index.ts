@@ -149,6 +149,17 @@ const bossIdentity = {
   phone: process.env.BOSS_PHONE?.trim() || 'Phone not published in environment config',
 };
 
+const reservedIdentityPattern = /(^|[\s_.-])(admin|administrator|owner|site owner|boss|super admin|super administrator)([\s_.-]|$)/i;
+const normalizeReservedIdentity = (value: string) => value.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function isReservedPublicIdentity(value: string, includeOwnerIdentity = false) {
+  if (!value.trim()) return false;
+  const normalized = normalizeReservedIdentity(value);
+  if (reservedIdentityPattern.test(value) || ['admin', 'administrator', 'owner', 'siteowner', 'boss', 'superadmin', 'superadministrator'].includes(normalized.replace(/\s+/g, ''))) return true;
+  if (!includeOwnerIdentity) return false;
+  const ownerValues = [bossIdentity.name, bossIdentity.email.split('@')[0]];
+  return ownerValues.some(ownerValue => normalized === normalizeReservedIdentity(ownerValue));
+}
+
 const geminiUsageTracker = {
   usedTokens: 0,
   limitTokens: Number(process.env.GEMINI_TOKEN_LIMIT || process.env.GEMINI_MONTHLY_TOKEN_LIMIT || 1_000_000),
@@ -2293,6 +2304,14 @@ app.put('/api/profile', requireAuth, requireActiveAccount, async (req: Authentic
   if (!await enforceAbuseLimit(req, res, 'profile_write', req.authUser!.uid)) return;
   const profile = buildProfileUpdate(req.body || {});
   const existingProfile = await readProfile(req.authUser!.uid);
+  const isAdminProfile = existingProfile?.role === 'admin' || req.authUser!.admin === true;
+  if (!isAdminProfile) {
+    const reservedField = ['name', 'handle', 'shopName'].find(field => isReservedPublicIdentity(String(profile[field] || ''), true));
+    if (reservedField) {
+      res.status(400).json({ error: 'Admin, owner, boss, site-owner, and the owner’s identity are reserved and cannot be used by another account.' });
+      return;
+    }
+  }
   if (existingProfile) {
     delete profile.role;
     const requestedAddress = req.body?.location && typeof req.body.location.businessAddress === 'string'

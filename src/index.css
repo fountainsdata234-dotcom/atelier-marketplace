@@ -86,6 +86,13 @@
     font-weight: 900;
   }
 
+  .admin-digital-name {
+    font-family: 'Orbitron', 'Segoe UI', monospace;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
   .typing-caret {
     border-right: 2px solid currentColor;
     padding-right: 0.08em;
@@ -130,16 +137,17 @@
     position: absolute;
     top: -7rem;
     right: -4rem;
-    width: 9rem;
-    height: 8rem;
+    width: 7rem;
+    height: 6rem;
     pointer-events: none;
     opacity: 0.92;
     overflow: hidden;
     background:
-      radial-gradient(circle at 91% 10%, rgba(255, 218, 132, 0.55) 0 0.42rem, rgba(255, 177, 61, 0.24) 0.65rem, transparent 1.15rem),
-      repeating-conic-gradient(from 112deg at 91% 9%, transparent 0deg 7deg, rgba(255, 181, 72, 0.12) 8deg 12deg, transparent 13deg 22deg),
-      radial-gradient(ellipse at 91% 7%, rgba(255, 139, 52, 0.32), rgba(244, 114, 42, 0.12) 35%, transparent 68%);
-    filter: blur(0.35px) drop-shadow(-0.8rem 0.9rem 1.2rem rgba(245, 158, 11, 0.16));
+      radial-gradient(circle at 91% 10%, rgba(255, 218, 132, 0.48) 0 0.42rem, rgba(255, 111, 97, 0.22) 0.65rem, transparent 1.15rem),
+      repeating-conic-gradient(from 112deg at 91% 9%, transparent 0deg 10deg, rgba(255, 107, 107, 0.07) 10deg 11deg, transparent 12deg 27deg),
+      radial-gradient(ellipse at 91% 7%, rgba(255, 89, 65, 0.28), rgba(214, 51, 132, 0.1) 35%, transparent 68%);
+    filter: blur(0.35px) drop-shadow(-0.8rem 0.9rem 1.2rem rgba(255, 94, 77, 0.14));
+    mix-blend-mode: screen;
     z-index: 0;
   }
 
@@ -148,8 +156,8 @@
     content: '';
     position: absolute;
     border-radius: 999px;
-    background: rgba(255, 211, 119, 0.42);
-    box-shadow: 1.4rem 1.1rem 0 rgba(247, 157, 64, 0.24), 3.2rem 2.1rem 0 rgba(255, 214, 122, 0.18), 4.6rem .7rem 0 rgba(244, 114, 42, 0.2), 5.5rem 2.8rem 0 rgba(255, 202, 107, 0.16), 6.7rem 1.4rem 0 rgba(247, 157, 64, 0.14), 8.1rem 3.1rem 0 rgba(255, 224, 154, 0.12);
+    background: rgba(255, 211, 119, 0.24);
+    box-shadow: 1rem 0.7rem 0 rgba(247, 157, 64, 0.14), 2.3rem 1.4rem 0 rgba(255, 214, 122, 0.1), 3.5rem .5rem 0 rgba(244, 114, 42, 0.12), 4.3rem 1.7rem 0 rgba(255, 202, 107, 0.09);
   }
 
   .navbar-sunset-rays::before {
@@ -173,8 +181,8 @@
     width: 0.19rem;
     height: 0.19rem;
     border-radius: 999px;
-    background: rgba(255, 224, 154, 0.38);
-    box-shadow: 3.5rem 3.2rem 0 rgba(255, 190, 91, 0.24), 5.8rem 0.8rem 0 rgba(245, 158, 11, 0.2), 8.2rem 4.8rem 0 rgba(255, 214, 122, 0.18), 10.6rem 1.2rem 0 rgba(244, 114, 42, 0.16), 13.8rem 6rem 0 rgba(255, 224, 154, 0.13);
+    background: rgba(255, 224, 154, 0.24);
+    box-shadow: 3rem 2.4rem 0 rgba(255, 190, 91, 0.15), 5rem 0.7rem 0 rgba(245, 158, 11, 0.12), 6.8rem 3.4rem 0 rgba(255, 214, 122, 0.11), 8.8rem 1rem 0 rgba(244, 114, 42, 0.1);
     animation: sunset-particle-drift 6s ease-in-out -2s infinite alternate;
   }
 
@@ -753,8 +761,8 @@
   width: 5.5rem;
   height: 5.5rem;
   border-radius: 9999px;
-  background: radial-gradient(circle, rgba(255, 251, 235, 1) 0%, rgba(253, 186, 116, 1) 20%, rgba(251, 146, 60, 0.8) 38%, rgba(251, 146, 60, 0.15) 64%, transparent 100%);
-  box-shadow: 0 0 30px rgba(251, 146, 60, 0.8), 0 0 80px rgba(251, 146, 60, 0.26);
+  background: radial-gradient(circle, rgba(255, 236, 179, 1) 0%, rgba(255, 165, 82, 1) 18%, rgba(255, 92, 82, 0.88) 38%, rgba(255, 92, 82, 0.16) 64%, transparent 100%);
+  box-shadow: 0 0 30px rgba(255, 92, 82, 0.78), 0 0 80px rgba(255, 92, 82, 0.24);
   animation: sunsetPulse 5s ease-in-out infinite alternate;
 }
 

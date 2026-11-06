@@ -14,6 +14,30 @@ export function getRoleLabel(role: UserRole): string {
   return 'Buyer';
 }
 
+const RESERVED_IDENTITY_PATTERN = /(^|[\s_.-])(admin|administrator|owner|site owner|boss|super admin|super administrator)([\s_.-]|$)/i;
+
+export function validatePublicIdentity(name: string, handle = '', shopName = ''): string | null {
+  const values = [name, handle, shopName];
+  if (values.some(value => RESERVED_IDENTITY_PATTERN.test(value))) {
+    return 'Admin, owner, boss, and administrator names or handles are reserved for the site owner.';
+  }
+  const normalizedHandle = handle.trim().replace(/^@/, '').toLowerCase();
+  if (['admin', 'administrator', 'owner', 'siteowner', 'boss', 'superadmin'].includes(normalizedHandle.replace(/[\s_.-]/g, ''))) {
+    return 'This handle is reserved for the site owner.';
+  }
+  const ownerAliases = ['fountainsdata', 'fountainsdata234', 'fountainsdata234@gmail.com'];
+  const normalizedOwnerAlias = values.map(value => value.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9]+/g, ''));
+  if (normalizedOwnerAlias.some(value => ownerAliases.includes(value))) {
+    return 'The site owner’s name and handle are reserved.';
+  }
+  return null;
+}
+
+export function getPublicUserName(user: { role?: UserRole; name?: string; shopName?: string }): string {
+  if (user.role === 'admin') return 'ADMIN';
+  return user.name?.trim() || user.shopName?.trim() || 'Atelier Member';
+}
+
 export function getHandleSlug(handle: string): string {
   return handle.replace(/^@/, '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-');
 }

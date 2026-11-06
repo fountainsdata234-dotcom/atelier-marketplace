@@ -5,7 +5,7 @@ import { api } from '../services/api';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/mediaUpload';
 import { getAuthUserId, signOutAuth } from '../services/auth';
-import { getProfileInitials, getRoleLabel } from '../utils/profile';
+import { getProfileInitials, getRoleLabel, validatePublicIdentity } from '../utils/profile';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 
 interface ProfilePageProps {
@@ -77,8 +77,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
       setStatus('Name and handle are required.');
       return;
     }
-    const cached = storageService.updateUser(currentUser.id, updates);
-    if (cached) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cached }));
+    const identityError = validatePublicIdentity(updates.name, updates.handle);
+    if (identityError) {
+      setStatus(identityError);
+      return;
+    }
     try {
       const saved = await api.saveProfile(updates);
       const synced = storageService.updateUser(currentUser.id, { ...updates, ...(saved || {}) });
