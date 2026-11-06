@@ -28,13 +28,25 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [draftCaption, setDraftCaption] = useState('');
   const [uploadError, setUploadError] = useState('');
   const storyFileInputRef = useRef<HTMLInputElement>(null);
+  const unavailableStoryIds = useRef(new Set<string>());
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
 
   const loadStories = () => {
-    api.getStories().then(setStories).catch(error => {
+    api.getStories().then(loadedStories => {
+      setStories(loadedStories.filter(story =>
+        new Date(story.expiresAt).getTime() > Date.now()
+        && !unavailableStoryIds.current.has(story.id),
+      ));
+    }).catch(error => {
       console.error('Unable to load stories.', error);
       setStories([]);
     });
+  };
+
+  const hideUnavailableStory = (storyId: string) => {
+    if (unavailableStoryIds.current.has(storyId)) return;
+    unavailableStoryIds.current.add(storyId);
+    setStories(current => current.filter(story => story.id !== storyId));
   };
 
   useEffect(() => {
@@ -171,8 +183,8 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                   {tailor?.role === 'admin' && <span className="admin-digital-name absolute left-1/2 top-[-18px] -translate-x-1/2 whitespace-nowrap text-[9px] text-amber-400">ADMIN</span>}
                   <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
                     {tailorStories[0].mediaType === 'video'
-                      ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" onError={event => { event.currentTarget.style.display = 'none'; }} className="h-full w-full object-cover" />
-                      : <img data-story-image src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} alt="" draggable={false} onError={event => { event.currentTarget.style.display = 'none'; }} className="h-full w-full object-cover" />}
+                      ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" onError={() => hideUnavailableStory(tailorStories[0].id)} className="h-full w-full object-cover" />
+                      : <img data-story-image src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} alt="" draggable={false} onError={() => hideUnavailableStory(tailorStories[0].id)} className="h-full w-full object-cover" />}
                   </span>
                 </span>
                 <span className="w-[76px] truncate text-[10px] font-bold">
@@ -193,9 +205,12 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
             owner={currentUser?.id === activeTailorId}
             onDelete={async storyId => {
               await api.deleteStory(storyId);
+              unavailableStoryIds.current.add(storyId);
+              setStories(current => current.filter(story => story.id !== storyId));
               loadStories();
               setActiveTailorId(null);
             }}
+            onUnavailable={hideUnavailableStory}
             onAdd={() => storyFileInputRef.current?.click()}
             onClose={() => setActiveTailorId(null)}
             onPrevious={() => setActiveTailorId(groupedStories[Math.max(0, activeIndex - 1)]?.[0] || null)}
@@ -271,7 +286,7 @@ export function PromotedTailorRail({ users, isDarkMode, onSelectSeller }: {
   );
 }
 
-export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevious, onNext }: {
+export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevious, onNext, onUnavailable }: {
   stories: TailorStory[];
   tailor?: User;
   onClose: () => void;
@@ -280,11 +295,11 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   owner: boolean;
   onDelete: (storyId: string) => Promise<void>;
   onAdd: () => void;
+  onUnavailable: (storyId: string) => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [reply, setReply] = useState('');
-  const [unavailableMedia, setUnavailableMedia] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const touchStartX = useRef<number | null>(null);
   const holdTimeout = useRef<number | null>(null);
@@ -301,9 +316,14 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   }, [tailor?.id]);
 
   useEffect(() => {
+    if (activeIndex >= chronologicalStories.length) {
+      setActiveIndex(Math.max(0, chronologicalStories.length - 1));
+    }
+  }, [activeIndex, chronologicalStories.length]);
+
+  useEffect(() => {
     setLiked(Boolean(story?.likedByViewer));
     setReply('');
-    setUnavailableMedia(false);
   }, [story?.id]);
 
   useEffect(() => {
@@ -371,11 +391,9 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         onPointerCancel={endHold}
         onPointerLeave={endHold}
       >
-        {unavailableMedia
-          ? <div role="status" className="flex h-full w-full items-center justify-center px-8 text-center text-sm text-white/70">This story media is no longer available.</div>
-          : story.mediaType === 'video'
-            ? <video ref={videoRef} data-story-image key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-contain" onError={() => setUnavailableMedia(true)} onEnded={() => move(1)} />
-            : <img data-story-image key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Merchant'} story`} draggable={false} className="h-full w-full object-contain" onError={() => setUnavailableMedia(true)} />}
+        {story.mediaType === 'video'
+          ? <video ref={videoRef} data-story-image key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-contain" onError={() => onUnavailable(story.id)} onEnded={() => move(1)} />
+          : <img data-story-image key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Merchant'} story`} draggable={false} className="h-full w-full object-contain" onError={() => onUnavailable(story.id)} />}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/75" />
         <div className="absolute left-3 right-3 top-3 z-20 flex gap-1">
           {chronologicalStories.map((item, index) => (
