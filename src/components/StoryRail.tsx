@@ -131,8 +131,8 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                 }}
                 className="flex min-w-[76px] flex-col items-center gap-1.5"
               >
-                {tailor?.role === 'admin' && <span className="text-[9px] font-black uppercase tracking-[0.12em] text-amber-400">Admin</span>}
-                <span className="rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
+                <span className="relative rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
+                  {tailor?.role === 'admin' && <span className="absolute left-1/2 top-[-18px] -translate-x-1/2 whitespace-nowrap text-[9px] font-black uppercase tracking-[0.12em] text-amber-400">Admin</span>}
                   <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
                     {tailorStories[0].mediaType === 'video'
                       ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" className="h-full w-full object-cover" />

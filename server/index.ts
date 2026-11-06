@@ -3112,7 +3112,7 @@ app.get('/api/users', async (_req, res) => {
     if (supabaseDataEnabled) {
       const profiles = await getUsers();
       const users = profiles.map(profile => {
-        const role = ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? String(profile.role) : 'buyer';
+        const role = ['tailor', 'fabric_seller', 'buyer', 'admin'].includes(String(profile.role)) ? String(profile.role) : 'buyer';
         const name = String(profile.name || 'Atelier Member');
         return {
           id: String(profile.id), email: '', name, role: role as UserRole,
@@ -3152,7 +3152,7 @@ app.get('/api/users', async (_req, res) => {
     }));
     const users = userRecords.map(authUser => {
       const profile = profiles.get(authUser.uid) || {};
-      const role = ['tailor', 'fabric_seller', 'buyer'].includes(String(profile.role)) ? profile.role : 'buyer';
+      const role = ['tailor', 'fabric_seller', 'buyer', 'admin'].includes(String(profile.role)) ? profile.role : 'buyer';
       const name = String(profile.name || authUser.displayName || authUser.email?.split('@')[0] || 'Atelier Member');
       return {
         id: authUser.uid,

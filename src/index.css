@@ -130,8 +130,8 @@
     position: absolute;
     top: -7rem;
     right: -4rem;
-    width: 18rem;
-    height: 15rem;
+    width: 9rem;
+    height: 8rem;
     pointer-events: none;
     opacity: 0.92;
     overflow: hidden;
@@ -149,7 +149,7 @@
     position: absolute;
     border-radius: 999px;
     background: rgba(255, 211, 119, 0.42);
-    box-shadow: 2.8rem 2.2rem 0 rgba(247, 157, 64, 0.24), 6.5rem 4.3rem 0 rgba(255, 214, 122, 0.18), 9.2rem 1.4rem 0 rgba(244, 114, 42, 0.2), 11rem 5.6rem 0 rgba(255, 202, 107, 0.16), 13.5rem 2.8rem 0 rgba(247, 157, 64, 0.14), 16.8rem 6.5rem 0 rgba(255, 224, 154, 0.12);
+    box-shadow: 1.4rem 1.1rem 0 rgba(247, 157, 64, 0.24), 3.2rem 2.1rem 0 rgba(255, 214, 122, 0.18), 4.6rem .7rem 0 rgba(244, 114, 42, 0.2), 5.5rem 2.8rem 0 rgba(255, 202, 107, 0.16), 6.7rem 1.4rem 0 rgba(247, 157, 64, 0.14), 8.1rem 3.1rem 0 rgba(255, 224, 154, 0.12);
   }
 
   .navbar-sunset-rays::before {
