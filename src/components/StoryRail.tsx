@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, X, ChevronLeft, ChevronRight, Trash2, Eye, Heart, Send, Play, Pause, BarChart3 } from 'lucide-react';
 import { TailorStory, User } from '../types';
@@ -38,6 +39,15 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   useEffect(() => () => {
     if (draftUrl) URL.revokeObjectURL(draftUrl);
   }, [draftUrl]);
+
+  useEffect(() => {
+    if (!activeTailorId && !draftFile) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeTailorId, draftFile]);
 
   const groupedStories = useMemo(() => {
     const groups = new Map<string, TailorStory[]>();
@@ -151,7 +161,8 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
       </AnimatePresence>
       <AnimatePresence>
         {draftFile && (
-          <motion.div data-story-interaction initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-end justify-center bg-black/75 sm:items-center">
+          createPortal(
+          <motion.div data-story-interaction initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-x-0 top-0 z-[110] flex h-[100dvh] items-end justify-center bg-black/75 sm:items-center">
             <motion.div initial={{ y: 40 }} animate={{ y: 0 }} className="max-h-[96dvh] w-full max-w-[430px] overflow-y-auto rounded-t-[28px] bg-neutral-950 text-white sm:rounded-[28px]">
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                 <div><p className="text-[9px] font-bold uppercase tracking-[.18em] text-amber-400">New story</p><h2 className="font-serif text-lg font-bold">Preview & compose</h2></div>
@@ -169,7 +180,8 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                 <button type="button" disabled={uploading} onClick={() => void uploadStory()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-neutral-950 disabled:opacity-60"><Send className="h-4 w-4" />{uploading ? 'Publishing...' : 'Share story'}</button>
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body)
         )}
       </AnimatePresence>
     </>
@@ -297,8 +309,8 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
     }).catch(() => undefined);
   };
 
-  return (
-    <motion.div data-story-interaction data-stories-viewer initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black" role="dialog" aria-modal="true" aria-label="Story viewer">
+  return createPortal(
+    <motion.div data-story-interaction data-stories-viewer initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-x-0 top-0 z-[100] flex h-[100dvh] items-center justify-center bg-black" role="dialog" aria-modal="true" aria-label="Story viewer">
       <div
         className="relative h-[100dvh] w-full overflow-hidden bg-neutral-950 sm:h-[94dvh] sm:max-w-[540px] sm:rounded-2xl"
         onTouchStart={event => { touchStartX.current = event.changedTouches[0]?.clientX ?? null; }}
@@ -363,6 +375,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         )}
       </div>
       <style>{`@keyframes story-progress { from { width: 0%; } to { width: 100%; } }`}</style>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }
