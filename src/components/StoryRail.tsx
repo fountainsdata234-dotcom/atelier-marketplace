@@ -307,9 +307,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
           />
         )}
       </AnimatePresence>
-      <AnimatePresence>
-        {draftFile && (
-          createPortal(
+      {draftFile && createPortal(
           <motion.div data-story-interaction initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-x-0 top-0 z-[110] flex h-[100dvh] items-end justify-center bg-black/75 sm:items-center">
             <motion.div initial={{ y: 40 }} animate={{ y: 0 }} className="max-h-[96dvh] w-full max-w-[430px] overflow-y-auto rounded-t-[28px] bg-neutral-950 text-white sm:rounded-[28px]">
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
@@ -372,8 +370,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
             </motion.div>
           </motion.div>,
           document.body)
-        )}
-      </AnimatePresence>
+      }
     </>
   );
 }
