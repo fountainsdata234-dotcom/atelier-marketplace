@@ -1694,6 +1694,32 @@ app.delete('/api/push/subscribe', requireAuth, async (req: AuthenticatedRequest,
   res.status(204).send();
 });
 
+function storyThumbnailUrl(story: Record<string, unknown>) {
+  const mediaUrl = String(story.media_url || '');
+  const storedThumbnail = String(story.thumbnail_url || '');
+  const mediaType = story.media_type === 'video' ? 'video' : 'image';
+  const publicId = String(story.cloudinary_public_id || '');
+  try {
+    if (new URL(mediaUrl).hostname === 'res.cloudinary.com' && publicId.startsWith('stories/')) {
+      return cloudinary.url(publicId, {
+        secure: true,
+        resource_type: mediaType,
+        format: 'jpg',
+        transformation: [{
+          ...(mediaType === 'video' ? { start_offset: 0.5 } : {}),
+          width: 480,
+          height: 640,
+          crop: 'limit',
+          quality: 'auto:eco',
+        }],
+      });
+    }
+  } catch (error) {
+    console.warn('Story thumbnail transform could not be generated.', { publicId, error });
+  }
+  return storedThumbnail || mediaUrl;
+}
+
 async function removeStoryMedia(story: Record<string, unknown>) {
   const mediaUrl = String(story.media_url || '');
   const publicId = String(story.cloudinary_public_id || '');
@@ -1799,7 +1825,7 @@ app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
       id: String(story.id),
       tailorId: String(story.tailor_id),
       mediaUrl: String(story.media_url),
-      thumbnailUrl: String(story.thumbnail_url || story.media_url),
+      thumbnailUrl: storyThumbnailUrl(story),
       mediaType: story.media_type === 'video' ? 'video' : 'image',
       cloudinaryPublicId: String(story.cloudinary_public_id),
       createdAt: String(story.created_at),
@@ -1848,7 +1874,7 @@ app.post('/api/stories', requireAuth, requireActiveAccount, async (req: Authenti
       id: String(story.id),
       tailorId: String(story.tailor_id),
       mediaUrl: String(story.media_url),
-      thumbnailUrl: String(story.thumbnail_url || story.media_url),
+      thumbnailUrl: storyThumbnailUrl(story),
       mediaType: story.media_type === 'video' ? 'video' : 'image',
       cloudinaryPublicId: String(story.cloudinary_public_id),
       createdAt: String(story.created_at),

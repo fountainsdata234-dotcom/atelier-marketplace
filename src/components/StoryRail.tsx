@@ -73,8 +73,17 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
 
   useEffect(() => {
     loadStories();
-    const refresh = window.setInterval(loadStories, 60_000);
-    return () => window.clearInterval(refresh);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') loadStories();
+    };
+    const refresh = window.setInterval(refreshWhenVisible, 15_000);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(refresh);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -209,7 +218,13 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     try {
       const media = uploadedMedia || await uploadSelectedMedia(draftFile!);
       if (!media) return;
-      await api.publishStory(media, draftCaption);
+      const publishedStory = await api.publishStory(media, draftCaption);
+      unavailableStoryIds.current.delete(publishedStory.id);
+      storyLoadRequestRef.current += 1;
+      setStories(current => [
+        ...current.filter(story => story.id !== publishedStory.id),
+        publishedStory,
+      ]);
       setUploadedMedia(null);
       setDraftFile(null);
       setDraftUrl('');
@@ -267,8 +282,9 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
         <input id="story-media-input" ref={storyFileInputRef} className="sr-only" aria-label="Add a story" type="file" accept="image/*,video/*,.heic,.heif,.mov,.mp4,.webm" disabled={uploading || publishing || cleaningUp} onChange={handleStoryFileChange} />
         {uploadError && !draftFile && <p role="alert" className="mx-1 mb-2 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-600">{uploadError}</p>}
         <div className="flex snap-x gap-3.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:gap-4">
-          {groupedStories.map(([tailorId, tailorStories]) => {
+          {groupedStories.map(([tailorId, tailorStories], storyIndex) => {
             const tailor = userById.get(tailorId);
+            const latestStory = tailorStories[tailorStories.length - 1];
             return (
               <button
                 key={tailorId}
@@ -283,10 +299,21 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
               >
                 <span className="relative rounded-full bg-gradient-to-tr from-amber-300 via-orange-500 to-red-500 p-[3px] shadow-[0_9px_22px_rgba(245,158,11,.18)]">
                   {tailor?.role === 'admin' && <span className="admin-digital-name absolute left-1/2 top-[-18px] -translate-x-1/2 whitespace-nowrap text-[9px] text-amber-400">ADMIN</span>}
-                  <span className={`block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 md:h-[78px] md:w-[78px] ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
-                    {tailorStories[0].mediaType === 'video'
-                      ? <video src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} muted playsInline preload="metadata" onError={() => hideUnavailableStory(tailorStories[0].id)} className="h-full w-full object-cover" />
-                      : <img data-story-image src={tailorStories[0].thumbnailUrl || tailorStories[0].mediaUrl} alt="" draggable={false} onError={() => hideUnavailableStory(tailorStories[0].id)} className="h-full w-full object-cover" />}
+                  <span className={`relative block h-[62px] w-[62px] overflow-hidden rounded-full border-[3px] bg-neutral-950 md:h-[78px] md:w-[78px] ${isDarkMode ? 'border-neutral-950' : 'border-white'}`}>
+                    <span className="absolute inset-0 grid place-items-center text-lg font-bold text-amber-300">
+                      {(tailor?.shopName || tailor?.name || '@').slice(0, 1).toUpperCase()}
+                    </span>
+                    <img
+                      data-story-image
+                      src={latestStory.thumbnailUrl || latestStory.mediaUrl}
+                      alt=""
+                      draggable={false}
+                      loading={storyIndex < 4 ? 'eager' : 'lazy'}
+                      fetchPriority={storyIndex < 4 ? 'high' : 'auto'}
+                      decoding="async"
+                      onError={event => { event.currentTarget.style.visibility = 'hidden'; }}
+                      className="relative h-full w-full object-cover"
+                    />
                   </span>
                 </span>
                 <span className="w-[76px] truncate text-[10px] font-bold md:w-[96px] md:text-xs">
@@ -448,6 +475,9 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   const [deletingStory, setDeletingStory] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [likeError, setLikeError] = useState('');
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoAutoplayBlocked, setVideoAutoplayBlocked] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const touchStartX = useRef<number | null>(null);
   const holdTimeout = useRef<number | null>(null);
@@ -477,6 +507,9 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
 
   useEffect(() => {
     setIsPaused(false);
+    setVideoDuration(0);
+    setVideoCurrentTime(0);
+    setVideoAutoplayBlocked(false);
     if (story && !owner) {
       void api.recordStoryView(story.id)
         .then(({ viewCount }) => onViewCount(story.id, viewCount))
@@ -494,7 +527,13 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
     const video = videoRef.current;
     if (!video || !story) return;
     if (isPaused) void video.pause();
-    else void video.play().catch(() => undefined);
+    else void video.play().then(() => setVideoAutoplayBlocked(false)).catch(error => {
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        setVideoAutoplayBlocked(true);
+        return;
+      }
+      console.error('Unable to play story video.', error);
+    });
   }, [isPaused, story?.id]);
 
   const move = (direction: number) => {
@@ -564,15 +603,53 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         onPointerLeave={endHold}
       >
         {story.mediaType === 'video'
-          ? <video ref={videoRef} data-story-image key={story.id} src={story.mediaUrl} poster={story.thumbnailUrl} autoPlay playsInline controls={false} className="h-full w-full object-contain" onError={() => onUnavailable(story.id)} onEnded={() => move(1)} />
+          ? <video
+              ref={videoRef}
+              data-story-image
+              key={story.id}
+              src={story.mediaUrl}
+              poster={story.thumbnailUrl}
+              autoPlay
+              playsInline
+              controls={false}
+              className="h-full w-full object-contain"
+              onLoadedMetadata={event => setVideoDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+              onTimeUpdate={event => {
+                const video = event.currentTarget;
+                setVideoCurrentTime(video.currentTime);
+                if (Number.isFinite(video.duration)) setVideoDuration(video.duration);
+              }}
+              onError={() => onUnavailable(story.id)}
+              onEnded={() => move(1)}
+            />
           : <img data-story-image key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Merchant'} story`} draggable={false} className="h-full w-full object-contain" onError={() => onUnavailable(story.id)} />}
+        {story.mediaType === 'video' && videoAutoplayBlocked && (
+          <button
+            type="button"
+            onClick={() => {
+              const video = videoRef.current;
+              if (!video) return;
+              void video.play().then(() => setVideoAutoplayBlocked(false)).catch(error => {
+                console.error('Unable to start story video playback.', error);
+              });
+            }}
+            className="absolute left-1/2 top-1/2 z-30 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-black/70 px-4 py-3 text-sm font-semibold text-white backdrop-blur"
+          >
+            <Play className="h-4 w-4 fill-current" /> Tap to play with sound
+          </button>
+        )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/75" />
         <div className="absolute left-3 right-3 top-3 z-20 flex gap-1">
           {chronologicalStories.map((item, index) => (
             <span key={item.id} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35">
               <span
-                className={`block h-full bg-white ${index < activeIndex ? 'w-full' : index === activeIndex ? 'animate-[story-progress_7s_linear_forwards]' : 'w-0'}`}
-                style={{ animationPlayState: isPaused ? 'paused' : 'running' }}
+                className={`block h-full bg-white ${index < activeIndex ? 'w-full' : index === activeIndex && story.mediaType !== 'video' ? 'animate-[story-progress_7s_linear_forwards]' : ''}`}
+                style={index === activeIndex && story.mediaType === 'video'
+                  ? { width: `${videoDuration > 0 ? Math.min(100, (videoCurrentTime / videoDuration) * 100) : 0}%` }
+                  : undefined}
+                {...(index === activeIndex && story.mediaType !== 'video'
+                  ? { style: { animationPlayState: isPaused ? 'paused' as const : 'running' as const } }
+                  : {})}
               />
             </span>
           ))}

@@ -218,25 +218,46 @@ export async function toggleStoryLike(storyId: string, userId: string): Promise<
 export async function getStoryCounts(storyIds: string[], userId?: string): Promise<Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>> {
   const supabase = requireClient();
   if (!storyIds.length) return new Map();
-  const counts = await Promise.all(storyIds.map(async storyId => {
-    const [views, likes, viewerLike] = await Promise.all([
-      supabase.from('tailor_story_views').select('user_id', { count: 'exact', head: true }).eq('story_id', storyId),
-      supabase.from('tailor_story_likes').select('user_id', { count: 'exact', head: true }).eq('story_id', storyId),
-      userId
-        ? supabase.from('tailor_story_likes').select('story_id').eq('story_id', storyId).eq('user_id', userId).maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-    ]);
-    if (views.error) throw normalizeError(views.error);
-    if (likes.error) throw normalizeError(likes.error);
-    if (viewerLike.error) throw normalizeError(viewerLike.error);
-    return [storyId, {
-      viewCount: views.count || 0,
-      likeCount: likes.count || 0,
-      likedByViewer: Boolean(viewerLike.data),
-    }] as const;
-  }));
+  const loadEngagementRows = async (table: 'tailor_story_views' | 'tailor_story_likes') => {
+    const rows: { story_id: string; user_id: string }[] = [];
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase
+        .from(table)
+        .select('story_id,user_id')
+        .in('story_id', storyIds)
+        .order('story_id')
+        .order('user_id')
+        .range(offset, offset + pageSize - 1);
+      if (error) throw normalizeError(error);
+      const page = Array.isArray(data) ? data : [];
+      rows.push(...page);
+      if (page.length < pageSize) return rows;
+    }
+  };
+  const [views, likes] = await Promise.all([
+    loadEngagementRows('tailor_story_views'),
+    loadEngagementRows('tailor_story_likes'),
+  ]);
+  const storyIdsLikedByViewer = new Set(
+    userId ? likes.filter(row => row.user_id === userId).map(row => String(row.story_id)) : [],
+  );
+  const viewCounts = new Map<string, number>();
+  const likeCounts = new Map<string, number>();
+  views.forEach(row => {
+    const storyId = String(row.story_id);
+    viewCounts.set(storyId, (viewCounts.get(storyId) || 0) + 1);
+  });
+  likes.forEach(row => {
+    const storyId = String(row.story_id);
+    likeCounts.set(storyId, (likeCounts.get(storyId) || 0) + 1);
+  });
   const result = new Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>();
-  counts.forEach(([storyId, countsForStory]) => result.set(storyId, countsForStory));
+  storyIds.forEach(storyId => result.set(storyId, {
+    viewCount: viewCounts.get(storyId) || 0,
+    likeCount: likeCounts.get(storyId) || 0,
+    likedByViewer: storyIdsLikedByViewer.has(storyId),
+  }));
   return result;
 }
 
