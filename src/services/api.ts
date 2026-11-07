@@ -196,7 +196,7 @@ export const api = {
     const apiUrl = API_URL;
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
-    formData.append(file.type.startsWith('video/') ? 'image' : 'image', file, file.name);
+    formData.append('image', file, file.name);
     formData.append('folder', 'stories');
     const uploaded = await uploadFormDataWithProgress<{ url: string; thumbnailUrl?: string; publicId: string; mediaType?: string }>(`${apiUrl}/api/upload`, formData, token, onProgress);
     if (!uploaded.url || !uploaded.publicId) throw new Error("We couldn't finish uploading your story. Please try again.");

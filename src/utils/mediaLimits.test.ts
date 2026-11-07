@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getImageSizeError, getStoryUploadSizeError, MAX_IMAGE_UPLOAD_BYTES, MAX_STORY_VIDEO_UPLOAD_BYTES } from './mediaLimits';
+import { getImageSizeError, getStoryUploadSizeError, MAX_IMAGE_UPLOAD_BYTES, MAX_STORY_IMAGE_UPLOAD_BYTES, MAX_STORY_VIDEO_UPLOAD_BYTES } from './mediaLimits';
 
 function file(size: number, type: string, name: string) {
   const result = new File([], name, { type });
@@ -14,8 +14,9 @@ describe('media upload limits', () => {
   });
 
   it('applies separate image and video limits to stories', () => {
-    expect(getStoryUploadSizeError(file(MAX_IMAGE_UPLOAD_BYTES + 1, 'image/jpeg', 'story.jpg'))).toContain('8 MB');
+    expect(getStoryUploadSizeError(file(MAX_STORY_IMAGE_UPLOAD_BYTES, 'image/jpeg', 'story.jpg'))).toBeNull();
+    expect(getStoryUploadSizeError(file(MAX_STORY_IMAGE_UPLOAD_BYTES + 1, 'image/jpeg', 'story.jpg'))).toContain('5 MB');
     expect(getStoryUploadSizeError(file(MAX_STORY_VIDEO_UPLOAD_BYTES, 'video/mp4', 'story.mp4'))).toBeNull();
-    expect(getStoryUploadSizeError(file(MAX_STORY_VIDEO_UPLOAD_BYTES + 1, 'video/mp4', 'story.mp4'))).toContain('50 MB');
+    expect(getStoryUploadSizeError(file(MAX_STORY_VIDEO_UPLOAD_BYTES + 1, 'video/mp4', 'story.mp4'))).toContain('5 MB');
   });
 });

@@ -122,7 +122,7 @@ export async function deleteStory(storyId: string, tailorId: string): Promise<bo
 export async function listExpiredStories(limit = 100): Promise<StoryRecord[]> {
   const { data, error } = await requireClient()
     .from('tailor_stories')
-    .select('id,cloudinary_public_id,media_type,media_url')
+    .select('id,tailor_id,cloudinary_public_id,media_type,media_url')
     .lte('expires_at', new Date().toISOString())
     .limit(limit);
   if (error) throw normalizeError(error);

@@ -15,6 +15,11 @@ import { adminAuth, firebaseAdminEnabled, firestore } from './firebaseAdmin.js';
 import type { UserLocation, UserRole } from '../src/types.js';
 import { parseMarketplaceSearch } from '../src/utils/marketplaceSearch.js';
 import {
+  MAX_IMAGE_UPLOAD_BYTES,
+  MAX_STORY_IMAGE_UPLOAD_BYTES,
+  MAX_STORY_VIDEO_UPLOAD_BYTES,
+} from '../src/utils/mediaLimits.js';
+import {
   createBroadcast,
   createDiscoveryEvent,
   createFabricRequest,
@@ -112,8 +117,6 @@ import {
 
 const app = express();
 const port = Number(process.env.PORT || 8787);
-const MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024;
-const MAX_STORY_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024;
 const gemini = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 const cloudinaryConfigured = !!process.env.CLOUDINARY_CLOUD_NAME && !!process.env.CLOUDINARY_API_KEY && !!process.env.CLOUDINARY_API_SECRET;
 if (cloudinaryConfigured) {
@@ -258,7 +261,7 @@ function isLocalNetworkOrigin(origin: string) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_STORY_VIDEO_UPLOAD_BYTES },
+  limits: { fileSize: MAX_IMAGE_UPLOAD_BYTES },
 });
 
 app.use(cors({
@@ -1733,6 +1736,7 @@ function uploadCompressedStoryToCloudinary(buffer: Buffer, userId: string, media
         ...(mediaType === 'image' ? { width: 1400, height: 1400 } : { width: 1080, height: 1920 }),
         crop: 'limit',
         quality: 'auto:good',
+        ...(mediaType === 'video' ? { video_codec: 'auto' } : {}),
       }],
     }, (error, result) => {
       if (error) {
@@ -1931,14 +1935,16 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
     res.status(400).json({ error: 'Video uploads are only supported for stories.' });
     return;
   }
-  const fileSizeLimit = safeFolder === 'stories' && isVideo
-    ? MAX_STORY_VIDEO_UPLOAD_BYTES
+  const fileSizeLimit = safeFolder === 'stories'
+    ? (isVideo ? MAX_STORY_VIDEO_UPLOAD_BYTES : MAX_STORY_IMAGE_UPLOAD_BYTES)
     : MAX_IMAGE_UPLOAD_BYTES;
   if (req.file.size > fileSizeLimit) {
     res.status(413).json({
       error: safeFolder === 'stories' && isVideo
-        ? 'Story videos must be 50 MB or smaller.'
-        : 'Images must be 8 MB or smaller.',
+        ? 'Story videos must be 5 MB or smaller.'
+        : safeFolder === 'stories'
+          ? 'Story photos must be 5 MB or smaller.'
+          : 'Images must be 8 MB or smaller.',
     });
     return;
   }
@@ -1964,7 +1970,7 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
   try {
     if (safeFolder === 'stories' && req.file.mimetype.startsWith('video/')) {
       if (!['video/mp4', 'video/webm', 'video/quicktime'].includes(req.file.mimetype)) {
-        res.status(400).json({ error: 'Upload an MP4, WebM, or MOV video up to 50 MB.' });
+        res.status(400).json({ error: 'Upload an MP4, WebM, or MOV video up to 5 MB.' });
         return;
       }
       if (cloudinaryConfigured) {
@@ -5791,7 +5797,7 @@ app.delete('/api/admin/sellers/:uid', requireAuth, requireAdmin, async (req: Aut
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-    res.status(413).json({ error: 'Images must be 8 MB or smaller; story videos must be 50 MB or smaller.', code: 'UPLOAD_TOO_LARGE' });
+    res.status(413).json({ error: 'Images must be 8 MB or smaller. Story photos and videos must be 5 MB or smaller.', code: 'UPLOAD_TOO_LARGE' });
     return;
   }
   console.error('API error', error);

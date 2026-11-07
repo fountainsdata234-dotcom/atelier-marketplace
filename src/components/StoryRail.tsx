@@ -23,6 +23,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [stories, setStories] = useState<TailorStory[]>([]);
   const [activeTailorId, setActiveTailorId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [draftFile, setDraftFile] = useState<File | null>(null);
   const [draftUrl, setDraftUrl] = useState('');
   const [draftCaption, setDraftCaption] = useState('');
@@ -132,9 +133,10 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const uploadStory = async () => {
     if (!draftFile) return;
     setUploading(true);
+    setUploadProgress(0);
     setUploadError('');
     try {
-      await api.createStory(draftFile, draftCaption);
+      await api.createStory(draftFile, draftCaption, setUploadProgress);
       setDraftFile(null);
       setDraftUrl('');
       loadStories();
@@ -142,6 +144,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
       setUploadError(error instanceof Error ? error.message : 'The story could not be published.');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -239,6 +242,24 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
               <div className="px-4 py-4">
                 <textarea value={draftCaption} onChange={event => setDraftCaption(event.target.value.slice(0, 280))} rows={3} placeholder="Add a message to your story..." className="mt-4 w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm outline-none focus:border-amber-400" />
                 {uploadError && <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{uploadError}</p>}
+                {uploading && (
+                  <div className="mt-3" role="status" aria-live="polite">
+                    <div className="mb-1 flex justify-between text-xs text-neutral-300">
+                      <span>{uploadProgress >= 100 ? 'Saving story...' : 'Uploading media...'}</span>
+                      {uploadProgress < 100 && <span>{uploadProgress}%</span>}
+                    </div>
+                    <div
+                      className="h-1.5 overflow-hidden rounded-full bg-white/15"
+                      role="progressbar"
+                      aria-label="Story upload progress"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={uploadProgress}
+                    >
+                      <div className="h-full rounded-full bg-amber-400 transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                  </div>
+                )}
                 <button type="button" disabled={uploading} onClick={() => void uploadStory()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-neutral-950 disabled:opacity-60"><Send className="h-4 w-4" />{uploading ? 'Publishing...' : 'Share story'}</button>
               </div>
             </motion.div>
