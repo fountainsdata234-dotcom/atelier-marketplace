@@ -14,6 +14,13 @@ const publicReadCache = new Map<string, { expiresAt: number; value: unknown }>()
 const inFlightPublicReads = new Map<string, Promise<unknown>>();
 let adminAiRoutesReady: Promise<unknown> | null = null;
 
+export interface StoryUploadAsset {
+  url: string;
+  thumbnailUrl: string;
+  publicId: string;
+  mediaType: 'image' | 'video';
+}
+
 function ensureAdminAiRoutes() {
   if (!adminAiRoutesReady) {
     adminAiRoutesReady = request<User[]>('/api/admin/users')
@@ -190,27 +197,42 @@ export const api = {
       body: JSON.stringify(message),
     }),
   getStories: () => request<TailorStory[]>('/api/stories'),
-  createStory: async (file: File, caption = '', onProgress?: (progress: number) => void) => {
+  uploadStoryMedia: async (file: File, onProgress?: (progress: number) => void): Promise<StoryUploadAsset> => {
     const sizeError = getStoryUploadSizeError(file);
     if (sizeError) throw new Error(sizeError);
-    const apiUrl = API_URL;
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
     formData.append('image', file, file.name);
     formData.append('folder', 'stories');
-    const uploaded = await uploadFormDataWithProgress<{ url: string; thumbnailUrl?: string; publicId: string; mediaType?: string }>(`${apiUrl}/api/upload`, formData, token, onProgress);
+    const uploaded = await uploadFormDataWithProgress<{ url: string; thumbnailUrl?: string; publicId: string; mediaType?: string }>(`${API_URL}/api/upload`, formData, token, onProgress);
     if (!uploaded.url || !uploaded.publicId) throw new Error("We couldn't finish uploading your story. Please try again.");
-    return request<TailorStory>('/api/stories', {
+    return {
+      url: uploaded.url,
+      thumbnailUrl: uploaded.thumbnailUrl || uploaded.url,
+      publicId: uploaded.publicId,
+      mediaType: uploaded.mediaType === 'video' || file.type.startsWith('video/') ? 'video' : 'image',
+    };
+  },
+  publishStory: (asset: StoryUploadAsset, caption = '') =>
+    request<TailorStory>('/api/stories', {
       method: 'POST',
       body: JSON.stringify({
-        mediaUrl: uploaded.url,
-        cloudinaryPublicId: uploaded.publicId,
-        mediaType: uploaded.mediaType || (file.type.startsWith('video/') ? 'video' : 'image'),
-        thumbnailUrl: uploaded.thumbnailUrl || uploaded.url,
+        mediaUrl: asset.url,
+        cloudinaryPublicId: asset.publicId,
+        mediaType: asset.mediaType,
+        thumbnailUrl: asset.thumbnailUrl,
         caption,
       }),
-    });
-  },
+    }),
+  discardStoryUpload: (asset: StoryUploadAsset) =>
+    request<{ ok: boolean }>('/api/stories/upload', {
+      method: 'DELETE',
+      body: JSON.stringify({
+        mediaUrl: asset.url,
+        cloudinaryPublicId: asset.publicId,
+        mediaType: asset.mediaType,
+      }),
+    }),
   deleteStory: (storyId: string) => request<void>(`/api/stories/${encodeURIComponent(storyId)}`, { method: 'DELETE' }),
   recordStoryView: (storyId: string) => request<{ viewCount: number }>(`/api/stories/${encodeURIComponent(storyId)}/view`, { method: 'POST' }),
   toggleStoryLike: (storyId: string) => request<{ isLiked: boolean; likeCount: number }>(`/api/stories/${encodeURIComponent(storyId)}/like`, { method: 'POST' }),

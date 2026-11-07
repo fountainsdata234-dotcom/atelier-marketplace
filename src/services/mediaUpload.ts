@@ -16,7 +16,7 @@ export function uploadFormDataWithProgress<T>(
     request.open('POST', url);
     if (token) request.setRequestHeader('Authorization', tokenHeader(token));
     request.upload.addEventListener('progress', event => {
-      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      if (event.lengthComputable) onProgress?.(Math.min(99, Math.round((event.loaded / event.total) * 100)));
     });
     request.addEventListener('error', () => reject(new Error("We couldn't reach the upload service. Please try again.")));
     request.addEventListener('abort', () => reject(new Error('Upload cancelled.')));

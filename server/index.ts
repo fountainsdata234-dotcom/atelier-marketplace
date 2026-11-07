@@ -1829,7 +1829,7 @@ app.post('/api/stories', requireAuth, requireActiveAccount, async (req: Authenti
   const thumbnailUrl = String(req.body?.thumbnailUrl || mediaUrl).trim();
   const publicId = String(req.body?.cloudinaryPublicId || '').trim();
   const mediaType = req.body?.mediaType === 'video' ? 'video' : 'image';
-  if (!mediaUrl || !publicId || !/^https?:\/\//i.test(mediaUrl)) {
+  if (!mediaUrl || !publicId || !publicId.startsWith(`stories/${req.authUser!.uid}/`) || !/^https?:\/\//i.test(mediaUrl)) {
     res.status(400).json({ error: 'Upload a photo or video story first.' });
     return;
   }
@@ -1875,14 +1875,6 @@ app.post('/api/stories', requireAuth, requireActiveAccount, async (req: Authenti
       hint: details.hint,
       tailorId: req.authUser!.uid,
     });
-    await removeStoryMedia({
-      media_url: mediaUrl,
-      cloudinary_public_id: publicId,
-      media_type: mediaType,
-      tailor_id: req.authUser!.uid,
-    }).catch(cleanupError => {
-      console.error('Failed to remove an unpublished story upload.', cleanupError);
-    });
     res.status(500).json({ error: 'The story could not be published.' });
   }
 });
@@ -1902,6 +1894,32 @@ app.post('/api/stories/:storyId/like', requireAuth, requireActiveAccount, async 
   } catch (error) {
     console.error('Story like failed', error);
     res.status(500).json({ error: 'The story reaction could not be updated.' });
+  }
+});
+
+app.delete('/api/stories/upload', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res) => {
+  const mediaUrl = String(req.body?.mediaUrl || '').trim();
+  const publicId = String(req.body?.cloudinaryPublicId || '').trim();
+  const mediaType = req.body?.mediaType === 'video' ? 'video' : 'image';
+  const ownerId = req.authUser!.uid;
+  if (!mediaUrl || !publicId || !publicId.startsWith(`stories/${ownerId}/`)) {
+    res.status(400).json({ error: 'The uploaded story media is invalid.' });
+    return;
+  }
+  try {
+    const activeStories = await listActiveStories();
+    if (!activeStories.some(story => String(story.cloudinary_public_id) === publicId)) {
+      await removeStoryMedia({
+        media_url: mediaUrl,
+        cloudinary_public_id: publicId,
+        media_type: mediaType,
+        tailor_id: ownerId,
+      });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Unpublished story media cleanup failed.', { publicId, error });
+    res.status(500).json({ error: 'The uploaded media could not be removed. Please try again.' });
   }
 });
 
