@@ -1736,6 +1736,7 @@ function uploadCompressedStoryToCloudinary(buffer: Buffer, userId: string, media
         ...(mediaType === 'image' ? { width: 1400, height: 1400 } : { width: 1080, height: 1920 }),
         crop: 'limit',
         quality: 'auto:good',
+        ...(mediaType === 'image' ? { format: 'jpg' } : {}),
         ...(mediaType === 'video' ? { video_codec: 'auto' } : {}),
       }],
     }, (error, result) => {
@@ -1986,6 +1987,15 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
   }
 
   try {
+    if (safeFolder === 'stories' && ['image/heic', 'image/heif'].includes(req.file.mimetype)) {
+      if (!cloudinaryConfigured) {
+        res.status(415).json({ error: 'HEIC photos need Cloudinary processing. Choose a JPEG or PNG photo instead.' });
+        return;
+      }
+      const uploaded = await uploadCompressedStoryToCloudinary(req.file.buffer, req.authUser!.uid, 'image');
+      res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.publicId, mediaType: 'image', mimeType: 'image/jpeg' });
+      return;
+    }
     if (safeFolder === 'stories' && req.file.mimetype.startsWith('video/')) {
       if (!['video/mp4', 'video/webm', 'video/quicktime'].includes(req.file.mimetype)) {
         res.status(400).json({ error: 'Upload an MP4, WebM, or MOV video up to 5 MB.' });

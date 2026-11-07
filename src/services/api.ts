@@ -3,7 +3,7 @@ import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMes
 import { getAuthToken, isSupabaseAuthReady } from './auth';
 import { uploadFormDataWithProgress } from './mediaUpload';
 import { customerMessageForHttpError, customerMessageForNetworkError, safeCustomerErrorMessage } from '../utils/customerMessages';
-import { MAX_IMAGE_UPLOAD_BYTES, getStoryUploadSizeError } from '../utils/mediaLimits';
+import { MAX_IMAGE_UPLOAD_BYTES, getStoryUploadMimeType, getStoryUploadSizeError, getStoryUploadTypeError } from '../utils/mediaLimits';
 
 const API_URL = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
 const PUBLIC_READ_CACHE_TTL_MS = 60_000;
@@ -198,11 +198,16 @@ export const api = {
     }),
   getStories: () => request<TailorStory[]>('/api/stories'),
   uploadStoryMedia: async (file: File, onProgress?: (progress: number) => void): Promise<StoryUploadAsset> => {
+    const typeError = getStoryUploadTypeError(file);
+    if (typeError) throw new Error(typeError);
     const sizeError = getStoryUploadSizeError(file);
     if (sizeError) throw new Error(sizeError);
+    const mimeType = getStoryUploadMimeType(file);
+    if (!mimeType) throw new Error('Choose a supported photo or video file for your story.');
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
-    formData.append('image', file, file.name);
+    const uploadFile = file.type === mimeType ? file : new File([file], file.name, { type: mimeType });
+    formData.append('image', uploadFile, file.name);
     formData.append('folder', 'stories');
     const uploaded = await uploadFormDataWithProgress<{ url: string; thumbnailUrl?: string; publicId: string; mediaType?: string }>(`${API_URL}/api/upload`, formData, token, onProgress);
     if (!uploaded.url || !uploaded.publicId) throw new Error("We couldn't finish uploading your story. Please try again.");
@@ -210,7 +215,7 @@ export const api = {
       url: uploaded.url,
       thumbnailUrl: uploaded.thumbnailUrl || uploaded.url,
       publicId: uploaded.publicId,
-      mediaType: uploaded.mediaType === 'video' || file.type.startsWith('video/') ? 'video' : 'image',
+      mediaType: uploaded.mediaType === 'video' || mimeType.startsWith('video/') ? 'video' : 'image',
     };
   },
   publishStory: (asset: StoryUploadAsset, caption = '') =>

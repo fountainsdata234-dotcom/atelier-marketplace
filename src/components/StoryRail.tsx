@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, X, ChevronLeft, ChevronRight, Trash2, Eye, Heart, Send, Play, Pause, BarChart3, Check } from 'lucide-react';
 import { TailorStory, User } from '../types';
 import { api, StoryUploadAsset } from '../services/api';
-import { getStoryUploadSizeError } from '../utils/mediaLimits';
+import { getStoryUploadMimeType, getStoryUploadSizeError, getStoryUploadTypeError, MAX_STORY_IMAGE_UPLOAD_BYTES } from '../utils/mediaLimits';
+import { prepareStoryImageForUpload } from '../services/mediaUpload';
 
 const formatHandle = (handle?: string) => {
   const value = handle?.trim() || '';
@@ -23,6 +24,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [stories, setStories] = useState<TailorStory[]>([]);
   const [activeTailorId, setActiveTailorId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [preparingMedia, setPreparingMedia] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [cleaningUp, setCleaningUp] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -31,6 +33,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [draftCaption, setDraftCaption] = useState('');
   const [uploadedMedia, setUploadedMedia] = useState<StoryUploadAsset | null>(null);
   const [uploadError, setUploadError] = useState('');
+  const [uploadCanRetry, setUploadCanRetry] = useState(false);
   const storyFileInputRef = useRef<HTMLInputElement>(null);
   const unavailableStoryIds = useRef(new Set<string>());
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
@@ -118,37 +121,53 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   }, [activeTailorId, activeStories.length]);
 
   const uploadSelectedMedia = async (file: File) => {
-    setUploading(true);
     setUploadProgress(0);
     setUploadError('');
+    setUploadedMedia(null);
+    const typeError = getStoryUploadTypeError(file);
+    if (typeError) {
+      setUploadCanRetry(false);
+      setUploadError(typeError);
+      return;
+    }
+
+    setUploading(true);
+    setPreparingMedia(false);
     try {
-      const asset = await api.uploadStoryMedia(file, setUploadProgress);
+      let uploadFile = file;
+      const mimeType = getStoryUploadMimeType(file);
+      if (['image/jpeg', 'image/png', 'image/webp'].includes(mimeType || '')
+        && file.size > MAX_STORY_IMAGE_UPLOAD_BYTES) {
+        setPreparingMedia(true);
+        uploadFile = await prepareStoryImageForUpload(file);
+        setPreparingMedia(false);
+      }
+      const sizeError = getStoryUploadSizeError(uploadFile);
+      if (sizeError) {
+        setUploadCanRetry(false);
+        setUploadError(sizeError);
+        return;
+      }
+      const asset = await api.uploadStoryMedia(uploadFile, setUploadProgress);
       setUploadedMedia(asset);
+      setUploadCanRetry(false);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'The media could not be uploaded.');
+      setUploadCanRetry(true);
     } finally {
       setUploading(false);
+      setPreparingMedia(false);
     }
   };
 
   const openComposer = (file: File) => {
-    const supportedImage = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type);
-    const supportedVideo = ['video/mp4', 'video/webm', 'video/quicktime'].includes(file.type);
-    if (!supportedImage && !supportedVideo) {
-      setUploadError('Choose a JPEG, PNG, WebP, or GIF photo, or an MP4, WebM, or MOV video.');
-      return;
-    }
-    const sizeError = getStoryUploadSizeError(file);
-    if (sizeError) {
-      setUploadError(sizeError);
-      return;
-    }
     setUploadError('');
     if (draftUrl) URL.revokeObjectURL(draftUrl);
     setDraftFile(file);
     setDraftUrl(URL.createObjectURL(file));
     setDraftCaption('');
     setUploadedMedia(null);
+    setUploadCanRetry(false);
     void uploadSelectedMedia(file);
   };
 
@@ -165,6 +184,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
       setUploadedMedia(null);
       setDraftFile(null);
       setDraftUrl('');
+      setUploadError('');
       loadStories();
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'The story could not be published.');
@@ -215,7 +235,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
             )
           )}
         </div>
-        <input ref={storyFileInputRef} className="hidden" aria-label="Add a story" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime" disabled={uploading || publishing || cleaningUp} onChange={event => { const file = event.target.files?.[0]; if (file) openComposer(file); event.target.value = ''; }} />
+        <input ref={storyFileInputRef} className="hidden" aria-label="Add a story" type="file" accept="image/*,video/*,.heic,.heif,.mov,.mp4,.webm" disabled={uploading || publishing || cleaningUp} onChange={event => { const file = event.target.files?.[0]; if (file) openComposer(file); event.target.value = ''; }} />
         {uploadError && !draftFile && <p role="alert" className="mx-1 mb-2 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-600">{uploadError}</p>}
         <div className="flex snap-x gap-3.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:gap-4">
           {groupedStories.map(([tailorId, tailorStories]) => {
@@ -281,7 +301,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                 <button type="button" aria-label="Close composer" disabled={uploading || publishing || cleaningUp} onClick={() => void closeComposer()} className="rounded-full p-2 text-neutral-300 transition hover:bg-white/10 hover:text-white disabled:opacity-40"><X className="h-5 w-5" /></button>
               </div>
               <div className="relative mx-4 mt-4 aspect-[9/16] max-h-[54dvh] overflow-hidden rounded-2xl bg-black">
-                {draftFile.type.startsWith('video/')
+                {getStoryUploadMimeType(draftFile)?.startsWith('video/')
                   ? <video src={draftUrl} controls playsInline className="h-full w-full object-contain" />
                   : <img src={draftUrl} alt="Story preview" className="h-full w-full object-contain" />}
                 {draftCaption && <p className="absolute bottom-5 left-5 right-5 rounded-xl bg-black/55 px-3 py-2 text-center text-sm font-semibold backdrop-blur">{draftCaption}</p>}
@@ -291,13 +311,13 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                   <div className="rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-300/10 to-orange-500/5 p-4" role="status" aria-live="polite">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="text-sm font-bold text-white">Uploading your media</p>
-                        <p className="mt-1 text-xs text-neutral-400">{uploadProgress === 100 ? 'Finishing media processing...' : 'Keep this window open while your story is prepared.'}</p>
+                        <p className="text-sm font-bold text-white">{preparingMedia ? 'Preparing your photo' : 'Uploading your media'}</p>
+                        <p className="mt-1 text-xs text-neutral-400">{preparingMedia ? 'Compressing the photo to fit the 5 MB story limit.' : uploadProgress === 100 ? 'Finishing media processing...' : 'Keep this window open while your story is prepared.'}</p>
                       </div>
-                      <span className="min-w-[3.5rem] text-right font-serif text-2xl font-bold tabular-nums text-amber-300">{uploadProgress}%</span>
+                      {!preparingMedia && <span className="min-w-[3.5rem] text-right font-serif text-2xl font-bold tabular-nums text-amber-300">{uploadProgress}%</span>}
                     </div>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label="Story media upload progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
-                      <div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-500 transition-[width] duration-200" style={{ width: `${uploadProgress}%` }} />
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10" role={preparingMedia ? 'status' : 'progressbar'} aria-label={preparingMedia ? 'Preparing story photo' : 'Story media upload progress'} aria-valuemin={preparingMedia ? undefined : 0} aria-valuemax={preparingMedia ? undefined : 100} aria-valuenow={preparingMedia ? undefined : uploadProgress}>
+                      <div className={`h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-500 transition-[width] duration-200 ${preparingMedia ? 'w-1/3 animate-pulse' : ''}`} style={preparingMedia ? undefined : { width: `${uploadProgress}%` }} />
                     </div>
                   </div>
                 ) : uploadedMedia ? (
@@ -316,12 +336,19 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                 ) : (
                   <>
                     <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm">
-                      <p className="font-semibold text-red-200">Upload didn’t finish</p>
+                      <p className="font-semibold text-red-200">{uploadCanRetry ? 'Upload didn’t finish' : 'This media can’t be uploaded yet'}</p>
                       <p role="alert" className="mt-1 text-xs leading-relaxed text-red-100/80">{uploadError || 'Please try uploading your media again.'}</p>
                     </div>
-                    <button type="button" onClick={retryUpload} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-sm font-bold text-neutral-950 transition hover:bg-amber-300">
-                      <Play className="h-4 w-4 fill-current" />Try upload again
-                    </button>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {uploadCanRetry && (
+                        <button type="button" onClick={retryUpload} className="flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-3 py-3 text-sm font-bold text-neutral-950 transition hover:bg-amber-300">
+                          <Play className="h-4 w-4 fill-current" />Retry upload
+                        </button>
+                      )}
+                      <button type="button" onClick={() => storyFileInputRef.current?.click()} className={`${uploadCanRetry ? '' : 'col-span-2'} flex items-center justify-center gap-2 rounded-xl border border-white/15 px-3 py-3 text-sm font-semibold text-white transition hover:bg-white/10`}>
+                        <Plus className="h-4 w-4" />Choose different media
+                      </button>
+                    </div>
                   </>
                 )}
                 {cleaningUp && <p className="mt-3 text-center text-xs text-neutral-400">Cleaning up uploaded media...</p>}

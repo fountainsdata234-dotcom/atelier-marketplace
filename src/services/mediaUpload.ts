@@ -1,6 +1,7 @@
 import { compressImageBlob } from '../utils/imageProgram';
 import { customerMessageForHttpError } from '../utils/customerMessages';
 import { getAuthToken } from './auth';
+import { getStoryUploadMimeType, MAX_STORY_IMAGE_UPLOAD_BYTES } from '../utils/mediaLimits';
 
 const tokenHeader = (token: string) => ['Bea' + 'rer', token].join(' ');
 
@@ -37,6 +38,26 @@ export function uploadFormDataWithProgress<T>(
       }
     });
     request.send(formData);
+  });
+}
+
+export async function prepareStoryImageForUpload(file: File): Promise<File> {
+  const mimeType = getStoryUploadMimeType(file);
+  if (!mimeType?.startsWith('image/') || file.size <= MAX_STORY_IMAGE_UPLOAD_BYTES || mimeType === 'image/gif') {
+    return file;
+  }
+
+  let compressed: Blob;
+  try {
+    compressed = await compressImageBlob(file, 1600);
+  } catch {
+    throw new Error('This photo could not be compressed on your device. Choose a JPEG or PNG photo under 5 MB.');
+  }
+  if (compressed === file) return file;
+  const outputName = file.name.replace(/\.[^.]+$/, '') || 'story';
+  return new File([compressed], `${outputName}.jpg`, {
+    type: compressed.type || 'image/jpeg',
+    lastModified: file.lastModified,
   });
 }
 
