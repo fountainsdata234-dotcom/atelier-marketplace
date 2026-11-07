@@ -137,6 +137,7 @@ export default function App() {
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>(getInitialView);
   const [dashboardInitialTab, setDashboardInitialTab] = useState<'overview' | 'posts' | 'plans'>('overview');
+  const [storyComposerRequested, setStoryComposerRequested] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [assistantWelcome, setAssistantWelcome] = useState<string>('');
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -641,6 +642,7 @@ export default function App() {
     const handleNavigateTab = (e: any) => {
       if (typeof e.detail === 'object' && e.detail?.view) {
         if (e.detail.tab === 'plans') setDashboardInitialTab('plans');
+        if (e.detail.openStoryComposer === true) setStoryComposerRequested(true);
         navigateToView(e.detail.view);
         return;
       }
@@ -1268,6 +1270,8 @@ export default function App() {
                 isDarkMode={isDarkMode}
                 enableGreetingTyping={!isDataLoading && !showIntro}
                 onOpenPromotionPlans={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'dashboard', tab: 'plans' } }))}
+                storyComposerRequested={storyComposerRequested}
+                onStoryComposerRequestHandled={() => setStoryComposerRequested(false)}
               />
             </motion.div>
           )}

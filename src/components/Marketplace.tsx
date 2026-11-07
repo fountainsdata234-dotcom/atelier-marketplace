@@ -34,6 +34,8 @@ interface MarketplaceProps {
   isDarkMode: boolean;
   enableGreetingTyping: boolean;
   onOpenPromotionPlans: () => void;
+  storyComposerRequested: boolean;
+  onStoryComposerRequestHandled: () => void;
 }
 
 const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -144,6 +146,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   isDarkMode,
   enableGreetingTyping,
   onOpenPromotionPlans,
+  storyComposerRequested,
+  onStoryComposerRequestHandled,
 }) => {
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -1169,6 +1173,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         isDarkMode={isDarkMode}
         onOpenPlans={onOpenPromotionPlans}
         onSelectSeller={onSelectSeller}
+        openComposerPrompt={storyComposerRequested}
+        onComposerPromptHandled={onStoryComposerRequestHandled}
       />
 
       <section aria-label="Marketplace discovery views" className={`rounded-2xl border p-3 sm:p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>

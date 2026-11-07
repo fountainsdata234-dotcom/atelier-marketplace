@@ -18,9 +18,11 @@ interface StoryRailProps {
   isDarkMode: boolean;
   onOpenPlans: () => void;
   onSelectSeller: (user: User) => void;
+  openComposerPrompt: boolean;
+  onComposerPromptHandled: () => void;
 }
 
-export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelectSeller }: StoryRailProps) {
+export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelectSeller, openComposerPrompt, onComposerPromptHandled }: StoryRailProps) {
   const [stories, setStories] = useState<TailorStory[]>([]);
   const [activeTailorId, setActiveTailorId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -34,6 +36,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [uploadedMedia, setUploadedMedia] = useState<StoryUploadAsset | null>(null);
   const [uploadError, setUploadError] = useState('');
   const [uploadCanRetry, setUploadCanRetry] = useState(false);
+  const [pickerPromptOpen, setPickerPromptOpen] = useState(false);
   const storyFileInputRef = useRef<HTMLInputElement>(null);
   const unavailableStoryIds = useRef(new Set<string>());
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
@@ -76,10 +79,10 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   }, [stories]);
 
   useEffect(() => {
-    const openStoryPicker = () => storyFileInputRef.current?.click();
-    window.addEventListener('atelier_open_story_composer', openStoryPicker);
-    return () => window.removeEventListener('atelier_open_story_composer', openStoryPicker);
-  }, []);
+    if (!openComposerPrompt) return;
+    setPickerPromptOpen(true);
+    onComposerPromptHandled();
+  }, [openComposerPrompt, onComposerPromptHandled]);
 
   useEffect(() => () => {
     if (draftUrl) URL.revokeObjectURL(draftUrl);
@@ -161,6 +164,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   };
 
   const openComposer = (file: File) => {
+    setPickerPromptOpen(false);
     setUploadError('');
     if (draftUrl) URL.revokeObjectURL(draftUrl);
     setDraftFile(file);
@@ -169,6 +173,18 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     setUploadedMedia(null);
     setUploadCanRetry(false);
     void uploadSelectedMedia(file);
+  };
+
+  const handleStoryFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) {
+      openComposer(file);
+      return;
+    }
+    setUploadError('No media was selected. Choose a photo or video to continue.');
+    setPickerPromptOpen(true);
   };
 
   const retryUpload = () => {
@@ -217,7 +233,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
 
   return (
     <>
-      {(currentUser?.role === 'tailor' || groupedStories.length > 0) && (
+      {(currentUser?.role === 'tailor' || currentUser?.role === 'admin' || groupedStories.length > 0) && (
       <section aria-label="Tailor stories" className={`overflow-hidden rounded-2xl border px-3 pb-3 pt-2.5 sm:px-4 ${isDarkMode ? 'border-amber-400/15 bg-[#111214]' : 'border-amber-200 bg-white shadow-sm'}`}>
         <div className="mb-3 flex items-center justify-between gap-3 px-1">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -235,7 +251,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
             )
           )}
         </div>
-        <input ref={storyFileInputRef} className="hidden" aria-label="Add a story" type="file" accept="image/*,video/*,.heic,.heif,.mov,.mp4,.webm" disabled={uploading || publishing || cleaningUp} onChange={event => { const file = event.target.files?.[0]; if (file) openComposer(file); event.target.value = ''; }} />
+        <input id="story-media-input" ref={storyFileInputRef} className="sr-only" aria-label="Add a story" type="file" accept="image/*,video/*,.heic,.heif,.mov,.mp4,.webm" disabled={uploading || publishing || cleaningUp} onChange={handleStoryFileChange} />
         {uploadError && !draftFile && <p role="alert" className="mx-1 mb-2 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-600">{uploadError}</p>}
         <div className="flex snap-x gap-3.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:gap-4">
           {groupedStories.map(([tailorId, tailorStories]) => {
@@ -289,6 +305,24 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
             onPrevious={() => setActiveTailorId(groupedStories[Math.max(0, activeIndex - 1)]?.[0] || null)}
             onNext={() => setActiveTailorId(groupedStories[Math.min(groupedStories.length - 1, activeIndex + 1)]?.[0] || null)}
           />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {pickerPromptOpen && (
+          createPortal(
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
+              <motion.div initial={{ y: 20, scale: 0.98 }} animate={{ y: 0, scale: 1 }} className="w-full max-w-sm rounded-3xl border border-amber-300/20 bg-neutral-950 p-6 text-center text-white shadow-2xl shadow-black/50">
+                <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950"><Plus className="h-6 w-6" /></div>
+                <h2 className="mt-4 font-serif text-xl font-bold">Create a story</h2>
+                <p className="mt-2 text-sm leading-relaxed text-neutral-400">Choose a photo or video. We’ll show upload progress before you add a caption and publish.</p>
+                <label htmlFor="story-media-input" className="mt-5 flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-gradient-to-r from-amber-300 to-orange-400 px-4 py-3 text-sm font-bold text-neutral-950 transition hover:brightness-110">
+                  Choose photo or video
+                </label>
+                <button type="button" onClick={() => setPickerPromptOpen(false)} className="mt-3 min-h-10 px-4 text-sm font-medium text-neutral-400 transition hover:text-white">Cancel</button>
+              </motion.div>
+            </motion.div>,
+            document.body,
+          )
         )}
       </AnimatePresence>
       <AnimatePresence>

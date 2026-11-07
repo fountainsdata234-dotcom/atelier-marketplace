@@ -734,7 +734,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   <span>Publish a new post</span>
                   <Scissors className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={() => { window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'marketplace' } })); window.setTimeout(() => window.dispatchEvent(new Event('atelier_open_story_composer')), 350); }} className="flex w-full items-center justify-between rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-3 text-left text-sm font-medium text-orange-200">
+                <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'marketplace', openStoryComposer: true } }))} className="flex w-full items-center justify-between rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-3 text-left text-sm font-medium text-orange-200">
                   <span>Post a story</span>
                   <Camera className="h-4 w-4" />
                 </button>

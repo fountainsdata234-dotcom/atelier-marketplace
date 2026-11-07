@@ -723,10 +723,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className={`${isLuminaPage ? 'hidden' : ''} flex flex-wrap gap-2 mt-6 pt-4 border-t border-amber-500/20 text-xs font-medium`}>
           <button
             type="button"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'marketplace' } }));
-              window.setTimeout(() => window.dispatchEvent(new Event('atelier_open_story_composer')), 350);
-            }}
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'marketplace', openStoryComposer: true } }))}
             className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-300 to-orange-500 text-neutral-950 font-bold shadow cursor-pointer"
           ><Camera className="mr-1.5 inline h-3.5 w-3.5" />Post a story</button>
           <button
