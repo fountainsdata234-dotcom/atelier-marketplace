@@ -137,7 +137,9 @@ export default function App() {
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>(getInitialView);
   const [dashboardInitialTab, setDashboardInitialTab] = useState<'overview' | 'posts' | 'plans'>('overview');
-  const [storyComposerRequested, setStoryComposerRequested] = useState(false);
+  const [pendingStoryFile, setPendingStoryFile] = useState<File | null>(null);
+  const storyPickerInputRef = useRef<HTMLInputElement>(null);
+  const clearPendingStoryFile = useCallback(() => setPendingStoryFile(null), []);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [assistantWelcome, setAssistantWelcome] = useState<string>('');
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -642,7 +644,11 @@ export default function App() {
     const handleNavigateTab = (e: any) => {
       if (typeof e.detail === 'object' && e.detail?.view) {
         if (e.detail.tab === 'plans') setDashboardInitialTab('plans');
-        if (e.detail.openStoryComposer === true) setStoryComposerRequested(true);
+        if (e.detail.openStoryComposer === true) {
+          navigateToView(e.detail.view);
+          storyPickerInputRef.current?.click();
+          return;
+        }
         navigateToView(e.detail.view);
         return;
       }
@@ -1139,6 +1145,18 @@ export default function App() {
     <div className={`min-h-screen relative flex flex-col font-sans transition-colors duration-300 ${
       isDarkMode ? 'bg-[#0c0d10] text-[#f4f4f6]' : 'bg-[#fbf9f5] text-[#16171a]'
     }`}>
+      <input
+        ref={storyPickerInputRef}
+        type="file"
+        accept="image/*,video/*,.heic,.heif,.mov,.mp4,.webm"
+        className="sr-only"
+        aria-label="Choose story photo or video"
+        onChange={event => {
+          const file = event.currentTarget.files?.[0] || null;
+          event.currentTarget.value = '';
+          if (file) setPendingStoryFile(file);
+        }}
+      />
       {/* 1. Cool Modern Intro Loading Animation Effect */}
       <AnimatePresence>
         {showIntro && (
@@ -1270,8 +1288,8 @@ export default function App() {
                 isDarkMode={isDarkMode}
                 enableGreetingTyping={!isDataLoading && !showIntro}
                 onOpenPromotionPlans={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'dashboard', tab: 'plans' } }))}
-                storyComposerRequested={storyComposerRequested}
-                onStoryComposerRequestHandled={() => setStoryComposerRequested(false)}
+                pendingStoryFile={pendingStoryFile}
+                onPendingStoryFileHandled={clearPendingStoryFile}
               />
             </motion.div>
           )}

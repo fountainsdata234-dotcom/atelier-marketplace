@@ -18,11 +18,11 @@ interface StoryRailProps {
   isDarkMode: boolean;
   onOpenPlans: () => void;
   onSelectSeller: (user: User) => void;
-  openComposerPrompt: boolean;
-  onComposerPromptHandled: () => void;
+  pendingStoryFile: File | null;
+  onPendingStoryFileHandled: () => void;
 }
 
-export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelectSeller, openComposerPrompt, onComposerPromptHandled }: StoryRailProps) {
+export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelectSeller, pendingStoryFile, onPendingStoryFileHandled }: StoryRailProps) {
   const [stories, setStories] = useState<TailorStory[]>([]);
   const [activeTailorId, setActiveTailorId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -36,7 +36,6 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [uploadedMedia, setUploadedMedia] = useState<StoryUploadAsset | null>(null);
   const [uploadError, setUploadError] = useState('');
   const [uploadCanRetry, setUploadCanRetry] = useState(false);
-  const [pickerPromptOpen, setPickerPromptOpen] = useState(false);
   const storyFileInputRef = useRef<HTMLInputElement>(null);
   const unavailableStoryIds = useRef(new Set<string>());
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
@@ -78,12 +77,6 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     return () => window.clearTimeout(timer);
   }, [stories]);
 
-  useEffect(() => {
-    if (!openComposerPrompt) return;
-    setPickerPromptOpen(true);
-    onComposerPromptHandled();
-  }, [openComposerPrompt, onComposerPromptHandled]);
-
   useEffect(() => () => {
     if (draftUrl) URL.revokeObjectURL(draftUrl);
   }, [draftUrl]);
@@ -123,7 +116,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     if (activeTailorId && activeStories.length === 0) setActiveTailorId(null);
   }, [activeTailorId, activeStories.length]);
 
-  const uploadSelectedMedia = async (file: File) => {
+  const uploadSelectedMedia = async (file: File): Promise<StoryUploadAsset | null> => {
     setUploadProgress(0);
     setUploadError('');
     setUploadedMedia(null);
@@ -131,7 +124,7 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     if (typeError) {
       setUploadCanRetry(false);
       setUploadError(typeError);
-      return;
+      return null;
     }
 
     setUploading(true);
@@ -149,14 +142,16 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
       if (sizeError) {
         setUploadCanRetry(false);
         setUploadError(sizeError);
-        return;
+        return null;
       }
       const asset = await api.uploadStoryMedia(uploadFile, setUploadProgress);
       setUploadedMedia(asset);
       setUploadCanRetry(false);
+      return asset;
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'The media could not be uploaded.');
       setUploadCanRetry(true);
+      return null;
     } finally {
       setUploading(false);
       setPreparingMedia(false);
@@ -164,7 +159,6 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   };
 
   const openComposer = (file: File) => {
-    setPickerPromptOpen(false);
     setUploadError('');
     if (draftUrl) URL.revokeObjectURL(draftUrl);
     setDraftFile(file);
@@ -172,8 +166,14 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
     setDraftCaption('');
     setUploadedMedia(null);
     setUploadCanRetry(false);
-    void uploadSelectedMedia(file);
+    setUploadProgress(0);
   };
+
+  useEffect(() => {
+    if (!pendingStoryFile) return;
+    openComposer(pendingStoryFile);
+    onPendingStoryFileHandled();
+  }, [pendingStoryFile, onPendingStoryFileHandled]);
 
   const handleStoryFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -183,8 +183,6 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
       openComposer(file);
       return;
     }
-    setUploadError('No media was selected. Choose a photo or video to continue.');
-    setPickerPromptOpen(true);
   };
 
   const retryUpload = () => {
@@ -192,11 +190,13 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   };
 
   const publishStory = async () => {
-    if (!uploadedMedia || publishing) return;
+    if ((!uploadedMedia && !draftFile) || publishing) return;
     setPublishing(true);
     setUploadError('');
     try {
-      await api.publishStory(uploadedMedia, draftCaption);
+      const media = uploadedMedia || await uploadSelectedMedia(draftFile!);
+      if (!media) return;
+      await api.publishStory(media, draftCaption);
       setUploadedMedia(null);
       setDraftFile(null);
       setDraftUrl('');
@@ -308,24 +308,6 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {pickerPromptOpen && (
-          createPortal(
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
-              <motion.div initial={{ y: 20, scale: 0.98 }} animate={{ y: 0, scale: 1 }} className="w-full max-w-sm rounded-3xl border border-amber-300/20 bg-neutral-950 p-6 text-center text-white shadow-2xl shadow-black/50">
-                <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 text-neutral-950"><Plus className="h-6 w-6" /></div>
-                <h2 className="mt-4 font-serif text-xl font-bold">Create a story</h2>
-                <p className="mt-2 text-sm leading-relaxed text-neutral-400">Choose a photo or video. We’ll show upload progress before you add a caption and publish.</p>
-                <label htmlFor="story-media-input" className="mt-5 flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-gradient-to-r from-amber-300 to-orange-400 px-4 py-3 text-sm font-bold text-neutral-950 transition hover:brightness-110">
-                  Choose photo or video
-                </label>
-                <button type="button" onClick={() => setPickerPromptOpen(false)} className="mt-3 min-h-10 px-4 text-sm font-medium text-neutral-400 transition hover:text-white">Cancel</button>
-              </motion.div>
-            </motion.div>,
-            document.body,
-          )
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
         {draftFile && (
           createPortal(
           <motion.div data-story-interaction initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-x-0 top-0 z-[110] flex h-[100dvh] items-end justify-center bg-black/75 sm:items-center">
@@ -354,11 +336,11 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
                       <div className={`h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-500 transition-[width] duration-200 ${preparingMedia ? 'w-1/3 animate-pulse' : ''}`} style={preparingMedia ? undefined : { width: `${uploadProgress}%` }} />
                     </div>
                   </div>
-                ) : uploadedMedia ? (
+                ) : uploadedMedia || !uploadError ? (
                   <>
                     <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-medium text-emerald-200">
                       <span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-400/20"><Check className="h-3 w-3" /></span>
-                      Your media is ready. Add a caption and publish your story.
+                      {uploadedMedia ? 'Your media is uploaded. Publish your story.' : 'Your preview is ready. Add a caption, then publish.'}
                     </div>
                     <textarea value={draftCaption} onChange={event => setDraftCaption(event.target.value.slice(0, 280))} rows={3} maxLength={280} placeholder="Add a caption to your story..." className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm outline-none transition focus:border-amber-400" />
                     <div className="mt-1 text-right text-[10px] text-neutral-500">{draftCaption.length}/280</div>
