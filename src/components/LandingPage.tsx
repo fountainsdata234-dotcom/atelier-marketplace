@@ -89,9 +89,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
   const [activeSlide, setActiveSlide] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
-  const [typedHighlight, setTypedHighlight] = useState('');
-  const [loadedSlides, setLoadedSlides] = useState<Set<number>>(() => new Set());
-  const [revealedSlide, setRevealedSlide] = useState<number | null>(null);
   const [offeringsVisible, setOfferingsVisible] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -100,8 +97,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
   const offeringsRef = useRef<HTMLElement | null>(null);
 
   const showSlide = (index: number) => {
-    setTypedHighlight('');
-    setRevealedSlide(null);
     setActiveSlide((index + slides.length) % slides.length);
   };
 
@@ -119,24 +114,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
     }, 7000);
     return () => window.clearInterval(timer);
   }, [isPressed, isHovered, prefersReducedMotion, activeSlide]);
-
-  useEffect(() => {
-    if (!loadedSlides.has(activeSlide) || revealedSlide !== activeSlide) return;
-    if (prefersReducedMotion) {
-      setTypedHighlight(slides[activeSlide].highlight);
-      return;
-    }
-
-    setTypedHighlight('');
-    let characterIndex = 0;
-    const timer = window.setInterval(() => {
-      characterIndex += 1;
-      setTypedHighlight(slides[activeSlide].highlight.slice(0, characterIndex));
-      if (characterIndex >= slides[activeSlide].highlight.length) window.clearInterval(timer);
-    }, 48);
-
-    return () => window.clearInterval(timer);
-  }, [activeSlide, loadedSlides, prefersReducedMotion, revealedSlide]);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -188,12 +165,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
     setTouchStart(null);
   };
 
-  const handleImageReveal = (event: React.AnimationEvent<HTMLDivElement>, index: number) => {
-    if (event.target === event.currentTarget && event.animationName === 'landing-image-fade-in') {
-      setRevealedSlide(index);
-    }
-  };
-
   const slide = slides[activeSlide];
 
   return (
@@ -216,7 +187,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
             <div
               className={`landing-hero-image ${index === activeSlide ? 'is-active' : ''}`}
               key={item.image}
-              onAnimationEnd={event => handleImageReveal(event, index)}
             >
               {(index === activeSlide || index === (activeSlide + 1) % slides.length) && (
                 <img
@@ -225,7 +195,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
                   style={{ objectPosition: item.imagePosition }}
                   loading={index === activeSlide ? 'eager' : 'lazy'}
                   fetchPriority={index === 0 ? 'high' : 'auto'}
-                  onLoad={() => setLoadedSlides(current => new Set(current).add(index))}
                 />
               )}
             </div>
@@ -237,14 +206,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
             <p className="landing-eyebrow"><span />{slide.eyebrow}</p>
             <h1 aria-label={`${slide.title} ${slide.highlight}`}>
               <span aria-hidden="true">{slide.title}</span>
-              <strong className="landing-typewriter">
-                <span className="landing-typewriter-reserve" aria-hidden="true">{slide.highlight}</span>
-                <span className="landing-typewriter-live" aria-hidden="true">
-                {typedHighlight}
-                {typedHighlight.length > 0 && typedHighlight.length < slide.highlight.length && (
-                  <span className="landing-typewriter-caret" />
-                )}
-                </span>
+              <strong className="landing-highlight">
+                {slide.highlight}
               </strong>
             </h1>
             <p className="landing-description">{slide.description}</p>

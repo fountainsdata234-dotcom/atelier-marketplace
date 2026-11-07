@@ -123,32 +123,8 @@
   text-align: left;
 }
 
-.landing-typewriter {
-  display: grid;
-  justify-items: start;
-  min-height: 1em;
-  text-align: left;
-}
-
-.landing-typewriter-reserve,
-.landing-typewriter-live {
-  grid-area: 1 / 1;
-  justify-self: start;
-  text-align: left;
-}
-
-.landing-typewriter-reserve {
-  visibility: hidden;
-}
-
-.landing-typewriter-caret {
-  display: inline-block;
-  width: 0.06em;
-  height: 0.78em;
-  margin-left: 0.08em;
-  background: currentColor;
-  animation: landing-caret-blink 800ms steps(2, start) infinite;
-  vertical-align: -0.02em;
+.landing-highlight {
+  animation: landing-highlight-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .landing-description {
@@ -735,24 +711,29 @@
 
 @keyframes landing-rise-in {
   from {
-    transform: translateY(3.5rem);
-    opacity: 0;
-    filter: blur(8px);
+    transform: translateY(1.25rem);
+    opacity: 0.92;
   }
   to {
     transform: translateY(0);
     opacity: 1;
-    filter: blur(0);
+  }
+}
+
+@keyframes landing-highlight-in {
+  from {
+    transform: translateY(0.12em);
+    opacity: 0.72;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 
 @keyframes landing-image-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-@keyframes landing-caret-blink {
-  to { opacity: 0; }
 }
 
 @media (min-width: 1024px) {
@@ -794,7 +775,7 @@
   }
 
   .landing-hero-content {
-    width: calc(100% - 6.5rem);
+    width: calc(100% - 3.5rem);
     padding: clamp(8.5rem, 27vh, 12rem) 0 9rem;
   }
 
@@ -810,17 +791,13 @@
   }
 
   .landing-hero h1 {
-    max-width: 12ch;
-    font-size: clamp(2.6rem, 10.8vw, 4rem);
+    max-width: 13ch;
+    font-size: clamp(2.25rem, 9.8vw, 4rem);
     line-height: 0.98;
   }
 
   .landing-hero h1 > strong {
-    white-space: nowrap;
-  }
-
-  .landing-typewriter {
-    min-height: 1em;
+    min-width: 0;
   }
 
   .landing-description {
@@ -984,11 +961,11 @@
 
 @media (max-width: 360px) {
   .landing-hero-content {
-    width: calc(100% - 5.5rem);
+    width: calc(100% - 3rem);
   }
 
   .landing-hero h1 {
-    font-size: 2.35rem;
+    font-size: clamp(2.1rem, 9.8vw, 2.35rem);
   }
 
   .landing-hero-footer {
@@ -1064,8 +1041,8 @@
     animation-duration: 0.01ms;
   }
 
-  .landing-typewriter-caret {
-    animation: none;
+  .landing-highlight {
+    animation-duration: 0.01ms;
   }
 
   .landing-offering-card {
