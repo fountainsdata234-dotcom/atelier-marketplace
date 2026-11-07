@@ -70,16 +70,7 @@ export async function listActiveStories(): Promise<StoryRecord[]> {
     .select('*')
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
-  if (error) {
-    const fallback = await requireClient()
-      .from('tailor_stories')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (fallback.error) throw normalizeError(fallback.error);
-    return (Array.isArray(fallback.data) ? fallback.data : []).filter(story =>
-      !story.expires_at || new Date(String(story.expires_at)).getTime() > Date.now()
-    );
-  }
+  if (error) throw normalizeError(error);
   return Array.isArray(data) ? data : [];
 }
 
@@ -136,43 +127,116 @@ export async function deleteExpiredStoriesByIds(ids: string[]): Promise<void> {
 }
 
 export async function recordStoryView(storyId: string, userId: string): Promise<number> {
-  await requireClient().from('tailor_story_views').upsert({ story_id: storyId, user_id: userId }, { onConflict: 'story_id,user_id' });
-  const { count, error } = await requireClient().from('tailor_story_views').select('user_id', { count: 'exact', head: true }).eq('story_id', storyId);
-  if (error) throw normalizeError(error);
-  return count || 0;
+  const supabase = requireClient();
+  const { data, error } = await supabase.rpc('record_tailor_story_view', {
+    p_story_id: storyId,
+    p_user_id: userId,
+  });
+  let viewCount: number;
+  if (error && isMissingRpcFunction(error, 'record_tailor_story_view')) {
+    const { data: activeStory, error: storyError } = await supabase
+      .from('tailor_stories')
+      .select('id')
+      .eq('id', storyId)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
+    if (storyError) throw normalizeError(storyError);
+    if (!activeStory) throw new Error('Active story does not exist.');
+    const { error: viewError } = await supabase
+      .from('tailor_story_views')
+      .upsert({ story_id: storyId, user_id: userId }, { onConflict: 'story_id,user_id' });
+    if (viewError) throw normalizeError(viewError);
+    const { count, error: countError } = await supabase
+      .from('tailor_story_views')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('story_id', storyId);
+    if (countError) throw normalizeError(countError);
+    viewCount = count ?? 0;
+  } else {
+    if (error) throw normalizeError(error);
+    viewCount = Number(data);
+  }
+  if (!Number.isInteger(viewCount) || viewCount < 0) {
+    throw new Error('Story view returned an invalid count.');
+  }
+  return viewCount;
 }
 
 export async function toggleStoryLike(storyId: string, userId: string): Promise<{ isLiked: boolean; likeCount: number }> {
   const supabase = requireClient();
-  const { data: existing } = await supabase.from('tailor_story_likes').select('story_id').eq('story_id', storyId).eq('user_id', userId).maybeSingle();
-  if (existing) await supabase.from('tailor_story_likes').delete().eq('story_id', storyId).eq('user_id', userId);
-  else await supabase.from('tailor_story_likes').insert({ story_id: storyId, user_id: userId });
-  const { count, error } = await supabase.from('tailor_story_likes').select('user_id', { count: 'exact', head: true }).eq('story_id', storyId);
-  if (error) throw normalizeError(error);
-  return { isLiked: !existing, likeCount: count || 0 };
+  const { data, error } = await supabase.rpc('toggle_tailor_story_like', {
+    p_story_id: storyId,
+    p_user_id: userId,
+  });
+  let result: { isLiked?: unknown; likeCount?: unknown } | null;
+  if (error && isMissingRpcFunction(error, 'toggle_tailor_story_like')) {
+    const { data: activeStory, error: storyError } = await supabase
+      .from('tailor_stories')
+      .select('id')
+      .eq('id', storyId)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
+    if (storyError) throw normalizeError(storyError);
+    if (!activeStory) throw new Error('Active story does not exist.');
+    const { data: existing, error: existingError } = await supabase
+      .from('tailor_story_likes')
+      .select('story_id')
+      .eq('story_id', storyId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existingError) throw normalizeError(existingError);
+    if (existing) {
+      const { error: deleteError } = await supabase
+        .from('tailor_story_likes')
+        .delete()
+        .eq('story_id', storyId)
+        .eq('user_id', userId);
+      if (deleteError) throw normalizeError(deleteError);
+    } else {
+      const { error: insertError } = await supabase
+        .from('tailor_story_likes')
+        .insert({ story_id: storyId, user_id: userId });
+      if (insertError) throw normalizeError(insertError);
+    }
+    const { count, error: countError } = await supabase
+      .from('tailor_story_likes')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('story_id', storyId);
+    if (countError) throw normalizeError(countError);
+    result = { isLiked: !existing, likeCount: count ?? 0 };
+  } else {
+    if (error) throw normalizeError(error);
+    result = data as { isLiked?: unknown; likeCount?: unknown } | null;
+  }
+  const likeCount = Number(result?.likeCount);
+  if (!result || typeof result.isLiked !== 'boolean' || !Number.isInteger(likeCount) || likeCount < 0) {
+    throw new Error('Story like returned an invalid response.');
+  }
+  return { isLiked: result.isLiked, likeCount };
 }
 
 export async function getStoryCounts(storyIds: string[], userId?: string): Promise<Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>> {
   const supabase = requireClient();
-  const missingTable = (error: unknown) => {
-    const code = (error as { code?: unknown } | null)?.code;
-    const message = String((error as { message?: unknown } | null)?.message || '').toLowerCase();
-    return code === '42P01' || code === 'PGRST205' || message.includes('does not exist') || message.includes('could not find the table');
-  };
-  const [views, likes, viewerLikes] = await Promise.all([
-    supabase.from('tailor_story_views').select('story_id'),
-    supabase.from('tailor_story_likes').select('story_id'),
-    userId ? supabase.from('tailor_story_likes').select('story_id').eq('user_id', userId).in('story_id', storyIds) : Promise.resolve({ data: [] as { story_id: string }[] }),
-  ]);
-  if (views.error && !missingTable(views.error)) throw normalizeError(views.error);
-  if (likes.error && !missingTable(likes.error)) throw normalizeError(likes.error);
-  if ('error' in viewerLikes && viewerLikes.error && !missingTable(viewerLikes.error)) throw normalizeError(viewerLikes.error);
-  const result = new Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>();
-  storyIds.forEach(storyId => result.set(storyId, {
-    viewCount: (views.data || []).filter(row => String(row.story_id) === storyId).length,
-    likeCount: (likes.data || []).filter(row => String(row.story_id) === storyId).length,
-    likedByViewer: (viewerLikes.data || []).some(row => String(row.story_id) === storyId),
+  if (!storyIds.length) return new Map();
+  const counts = await Promise.all(storyIds.map(async storyId => {
+    const [views, likes, viewerLike] = await Promise.all([
+      supabase.from('tailor_story_views').select('user_id', { count: 'exact', head: true }).eq('story_id', storyId),
+      supabase.from('tailor_story_likes').select('user_id', { count: 'exact', head: true }).eq('story_id', storyId),
+      userId
+        ? supabase.from('tailor_story_likes').select('story_id').eq('story_id', storyId).eq('user_id', userId).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    if (views.error) throw normalizeError(views.error);
+    if (likes.error) throw normalizeError(likes.error);
+    if (viewerLike.error) throw normalizeError(viewerLike.error);
+    return [storyId, {
+      viewCount: views.count || 0,
+      likeCount: likes.count || 0,
+      likedByViewer: Boolean(viewerLike.data),
+    }] as const;
   }));
+  const result = new Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>();
+  counts.forEach(([storyId, countsForStory]) => result.set(storyId, countsForStory));
   return result;
 }
 

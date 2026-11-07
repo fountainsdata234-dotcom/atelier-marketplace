@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, X, ChevronLeft, ChevronRight, Trash2, Eye, Heart, Send, Play, Pause, BarChart3, Check } from 'lucide-react';
@@ -38,19 +38,32 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
   const [uploadCanRetry, setUploadCanRetry] = useState(false);
   const storyFileInputRef = useRef<HTMLInputElement>(null);
   const unavailableStoryIds = useRef(new Set<string>());
+  const storyLoadRequestRef = useRef(0);
   const userById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
 
   const loadStories = () => {
+    const requestId = ++storyLoadRequestRef.current;
     api.getStories().then(loadedStories => {
+      if (requestId !== storyLoadRequestRef.current) return;
       setStories(loadedStories.filter(story =>
         new Date(story.expiresAt).getTime() > Date.now()
         && !unavailableStoryIds.current.has(story.id),
       ));
     }).catch(error => {
+      if (requestId !== storyLoadRequestRef.current) return;
       console.error('Unable to load stories.', error);
-      setStories([]);
     });
   };
+
+  const updateStoryViewCount = useCallback((storyId: string, viewCount: number) => {
+    setStories(current => current.map(story => story.id === storyId ? { ...story, viewCount } : story));
+  }, []);
+
+  const updateStoryLike = useCallback((storyId: string, likeCount: number, likedByViewer: boolean) => {
+    setStories(current => current.map(story => story.id === storyId
+      ? { ...story, likeCount, likedByViewer }
+      : story));
+  }, []);
 
   const hideUnavailableStory = (storyId: string) => {
     if (unavailableStoryIds.current.has(storyId)) return;
@@ -296,9 +309,10 @@ export function StoryRail({ users, currentUser, isDarkMode, onOpenPlans, onSelec
               await api.deleteStory(storyId);
               unavailableStoryIds.current.add(storyId);
               setStories(current => current.filter(story => story.id !== storyId));
-              loadStories();
               setActiveTailorId(null);
             }}
+            onViewCount={updateStoryViewCount}
+            onLikeChange={updateStoryLike}
             onUnavailable={hideUnavailableStory}
             onAdd={() => storyFileInputRef.current?.click()}
             onClose={() => setActiveTailorId(null)}
@@ -414,7 +428,7 @@ export function PromotedTailorRail({ users, isDarkMode, onSelectSeller }: {
   );
 }
 
-export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevious, onNext, onUnavailable }: {
+export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose, onPrevious, onNext, onUnavailable, onViewCount, onLikeChange }: {
   stories: TailorStory[];
   tailor?: User;
   onClose: () => void;
@@ -424,10 +438,16 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   onDelete: (storyId: string) => Promise<void>;
   onAdd: () => void;
   onUnavailable: (storyId: string) => void;
+  onViewCount: (storyId: string, viewCount: number) => void;
+  onLikeChange: (storyId: string, likeCount: number, likedByViewer: boolean) => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [reply, setReply] = useState('');
+  const [liking, setLiking] = useState(false);
+  const [deletingStory, setDeletingStory] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [likeError, setLikeError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const touchStartX = useRef<number | null>(null);
   const holdTimeout = useRef<number | null>(null);
@@ -452,12 +472,17 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   useEffect(() => {
     setLiked(Boolean(story?.likedByViewer));
     setReply('');
+    setLikeError('');
   }, [story?.id]);
 
   useEffect(() => {
     setIsPaused(false);
-    if (story) void api.recordStoryView(story.id).catch(() => undefined);
-  }, [story?.id]);
+    if (story && !owner) {
+      void api.recordStoryView(story.id)
+        .then(({ viewCount }) => onViewCount(story.id, viewCount))
+        .catch(error => console.error('Unable to record story view.', error));
+    }
+  }, [story?.id, owner, onViewCount]);
 
   useEffect(() => {
     if (!story || isPaused || story.mediaType === 'video') return;
@@ -496,11 +521,30 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   if (!story) return null;
 
   const toggleLike = () => {
+    if (liking) return;
+    setLiking(true);
+    setLikeError('');
     void api.toggleStoryLike(story.id).then(result => {
       setLiked(result.isLiked);
-      story.likeCount = result.likeCount;
-      story.likedByViewer = result.isLiked;
-    }).catch(() => undefined);
+      onLikeChange(story.id, result.likeCount, result.isLiked);
+    }).catch(error => {
+      console.error('Unable to update story like.', error);
+      setLikeError(error instanceof Error ? error.message : 'Your like could not be saved.');
+    }).finally(() => setLiking(false));
+  };
+
+  const deleteCurrentStory = async () => {
+    if (deletingStory) return;
+    setDeletingStory(true);
+    setDeleteError('');
+    try {
+      await onDelete(story.id);
+    } catch (error) {
+      console.error('Unable to delete story.', error);
+      setDeleteError(error instanceof Error ? error.message : 'The story could not be deleted.');
+    } finally {
+      setDeletingStory(false);
+    }
   };
 
   return createPortal(
@@ -553,20 +597,23 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
           <div className="absolute bottom-4 left-4 right-4 z-40 flex items-center gap-2">
             <input value={reply} onChange={event => setReply(event.target.value)} placeholder={`Reply to ${formatHandle(tailor?.handle) || '@merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur" />
             <button type="button" aria-label="Send reply" disabled={!reply.trim()} onClick={() => setReply('')} className="grid h-11 w-11 place-items-center rounded-full bg-white text-neutral-950 disabled:opacity-50"><Send className="h-4 w-4" /></button>
-            <button type="button" aria-label={liked ? 'Unlike story' : 'Like story'} onClick={toggleLike} className="grid h-11 w-11 place-items-center rounded-full bg-black/45 text-white backdrop-blur">
+            <button type="button" aria-label={liked ? `Unlike story (${story.likeCount} likes)` : `Like story (${story.likeCount} likes)`} disabled={liking} onClick={toggleLike} className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-full bg-black/45 px-2 text-white backdrop-blur disabled:opacity-60">
               <Heart className="h-5 w-5" fill={liked ? 'currentColor' : 'none'} />
+              <span className="text-xs tabular-nums">{story.likeCount}</span>
             </button>
           </div>
         )}
+        {likeError && <p role="alert" className="absolute bottom-20 left-4 right-4 z-50 rounded-lg bg-red-950/90 px-3 py-2 text-xs text-red-100">{likeError}</p>}
         {owner && (
           <div className="absolute bottom-4 left-4 right-4 z-40 flex items-center gap-2 rounded-2xl bg-neutral-950/90 p-2 text-white backdrop-blur">
             <span className="flex items-center gap-1.5 px-2 text-xs"><Eye className="h-4 w-4 text-amber-400" />{story.viewCount}</span>
             <span className="flex items-center gap-1.5 px-2 text-xs"><Heart className="h-4 w-4 text-rose-400" />{story.likeCount}</span>
             <button type="button" onClick={onAdd} className="ml-auto flex items-center gap-1 rounded-lg bg-amber-400 px-3 py-2 text-xs font-bold text-neutral-950"><Plus className="h-3.5 w-3.5" />Add story</button>
             <button type="button" aria-label="Story insights" className="rounded-lg bg-white/10 p-2"><BarChart3 className="h-4 w-4" /></button>
-            <button type="button" onClick={() => void onDelete(story.id)} aria-label="Delete story" className="rounded-lg bg-red-500/15 p-2 text-red-300"><Trash2 className="h-4 w-4" /></button>
+            <button type="button" onClick={() => void deleteCurrentStory()} disabled={deletingStory} aria-label="Delete story" className="rounded-lg bg-red-500/15 p-2 text-red-300 disabled:cursor-wait disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
           </div>
         )}
+        {deleteError && <p role="alert" className="absolute bottom-20 left-4 right-4 z-50 rounded-lg bg-red-950/90 px-3 py-2 text-xs text-red-100">{deleteError}</p>}
       </div>
       <style>{`@keyframes story-progress { from { width: 0%; } to { width: 100%; } }`}</style>
     </motion.div>,

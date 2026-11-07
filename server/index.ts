@@ -1793,18 +1793,8 @@ app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
     } catch (error) {
       console.warn('Expired story lookup failed', error);
     }
-    let stories: Awaited<ReturnType<typeof listActiveStories>> = [];
-    try {
-      stories = await listActiveStories();
-    } catch (error) {
-      console.warn('Stories table unavailable', error);
-    }
-    let counts = new Map<string, { viewCount: number; likeCount: number; likedByViewer: boolean }>();
-    try {
-      counts = await getStoryCounts(stories.map(story => String(story.id)), req.authUser?.uid);
-    } catch (error) {
-      console.warn('Story counts unavailable', error);
-    }
+    const stories = await listActiveStories();
+    const counts = await getStoryCounts(stories.map(story => String(story.id)), req.authUser?.uid);
     res.json(stories.map(story => ({
       id: String(story.id),
       tailorId: String(story.tailor_id),
@@ -1815,9 +1805,9 @@ app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
       createdAt: String(story.created_at),
       expiresAt: String(story.expires_at),
       caption: String(story.caption || ''),
-      viewCount: counts.get(String(story.id))?.viewCount || Number(story.view_count) || 0,
-      likeCount: counts.get(String(story.id))?.likeCount || Number(story.like_count) || 0,
-      likedByViewer: counts.get(String(story.id))?.likedByViewer || false,
+      viewCount: counts.get(String(story.id))?.viewCount ?? (Number(story.view_count) || 0),
+      likeCount: counts.get(String(story.id))?.likeCount ?? (Number(story.like_count) || 0),
+      likedByViewer: counts.get(String(story.id))?.likedByViewer ?? false,
     })));
   } catch (error) {
     console.error('Story list failed', error);
@@ -1933,7 +1923,8 @@ app.delete('/api/stories/:storyId', requireAuth, requireActiveAccount, async (re
       return;
     }
     await removeStoryMedia(target);
-    await deleteStory(String(req.params.storyId), req.authUser!.uid);
+    const deleted = await deleteStory(String(req.params.storyId), req.authUser!.uid);
+    if (!deleted) throw new Error('Story record was not deleted after media cleanup.');
     res.status(204).send();
   } catch (error) {
     console.error('Story delete failed', error);
