@@ -465,9 +465,66 @@ export async function getPosts(limit = 16, search?: string): Promise<PostRecord[
   return (data || []).map(post => ({ ...post, author: post.author || {} }));
 }
 
+export async function getAdminMarketplacePosts(limit = 200): Promise<PostRecord[]> {
+  const { data, error } = await requireClient()
+    .from('posts')
+    .select('*, author:profiles!posts_author_id_fkey(id,name,shop_name,role,handle,avatar_url,location,whatsapp_number,is_promoted,is_blocked)')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(limit);
+  if (error) throw normalizeError(error);
+  return (data || []).map(post => ({ ...post, author: post.author || {} }));
+}
+
+export async function getMarketplaceFeaturedPosts(limit = 48, viewerId?: string): Promise<PostRecord[]> {
+  const blockedSellerIds = viewerId ? await getMarketplaceBlockedSellerIds(viewerId) : [];
+  const hiddenListingIds = viewerId ? await getMarketplaceHiddenListingIds(viewerId) : [];
+  let query = requireClient()
+    .from('posts')
+    .select('*, author:profiles!posts_author_id_fkey!inner(id,name,shop_name,role,handle,avatar_url,location,whatsapp_number,is_promoted,is_blocked)')
+    .eq('is_featured', true)
+    .gt('featured_until', new Date().toISOString())
+    .eq('status', 'published')
+    .eq('moderation_status', 'approved')
+    .is('deleted_at', null)
+    .eq('is_blocked', false)
+    .neq('availability', 'unavailable')
+    .neq('status', 'sold_out')
+    .eq('author.is_blocked', false)
+    .not('published_at', 'is', null)
+    .order('featured_at', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(limit);
+  if (blockedSellerIds.length) query = query.not('author_id', 'in', `(${blockedSellerIds.join(',')})`);
+  if (hiddenListingIds.length) query = query.not('id', 'in', `(${hiddenListingIds.join(',')})`);
+  const { data, error } = await query;
+  if (error) throw normalizeError(error);
+  return (data || []).map(post => ({ ...post, author: post.author || {} }));
+}
+
+export async function setMarketplaceListingFeatured(
+  listingId: string,
+  featuredUntil: string | null,
+  actorId: string,
+): Promise<void> {
+  const timestamp = new Date().toISOString();
+  const values = featuredUntil
+    ? { is_featured: true, featured_at: timestamp, featured_until: featuredUntil, featured_by: actorId, updated_at: timestamp }
+    : { is_featured: false, featured_at: null, featured_until: null, featured_by: null, updated_at: timestamp };
+  const { data, error } = await requireClient()
+    .from('posts')
+    .update(values)
+    .eq('id', listingId)
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+  if (error) throw normalizeError(error);
+  if (!data) throw new Error('That listing is no longer available.');
+}
+
 const MARKETPLACE_SORT_FIELDS: Record<string, Array<{ field: string; direction: 'asc' | 'desc'; nullsLast?: boolean }>> = {
   relevance: [
-    { field: 'is_promoted', direction: 'desc' },
     { field: 'popularity_score', direction: 'desc' },
     { field: 'published_at', direction: 'desc' },
     { field: 'id', direction: 'desc' },
@@ -882,7 +939,7 @@ export async function getMarketplaceTrendingPage(options: {
   scopeValue: string;
   limit: number;
   viewerId?: string;
-}): Promise<{ rows: PostRecord[]; fallback: boolean; computedAt: string | null }> {
+}): Promise<{ rows: PostRecord[]; fallback: boolean; fallbackMessage: string | null; computedAt: string | null }> {
   const supabase = requireClient();
   const blockedSellerIds = options.viewerId
     ? await getMarketplaceBlockedSellerIds(options.viewerId)
@@ -920,31 +977,8 @@ export async function getMarketplaceTrendingPage(options: {
   if (blockedSellerFilter) trendQuery = trendQuery.not('listing.author_id', 'in', blockedSellerFilter);
   if (hiddenListingIds.length) trendQuery = trendQuery.not('listing_id', 'in', `(${hiddenListingIds.join(',')})`);
 
-  const fallbackToRecentListings = async () => {
-    const { rows } = await getMarketplacePostsPage({
-      view: 'all',
-      sort: 'newest',
-      limit: options.limit,
-      ...(options.scopeType === 'category' ? { categoryId: options.scopeValue } : {}),
-      ...(options.scopeType === 'region' ? { country: options.scopeValue } : {}),
-      ...(options.scopeType === 'style' ? { tag: options.scopeValue } : {}),
-      viewerId: options.viewerId,
-    });
-    return {
-      rows,
-      fallback: true,
-      computedAt: null,
-      ...(options.scopeType === 'global' && options.viewerId
-        ? { likes: await getMarketplaceViewerInteractions(rows.map(row => String(row.id)), options.viewerId) }
-        : {}),
-    };
-  };
-
   const { data, error } = await trendQuery;
-  if (error) {
-    console.warn('Marketplace trend scores are unavailable; using eligible recent listings.', normalizeError(error));
-    return fallbackToRecentListings();
-  }
+  if (error) throw normalizeError(error);
 
   if (data?.length) {
     return {
@@ -963,11 +997,17 @@ export async function getMarketplaceTrendingPage(options: {
         };
       }),
       fallback: false,
+      fallbackMessage: null,
       computedAt: String(data[0].computed_at || ''),
     };
   }
 
-  return fallbackToRecentListings();
+  return {
+    rows: [],
+    fallback: true,
+    fallbackMessage: 'No listings currently meet the qualified engagement thresholds for this trend category.',
+    computedAt: null,
+  };
 }
 
 export async function getMarketplaceViewerInteractions(postIds: string[], userId?: string): Promise<{

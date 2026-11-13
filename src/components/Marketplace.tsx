@@ -8,7 +8,7 @@ import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
 import { buildPostShareUrl, getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
-import { rankMarketplaceListings } from '../utils/marketplaceRanking';
+import { rankMarketplaceListingPages } from '../utils/marketplaceRanking';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { animateActionFeedback } from '../utils/actionFeedback';
@@ -170,6 +170,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [fulfilmentFilter, setFulfilmentFilter] = useState('');
   const [availabilityFilter, setAvailabilityFilter] = useState('');
   const [feedPosts, setFeedPosts] = useState<ClothPost[]>([]);
+  const [feedPageLengths, setFeedPageLengths] = useState<number[]>([]);
+  const [featuredPosts, setFeaturedPosts] = useState<ClothPost[]>([]);
+  const [featuredError, setFeaturedError] = useState<string | null>(null);
+  const [featuredRetry, setFeaturedRetry] = useState(0);
   const [feedCursor, setFeedCursor] = useState<string | null>(null);
   const [feedHasMore, setFeedHasMore] = useState(false);
   const [feedLoading, setFeedLoading] = useState(true);
@@ -261,14 +265,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       try {
         await api.saveRecommendationPreferences(next);
         setRecommendationNotice(next.enabled
-          ? 'Your preferences are saved to your account and will shape For You recommendations.'
+          ? 'Your preferences are saved to your account and will shape Explore recommendations.'
           : 'Preferences saved. Personalization remains off until you enable it.');
       } catch (error) {
         setRecommendationNotice(`Preferences are saved on this device, but account sync could not be completed: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
       }
     } else {
       setRecommendationNotice(next.enabled
-        ? 'Your preferences are saved on this device and will shape the For You feed.'
+        ? 'Your preferences are saved on this device and will shape Explore.'
         : 'Preferences saved. Personalization remains off until you enable it.');
     }
   };
@@ -372,6 +376,31 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
   useEffect(() => {
     let active = true;
+    const loadFeatured = () => {
+      void api.getMarketplaceFeatured()
+        .then(items => {
+          if (active) {
+            setFeaturedPosts(items);
+            setFeaturedError(null);
+          }
+        })
+        .catch(error => {
+          if (active) {
+            console.warn('Featured marketplace listings could not be loaded.', error);
+            setFeaturedError(safeCustomerErrorMessage(error, 'Featured listings could not be loaded. Please try again.'));
+          }
+        });
+    };
+    loadFeatured();
+    const timer = window.setInterval(loadFeatured, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [featuredRetry]);
+
+  useEffect(() => {
+    let active = true;
     void api.getPublicSellerCollections()
       .then(collections => {
         if (active) setPublicCollections(Array.isArray(collections) ? collections.filter(collection => collection.imageUrls.some(Boolean)) : []);
@@ -416,20 +445,20 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }
   };
 
-  const trendScores = useMemo(() => new Map(
-    (activeTrendingPage && !activeTrendingPage.fallback ? activeTrendingPage.items : []).map(post => [post.id, {
-      score: post.trendScore || 0,
-      confidence: post.trendConfidence || 0,
-    }]),
-  ), [activeTrendingPage]);
   const sourcePosts = useMemo(() => {
     if (activeFeedView !== 'for-you' || sortOrder !== 'relevance') return feedPosts;
-    return rankMarketplaceListings(feedPosts, users, recommendationEvents, recommendationPreferences, {
+    let offset = 0;
+    const pages = feedPageLengths.map(length => {
+      const page = feedPosts.slice(offset, offset + length);
+      offset += length;
+      return page;
+    });
+    if (offset < feedPosts.length) pages.push(feedPosts.slice(offset));
+    return rankMarketplaceListingPages(pages, users, recommendationEvents, recommendationPreferences, {
       search: searchQuery,
       categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
-      trendScores,
     });
-  }, [feedPosts, users, recommendationEvents, recommendationPreferences, activeFeedView, sortOrder, searchQuery, selectedCategory, trendScores, recommendationRevision]);
+  }, [feedPosts, feedPageLengths, users, recommendationEvents, recommendationPreferences, activeFeedView, sortOrder, searchQuery, selectedCategory, recommendationRevision]);
   const getPostImageSource = (post: ClothPost): string | undefined => {
     const thumbnail = post.imageAssets?.[0]?.thumbnailUrl;
     const original = post.imageAssets?.[0]?.url || post.imageUrl;
@@ -529,8 +558,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     || city.toLowerCase().includes(citySearch.trim().toLowerCase())).slice(0, 100);
 
   useEffect(() => {
-    if (!hasLoadedServerFeed.current && posts.length > 0) setFeedPosts(posts.slice(0, 16));
-  }, [posts]);
+    if (activeFeedView !== 'newest' && !hasLoadedServerFeed.current && posts.length > 0) {
+      const initialPosts = posts.slice(0, 16);
+      setFeedPosts(initialPosts);
+      setFeedPageLengths([initialPosts.length]);
+    }
+  }, [activeFeedView, posts]);
 
   useEffect(() => {
     const generation = ++feedGeneration.current;
@@ -540,6 +573,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     setFeedError(null);
     setFeedCursor(null);
     setFeedHasMore(false);
+    setFeedPageLengths([]);
     const timer = window.setTimeout(() => {
       void api.getMarketplaceFeed({
         view: activeFeedView,
@@ -562,20 +596,24 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       }).then(page => {
         if (cancelled || generation !== feedGeneration.current) return;
         hasLoadedServerFeed.current = true;
-        setFeedPosts(page.items.length > 0
+        const initialPosts = page.items.length > 0
           ? page.items
-          : hasActiveFeedFilters
+          : activeFeedView === 'newest' || hasActiveFeedFilters
             ? []
-            : postsRef.current.slice(0, 16));
+            : postsRef.current.slice(0, 16);
+        setFeedPosts(initialPosts);
+        setFeedPageLengths(initialPosts.length > 0 ? [initialPosts.length] : []);
         setFeedCursor(page.nextCursor);
         setFeedHasMore(page.hasMore);
         if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
       }).catch(error => {
         if (!cancelled && generation === feedGeneration.current) {
-          setFeedPosts(postsRef.current.slice(0, 16));
+          const initialPosts = activeFeedView === 'newest' ? [] : postsRef.current.slice(0, 16);
+          setFeedPosts(initialPosts);
+          setFeedPageLengths(initialPosts.length > 0 ? [initialPosts.length] : []);
           setFeedCursor(null);
           setFeedHasMore(false);
-          setFeedError(hasActiveFeedFilters
+          setFeedError(activeFeedView === 'newest' || hasActiveFeedFilters
             ? safeCustomerErrorMessage(error, "We couldn't load listings. Please try again.")
             : null);
         }
@@ -616,14 +654,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         limit: 16,
       });
       if (generation !== feedGeneration.current) return;
-      setFeedPosts(current => {
-        const ids = new Set(current.map(post => post.id));
-        return [...current, ...page.items.filter(post => {
-          if (ids.has(post.id)) return false;
-          ids.add(post.id);
-          return true;
-        })];
+      const existingIds = new Set(feedPosts.map(post => post.id));
+      const newItems = page.items.filter(post => {
+        if (existingIds.has(post.id)) return false;
+        existingIds.add(post.id);
+        return true;
       });
+      setFeedPosts(current => {
+        return [...current, ...newItems];
+      });
+      if (newItems.length > 0) setFeedPageLengths(current => [...current, newItems.length]);
       setFeedCursor(page.nextCursor);
       setFeedHasMore(page.hasMore);
       if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
@@ -675,24 +715,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     || filterState !== 'all'
     || filterCity !== 'all'
     || nearMeActive
-    || recommendationPreferences.enabled
-    || recommendationPreferences.categories.length > 0
-    || recommendationPreferences.styles.length > 0
-    || recommendationPreferences.minimumPrice !== null
-    || recommendationPreferences.maximumPrice !== null
-    || Boolean(recommendationPreferences.country)
-    || Boolean(recommendationPreferences.state));
-
-  const carouselPosts = useMemo(() => rankMarketplaceListings(
-    tailorPosts,
-    users,
-    recommendationEvents,
-    recommendationPreferences,
-    { trendScores },
-  ).slice(0, 8), [tailorPosts, users, recommendationEvents, recommendationPreferences, trendScores, recommendationRevision]);
+    || (activeFeedView === 'for-you' && (
+      recommendationPreferences.enabled
+      || recommendationPreferences.categories.length > 0
+      || recommendationPreferences.styles.length > 0
+      || recommendationPreferences.minimumPrice !== null
+      || recommendationPreferences.maximumPrice !== null
+      || Boolean(recommendationPreferences.country)
+      || Boolean(recommendationPreferences.state)
+    )));
 
   const trendingPosts = useMemo(
-    () => (activeTrendingPage && !activeTrendingPage.fallback ? activeTrendingPage.items : []).slice(0, showAllTrending ? 48 : 7),
+    () => (activeTrendingPage?.items || []).slice(0, showAllTrending ? 48 : 7),
     [activeTrendingPage, showAllTrending],
   );
   const activeTrendCategoryLabel = TREND_CATEGORY_LABELS[activeTrendCategory];
@@ -739,6 +773,16 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     setActiveSuggestionIndex(-1);
   };
 
+  const selectFeedView = (view: MarketplaceFeedView) => {
+    setActiveFeedView(view);
+    if (view === 'newest') {
+      setSortOrder('newest');
+      setNearMeActive(false);
+    } else if (view === 'for-you') {
+      setSortOrder('relevance');
+    }
+  };
+
   // Filter and sort posts
   const filteredPosts = useMemo(() => {
     let result = tailorPosts.filter(post => {
@@ -755,8 +799,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       return true;
     });
 
-    // Sorting: Promoted posts first, or distance if Near Me is active
-    if (nearMeActive && userCoords && !searchQuery.trim()) {
+    if (activeFeedView !== 'newest' && nearMeActive && userCoords && !searchQuery.trim()) {
       result.sort((a, b) => {
         const distA = a.authorLocation.lat && a.authorLocation.lng
           ? calculateDistanceKm(userCoords.lat, userCoords.lng, a.authorLocation.lat, a.authorLocation.lng)
@@ -769,15 +812,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }
 
     return result;
-  }, [tailorPosts, userById, filterCountry, filterState, filterCity, nearMeActive, userCoords, searchQuery]);
+  }, [tailorPosts, userById, filterCountry, filterState, filterCity, nearMeActive, userCoords, searchQuery, activeFeedView]);
 
-  const visiblePosts = filteredPosts;
+  const visiblePosts = activeFeedView === 'newest' && feedLoading ? [] : filteredPosts;
 
   useEffect(() => {
-    if (carouselPosts.length < 2) return;
-    const timer = window.setInterval(() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length), 4500);
+    if (featuredPosts.length < 2) return;
+    const timer = window.setInterval(() => setActiveCarouselIndex(index => (index + 1) % featuredPosts.length), 4500);
     return () => window.clearInterval(timer);
-  }, [carouselPosts.length]);
+  }, [featuredPosts.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1249,7 +1292,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       <section aria-label="Marketplace discovery views" className={`rounded-2xl border p-3 sm:p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>
         <div role="tablist" aria-label="Browse marketplace listings" className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]">
           {([
-            ['for-you', 'For You'],
+            ['for-you', 'Explore'],
+            ['newest', 'Newest Uploads'],
             ['all', 'All listings'],
             ['clothing', 'Clothing'],
             ['fabrics', 'Fabrics'],
@@ -1263,14 +1307,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               aria-selected={activeFeedView === view}
               aria-controls="marketplace-feed-panel"
               tabIndex={activeFeedView === view ? 0 : -1}
-              onClick={() => setActiveFeedView(view)}
+              onClick={() => selectFeedView(view)}
               onKeyDown={event => {
                 const offset = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
                 const targetIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + offset + tabs.length) % tabs.length;
                 if (!offset && event.key !== 'Home' && event.key !== 'End') return;
                 event.preventDefault();
                 const target = tabs[targetIndex][0];
-                setActiveFeedView(target);
+                selectFeedView(target);
                 document.getElementById(`marketplace-tab-${target}`)?.focus();
               }}
               className={`shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
@@ -1288,7 +1332,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className={`text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             {activeFeedView === 'for-you'
-              ? 'An optional, privacy-conscious mix of eligible listings. Personalization is off until you enable it; promoted listings stay clearly labelled.'
+              ? 'Explore available outfits with relevance, your selected filters, and merchant diversity. Promoted placements stay clearly labelled.'
+              : activeFeedView === 'newest'
+                ? 'Approved and published listings in strict published-time order. Engagement does not change this list.'
               : activeFeedView === 'tailors'
                 ? 'Explore published work from tailor profiles.'
                 : activeFeedView === 'fabrics'
@@ -1312,19 +1358,23 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             <datalist id="marketplace-category-options">
               {categories.map(category => <option key={category} value={category} />)}
             </datalist>
-            <label className="sr-only" htmlFor="marketplace-sort">Sort listings</label>
-            <select
-              id="marketplace-sort"
-              value={sortOrder}
-              onChange={event => setSortOrder(event.target.value as MarketplaceSort)}
-              className={`min-h-10 rounded-lg border px-3 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-100' : 'border-neutral-300 bg-white text-neutral-800'}`}
-            >
-              <option value="relevance">Relevance</option>
-              <option value="newest">Newest</option>
-              <option value="price_asc">Price: low to high</option>
-              <option value="price_desc">Price: high to low</option>
-              <option value="popularity">Popularity</option>
-            </select>
+            {activeFeedView !== 'for-you' && activeFeedView !== 'newest' && (
+              <>
+                <label className="sr-only" htmlFor="marketplace-sort">Sort listings</label>
+                <select
+                  id="marketplace-sort"
+                  value={sortOrder}
+                  onChange={event => setSortOrder(event.target.value as MarketplaceSort)}
+                  className={`min-h-10 rounded-lg border px-3 text-xs ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-100' : 'border-neutral-300 bg-white text-neutral-800'}`}
+                >
+                  <option value="relevance">Relevance</option>
+                  <option value="newest">Newest</option>
+                  <option value="price_asc">Price: low to high</option>
+                  <option value="price_desc">Price: high to low</option>
+                  <option value="popularity">Popularity</option>
+                </select>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -1376,7 +1426,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       </details>
       {activeFeedView === 'for-you' && <details className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>
         <summary className="cursor-pointer text-sm font-semibold text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
-          For You preferences and privacy
+          Explore preferences and privacy
         </summary>
         <form onSubmit={saveRecommendationSettings} className="mt-4 space-y-4">
           <label className={`flex items-start gap-3 text-xs ${isDarkMode ? 'text-neutral-200' : 'text-neutral-700'}`}>
@@ -1418,7 +1468,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               <input value={statePreferenceInput} onChange={event => setStatePreferenceInput(event.target.value)} maxLength={80} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
             </label>
           </div>
-          <p className={`text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>The current feed uses selected preferences, recent marketplace trend scores where available, listing freshness, and listing completeness. Verified rating-confidence and seller-reliability signals are not available to this ranker and are not guessed. Recent listings receive limited exploration slots; this is not a claim that they have had fewer impressions.</p>
+          <p className={`text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>Explore uses selected preferences, listing relevance and completeness, freshness, and merchant diversity. It does not reuse Trending scores. Verified rating-confidence and seller-reliability signals are not available to this ranker and are not guessed.</p>
           <div className="flex flex-wrap items-center gap-2">
             <button type="submit" className="min-h-10 rounded-lg bg-amber-400 px-4 text-xs font-bold text-neutral-950 hover:bg-amber-300">Save preferences</button>
             <button type="button" onClick={resetRecommendations} className={`min-h-10 rounded-lg border px-4 text-xs font-semibold ${isDarkMode ? 'border-neutral-700 text-neutral-200 hover:border-amber-400' : 'border-neutral-300 text-neutral-700 hover:border-amber-500'}`}>Reset preferences and activity</button>
@@ -1427,18 +1477,25 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </form>
       </details>}
 
-      {carouselPosts.length >= DISCOVERY_POST_THRESHOLD && (
-        <section className="space-y-3">
+      {featuredError && (
+        <div role="alert" className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs ${isDarkMode ? 'border-red-500/30 bg-red-500/10 text-red-200' : 'border-red-200 bg-red-50 text-red-800'}`}>
+          <span>{featuredError}</span>
+          <button type="button" onClick={() => setFeaturedRetry(value => value + 1)} className="shrink-0 font-semibold underline underline-offset-2">Retry</button>
+        </div>
+      )}
+
+      {featuredPosts.length > 0 && (
+        <section aria-label="Featured marketplace listings" className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400/15 text-xs font-bold text-neutral-950 ring-1 ring-amber-500/30">👘</div>
-              <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-amber-400">Curated atelier picks</h2>
+              <h2 className="font-mono text-sm font-semibold uppercase tracking-wide text-amber-400">Featured atelier picks</h2>
             </div>
-            <span className="text-[11px] text-neutral-400">Selected work from real merchants</span>
+            <span className="text-[11px] text-neutral-400">Selected by the Fabs Attire team</span>
           </div>
           <div className="relative overflow-hidden rounded-[2rem] border border-amber-500/30 bg-neutral-950 shadow-[0_30px_80px_rgba(0,0,0,0.4)]">
             {(() => {
-              const post = carouselPosts[activeCarouselIndex % carouselPosts.length];
+              const post = featuredPosts[activeCarouselIndex % featuredPosts.length];
               const imageSource = getPostImageSource(post);
               return (
                 <motion.div
@@ -1449,7 +1506,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   className="grid min-h-[500px] overflow-hidden bg-neutral-950 md:min-h-[390px] md:grid-cols-[1.15fr_0.85fr]"
                 >
                   <div className="group/curated-image relative flex min-h-[min(72svh,620px)] items-center justify-center overflow-hidden bg-[#f1ece3] md:min-h-0">
-                    <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center">
+                    <button type="button" onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center">
                       {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500" fit="contain" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
                     </button>
                     <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:top-6">
@@ -1461,7 +1518,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </div>
                   <div className="flex flex-col justify-center border-t border-white/10 bg-gradient-to-br from-[#171615] via-[#111112] to-[#1c1710] p-5 sm:p-7 md:border-l md:border-t-0 md:p-8 lg:p-10">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">Curated atelier pick</span>
+                      <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">Featured listing</span>
                       {post.isPromoted && <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200">Promoted</span>}
                     </div>
                     <p className="mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">{post.authorName} <span className="px-1 text-neutral-600">/</span> {formatLocation(post.authorLocation)}</p>
@@ -1476,12 +1533,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 </motion.div>
               );
             })()}
-            {carouselPosts.length > 1 && (
+            {featuredPosts.length > 1 && (
               <>
-                <button type="button" onClick={() => setActiveCarouselIndex(index => (index - 1 + carouselPosts.length) % carouselPosts.length)} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white transition hover:bg-amber-400 hover:text-neutral-950" aria-label="Previous runway post">
+                <button type="button" onClick={() => setActiveCarouselIndex(index => (index - 1 + featuredPosts.length) % featuredPosts.length)} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white transition hover:bg-amber-400 hover:text-neutral-950" aria-label="Previous featured listing">
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={() => setActiveCarouselIndex(index => (index + 1) % carouselPosts.length)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white transition hover:bg-amber-400 hover:text-neutral-950" aria-label="Next runway post">
+                <button type="button" onClick={() => setActiveCarouselIndex(index => (index + 1) % featuredPosts.length)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white transition hover:bg-amber-400 hover:text-neutral-950" aria-label="Next featured listing">
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </>
@@ -1490,7 +1547,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </section>
       )}
 
-      {(trendingPosts.length > 0 || trendingLoading || trendingError) && (
+      {(trendingPosts.length > 0 || trendingLoading || trendingError || Boolean(activeTrendingPage?.fallbackMessage)) && (
         <section className={`overflow-hidden rounded-[1.75rem] border ${isDarkMode ? 'border-orange-400/20 bg-[#13110f]' : 'border-orange-300/50 bg-[#fffaf3] shadow-sm'}`}>
           <div className={`flex flex-col gap-4 border-b p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 ${isDarkMode ? 'border-white/10 bg-gradient-to-r from-orange-950/50 via-neutral-950 to-neutral-950' : 'border-orange-200 bg-gradient-to-r from-orange-100 via-white to-amber-50'}`}>
             <div className="flex items-center gap-3">
@@ -1505,7 +1562,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </span>
                 </div>
                 <p className={`mt-1 text-[11px] ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                  A fresh look at pieces shoppers are exploring.
+                  Ranked by qualified engagement, recent growth, and freshness—not upload time.
                 </p>
               </div>
             </div>
@@ -1631,9 +1688,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               })}
             </div>
           )}
-          {!trendingLoading && !trendingError && trendingPosts.length === 0 && !activeTrendingPage?.fallback && (
+          {!trendingLoading && !trendingError && trendingPosts.length === 0 && (
             <p className={`m-4 rounded-xl border px-4 py-5 text-center text-xs sm:m-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40 text-neutral-400' : 'border-neutral-200 bg-white text-neutral-600'}`}>
-              Popular items will appear here as more customers explore Fabsattire.
+              {activeTrendingPage?.fallbackMessage || 'No listings currently meet the qualified engagement thresholds for this trend category.'}
             </p>
           )}
           {(showAllTrending ? trendingPosts.length > 7 : trendingPosts.length >= 7) && (
@@ -1800,10 +1857,20 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       </section>
 
       <section id="marketplace-feed-panel" role="tabpanel" aria-labelledby={`marketplace-tab-${activeFeedView}`} className="space-y-5">
+      <div>
+        <h2 className={`font-serif text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>
+          {activeFeedView === 'newest' ? 'Newest Uploads' : activeFeedView === 'for-you' ? 'Explore Marketplace' : 'Marketplace Listings'}
+        </h2>
+        {activeFeedView === 'newest' && (
+          <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
+            Latest approved publications first, with older listings loaded as you scroll.
+          </p>
+        )}
+      </div>
       {/* Server-paginated listings feed */}
-      {feedLoading && filteredPosts.length === 0 ? (
+      {feedLoading && visiblePosts.length === 0 ? (
         <ContentSkeleton isDarkMode={isDarkMode} />
-      ) : filteredPosts.length === 0 ? (
+      ) : visiblePosts.length === 0 ? (
         <div className={`text-center py-16 px-6 rounded-3xl border ${
           isDarkMode ? 'bg-[#121316]/50 border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'
         }`}>
@@ -1827,7 +1894,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             {postsLoadError || feedError
               ? (feedError || 'Your saved listings are safe. Check your connection and try loading the feed again.')
               : hasActiveFeedFilters || sellerPosts.length > 0
-                ? 'Adjust your search, category, location, or For You preferences to see more listings.'
+                ? 'Adjust your search, category, location, or Explore preferences to see more listings.'
                 : currentUser?.role === 'tailor'
                   ? 'Publish garments, pricing, and fabric details for buyers to discover.'
                   : currentUser?.role === 'fabric_seller'
@@ -1896,7 +1963,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               onClick={resetRecommendations}
               className="rounded-xl border border-amber-500/40 px-5 py-2.5 text-xs font-semibold text-amber-500 transition hover:bg-amber-500/10"
             >
-              Reset For You preferences
+              Reset Explore preferences
             </button>}
           </div>
         </div>
@@ -1905,7 +1972,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           {visiblePosts.map((post, postIndex) => {
             const daySeed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
             const railInterval = 5 + ((daySeed * 7 + Math.max(0, visiblePosts.length) * 3) % 6);
-            const shouldShowPromotedRail = postIndex > 0 && postIndex % railInterval === 0;
+            const shouldShowPromotedRail = activeFeedView !== 'newest' && postIndex > 0 && postIndex % railInterval === 0;
             const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
             const isSaved = currentUser ? post.saves.includes(currentUser.id) : false;
             const likeCount = post.likeCount ?? post.likes.length;
@@ -1968,7 +2035,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       <span className="mt-0.5 block truncate text-[10px] text-neutral-500">{locationLabel || getRoleLabel(post.authorRole)}</span>
                     </span>
                   </button>
-                  {post.isPromoted && <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-amber-600">Featured</span>}
+                  {post.isPromoted && <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-amber-600">Promoted</span>}
                 </div>
 
                 <div className="feed-card-image group/img relative w-full overflow-hidden bg-[#f3f0e9]">
@@ -2029,10 +2096,24 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         setRecommendationNotice('We will avoid this listing on this device and adjust its category and style signals.');
                         return;
                       }
+                      const feedPostIndex = feedPosts.findIndex(item => item.id === post.id);
                       setPendingActions(current => new Set(current).add(`feedback-${post.id}`));
                       void api.setRecommendationFeedback(post.id, 'not_interested', true)
                         .then(() => {
                           setFeedPosts(current => current.filter(item => item.id !== post.id));
+                          if (feedPostIndex >= 0) {
+                            setFeedPageLengths(current => {
+                              let offset = 0;
+                              const pageIndex = current.findIndex(length => {
+                                const containsPost = feedPostIndex < offset + length;
+                                if (!containsPost) offset += length;
+                                return containsPost;
+                              });
+                              return pageIndex < 0
+                                ? current
+                                : current.map((length, index) => index === pageIndex ? Math.max(0, length - 1) : length);
+                            });
+                          }
                           setRecommendationNotice('This listing is hidden from your recommendations for 30 days.');
                         })
                         .catch(error => {
@@ -2099,12 +2180,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 )}
 
               </motion.article>
-              {(postIndex + 1) % 12 === 0 && postIndex + 1 < filteredPosts.length && (Math.floor((postIndex + 1) / 6) % 3 !== 2) && (
+              {activeFeedView !== 'newest' && (postIndex + 1) % 12 === 0 && postIndex + 1 < visiblePosts.length && (Math.floor((postIndex + 1) / 6) % 3 !== 2) && (
                 <div className="md:col-span-2 lg:col-span-3 2xl:col-span-4">
-                  <MarketplaceInterlude posts={filteredPosts} users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
+                  <MarketplaceInterlude posts={visiblePosts} users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
                 </div>
               )}
-              {(postIndex + 1) % 6 === 0 && postIndex + 1 < filteredPosts.length && (() => {
+              {activeFeedView !== 'newest' && (postIndex + 1) % 6 === 0 && postIndex + 1 < visiblePosts.length && (() => {
                 const discoveryBatch = (postIndex + 1) / 6;
                 const category = discoveryCategorySections[(discoveryBatch - 1) % Math.max(discoveryCategorySections.length, 1)];
                 const collection = visibleSellerCollections[(discoveryBatch - 1) % Math.max(visibleSellerCollections.length, 1)];
@@ -2186,7 +2267,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </div>
       )}
 
-      {feedError && filteredPosts.length > 0 && (
+      {feedError && visiblePosts.length > 0 && (
         <div role="alert" className="flex flex-col items-start justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs text-red-200 sm:flex-row sm:items-center">
           <span>{feedError}</span>
           <button type="button" onClick={() => void loadMoreListings()} className="rounded-lg border border-red-300/40 px-3 py-2 font-semibold hover:bg-red-500/20">

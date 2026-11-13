@@ -31,6 +31,7 @@ import {
   createListingReport,
   deleteUserUploads,
   deleteMessage,
+  getAdminMarketplacePosts,
   getListingsForModeration,
   getListingReports,
   getDiscoveryEvents,
@@ -41,7 +42,9 @@ import {
   getPostInteractions,
   getPosts,
   getMarketplacePostsPage,
+  getMarketplaceFeaturedPosts,
   getMarketplaceTrendingPage,
+  getSellerListingViewCounts,
   getMarketplaceViewerInteractions,
   getMarketplaceReviewSummaries,
   getMarketplaceReviews,
@@ -68,6 +71,7 @@ import {
   setMarketplaceAccountBlock,
   getMarketplaceAbuseFlags,
   resolveMarketplaceAbuseFlag,
+  setMarketplaceListingFeatured,
   recordMarketplaceEngagementEvent,
   recordMarketplaceSearchAuditEvent,
   refreshMarketplaceTrends,
@@ -75,7 +79,6 @@ import {
   type MarketplaceTrendCategory,
   type MarketplaceCursor,
   getSellerListings,
-  getSellerListingViewCounts,
   getProfile,
   getProfileByEmail,
   getPromoPlans,
@@ -2888,10 +2891,10 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
-const MARKETPLACE_VIEWS = new Set(['all', 'clothing', 'fabrics', 'tailors', 'for-you']);
+const MARKETPLACE_VIEWS = new Set(['all', 'clothing', 'fabrics', 'tailors', 'for-you', 'newest']);
 const MARKETPLACE_SORTS = new Set(['relevance', 'newest', 'price_asc', 'price_desc', 'rating', 'popularity']);
 const MARKETPLACE_CURSOR_FIELDS: Record<string, string[]> = {
-  relevance: ['is_promoted', 'popularity_score', 'published_at', 'id'],
+  relevance: ['popularity_score', 'published_at', 'id'],
   newest: ['published_at', 'id'],
   price_asc: ['price_min', 'published_at', 'id'],
   price_desc: ['price_min', 'published_at', 'id'],
@@ -2931,11 +2934,12 @@ function decodeMarketplaceCursor(encoded: unknown, sort: string, rankedSearch = 
 
 app.get('/api/marketplace/feed', optionalAuth, async (req: AuthenticatedRequest, res) => {
   const view = typeof req.query.view === 'string' ? req.query.view : 'for-you';
-  const sort = typeof req.query.sort === 'string' ? req.query.sort : (view === 'for-you' ? 'relevance' : 'newest');
-  if (!MARKETPLACE_VIEWS.has(view) || !MARKETPLACE_SORTS.has(sort)) {
+  const requestedSort = typeof req.query.sort === 'string' ? req.query.sort : (view === 'for-you' ? 'relevance' : 'newest');
+  if (!MARKETPLACE_VIEWS.has(view) || !MARKETPLACE_SORTS.has(requestedSort)) {
     res.status(400).json({ error: 'Choose a valid marketplace view and sort order.' });
     return;
   }
+  const sort = view === 'newest' ? 'newest' : view === 'for-you' ? 'relevance' : requestedSort;
 
   const limitValue = typeof req.query.limit === 'string' ? Number(req.query.limit) : 24;
   if (!Number.isInteger(limitValue) || limitValue < 1 || limitValue > 48) {
@@ -3231,6 +3235,42 @@ app.get('/api/marketplace/listings/:listingId/image-download', optionalAuth, asy
   }
 });
 
+app.get('/api/marketplace/featured', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const rows = await getMarketplaceFeaturedPosts(48, req.authUser?.uid);
+    const ids = rows.map(row => String(row.id));
+    const interactions = await getMarketplaceViewerInteractions(ids, req.authUser?.uid);
+    const items = rows.map(row => {
+      const author = row.author as Record<string, unknown> || {};
+      const post = snakeToCamel(row) as Record<string, unknown>;
+      const id = String(post.id);
+      return {
+        ...post,
+        id,
+        title: String(post.title || 'Untitled atelier listing'),
+        authorId: String(post.authorId || ''),
+        authorName: String(author.shop_name || author.name || 'Atelier Member'),
+        authorRole: author.role === 'fabric_seller' ? 'fabric_seller' : 'tailor',
+        authorHandle: String(author.handle || '@atelier_member'),
+        authorAvatar: String(author.avatar_url || ''),
+        authorLocation: author.location || {},
+        authorWhatsapp: String(author.whatsapp_number || ''),
+        isPromoted: post.isPromoted === true || author.is_promoted === true,
+        likes: interactions.likes.has(id) && req.authUser ? [req.authUser.uid] : [],
+        saves: interactions.saves.has(id) && req.authUser ? [req.authUser.uid] : [],
+        likeCount: Number(post.likeCount) || 0,
+        saveCount: Number(post.saveCount) || 0,
+        imageAlt: typeof post.imageAlt === 'string' ? post.imageAlt.trim() : '',
+      };
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(items);
+  } catch (error) {
+    console.error('Unable to load featured marketplace listings.', error);
+    res.status(503).json({ error: 'Featured listings could not be loaded right now.' });
+  }
+});
+
 app.get('/api/marketplace/trending', optionalAuth, async (req: AuthenticatedRequest, res) => {
   const category = typeof req.query.category === 'string' ? req.query.category : 'TRENDING_NOW';
   const scopeType = typeof req.query.scopeType === 'string' ? req.query.scopeType : 'global';
@@ -3315,30 +3355,11 @@ app.get('/api/marketplace/trending', optionalAuth, async (req: AuthenticatedRequ
       scopeType,
       scopeValue,
       fallback: result.fallback,
-      fallbackMessage: result.fallback
-        ? 'Not enough qualified recent activity yet. Showing the newest eligible listings without labeling them as trending.'
-        : null,
+      fallbackMessage: result.fallbackMessage,
       computedAt: result.computedAt,
     });
   } catch (error) {
     console.error('Unable to load marketplace trends.', error);
-    if (!req.headers.authorization
-      && postsCache && postsCache.staleUntil > Date.now()
-      && Array.isArray(postsCache.value)) {
-      console.warn('Marketplace trends are temporarily unavailable; returning the last successful public listings.');
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Warning', '110 - "Response is stale"');
-      res.json({
-        items: postsCache.value.slice(0, limit),
-        category,
-        scopeType,
-        scopeValue,
-        fallback: true,
-        fallbackMessage: 'Trend data is temporarily unavailable. Showing the last successfully loaded listings instead.',
-        computedAt: null,
-      });
-      return;
-    }
     res.status(503).json({ error: 'Marketplace trends could not be loaded right now. Please retry.' });
   }
 });
@@ -4989,6 +5010,46 @@ app.get('/api/admin/listings/moderation', requireAuth, requireAdmin, async (_req
   }
 });
 
+app.get('/api/admin/listings', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const rows = await getAdminMarketplacePosts(500);
+    let viewCounts = new Map<string, number>();
+    try {
+      viewCounts = await getSellerListingViewCounts(rows.map(row => String(row.id)));
+    } catch (error) {
+      console.warn('Marketplace view counts are unavailable in the admin catalog.', error);
+    }
+    const items = rows.map(row => {
+      const author = row.author as Record<string, unknown> || {};
+      const post = snakeToCamel(row) as Record<string, unknown>;
+      const id = String(post.id);
+      return {
+        ...post,
+        id,
+        authorId: String(post.authorId || ''),
+        authorName: String(author.shop_name || author.name || 'Atelier Member'),
+        authorRole: author.role === 'fabric_seller' ? 'fabric_seller' : 'tailor',
+        authorHandle: String(author.handle || '@atelier_member'),
+        authorAvatar: String(author.avatar_url || ''),
+        authorLocation: author.location || {},
+        authorWhatsapp: String(author.whatsapp_number || ''),
+        authorIsBlocked: author.is_blocked === true,
+        isPromoted: post.isPromoted === true || author.is_promoted === true,
+        likes: [],
+        saves: [],
+        likeCount: Number(post.likeCount) || 0,
+        saveCount: Number(post.saveCount) || 0,
+        viewCount7d: viewCounts.get(id) ?? null,
+      };
+    });
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json(items);
+  } catch (error) {
+    console.error('Unable to load the admin marketplace catalog.', error);
+    res.status(503).json({ error: 'The marketplace catalog could not be loaded right now.' });
+  }
+});
+
 app.get('/api/admin/listing-reports', requireAuth, requireAdmin, async (_req, res) => {
   try {
     res.json(snakeToCamel(await getListingReports()));
@@ -5011,6 +5072,83 @@ app.patch('/api/admin/listing-reports/:reportId', requireAuth, requireAdmin, asy
     actorId: req.authUser!.uid,
     reason,
   });
+  res.status(204).send();
+});
+
+app.patch('/api/admin/listings/:listingId/featured', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  if (!isUuid(req.params.listingId) || typeof req.body?.featured !== 'boolean') {
+    res.status(400).json({ error: 'Choose a valid listing and featured state.' });
+    return;
+  }
+  const listing = await getPost(req.params.listingId);
+  if (!listing) {
+    res.status(404).json({ error: 'That listing is no longer available.' });
+    return;
+  }
+  const featured = req.body.featured;
+  const durationDays = Number(req.body?.durationDays);
+  if (featured && (!Number.isInteger(durationDays) || ![7, 14, 30, 90].includes(durationDays))) {
+    res.status(400).json({ error: 'Choose a featured duration of 7, 14, 30, or 90 days.' });
+    return;
+  }
+  const author = listing.author as Record<string, unknown> || {};
+  if (featured && (listing.status !== 'published'
+    || listing.moderation_status !== 'approved'
+    || listing.deleted_at
+    || listing.is_blocked === true
+    || author.is_blocked === true
+    || listing.availability === 'unavailable')) {
+    res.status(409).json({ error: 'Only approved, published, available listings can be featured.' });
+    return;
+  }
+  const expiresAt = featured
+    ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+    : null;
+  await setMarketplaceListingFeatured(req.params.listingId, expiresAt, req.authUser!.uid);
+  await recordListingChange(req.params.listingId, req.authUser!.uid, featured ? 'featured' : 'unfeatured', { expiresAt });
+  invalidatePublicCaches();
+  res.status(204).send();
+});
+
+app.patch('/api/admin/listings/:listingId/status', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  if (!isUuid(req.params.listingId) || !['suspend', 'restore'].includes(req.body?.action)) {
+    res.status(400).json({ error: 'Choose a valid listing status action.' });
+    return;
+  }
+  const listing = await getPost(req.params.listingId);
+  if (!listing) {
+    res.status(404).json({ error: 'That listing is no longer available.' });
+    return;
+  }
+  const timestamp = new Date().toISOString();
+  let values: Record<string, unknown>;
+  let auditAction: string;
+  if (req.body.action === 'suspend' && listing.status === 'published' && listing.moderation_status === 'approved') {
+    values = {
+      status: 'paused',
+      is_featured: false,
+      featured_at: null,
+      featured_until: null,
+      featured_by: null,
+      updated_at: timestamp,
+    };
+    auditAction = 'suspended_by_admin';
+  } else if (req.body.action === 'restore'
+    && listing.status === 'paused'
+    && listing.moderation_status === 'approved'
+    && typeof listing.published_at === 'string') {
+    values = { status: 'published', updated_at: timestamp };
+    auditAction = 'restored_by_admin';
+  } else {
+    res.status(409).json({ error: 'That listing cannot be suspended or restored from its current state.' });
+    return;
+  }
+  await updateListing(req.params.listingId, values);
+  await recordListingChange(req.params.listingId, req.authUser!.uid, auditAction, {
+    from: listing.status,
+    to: values.status,
+  });
+  invalidatePublicCaches();
   res.status(204).send();
 });
 

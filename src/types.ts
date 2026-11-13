@@ -91,6 +91,10 @@ export interface Listing {
   moderationNote?: string;
   listingDetails?: FabricListingDetails | ClothingListingDetails;
   deletedAt?: string | null;
+  isFeatured?: boolean;
+  featuredAt?: string | null;
+  featuredUntil?: string | null;
+  featuredBy?: string | null;
 }
 
 export interface User {
@@ -203,7 +207,7 @@ export interface ClothPost extends Listing {
   searchLocationHint?: string;
 }
 
-export type MarketplaceFeedView = 'all' | 'clothing' | 'fabrics' | 'tailors' | 'for-you';
+export type MarketplaceFeedView = 'all' | 'clothing' | 'fabrics' | 'tailors' | 'for-you' | 'newest';
 export type MarketplaceSort = 'relevance' | 'newest' | 'price_asc' | 'price_desc' | 'rating' | 'popularity';
 
 export interface MarketplaceFeedQuery {

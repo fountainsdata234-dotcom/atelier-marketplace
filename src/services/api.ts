@@ -387,6 +387,7 @@ export const api = {
     });
     return request<MarketplaceFeedPage>(`/api/marketplace/feed?${params.toString()}`);
   },
+  getMarketplaceFeatured: () => request<ClothPost[]>('/api/marketplace/featured'),
   downloadMarketplaceImage: async (listingId: string): Promise<Blob> => {
     const path = `/api/marketplace/listings/${encodeURIComponent(listingId)}/image-download`;
     const controller = new AbortController();
@@ -526,6 +527,17 @@ export const api = {
   }),
   getMyListings: () => request<ClothPost[]>('/api/listings/mine'),
   acknowledgeWarning: () => request<void>('/api/profile/warning/acknowledge', { method: 'POST' }),
+  getAdminMarketplacePosts: () => request<ClothPost[]>('/api/admin/listings'),
+  setMarketplaceListingFeatured: (listingId: string, featured: boolean, durationDays?: 7 | 14 | 30 | 90) =>
+    request<void>(`/api/admin/listings/${encodeURIComponent(listingId)}/featured`, {
+      method: 'PATCH',
+      body: JSON.stringify({ featured, durationDays }),
+    }),
+  setAdminListingStatus: (listingId: string, action: 'suspend' | 'restore') =>
+    request<void>(`/api/admin/listings/${encodeURIComponent(listingId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action }),
+    }),
   getListingsForModeration: () => request<ClothPost[]>('/api/admin/listings/moderation'),
   getListingReports: () => request<ListingReport[]>('/api/admin/listing-reports'),
   updateListingReport: (reportId: string, status: 'reviewed' | 'dismissed', reason: string) => request<void>(`/api/admin/listing-reports/${reportId}`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }),

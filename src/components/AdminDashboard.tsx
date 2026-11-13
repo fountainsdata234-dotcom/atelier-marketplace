@@ -76,6 +76,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Sub-admin management state
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
+  const [adminMarketplacePosts, setAdminMarketplacePosts] = useState<ClothPost[]>([]);
+  const [adminMarketplaceLoading, setAdminMarketplaceLoading] = useState(false);
+  const [adminMarketplaceStatus, setAdminMarketplaceStatus] = useState<string | null>(null);
+  const [featuredDurations, setFeaturedDurations] = useState<Record<string, 7 | 14 | 30 | 90>>({});
   const [deletedSellerIds, setDeletedSellerIds] = useState<string[]>([]);
   const [sellerSearch, setSellerSearch] = useState('');
   const [visibleSellerCount, setVisibleSellerCount] = useState(10);
@@ -312,6 +316,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       console.warn('Admin AI local memory could not be saved.', error);
     }
   }, [aiMemories, currentUser.id, isSuperAdmin]);
+
+  useEffect(() => {
+    if (activeTab !== 'posts') return;
+    let active = true;
+    setAdminMarketplaceLoading(true);
+    setAdminMarketplaceStatus(null);
+    void api.getAdminMarketplacePosts()
+      .then(items => { if (active) setAdminMarketplacePosts(items); })
+      .catch((error: unknown) => {
+        if (active) setAdminMarketplaceStatus(safeCustomerErrorMessage(error, "We couldn't load the marketplace catalog. Please try again."));
+      })
+      .finally(() => { if (active) setAdminMarketplaceLoading(false); });
+    return () => { active = false; };
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'moderation') return;
@@ -707,17 +725,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Delete Post as Admin
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm('Delete this post from the marketplace as administrator?')) return;
-
-    const cachedPosts = storageService.getPosts();
-    if (!cachedPosts.some(post => post.id === postId)) return;
-    storageService.deletePost(postId, currentUser.id, true);
-
     try {
       await api.deletePost(postId);
-      setAdminStatus('Post deleted from the marketplace.');
+      storageService.deletePost(postId, currentUser.id, true);
+      setAdminMarketplacePosts(current => current.filter(post => post.id !== postId));
+      setAdminMarketplaceStatus('Post removed from the marketplace.');
     } catch (error) {
-      storageService.savePosts(cachedPosts);
-      setAdminStatus(safeCustomerErrorMessage(error, "The listing couldn't be deleted. Please try again."));
+      setAdminMarketplaceStatus(safeCustomerErrorMessage(error, "The listing couldn't be deleted. Please try again."));
+    }
+  };
+
+  const toggleFeaturedPost = async (post: ClothPost) => {
+    const currentlyFeatured = Boolean(post.isFeatured && post.featuredUntil && Date.parse(post.featuredUntil) > Date.now());
+    const durationDays = featuredDurations[post.id] || 14;
+    try {
+      await api.setMarketplaceListingFeatured(post.id, !currentlyFeatured, durationDays);
+      const now = new Date();
+      const featuredUntil = currentlyFeatured ? null : new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+      setAdminMarketplacePosts(current => current.map(item => item.id === post.id
+        ? { ...item, isFeatured: !currentlyFeatured, featuredAt: currentlyFeatured ? null : now.toISOString(), featuredUntil }
+        : item));
+      setAdminMarketplaceStatus(currentlyFeatured ? 'Listing removed from Featured.' : `Listing featured for ${durationDays} days.`);
+    } catch (error) {
+      setAdminMarketplaceStatus(safeCustomerErrorMessage(error, "The featured status couldn't be updated. Please try again."));
+    }
+  };
+
+  const setAdminPostSuspended = async (post: ClothPost) => {
+    const action = post.status === 'published' ? 'suspend' : 'restore';
+    try {
+      await api.setAdminListingStatus(post.id, action);
+      setAdminMarketplacePosts(current => current.map(item => item.id === post.id
+        ? { ...item, status: action === 'suspend' ? 'paused' : 'published', isFeatured: false, featuredAt: null, featuredUntil: null }
+        : item));
+      setAdminMarketplaceStatus(action === 'suspend' ? 'Listing suspended from public sections.' : 'Listing restored to the marketplace.');
+    } catch (error) {
+      setAdminMarketplaceStatus(safeCustomerErrorMessage(error, "The listing status couldn't be updated. Please try again."));
     }
   };
 
@@ -1579,14 +1622,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div>
               <h2 className="text-xl font-serif font-bold">All Tailor & Fabric Posts</h2>
               <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                Timestamped catalog of all items posted by registered tailors and fabric sellers.
+                Feature published work for up to 90 days, suspend or restore listings, review promotion labels, and monitor engagement.
               </p>
             </div>
           </div>
 
-          {posts.length === 0 ? (
+          {adminMarketplaceStatus && <p role="status" className="mb-4 text-xs text-amber-400">{adminMarketplaceStatus}</p>}
+          {adminMarketplaceLoading ? (
+            <p className="p-8 text-center text-xs text-neutral-400">Loading the marketplace catalog…</p>
+          ) : adminMarketplacePosts.length === 0 ? (
             <div className="p-8 text-center text-xs text-neutral-400">
-              No garments or fabric items posted yet.
+              {adminMarketplaceStatus ? 'The marketplace catalog is unavailable.' : 'No garments or fabric items posted yet.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1596,13 +1642,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <th className="pb-3 font-medium">Preview</th>
                     <th className="pb-3 font-medium">Title & Author</th>
                     <th className="pb-3 font-medium">Pricing Tiers</th>
-                    <th className="pb-3 font-medium">Timestamp</th>
+                    <th className="pb-3 font-medium">Published</th>
                     <th className="pb-3 font-medium">Engagement</th>
-                    <th className="pb-3 font-medium text-right">Moderation</th>
+                    <th className="pb-3 font-medium">Featured</th>
+                    <th className="pb-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800/60">
-                  {posts.map((post) => (
+                  {adminMarketplacePosts.map((post) => (
                     <tr key={post.id} className="hover:bg-neutral-800/20 transition-colors">
                       <td className="py-3">
                         <img
@@ -1614,24 +1661,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <td className="py-3">
                         <div className="font-semibold text-neutral-100">{post.title}</div>
                         <div className="text-[11px] text-amber-400 font-mono">{post.authorName} ({post.authorHandle})</div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[9px] uppercase text-neutral-300">{post.status || 'unknown'}</span>
+                          {post.isPromoted && <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[9px] uppercase text-amber-300">Promoted</span>}
+                        </div>
                       </td>
                       <td className="py-3 font-mono text-[11px]">
-                        {post.pricing.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable'}
+                        {post.pricing?.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic}` : 'Negotiable'}
                       </td>
                       <td className="py-3 font-mono text-[11px] text-neutral-400">
-                        {new Date(post.createdAt).toLocaleString()}
+                        {post.publishedAt ? new Date(post.publishedAt).toLocaleString() : 'Not published'}
                       </td>
                       <td className="py-3 font-mono text-[11px] text-neutral-400">
-                        {(post.likes || []).length} Likes • {(post.saves || []).length} Saves
+                        {post.likeCount ?? post.likes.length} Likes • {post.saveCount ?? post.saves.length} Saves • {post.viewCount7d === null || post.viewCount7d === undefined ? '—' : post.viewCount7d} views (7d)
+                      </td>
+                      <td className="py-3">
+                        {post.isFeatured && post.featuredUntil && Date.parse(post.featuredUntil) > Date.now()
+                          ? <span className="text-[10px] font-semibold text-amber-300">Active until {new Date(post.featuredUntil).toLocaleDateString()}</span>
+                          : post.isFeatured
+                            ? <span className="text-[10px] text-neutral-500">Expired</span>
+                            : <span className="text-[10px] text-neutral-500">Not featured</span>}
                       </td>
                       <td className="py-3 text-right">
-                        <button
-                          onClick={() => handleDeletePost(post.id)}
-                          className="p-1.5 rounded-lg text-neutral-400 hover:text-red-400 hover:bg-neutral-800 transition-colors"
-                          title="Remove post"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex min-w-64 flex-wrap justify-end gap-2">
+                          <label className="sr-only" htmlFor={`featured-duration-${post.id}`}>Featured duration for {post.title}</label>
+                          <select
+                            id={`featured-duration-${post.id}`}
+                            value={featuredDurations[post.id] || 14}
+                            onChange={event => {
+                              const value = Number(event.target.value);
+                              const duration = value === 7 ? 7 : value === 30 ? 30 : value === 90 ? 90 : 14;
+                              setFeaturedDurations(current => ({ ...current, [post.id]: duration }));
+                            }}
+                            disabled={post.status !== 'published' || post.moderationStatus !== 'approved' || post.availability === 'unavailable'}
+                            className="rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-[10px] text-neutral-200 disabled:opacity-50"
+                          >
+                            <option value={7}>7 days</option>
+                            <option value={14}>14 days</option>
+                            <option value={30}>30 days</option>
+                            <option value={90}>90 days</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => void toggleFeaturedPost(post)}
+                            disabled={!(post.isFeatured && post.featuredUntil && Date.parse(post.featuredUntil) > Date.now())
+                              && (post.status !== 'published' || post.moderationStatus !== 'approved' || post.availability === 'unavailable')}
+                            className="rounded-lg border border-amber-500/30 px-2 py-1 text-[10px] font-semibold text-amber-300 hover:bg-amber-400/10 disabled:opacity-50"
+                          >
+                            {post.isFeatured && post.featuredUntil && Date.parse(post.featuredUntil) > Date.now() ? 'Unfeature' : 'Feature'}
+                          </button>
+                          {(post.status === 'published' || post.status === 'paused') && (
+                            <button
+                              type="button"
+                              onClick={() => void setAdminPostSuspended(post)}
+                              className="rounded-lg border border-neutral-700 px-2 py-1 text-[10px] text-neutral-300 hover:border-amber-400"
+                            >
+                              {post.status === 'published' ? 'Suspend' : 'Restore'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void handleDeletePost(post.id)}
+                            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-red-400"
+                            title="Remove post"
+                            aria-label={`Remove ${post.title}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

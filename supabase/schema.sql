@@ -110,7 +110,12 @@ create table if not exists public.posts (
   rating_sum numeric(18, 3) not null default 0,
   rating_average numeric(4, 2) not null default 0,
   popularity_score numeric(18, 3) not null default 0,
+  is_featured boolean not null default false,
+  featured_at timestamptz,
+  featured_until timestamptz,
+  featured_by uuid references public.profiles(id) on delete set null,
   check (price_max is null or price_min is null or price_max >= price_min),
+  check (not is_featured or (featured_at is not null and featured_until is not null)),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -563,8 +568,8 @@ create index if not exists posts_marketplace_rating_idx on public.posts (rating_
   where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
 create index if not exists posts_marketplace_popularity_idx on public.posts (popularity_score desc, published_at desc, id desc)
   where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
-create index if not exists posts_marketplace_relevance_idx on public.posts (is_promoted desc, popularity_score desc, published_at desc, id desc)
-  where status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
+create index if not exists posts_marketplace_featured_idx on public.posts (featured_until, featured_at desc, id)
+  where is_featured = true and status = 'published' and moderation_status = 'approved' and deleted_at is null and availability <> 'unavailable' and is_blocked = false;
 create index if not exists listing_reports_open_idx on public.listing_reports (created_at desc) where status = 'open';
 create index if not exists messages_sender_idx on public.messages(sender_id, timestamp);
 create index if not exists messages_recipient_idx on public.messages(recipient_id, timestamp);

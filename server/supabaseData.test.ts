@@ -2,6 +2,31 @@ import { describe, expect, it } from 'vitest';
 import { buildMarketplaceCursorFilter, isMissingRpcFunction, type MarketplaceCursor } from './supabaseData.js';
 
 describe('marketplace keyset pagination', () => {
+  it('keeps Newest Uploads strictly ordered by publication time and stable id', () => {
+    const cursor: MarketplaceCursor = {
+      sort: 'newest',
+      values: ['2026-10-15T11:00:00.000Z', '00000000-0000-4000-8000-000000000001'],
+    };
+
+    expect(buildMarketplaceCursorFilter('newest', cursor)).toBe(
+      'published_at.lt.2026-10-15T11:00:00.000Z,'
+      + 'and(published_at.eq.2026-10-15T11:00:00.000Z,id.lt.00000000-0000-4000-8000-000000000001)',
+    );
+  });
+
+  it('does not use promotion status as an organic relevance cursor', () => {
+    const cursor: MarketplaceCursor = {
+      sort: 'relevance',
+      values: [8.5, '2026-10-15T11:00:00.000Z', '00000000-0000-4000-8000-000000000001'],
+    };
+
+    expect(buildMarketplaceCursorFilter('relevance', cursor)).toBe(
+      'popularity_score.lt.8.5,'
+      + 'and(popularity_score.eq.8.5,published_at.lt.2026-10-15T11:00:00.000Z),'
+      + 'and(popularity_score.eq.8.5,published_at.eq.2026-10-15T11:00:00.000Z,id.lt.00000000-0000-4000-8000-000000000001)',
+    );
+  });
+
   it('keeps deterministic tie breakers for popularity sorting', () => {
     const cursor: MarketplaceCursor = {
       sort: 'popularity',

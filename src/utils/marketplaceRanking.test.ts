@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ClothPost, DiscoveryEvent, RecommendationPreferences, User } from '../types';
-import { calculateFeedScore, getRatingQuality, getTopTailors, isNewSeller, rankMarketplaceListings, rankTrendingPosts } from './marketplaceRanking';
+import { calculateFeedScore, getRatingQuality, getTopTailors, isNewSeller, rankMarketplaceListingPages, rankMarketplaceListings, rankTrendingPosts } from './marketplaceRanking';
 
 const defaultRecommendationPreferences: RecommendationPreferences = {
   enabled: false,
@@ -95,6 +95,37 @@ describe('marketplace ranking', () => {
     const disabled = rankMarketplaceListings(posts, [], activities, defaultRecommendationPreferences, { now });
     expect(enabled.map(post => post.id)).toEqual(['senator']);
     expect(disabled).toHaveLength(2);
+  });
+
+  it('measures Explore freshness from publication rather than draft creation', () => {
+    const now = Date.parse('2026-09-26T12:00:00.000Z');
+    const posts = [
+      makePost('published-recently', {
+        createdAt: '2026-09-01T00:00:00.000Z',
+        publishedAt: '2026-09-26T00:00:00.000Z',
+      }),
+      makePost('published-earlier', {
+        createdAt: '2026-09-26T00:00:00.000Z',
+        publishedAt: '2026-09-01T00:00:00.000Z',
+      }),
+    ];
+
+    expect(rankMarketplaceListings(posts, [], [], defaultRecommendationPreferences, { now })
+      .map(post => post.id)).toEqual(['published-recently', 'published-earlier']);
+  });
+
+  it('keeps already-loaded Explore pages in place when later pages are ranked', () => {
+    const now = Date.parse('2026-09-26T12:00:00.000Z');
+    const firstPage = [
+      makePost('page-one-first', { confidenceAdjustedRating: 3 }),
+      makePost('page-one-second', { confidenceAdjustedRating: 2 }),
+    ];
+    const laterPage = [makePost('page-two-best', { confidenceAdjustedRating: 5 })];
+
+    expect(rankMarketplaceListingPages([firstPage, laterPage], [], [], defaultRecommendationPreferences, { now })
+      .map(post => post.id)).toEqual(['page-one-first', 'page-one-second', 'page-two-best']);
+    expect(rankMarketplaceListings([...firstPage, ...laterPage], [], [], defaultRecommendationPreferences, { now })[0].id)
+      .toBe('page-two-best');
   });
 
   it('removes explicit not-interested listings and explains recent qualified trends', () => {

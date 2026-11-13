@@ -339,8 +339,16 @@ export const rankMarketplaceListings = (
   return ordered.map(candidate => candidate.post);
 };
 
+export const rankMarketplaceListingPages = (
+  pages: ClothPost[][],
+  users: User[],
+  events: DiscoveryEvent[],
+  preferences: RecommendationPreferences,
+  options: Parameters<typeof rankMarketplaceListings>[4] = {},
+): ClothPost[] => pages.flatMap(page => rankMarketplaceListings(page, users, events, preferences, options));
+
 const postTimestamp = (post: ClothPost): number => {
-  const timestamp = Date.parse(post.createdAt);
+  const timestamp = Date.parse(post.publishedAt || post.createdAt);
   return Number.isFinite(timestamp) ? timestamp : 0;
 };
 
