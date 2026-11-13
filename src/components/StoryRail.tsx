@@ -7,7 +7,6 @@ import { api, StoryUploadAsset } from '../services/api';
 import { getStoryUploadMimeType, getStoryUploadSizeError, getStoryUploadTypeError, MAX_STORY_IMAGE_UPLOAD_BYTES } from '../utils/mediaLimits';
 import { prepareStoryImageForUpload } from '../services/mediaUpload';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
-import { fetchShareableImageFile } from '../utils/imageSharing';
 
 const formatHandle = (handle?: string) => {
   const value = handle?.trim() || '';
@@ -477,7 +476,6 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   const [reply, setReply] = useState('');
   const [replyStatus, setReplyStatus] = useState('');
   const [replyFallbackUrl, setReplyFallbackUrl] = useState('');
-  const [isSharingReply, setIsSharingReply] = useState(false);
   const [liking, setLiking] = useState(false);
   const [deletingStory, setDeletingStory] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -494,7 +492,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   );
   const story = chronologicalStories[activeIndex];
   const [liked, setLiked] = useState(Boolean(story?.likedByViewer));
-  const isStoryPaused = isPaused || replyComposerActive || isSharingReply || readyStoryId !== story?.id;
+  const isStoryPaused = isPaused || replyComposerActive || readyStoryId !== story?.id;
 
   useEffect(() => {
     setActiveIndex(0);
@@ -597,58 +595,24 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
     }
   };
 
-  const sendReply = async () => {
+  const sendReply = () => {
     const message = reply.trim();
-    if (!message || !story || isSharingReply) return;
+    if (!message || !story) return;
     const merchantName = tailor?.shopName || tailor?.name || 'the merchant';
     const shareText = `Hello ${merchantName}, I'm replying to your FABSATTIRE story.\n\n${message}`;
     const whatsappUrl = buildWhatsAppUrl(
       tailor?.whatsappNumber || tailor?.phone,
-      `${shareText}\n\nStory image: ${story.mediaUrl}`,
+      `${shareText}\n\nStory link: ${story.mediaUrl}`,
     );
     if (!whatsappUrl) {
       setReplyStatus('This merchant has not added a WhatsApp number yet.');
       return;
     }
-    if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function' || story.mediaType !== 'image') {
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-      setReply('');
-      setReplyComposerActive(false);
-      setReplyFallbackUrl(whatsappUrl);
-      setReplyStatus('WhatsApp opened with your message and a link to this story image. Review and send it there.');
-      return;
-    }
-
-    setIsSharingReply(true);
-    setReplyStatus('Preparing the story image for sharing…');
-    setReplyFallbackUrl('');
-    try {
-      const imageFile = await fetchShareableImageFile(story.mediaUrl, `fabsattire-story-${story.id}`);
-      if (!navigator.canShare({ files: [imageFile] })) {
-        setReplyFallbackUrl(whatsappUrl);
-        setReplyStatus('This browser cannot attach images directly. You can still send the story link through WhatsApp.');
-        return;
-      }
-
-      await navigator.share({
-        files: [imageFile],
-        title: `Story from ${merchantName}`,
-        text: shareText,
-      });
-      setReply('');
-      setReplyComposerActive(false);
-      setReplyStatus('The image and message are ready in the share sheet. Choose WhatsApp to send them to the merchant.');
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        setReplyStatus('Sharing was canceled. Your reply is still here.');
-        return;
-      }
-      console.warn('Story image could not be attached to the reply.', error);
-      setReplyFallbackUrl(whatsappUrl);
-      setReplyStatus('Could not attach the image on this device. You can send the story link through WhatsApp instead.');
-    } finally {
-      setIsSharingReply(false);
-    }
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    setReply('');
+    setReplyComposerActive(false);
+    setReplyFallbackUrl(whatsappUrl);
+    setReplyStatus('WhatsApp opened with your reply and a link to this story. Review and send it there.');
   };
 
   return createPortal(
@@ -737,8 +701,8 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         </button>
         {!owner && (
           <div className="absolute bottom-4 left-4 right-4 z-40 flex items-center gap-2">
-            <input value={reply} disabled={isSharingReply} onFocus={() => setReplyComposerActive(true)} onBlur={() => setReplyComposerActive(false)} onMouseEnter={() => setReplyComposerActive(true)} onMouseLeave={() => setReplyComposerActive(false)} onChange={event => { setReplyComposerActive(true); setReply(event.target.value); setReplyStatus(''); setReplyFallbackUrl(''); }} onKeyDown={event => { if (event.key === 'Enter' && reply.trim()) void sendReply(); }} placeholder={`Message ${formatHandle(tailor?.handle) || '@merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur disabled:opacity-60" />
-            <button type="button" aria-label={isSharingReply ? 'Preparing story image' : 'Send story reply to WhatsApp'} disabled={!reply.trim() || isSharingReply} onClick={() => void sendReply()} className="grid h-11 w-11 place-items-center rounded-full bg-white text-neutral-950 disabled:opacity-50"><Send className="h-4 w-4" /></button>
+            <input value={reply} onFocus={() => setReplyComposerActive(true)} onBlur={() => setReplyComposerActive(false)} onMouseEnter={() => setReplyComposerActive(true)} onMouseLeave={() => setReplyComposerActive(false)} onChange={event => { setReplyComposerActive(true); setReply(event.target.value); setReplyStatus(''); setReplyFallbackUrl(''); }} onKeyDown={event => { if (event.key === 'Enter' && reply.trim()) void sendReply(); }} placeholder={`Message ${formatHandle(tailor?.handle) || '@merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65" />
+            <button type="button" aria-label="Send story reply to WhatsApp" disabled={!reply.trim()} onClick={sendReply} className="grid h-11 w-11 place-items-center rounded-full bg-white text-neutral-950 disabled:opacity-50"><Send className="h-4 w-4" /></button>
             <button type="button" aria-label={liked ? `Unlike story (${story.likeCount} likes)` : `Like story (${story.likeCount} likes)`} disabled={liking} onClick={toggleLike} className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-full bg-black/45 px-2 text-white backdrop-blur disabled:opacity-60">
               <Heart className="h-5 w-5" fill={liked ? 'currentColor' : 'none'} />
               <span className="text-xs tabular-nums">{story.likeCount}</span>

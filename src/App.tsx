@@ -180,7 +180,7 @@ export default function App() {
       const image = event.target;
       if (!(image instanceof HTMLImageElement)
         || image.getAttribute('aria-hidden') === 'true'
-        || image.closest('[data-image-viewer], [data-open-image-on-click], [data-story-interaction], [data-story-thumbnail], [data-story-image]')) return;
+        || image.closest('button, a, [data-image-viewer], [data-open-image-on-click], [data-prevent-global-image-viewer], [data-story-interaction], [data-story-thumbnail], [data-story-image]')) return;
       const src = image.currentSrc || image.src;
       if (!src || new URL(src, window.location.href).pathname.endsWith('/logo.png')) return;
 
@@ -1065,7 +1065,7 @@ export default function App() {
     const seller = users.find(user => user.id === post.authorId);
     const contactUrl = buildWhatsAppUrl(
       post.authorWhatsapp || seller?.whatsappNumber || seller?.phone,
-      `Hello ${post.authorName}, I saw "${post.title}" on FABSATTIRE and would like to discuss it.`,
+      `Hello ${post.authorName}, I saw "${post.title}" on FABSATTIRE and would like to discuss it.\n\nView this listing: ${buildPostShareUrl(window.location.origin, post.authorHandle, post.id)}`,
     );
     if (!contactUrl) return;
     storageService.recordDiscoveryEvent(post.id, 'ENQUIRY', currentUser?.id);

@@ -6,7 +6,7 @@ import { ClothPost, CountryGeo, DiscoveryEvent, MarketplaceFeedView, Marketplace
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
-import { getProfileInitials, getRoleLabel } from '../utils/profile';
+import { buildPostShareUrl, getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
 import { rankMarketplaceListings } from '../utils/marketplaceRanking';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
@@ -109,7 +109,7 @@ const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, 
           </div>
         )}
       </div>
-      <button type="button" onClick={() => onSelectPost(activePost)} className="group relative block h-[330px] w-full overflow-hidden text-left sm:h-[420px]">
+      <button type="button" onClick={() => onSelectPost(activePost)} className="group relative block h-[min(68svh,560px)] min-h-[420px] w-full overflow-hidden text-left sm:h-[420px]">
         <motion.img key={activePost.id} initial={{ opacity: 0.45 }} animate={{ opacity: 1 }} transition={{ duration: 0.45 }} src={discoveryImage(activePost)} alt={activePost.imageAlt || activePost.title} className="absolute inset-0 h-full w-full bg-[#f3f0e9] object-contain" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-transparent" />
         <div className="absolute bottom-0 left-0 p-5 text-white sm:p-7">
@@ -1099,10 +1099,17 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const getWhatsAppUrl = (post: ClothPost) => buildWhatsAppUrl(
-    post.authorWhatsapp,
-    `Hello ${post.authorName}! I saw "${post.title}" on FABSATTIRE and would like to discuss it.`,
-  );
+  const getWhatsAppUrl = (post: ClothPost) => {
+    const seller = userById.get(post.authorId);
+    return buildWhatsAppUrl(
+      post.authorWhatsapp || seller?.whatsappNumber || seller?.phone,
+      `Hello ${post.authorName}! I saw "${post.title}" on FABSATTIRE and would like to discuss it.\n\nView this listing: ${buildPostShareUrl(window.location.origin, post.authorHandle, post.id)}`,
+    );
+  };
+
+  const hour = new Date().getHours();
+  const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = currentUser?.name.trim().split(/\s+/)[0];
 
   return (
     <div ref={marketplaceRootRef} className="relative z-10 w-full px-2 sm:px-6 lg:px-8 py-6 space-y-8">
@@ -1111,7 +1118,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         <div>
           <div className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-semibold tracking-wider uppercase mb-1">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Fabsattire marketplace</span>
+            <span>{firstName ? `${timeGreeting}, ${firstName}` : timeGreeting} · Fabsattire marketplace</span>
           </div>
           <h1 className="max-w-3xl text-3xl leading-tight font-serif font-bold tracking-tight sm:text-4xl lg:text-5xl">
             Find your next favourite piece.
@@ -1431,9 +1438,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   initial={{ opacity: 0.5, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35 }}
-                  className="grid min-h-[420px] overflow-hidden bg-neutral-950 md:min-h-[390px] md:grid-cols-[1.15fr_0.85fr]"
+                  className="grid min-h-[500px] overflow-hidden bg-neutral-950 md:min-h-[390px] md:grid-cols-[1.15fr_0.85fr]"
                 >
-                  <div className="group/curated-image relative flex min-h-[260px] items-center justify-center overflow-hidden bg-[#f1ece3] p-3 sm:min-h-[340px] md:min-h-0 md:p-6">
+                  <div className="group/curated-image relative flex min-h-[340px] items-center justify-center overflow-hidden bg-[#f1ece3] p-3 sm:min-h-[340px] md:min-h-0 md:p-6">
                     <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center p-3 sm:p-5">
                       {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500" fit="contain" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
                     </button>

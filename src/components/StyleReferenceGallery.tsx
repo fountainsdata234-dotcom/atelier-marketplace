@@ -1,8 +1,8 @@
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ChevronRight, LoaderCircle, Send, X } from 'lucide-react';
 import { MarketplaceStyleReference, User } from '../types';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
-import { fetchShareableImageFile } from '../utils/imageSharing';
 
 interface StyleReferenceGalleryProps {
   references: MarketplaceStyleReference[];
@@ -32,9 +32,10 @@ const StyleReferenceCard: React.FC<StyleReferenceCardProps> = ({ reference, merc
   const [selectedMerchant, setSelectedMerchant] = useState<User | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
-  const [isSharing, setIsSharing] = useState(false);
   const [status, setStatus] = useState('');
   const [fallbackUrl, setFallbackUrl] = useState('');
+  const [suggestionPosition, setSuggestionPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const instanceId = useId();
   const suggestionListId = `style-reference-merchants-${instanceId}`;
   const suggestions = useMemo(() => {
@@ -47,6 +48,44 @@ const StyleReferenceCard: React.FC<StyleReferenceCardProps> = ({ reference, merc
     ).slice(0, 5);
   }, [merchants, query, selectedMerchant]);
 
+  useLayoutEffect(() => {
+    if (!showSuggestions || !query.trim() || selectedMerchant) {
+      setSuggestionPosition(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const inputBounds = inputRef.current?.getBoundingClientRect();
+      if (!inputBounds) return;
+
+      const viewportPadding = 8;
+      const maxHeight = Math.min(208, window.innerHeight - viewportPadding * 2);
+      const spaceBelow = window.innerHeight - inputBounds.bottom - viewportPadding;
+      const showBelow = spaceBelow >= Math.min(maxHeight, 140) || inputBounds.top < maxHeight + viewportPadding * 2;
+      const top = showBelow
+        ? Math.min(inputBounds.bottom + 4, window.innerHeight - viewportPadding)
+        : Math.max(viewportPadding, inputBounds.top - maxHeight - 4);
+      const availableHeight = showBelow
+        ? window.innerHeight - top - viewportPadding
+        : inputBounds.top - top - 4;
+
+      setSuggestionPosition({
+        left: Math.max(viewportPadding, Math.min(inputBounds.left, window.innerWidth - inputBounds.width - viewportPadding)),
+        top,
+        width: Math.min(inputBounds.width, window.innerWidth - viewportPadding * 2),
+        maxHeight: Math.max(0, Math.min(maxHeight, availableHeight)),
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [query, selectedMerchant, showSuggestions]);
+
   const chooseMerchant = (merchant: User) => {
     setSelectedMerchant(merchant);
     setQuery(merchantName(merchant));
@@ -56,8 +95,8 @@ const StyleReferenceCard: React.FC<StyleReferenceCardProps> = ({ reference, merc
     setFallbackUrl('');
   };
 
-  const sendReference = async () => {
-    if (!selectedMerchant || isSharing) return;
+  const sendReference = () => {
+    if (!selectedMerchant) return;
     const name = merchantName(selectedMerchant);
     const phone = selectedMerchant.whatsappNumber || selectedMerchant.phone;
     const message = `Hello ${name}, I found this style or material on FABSATTIRE and would love to discuss a similar look.\n\nReference image: ${reference.imageUrl}`;
@@ -68,41 +107,9 @@ const StyleReferenceCard: React.FC<StyleReferenceCardProps> = ({ reference, merc
       return;
     }
 
-    if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') {
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-      setStatus('WhatsApp opened to this merchant with your request and the image link. Review and send it there.');
-      setFallbackUrl(whatsappUrl);
-      return;
-    }
-
-    setIsSharing(true);
-    setStatus('Preparing the image for sharing…');
-    setFallbackUrl('');
-    try {
-      const imageFile = await fetchShareableImageFile(reference.imageUrl, `fabsattire-reference-${reference.id}`);
-      if (!navigator.canShare({ files: [imageFile] })) {
-        setFallbackUrl(whatsappUrl);
-        setStatus('This browser cannot attach images directly. You can still send the image link to this merchant.');
-        return;
-      }
-
-      await navigator.share({
-        files: [imageFile],
-        title: `Style reference for ${name}`,
-        text: `Hello ${name}, I found this style or material on FABSATTIRE and would love to discuss a similar look.`,
-      });
-      setStatus('The image and request are ready to share. Choose WhatsApp, then choose this merchant.');
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        setStatus('Sharing was canceled. You can try again whenever you are ready.');
-        return;
-      }
-      console.warn('Style reference image could not be attached to the WhatsApp request.', error);
-      setFallbackUrl(whatsappUrl);
-      setStatus('Could not attach the image on this device. You can send its link to this merchant instead.');
-    } finally {
-      setIsSharing(false);
-    }
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    setStatus('WhatsApp opened with your message and the reference image link. Review and send it there.');
+    setFallbackUrl(whatsappUrl);
   };
 
   return (
@@ -122,6 +129,7 @@ const StyleReferenceCard: React.FC<StyleReferenceCardProps> = ({ reference, merc
           <label className="sr-only" htmlFor={`${suggestionListId}-input`}>Choose a merchant</label>
           <input
             id={`${suggestionListId}-input`}
+            ref={inputRef}
             type="search"
             role="combobox"
             aria-autocomplete="list"
@@ -163,51 +171,73 @@ const StyleReferenceCard: React.FC<StyleReferenceCardProps> = ({ reference, merc
               isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white placeholder:text-neutral-500' : 'border-neutral-300 bg-white text-neutral-900 placeholder:text-neutral-500'
             }`}
           />
-          {showSuggestions && suggestions.length > 0 && (
-            <ul id={suggestionListId} role="listbox" className={`absolute inset-x-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border p-1 shadow-xl ${
-              isDarkMode ? 'border-neutral-700 bg-neutral-900' : 'border-neutral-200 bg-white'
-            }`}>
-              {suggestions.map((merchant, index) => (
-                <li key={merchant.id} role="presentation">
-                  <button
-                    type="button"
-                    id={`${suggestionListId}-option-${index}`}
-                    role="option"
-                    aria-selected={index === activeSuggestionIndex}
-                    onMouseDown={event => event.preventDefault()}
-                    onClick={() => chooseMerchant(merchant)}
-                    className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm ${
-                      index === activeSuggestionIndex
-                        ? 'bg-amber-400/15'
-                        : isDarkMode ? 'hover:bg-neutral-800' : 'hover:bg-amber-50'
-                    }`}
-                  >
-                    {merchant.avatarUrl ? (
-                      <img src={merchant.avatarUrl} alt="" loading="lazy" className="h-7 w-7 rounded-full object-cover" />
-                    ) : (
-                      <span className="grid h-7 w-7 place-items-center rounded-full bg-amber-400/15 text-xs font-bold text-amber-500">{merchantName(merchant).slice(0, 1).toUpperCase()}</span>
-                    )}
-                    <span className="min-w-0 flex-1 truncate font-medium">{merchantName(merchant)}</span>
-                    {merchant.handle && <span className="max-w-[35%] truncate text-xs text-neutral-500">@{merchant.handle.replace(/^@/, '')}</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {showSuggestions && query.trim() && !selectedMerchant && suggestions.length === 0 && (
-            <p className={`absolute inset-x-0 top-full z-30 mt-1 rounded-xl border px-3 py-2 text-xs shadow-lg ${
-              isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-400' : 'border-neutral-200 bg-white text-neutral-600'
-            }`}>No tailor or fabric merchant found.</p>
+          {showSuggestions && query.trim() && !selectedMerchant && suggestionPosition && createPortal(
+            suggestions.length > 0 ? (
+              <ul
+                id={suggestionListId}
+                role="listbox"
+                style={{
+                  position: 'fixed',
+                  left: suggestionPosition.left,
+                  top: suggestionPosition.top,
+                  width: suggestionPosition.width,
+                  maxHeight: suggestionPosition.maxHeight,
+                }}
+                className={`z-[120] overflow-y-auto rounded-xl border p-1 shadow-xl ${
+                  isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-900'
+                }`}
+              >
+                {suggestions.map((merchant, index) => (
+                  <li key={merchant.id} role="presentation">
+                    <button
+                      type="button"
+                      id={`${suggestionListId}-option-${index}`}
+                      role="option"
+                      aria-selected={index === activeSuggestionIndex}
+                      onMouseDown={event => event.preventDefault()}
+                      onClick={() => chooseMerchant(merchant)}
+                      className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm ${
+                        index === activeSuggestionIndex
+                          ? 'bg-amber-400/15'
+                          : isDarkMode ? 'hover:bg-neutral-800' : 'hover:bg-amber-50'
+                      }`}
+                    >
+                      {merchant.avatarUrl ? (
+                        <img src={merchant.avatarUrl} alt="" loading="lazy" className="h-7 w-7 rounded-full object-cover" />
+                      ) : (
+                        <span className="grid h-7 w-7 place-items-center rounded-full bg-amber-400/15 text-xs font-bold text-amber-500">{merchantName(merchant).slice(0, 1).toUpperCase()}</span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate font-medium">{merchantName(merchant)}</span>
+                      {merchant.handle && <span className="max-w-[35%] truncate text-xs text-neutral-500">@{merchant.handle.replace(/^@/, '')}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p
+                style={{
+                  position: 'fixed',
+                  left: suggestionPosition.left,
+                  top: suggestionPosition.top,
+                  width: suggestionPosition.width,
+                  maxHeight: suggestionPosition.maxHeight,
+                }}
+                className={`z-[120] rounded-xl border px-3 py-2 text-xs shadow-lg ${
+                  isDarkMode ? 'border-neutral-700 bg-neutral-900 text-neutral-400' : 'border-neutral-200 bg-white text-neutral-600'
+                }`}
+              >No tailor or fabric merchant found.</p>
+            ),
+            document.body,
           )}
         </div>
         <button
           type="button"
-          disabled={!selectedMerchant || isSharing}
-          onClick={() => void sendReference()}
+          disabled={!selectedMerchant}
+          onClick={sendReference}
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-400 px-3 text-sm font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isSharing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          {isSharing ? 'Preparing image' : 'Send to merchant'}
+          <Send className="h-4 w-4" />
+          Share on WhatsApp
         </button>
         {status && (
           <p role="status" className={`text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
