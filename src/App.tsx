@@ -136,6 +136,9 @@ export default function App() {
 
   // Navigation View: 'landing' | 'marketplace' | 'collections' | 'profile' | 'dashboard' | 'admin' | 'messages' | 'artisan'
   const [currentView, setCurrentView] = useState<string>(getInitialView);
+  const currentViewRef = useRef(currentView);
+  const refreshAllDataRef = useRef<((showLoader?: boolean, forceNetworkRefresh?: boolean) => Promise<void>) | null>(null);
+  currentViewRef.current = currentView;
   const [dashboardInitialTab, setDashboardInitialTab] = useState<'overview' | 'posts' | 'plans'>('overview');
   const [pendingStoryFile, setPendingStoryFile] = useState<File | null>(null);
   const storyPickerInputRef = useRef<HTMLInputElement>(null);
@@ -544,9 +547,13 @@ export default function App() {
       if (pullStartY.current === null || lastTouchY === null || lastTouchY - pullStartY.current < 80 || window.scrollY > 2) return;
       pullStartY.current = null;
       lastTouchY = null;
+      if (currentViewRef.current !== 'marketplace' && currentViewRef.current !== 'artisan') return;
       setIsRefreshing(true);
-      await refreshAllData();
-      setIsRefreshing(false);
+      try {
+        await refreshAllDataRef.current?.(false);
+      } finally {
+        setIsRefreshing(false);
+      }
     };
     window.addEventListener('touchstart', handleTouchStart, { passive: true });
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
@@ -942,6 +949,7 @@ export default function App() {
     inFlightDataRefresh.current = refreshTask();
     await inFlightDataRefresh.current;
   };
+  refreshAllDataRef.current = refreshAllData;
 
   useEffect(() => {
     if (currentView !== 'landing' || posts.length > 0 || landingPostsRequestStarted.current) return;
@@ -1142,7 +1150,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen relative flex flex-col font-sans transition-colors duration-300 ${
+    <div data-theme={isDarkMode ? 'dark' : 'light'} className={`min-h-screen relative flex flex-col font-sans transition-colors duration-300 ${
       isDarkMode ? 'bg-[#0c0d10] text-[#f4f4f6]' : 'bg-[#fbf9f5] text-[#16171a]'
     }`}>
       <input

@@ -18,6 +18,12 @@ interface CollectionUploadItem {
   error?: string;
 }
 
+interface SellerCollectionDraft {
+  title: string;
+  description: string;
+  imageUrls: string[];
+}
+
 interface CollectionPageProps {
   currentUser: User | null;
   isDarkMode: boolean;
@@ -36,7 +42,68 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
   const [isUploading, setIsUploading] = useState(false);
   const [deletingCollectionId, setDeletingCollectionId] = useState<string | null>(null);
   const [buyingSlot, setBuyingSlot] = useState(false);
+  const [draftOwnerId, setDraftOwnerId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setDraftOwnerId(null);
+      return;
+    }
+
+    const draftKey = `fabsattire_seller_collection_draft_${currentUser.id}`;
+    setCollectionTitle('');
+    setCollectionDescription('');
+    setCollectionImages(['']);
+    try {
+      const savedDraft = sessionStorage.getItem(draftKey);
+      if (savedDraft) {
+        const draft: unknown = JSON.parse(savedDraft);
+        if (typeof draft === 'object' && draft !== null) {
+          const record = draft as Record<string, unknown>;
+          if (
+            typeof record.title === 'string'
+            && typeof record.description === 'string'
+            && Array.isArray(record.imageUrls)
+            && record.imageUrls.every((image): image is string => typeof image === 'string')
+          ) {
+            const imageUrls = record.imageUrls.slice(0, 12) as string[];
+            setCollectionTitle(record.title);
+            setCollectionDescription(record.description);
+            setCollectionImages(imageUrls.length ? imageUrls : ['']);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Seller collection draft could not be restored.', error);
+    }
+    setDraftOwnerId(currentUser.id);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser || draftOwnerId !== currentUser.id) return;
+    const draftKey = `fabsattire_seller_collection_draft_${currentUser.id}`;
+    const imageUrls = collectionImages.map(image => image.trim()).filter(Boolean);
+    if (!collectionTitle.trim() && !collectionDescription.trim() && imageUrls.length === 0) {
+      try {
+        sessionStorage.removeItem(draftKey);
+      } catch (error) {
+        console.warn('Empty seller collection draft could not be cleared.', error);
+      }
+      return;
+    }
+
+    try {
+      const draft: SellerCollectionDraft = {
+        title: collectionTitle,
+        description: collectionDescription,
+        imageUrls,
+      };
+      sessionStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch (error) {
+      console.warn('Seller collection draft could not be saved.', error);
+    }
+  }, [collectionTitle, collectionDescription, collectionImages, currentUser?.id, draftOwnerId]);
 
   useEffect(() => {
     setSavedPhotos(storageService.getSavedPhotos());
@@ -148,9 +215,9 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
       return;
     }
 
-    const activeImages = new Set(collectionImages.filter(Boolean));
+    const activeImages = collectionImages.filter(Boolean);
     const existingUploads = uploadQueue.filter((item) => item.status === 'done' && item.url).map((item) => item.url as string);
-    const totalUsed = activeImages.size + existingUploads.length;
+    const totalUsed = new Set([...activeImages, ...existingUploads]).size;
     const remainingSlots = Math.max(0, 12 - totalUsed);
     if (remainingSlots <= 0) {
       setCollectionStatus('This collection is already full. Remove an image or start a new one.');
@@ -299,7 +366,7 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
               <button type="submit" disabled={sellerCollections.length >= sellerCollectionLimit || isUploading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="h-4 w-4" /> {isUploading ? 'Uploading...' : 'Publish collection'}</button>
             </div>
             <div className="space-y-3">
-              <div className="flex items-center justify-between"><p className="text-xs font-semibold text-neutral-300">Collection gallery</p><span className="text-[10px] text-neutral-500">{Array.from(new Set([...collectionImages.filter(Boolean), ...uploadQueue.filter((item) => item.status === 'done' && item.url).map((item) => item.url as string)])).length}/12 images</span></div>
+              <div className="flex items-center justify-between"><p className="text-xs font-semibold text-neutral-300">Collection gallery</p><span className="text-[10px] text-neutral-500">{new Set([...collectionImages.filter(Boolean), ...uploadQueue.filter((item) => item.status === 'done' && item.url).map((item) => item.url as string)]).size}/12 images</span></div>
 
               <div
                 onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}

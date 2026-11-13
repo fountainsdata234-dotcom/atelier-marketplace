@@ -3,6 +3,7 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --color-bg-light: #f5f7fb;
     --color-bg-dark: #0b1020;
     --color-surface-light: rgba(255, 255, 255, 0.78);
@@ -14,6 +15,20 @@
     --color-brand-soft: #fef3c7;
     --color-rose-soft: #ffe4d6;
     --color-gold: #f4b942;
+    --control-background: rgba(255, 255, 255, 0.92);
+    --control-focus-background: #ffffff;
+    --control-text: #16171a;
+    --control-placeholder: #667085;
+    --control-border: rgba(71, 85, 105, 0.28);
+  }
+
+  [data-theme='dark'] {
+    color-scheme: dark;
+    --control-background: rgba(24, 26, 32, 0.6);
+    --control-focus-background: rgba(17, 18, 22, 0.82);
+    --control-text: #f5f5f5;
+    --control-placeholder: rgba(148, 163, 184, 0.8);
+    --control-border: rgba(148, 163, 184, 0.2);
   }
 
   * {
@@ -35,6 +50,7 @@
   html {
     scroll-behavior: smooth;
     overflow-x: hidden;
+    overscroll-behavior-y: none;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
@@ -187,16 +203,16 @@
     border-radius: 0.9rem;
     font-size: 1rem !important;
     line-height: 1.45;
-    color: #f5f5f5;
-    background: rgba(24, 26, 32, 0.6);
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: var(--control-text);
+    background: var(--control-background);
+    border: 1px solid var(--control-border);
     transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
   }
 
   input::placeholder,
   textarea::placeholder,
   select::placeholder {
-    color: rgba(148, 163, 184, 0.8);
+    color: var(--control-placeholder);
   }
 
   input:focus,
@@ -205,7 +221,14 @@
     outline: none;
     border-color: rgba(251, 191, 36, 0.9);
     box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.12);
-    background: rgba(17, 18, 22, 0.82);
+    background: var(--control-focus-background);
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  [role='button']:focus-visible {
+    outline: 2px solid #d97706;
+    outline-offset: 3px;
   }
 
   textarea {
