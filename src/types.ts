@@ -183,6 +183,7 @@ export interface ClothPost extends Listing {
   sellerConfidenceAdjustedRating?: number | null;
   likeCount?: number;
   saveCount?: number;
+  viewCount7d?: number | null;
   trendScore?: number;
   trendConfidence?: number;
   recommendationReason?: string;

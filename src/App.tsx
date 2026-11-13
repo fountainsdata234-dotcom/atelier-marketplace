@@ -1096,6 +1096,10 @@ export default function App() {
   const handleRecordPostView = (post: ClothPost) => {
     storageService.recordDiscoveryEvent(post.id, 'VIEW', currentUser?.id);
     storageService.recordRecommendationEvent(post.id, 'VIEW', storageService.getRecommendationScope(currentUser?.id), post);
+    if (currentUser?.id === post.authorId) return;
+    void api.recordMarketplaceEvent(post.id, 'VIEW').catch(error => {
+      if (import.meta.env.DEV) console.warn('Marketplace post view could not be recorded.', error);
+    });
   };
 
   // Trigger Social Share Modal

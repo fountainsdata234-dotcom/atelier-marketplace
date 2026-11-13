@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Ban, MapPin, Phone, Search, Share2, Users, CheckCircle2, Grid3X3, Layers } from 'lucide-react';
-import { ClothPost, User } from '../types';
+import { ClothPost, SellerCollection, User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
@@ -32,10 +32,33 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
     && post.status !== 'sold_out'
     && !post.isBlocked,
   ), [posts, seller.id]);
+  const [publicCollections, setPublicCollections] = useState<SellerCollection[]>([]);
+  const [collectionsError, setCollectionsError] = useState('');
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    setPublicCollections([]);
+    setCollectionsError('');
+    setSelectedCollectionId(null);
+    void api.getPublicSellerCollections()
+      .then(collections => {
+        if (active) setPublicCollections(collections.filter(collection => collection.sellerId === seller.id));
+      })
+      .catch(error => {
+        if (!active) return;
+        console.warn('Public seller collections could not be loaded.', error);
+        setCollectionsError(safeCustomerErrorMessage(error, "This seller's collections couldn't be loaded."));
+      });
+    return () => { active = false; };
+  }, [seller.id]);
   const collectionCover = useMemo(() => [...allSellerPosts]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .find(post => Boolean(post.imageUrl)), [allSellerPosts]);
-  const collectionCoverUrl = collectionCover?.imageAssets?.find(asset => asset.url === collectionCover.imageUrl)?.thumbnailUrl
+  const publicCollectionCover = [...publicCollections]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .find(collection => collection.imageUrls.length > 0)?.imageUrls[0];
+  const collectionCoverUrl = publicCollectionCover
+    || collectionCover?.imageAssets?.find(asset => asset.url === collectionCover.imageUrl)?.thumbnailUrl
     || collectionCover?.imageUrl;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState('all');
@@ -64,7 +87,17 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   }), [allSellerPosts, searchQuery, selectedTag, sortBy]);
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm';
-  const openCollection = () => document.getElementById('seller-collection-listings')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const openSellerListings = () => document.getElementById('seller-collection-listings')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const openCollection = () => {
+    if (publicCollections.length > 0) {
+      const newestCollection = [...publicCollections]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      setSelectedCollectionId(newestCollection.id);
+      document.getElementById('seller-public-collections')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    openSellerListings();
+  };
 
   useEffect(() => {
     if (!featuredPostId || !allSellerPosts.some(post => post.id === featuredPostId)) return;
@@ -166,6 +199,57 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
             </div>
           </div>
         </div>
+        {(publicCollections.length > 0 || collectionsError) && (
+          <section id="seller-public-collections" className={`scroll-mt-24 border-b p-5 sm:p-8 ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white'}`}>
+            <div className="mb-5 flex items-center gap-2">
+              <Layers className="h-4 w-4 text-amber-500" />
+              <div>
+                <h2 className="text-xl font-serif font-bold">Collections</h2>
+                <p className="mt-1 text-xs text-neutral-400">Explore this seller's curated images and available pieces.</p>
+              </div>
+            </div>
+            {collectionsError ? <p role="status" className="text-xs text-red-400">{collectionsError}</p> : (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {publicCollections.map(collection => (
+                    <button
+                      key={collection.id}
+                      type="button"
+                      onClick={() => setSelectedCollectionId(collection.id)}
+                      aria-pressed={selectedCollectionId === collection.id}
+                      className={`group overflow-hidden rounded-2xl border text-left transition ${selectedCollectionId === collection.id ? 'border-amber-400 ring-2 ring-amber-400/40' : isDarkMode ? 'border-neutral-800 bg-neutral-950 hover:border-amber-500/50' : 'border-neutral-200 bg-neutral-50 hover:border-amber-500/50'}`}
+                    >
+                      <PostImage src={collection.imageUrls[0] || SELLER_ATELIER_IMAGE} alt="" className="aspect-[16/9]" imageClassName="transition-transform group-hover:scale-105" loading="lazy" />
+                      <span className="block p-4">
+                        <span className="block font-serif text-lg font-bold">{collection.title}</span>
+                        <span className="mt-1 block text-xs text-neutral-400">{collection.imageUrls.length} item{collection.imageUrls.length === 1 ? '' : 's'}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {publicCollections.find(collection => collection.id === selectedCollectionId) && (() => {
+                  const selectedCollection = publicCollections.find(collection => collection.id === selectedCollectionId)!;
+                  return (
+                    <div className={`mt-6 rounded-2xl border p-4 sm:p-6 ${isDarkMode ? 'border-neutral-800 bg-neutral-950/60' : 'border-neutral-200 bg-neutral-50'}`}>
+                      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-serif text-xl font-bold">{selectedCollection.title}</h3>
+                          {selectedCollection.description && <p className="mt-1 max-w-2xl text-xs text-neutral-400">{selectedCollection.description}</p>}
+                        </div>
+                        <button type="button" onClick={openSellerListings} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2 text-xs font-bold text-neutral-950 hover:bg-amber-300">Shop all pieces <ArrowRight className="h-3.5 w-3.5" /></button>
+                      </div>
+                      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                        {selectedCollection.imageUrls.map((imageUrl, index) => (
+                          <PostImage key={`${selectedCollection.id}-${imageUrl}-${index}`} src={imageUrl} alt={`${selectedCollection.title}, item ${index + 1}`} className="aspect-square overflow-hidden rounded-xl border border-neutral-800" loading="lazy" />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+          </section>
+        )}
         <div className={`border-b px-5 py-4 sm:px-8 ${isDarkMode ? 'border-neutral-800/70 bg-[#121316]' : 'border-neutral-200 bg-white'}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label className={`relative min-w-0 flex-1 sm:max-w-md ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>

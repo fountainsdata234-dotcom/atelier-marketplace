@@ -7,6 +7,7 @@ import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
+import { LISTING_TAG_OPTIONS, normalizeListingTags, toggleListingTag } from '../utils/listingTags';
 import { PostImage } from './PostImage';
 
 interface TailorDashboardProps {
@@ -113,48 +114,14 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const currentAvatarUrl = currentUser.avatarUrl && failedAvatarUrl !== currentUser.avatarUrl ? currentUser.avatarUrl : null;
   const [sellerListings, setSellerListings] = useState<ClothPost[]>(() => posts.filter(post => post.authorId === currentUser.id));
+  const [listingsLoadError, setListingsLoadError] = useState('');
+  const [isLoadingListings, setIsLoadingListings] = useState(false);
+  const [listingsRetry, setListingsRetry] = useState(0);
   const [imageAssets, setImageAssets] = useState<ListingImageAsset[]>([]);
 
-  const TAG_OPTIONS = ['Menwear', 'Womenwear', 'Commercial', 'Formal', 'Bridal', 'Casual', 'Streetwear', 'Fabrics'];
-
-  const normalizeTags = (rawTags: string): string[] => {
-    const normalized = rawTags
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(Boolean);
-
-    const matchTag = (value: string) => {
-      const lowered = value.toLowerCase();
-      if (lowered.includes('men') || lowered.includes('male')) return 'Menwear';
-      if (lowered.includes('women') || lowered.includes('female')) return 'Womenwear';
-      if (lowered.includes('commercial') || lowered.includes('retail')) return 'Commercial';
-      if (lowered.includes('formal') || lowered.includes('occasion')) return 'Formal';
-      if (lowered.includes('bridal') || lowered.includes('wedding')) return 'Bridal';
-      if (lowered.includes('casual') || lowered.includes('everyday')) return 'Casual';
-      if (lowered.includes('street') || lowered.includes('urban')) return 'Streetwear';
-      if (lowered.includes('fabric') || lowered.includes('textile') || lowered.includes('cloth')) return 'Fabrics';
-
-      const directMatch = TAG_OPTIONS.find(option => option.toLowerCase() === lowered);
-      return directMatch || null;
-    };
-
-    const result: string[] = [];
-    normalized.forEach(tag => {
-      const mapped = matchTag(tag);
-      const cleanTag = mapped || tag;
-      if (!result.some(existing => existing.toLowerCase() === cleanTag.toLowerCase())) result.push(cleanTag);
-    });
-
-    return result.slice(0, 20);
-  };
+  const normalizeTags = normalizeListingTags;
   const toggleTag = (tag: string) => {
-    setTagsInput(previous => {
-      const tags = previous.split(',').map(item => item.trim()).filter(Boolean);
-      const selectedIndex = tags.findIndex(item => item.toLowerCase() === tag.toLowerCase());
-      if (selectedIndex >= 0) tags.splice(selectedIndex, 1);
-      else tags.push(tag);
-      return tags.join(', ');
-    });
+    setTagsInput(previous => toggleListingTag(previous, tag));
   };
   // Image Program State
   const [imageUrl, setImageUrl] = useState('');
@@ -210,12 +177,31 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   }));
   const totalLikes = myPosts.reduce((acc, p) => acc + p.likes.length, 0);
   const totalSaves = myPosts.reduce((acc, p) => acc + p.saves.length, 0);
+  const totalViews7d = myPosts.reduce((acc, p) => acc + (typeof p.viewCount7d === 'number' ? p.viewCount7d : 0), 0);
+  const viewsUnavailable = isLoadingListings
+    || Boolean(listingsLoadError)
+    || myPosts.some(post => post.viewCount7d === null);
   const followerCount = Array.isArray(currentUser.followers) ? currentUser.followers.length : 0;
 
   React.useEffect(() => {
+    let active = true;
     setSellerListings(posts.filter(post => post.authorId === currentUser.id));
-    void api.getMyListings().then(setSellerListings).catch(() => undefined);
-  }, [currentUser.id]);
+    setListingsLoadError('');
+    setIsLoadingListings(true);
+    void api.getMyListings()
+      .then(listings => {
+        if (!active) return;
+        setSellerListings(listings);
+      })
+      .catch(error => {
+        if (!active) return;
+        setListingsLoadError(safeCustomerErrorMessage(error, "Your listings and engagement couldn't be refreshed."));
+      })
+      .finally(() => {
+        if (active) setIsLoadingListings(false);
+      });
+    return () => { active = false; };
+  }, [currentUser.id, listingsRetry]);
 
   React.useEffect(() => {
     setListingType(currentUser.role === 'fabric_seller' ? 'FABRIC' : 'CLOTHING');
@@ -587,7 +573,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         </div>
 
         {/* Real-time Metrics Counters */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-amber-500/20">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-6 pt-6 border-t border-amber-500/20">
           <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800">
             <span className="text-[10px] uppercase tracking-wider text-neutral-400 block font-mono">Followers</span>
                 <span className="text-2xl font-serif font-bold text-amber-400">{followerCount}</span>
@@ -601,11 +587,22 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
             <span className="text-2xl font-serif font-bold text-purple-400">{totalSaves}</span>
           </div>
           <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800">
+            <span className="text-[10px] uppercase tracking-wider text-neutral-400 block font-mono">Views (7 days)</span>
+            <span className="text-2xl font-serif font-bold text-sky-400">{viewsUnavailable ? '—' : totalViews7d}</span>
+          </div>
+          <div className="p-3 rounded-xl bg-neutral-900/40 border border-neutral-800">
             <span className="text-[10px] uppercase tracking-wider text-neutral-400 block font-mono">Live Posts</span>
             <span className="text-2xl font-serif font-bold text-emerald-400">{myPosts.length}</span>
           </div>
         </div>
       </div>
+
+      {(isLoadingListings || listingsLoadError) && (
+        <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-xs ${isDarkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-300 bg-amber-50 text-amber-900'}`} role="status">
+          <span>{isLoadingListings ? 'Refreshing your saved listings and engagement…' : listingsLoadError}</span>
+          {listingsLoadError && <button type="button" onClick={() => setListingsRetry(value => value + 1)} className="font-semibold underline underline-offset-2">Retry</button>}
+        </div>
+      )}
 
       {/* Blocked Account Notice */}
       {currentUser.isBlocked && (
@@ -715,6 +712,10 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   <div className="text-[10px] uppercase tracking-wider text-neutral-400">Saves</div>
                   <div className="mt-2 text-lg font-bold text-purple-300">{totalSaves}</div>
                 </div>
+                <div className="rounded-xl border border-neutral-700/60 bg-neutral-900/50 p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-neutral-400">Views (7 days)</div>
+                  <div className="mt-2 text-lg font-bold text-sky-300">{viewsUnavailable ? '—' : totalViews7d}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -774,7 +775,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                       <label htmlFor="post-tags" className="block text-xs font-medium text-neutral-400">Tags <span className="text-amber-400">*</span></label>
                       <input id="post-tags" type="text" disabled={currentUser.isBlocked} value={tagsInput} onChange={event => setTagsInput(event.target.value)} placeholder="Choose tags or add your own, separated by commas" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-4 py-3 text-base text-neutral-100 focus:border-amber-500 focus:outline-none" />
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {TAG_OPTIONS.map(tag => {
+                        {LISTING_TAG_OPTIONS.map(tag => {
                           const selected = normalizeTags(tagsInput).some(value => value.toLowerCase() === tag.toLowerCase());
                           return <button key={tag} type="button" aria-pressed={selected} onClick={() => toggleTag(tag)} className={`rounded-full border px-3 py-2 text-xs font-medium transition ${selected ? 'border-amber-400 bg-amber-400 text-neutral-950' : 'border-neutral-700 bg-neutral-800/60 text-neutral-300 hover:border-amber-500 hover:text-amber-300'}`}>{selected ? '✓ ' : '+ '}{tag}</button>;
                         })}
@@ -826,6 +827,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                         <div className="flex items-center justify-between border-t border-neutral-800 pt-2 text-xs font-mono text-neutral-400">
                           <span>{post.likes.length} Likes</span>
                           <span>{post.saves.length} Saves</span>
+                          <span>{post.viewCount7d === null ? '—' : post.viewCount7d ?? 0} Views (7d)</span>
                           <span>{new Date(post.createdAt).toLocaleDateString()}</span>
                         </div>
                         <div className="flex flex-wrap gap-2 border-t border-neutral-800 p-3">

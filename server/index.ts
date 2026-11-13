@@ -75,6 +75,7 @@ import {
   type MarketplaceTrendCategory,
   type MarketplaceCursor,
   getSellerListings,
+  getSellerListingViewCounts,
   getProfile,
   getProfileByEmail,
   getPromoPlans,
@@ -4808,8 +4809,16 @@ app.post('/api/discovery-events', requireAuth, async (req: AuthenticatedRequest,
 app.get('/api/listings/mine', requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
     const listings = await getSellerListings(req.authUser!.uid);
-    const enriched = await Promise.all(listings.map(async listing => {
-      const interactions = await getPostInteractions(String(listing.id));
+    const [viewCountsResult, interactions] = await Promise.all([
+      getSellerListingViewCounts(listings.map(listing => String(listing.id)))
+        .then(value => ({ status: 'fulfilled' as const, value }))
+        .catch(reason => ({ status: 'rejected' as const, reason })),
+      Promise.all(listings.map(listing => getPostInteractions(String(listing.id)))),
+    ]);
+    if (viewCountsResult.status === 'rejected') {
+      console.error('Seller listing view counts could not be loaded.', viewCountsResult.reason);
+    }
+    const enriched = listings.map((listing, index) => {
       const author = listing.author as Record<string, unknown> || {};
       return {
         ...snakeToCamel(listing),
@@ -4820,12 +4829,15 @@ app.get('/api/listings/mine', requireAuth, async (req: AuthenticatedRequest, res
         authorAvatar: author.avatar_url || '',
         authorLocation: author.location || {},
         authorWhatsapp: author.whatsapp_number || '',
-        likes: interactions.likes,
-        saves: interactions.saves,
+        likes: interactions[index].likes,
+        saves: interactions[index].saves,
+        viewCount7d: viewCountsResult.status === 'fulfilled'
+          ? viewCountsResult.value.get(String(listing.id)) ?? 0
+          : null,
         rating: Number(listing.rating_average) || 0,
         ratingCount: Number(listing.rating_count) || 0,
       };
-    }));
+    });
     res.json(enriched);
   } catch (error) {
     console.error('Unable to load seller listings.', error);

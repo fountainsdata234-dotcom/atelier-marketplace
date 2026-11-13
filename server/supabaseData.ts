@@ -949,6 +949,25 @@ export async function getSellerListings(userId: string): Promise<PostRecord[]> {
   return data || [];
 }
 
+export async function getSellerListingViewCounts(listingIds: string[]): Promise<Map<string, number>> {
+  const viewCounts = new Map<string, number>();
+  const batches: string[][] = [];
+  for (let index = 0; index < listingIds.length; index += 100) {
+    batches.push(listingIds.slice(index, index + 100));
+  }
+  const results = await Promise.all(batches.map(async batch => {
+    const { data, error } = await requireClient().from('marketplace_trend_scores')
+      .select('listing_id,qualified_views_7d')
+      .eq('scope_type', 'global')
+      .eq('scope_value', 'global')
+      .in('listing_id', batch);
+    if (error) throw normalizeError(error);
+    return data || [];
+  }));
+  results.flat().forEach(row => viewCounts.set(String(row.listing_id), Number(row.qualified_views_7d) || 0));
+  return viewCounts;
+}
+
 export async function getListingsForModeration(): Promise<PostRecord[]> {
   const { data, error } = await requireClient().from('posts').select('*, author:profiles!posts_author_id_fkey(*)')
     .eq('status', 'pending_review').eq('moderation_status', 'pending').is('deleted_at', null)
