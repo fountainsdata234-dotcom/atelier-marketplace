@@ -159,6 +159,18 @@ export interface SellerCollection {
   createdAt: string;
 }
 
+export interface MarketplaceStyleReference {
+  id: string;
+  imageUrl: string;
+  createdAt: string;
+}
+
+export interface MarketplaceStyleReferencePage {
+  items: MarketplaceStyleReference[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface ClothPost extends Listing {
   authorId: string;
   authorName: string;

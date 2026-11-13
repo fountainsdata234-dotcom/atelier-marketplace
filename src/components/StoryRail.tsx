@@ -7,6 +7,7 @@ import { api, StoryUploadAsset } from '../services/api';
 import { getStoryUploadMimeType, getStoryUploadSizeError, getStoryUploadTypeError, MAX_STORY_IMAGE_UPLOAD_BYTES } from '../utils/mediaLimits';
 import { prepareStoryImageForUpload } from '../services/mediaUpload';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
+import { fetchShareableImageFile } from '../utils/imageSharing';
 
 const formatHandle = (handle?: string) => {
   const value = handle?.trim() || '';
@@ -471,6 +472,8 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [readyStoryId, setReadyStoryId] = useState<string | null>(null);
+  const [replyComposerActive, setReplyComposerActive] = useState(false);
   const [reply, setReply] = useState('');
   const [replyStatus, setReplyStatus] = useState('');
   const [replyFallbackUrl, setReplyFallbackUrl] = useState('');
@@ -491,10 +494,12 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   );
   const story = chronologicalStories[activeIndex];
   const [liked, setLiked] = useState(Boolean(story?.likedByViewer));
+  const isStoryPaused = isPaused || replyComposerActive || isSharingReply || readyStoryId !== story?.id;
 
   useEffect(() => {
     setActiveIndex(0);
     setIsPaused(false);
+    setReplyComposerActive(false);
   }, [tailor?.id]);
 
   useEffect(() => {
@@ -524,15 +529,15 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   }, [story?.id, owner, onViewCount]);
 
   useEffect(() => {
-    if (!story || isPaused || story.mediaType === 'video') return;
+    if (!story || isStoryPaused || story.mediaType === 'video') return;
     const timer = window.setTimeout(() => move(1), 7000);
     return () => window.clearTimeout(timer);
-  }, [activeIndex, isPaused, story?.mediaType, story?.id]);
+  }, [activeIndex, isStoryPaused, story?.mediaType, story?.id]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !story) return;
-    if (isPaused) void video.pause();
+    if (isStoryPaused) void video.pause();
     else void video.play().then(() => setVideoAutoplayBlocked(false)).catch(error => {
       if (error instanceof DOMException && error.name === 'NotAllowedError') {
         setVideoAutoplayBlocked(true);
@@ -540,7 +545,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
       }
       console.error('Unable to play story video.', error);
     });
-  }, [isPaused, story?.id]);
+  }, [isStoryPaused, story?.id]);
 
   const move = (direction: number) => {
     if (direction < 0 && activeIndex > 0) setActiveIndex(index => index - 1);
@@ -608,7 +613,8 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
     if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function' || story.mediaType !== 'image') {
       window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
       setReply('');
-      setReplyFallbackUrl('');
+      setReplyComposerActive(false);
+      setReplyFallbackUrl(whatsappUrl);
       setReplyStatus('WhatsApp opened with your message and a link to this story image. Review and send it there.');
       return;
     }
@@ -617,13 +623,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
     setReplyStatus('Preparing the story image for sharing…');
     setReplyFallbackUrl('');
     try {
-      const response = await fetch(story.mediaUrl, { mode: 'cors' });
-      if (!response.ok) throw new Error(`Story image request failed with status ${response.status}.`);
-      const imageBlob = await response.blob();
-      const imageType = imageBlob.type || response.headers.get('content-type')?.split(';')[0] || '';
-      if (!imageType.startsWith('image/')) throw new Error('The story media is not a shareable image.');
-      const extension = imageType.split('/')[1]?.replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
-      const imageFile = new File([imageBlob], `fabsattire-story-${story.id}.${extension}`, { type: imageType });
+      const imageFile = await fetchShareableImageFile(story.mediaUrl, `fabsattire-story-${story.id}`);
       if (!navigator.canShare({ files: [imageFile] })) {
         setReplyFallbackUrl(whatsappUrl);
         setReplyStatus('This browser cannot attach images directly. You can still send the story link through WhatsApp.');
@@ -636,6 +636,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         text: shareText,
       });
       setReply('');
+      setReplyComposerActive(false);
       setReplyStatus('The image and message are ready in the share sheet. Choose WhatsApp to send them to the merchant.');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -673,11 +674,11 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
               key={story.id}
               src={story.mediaUrl}
               poster={story.thumbnailUrl}
-              autoPlay
               playsInline
               controls={false}
               className="h-full w-full object-contain"
               onLoadedMetadata={event => setVideoDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+              onCanPlayThrough={() => setReadyStoryId(story.id)}
               onTimeUpdate={event => {
                 const video = event.currentTarget;
                 setVideoCurrentTime(video.currentTime);
@@ -686,7 +687,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
               onError={() => onUnavailable(story.id)}
               onEnded={() => move(1)}
             />
-          : <img data-story-image key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Merchant'} story`} draggable={false} className="h-full w-full object-contain" onError={() => onUnavailable(story.id)} />}
+          : <img data-story-image key={story.id} src={story.mediaUrl} alt={`${tailor?.shopName || tailor?.name || 'Merchant'} story`} draggable={false} className="h-full w-full object-contain" onLoad={() => setReadyStoryId(story.id)} onError={() => onUnavailable(story.id)} />}
         {story.mediaType === 'video' && videoAutoplayBlocked && (
           <button
             type="button"
@@ -712,7 +713,7 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
                   ? { width: `${videoDuration > 0 ? Math.min(100, (videoCurrentTime / videoDuration) * 100) : 0}%` }
                   : undefined}
                 {...(index === activeIndex && story.mediaType !== 'video'
-                  ? { style: { animationPlayState: isPaused ? 'paused' as const : 'running' as const } }
+                  ? { style: { animationPlayState: isStoryPaused ? 'paused' as const : 'running' as const } }
                   : {})}
               />
             </span>
@@ -731,12 +732,12 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         {story.caption && <p className="absolute bottom-28 left-5 right-5 z-20 rounded-xl bg-black/55 px-3 py-2 text-center text-sm font-semibold text-white backdrop-blur">{story.caption}</p>}
         <button type="button" aria-label="Previous story" onClick={() => move(-1)} className="absolute bottom-32 left-2 z-40 grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white sm:bottom-1/2 sm:translate-y-1/2"><ChevronLeft className="h-5 w-5" /></button>
         <button type="button" aria-label="Next story" onClick={() => move(1)} className="absolute bottom-32 right-2 z-40 grid h-10 w-10 place-items-center rounded-full bg-black/45 text-white sm:bottom-1/2 sm:translate-y-1/2"><ChevronRight className="h-5 w-5" /></button>
-        <button type="button" aria-label={isPaused ? 'Resume story' : 'Pause story'} onClick={() => setIsPaused(value => !value)} className="absolute bottom-[92px] left-4 z-40 rounded-full bg-black/45 p-2 text-white backdrop-blur">
-          {isPaused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4 fill-current" />}
+        <button type="button" aria-label={isStoryPaused ? 'Resume story' : 'Pause story'} onClick={() => setIsPaused(isStoryPaused ? false : true)} className="absolute bottom-[92px] left-4 z-40 rounded-full bg-black/45 p-2 text-white backdrop-blur">
+          {isStoryPaused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4 fill-current" />}
         </button>
         {!owner && (
           <div className="absolute bottom-4 left-4 right-4 z-40 flex items-center gap-2">
-            <input value={reply} disabled={isSharingReply} onChange={event => { setReply(event.target.value); setReplyStatus(''); setReplyFallbackUrl(''); }} onKeyDown={event => { if (event.key === 'Enter' && reply.trim()) void sendReply(); }} placeholder={`Message ${formatHandle(tailor?.handle) || '@merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur disabled:opacity-60" />
+            <input value={reply} disabled={isSharingReply} onFocus={() => setReplyComposerActive(true)} onBlur={() => setReplyComposerActive(false)} onMouseEnter={() => setReplyComposerActive(true)} onMouseLeave={() => setReplyComposerActive(false)} onChange={event => { setReplyComposerActive(true); setReply(event.target.value); setReplyStatus(''); setReplyFallbackUrl(''); }} onKeyDown={event => { if (event.key === 'Enter' && reply.trim()) void sendReply(); }} placeholder={`Message ${formatHandle(tailor?.handle) || '@merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur disabled:opacity-60" />
             <button type="button" aria-label={isSharingReply ? 'Preparing story image' : 'Send story reply to WhatsApp'} disabled={!reply.trim() || isSharingReply} onClick={() => void sendReply()} className="grid h-11 w-11 place-items-center rounded-full bg-white text-neutral-950 disabled:opacity-50"><Send className="h-4 w-4" /></button>
             <button type="button" aria-label={liked ? `Unlike story (${story.likeCount} likes)` : `Like story (${story.likeCount} likes)`} disabled={liking} onClick={toggleLike} className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-full bg-black/45 px-2 text-white backdrop-blur disabled:opacity-60">
               <Heart className="h-5 w-5" fill={liked ? 'currentColor' : 'none'} />

@@ -1,4 +1,4 @@
-import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences, NearbySellerMatch, ReverseGeocodedBusinessLocation, BusinessLocationSearchResult, TailorStory } from '../types';
+import { AdminPromoPlan, AppNotification, BroadcastMessage, ClothPost, DirectMessage, FabricRequest, SellerCollection, User, UserLocation, DiscoveryEvent, DiscoveryEventType, ListingImageAsset, ListingReport, LocationCity, LocationCountry, LocationCurrency, LocationRegion, MarketplaceAbuseFlag, MarketplaceFeedPage, MarketplaceFeedQuery, MarketplaceTrendingPage, MarketplaceTrendingQuery, MarketplaceTrendEventType, MarketplaceReviewType, MarketplaceReviewModerationStatus, MarketplaceReviewsPage, MarketplaceReview, MarketplaceReviewQueueItem, RecommendationPreferences, NearbySellerMatch, ReverseGeocodedBusinessLocation, BusinessLocationSearchResult, TailorStory, MarketplaceStyleReference, MarketplaceStyleReferencePage } from '../types';
 
 import { getAuthToken, isSupabaseAuthReady } from './auth';
 import { uploadFormDataWithProgress } from './mediaUpload';
@@ -83,6 +83,7 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
   const method = (options.method || 'GET').toUpperCase();
   const isPublicRead = method === 'GET'
     && (['/api/posts', '/api/users', '/api/promo-plans', '/api/public/seller-collections'].includes(path)
+      || path.startsWith('/api/marketplace/style-references?')
       || path.startsWith('/api/location/'));
   let token: string | null;
   try {
@@ -298,6 +299,25 @@ export const api = {
   getPublicSellerCollections: () => request<SellerCollection[]>('/api/public/seller-collections'),
   saveSellerCollection: (collection: Pick<SellerCollection, 'title' | 'description' | 'imageUrls'>) => request<SellerCollection>('/api/seller-collections', { method: 'POST', body: JSON.stringify(collection) }),
   deleteSellerCollection: (collectionId: string) => request<void>(`/api/seller-collections/${encodeURIComponent(collectionId)}`, { method: 'DELETE' }),
+  getMarketplaceStyleReferences: (offset = 0, limit = 15) => request<MarketplaceStyleReferencePage>(
+    `/api/marketplace/style-references?offset=${encodeURIComponent(String(offset))}&limit=${encodeURIComponent(String(limit))}`,
+  ),
+  uploadAdminStyleReferences: async (files: File[], onProgress?: (progress: number) => void) => {
+    if (files.length < 1 || files.length > 10) throw new Error('Choose between 1 and 10 style reference images at a time.');
+    const oversizedFile = files.find(file => file.size > MAX_IMAGE_UPLOAD_BYTES);
+    if (oversizedFile) throw new Error('Style reference images must be 8 MB or smaller each.');
+    const token = await getAuthTokenForRequest();
+    const formData = new FormData();
+    files.forEach(file => formData.append('images', file, file.name));
+    return uploadFormDataWithProgress<MarketplaceStyleReference[]>(
+      `${API_URL}/api/admin/style-references`,
+      formData,
+      token,
+      onProgress,
+      '/api/admin/style-references',
+    );
+  },
+  deleteMarketplaceStyleReference: (referenceId: string) => request<void>(`/api/admin/style-references/${encodeURIComponent(referenceId)}`, { method: 'DELETE' }),
   initializeCollectionSlotPayment: () => request<{ authorizationUrl: string; reference: string }>('/api/collection-slots/initialize', { method: 'POST' }),
   verifyCollectionSlotPayment: (reference: string) => request<{ purchasedSlots: number }>(`/api/collection-slots/verify?reference=${encodeURIComponent(reference)}`),
   getPromoPlans: () => request<AdminPromoPlan[]>('/api/promo-plans'),

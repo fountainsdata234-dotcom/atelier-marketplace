@@ -396,6 +396,52 @@ export async function deleteSellerCollection(userId: string, collectionId: strin
   if (error) throw normalizeError(error);
 }
 
+export async function listMarketplaceStyleReferences(offset: number, limit: number): Promise<{
+  items: ProfileRecord[];
+  nextOffset: number | null;
+}> {
+  const { data, error } = await requireClient()
+    .from('marketplace_style_references')
+    .select('id,image_url,created_at')
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(offset, offset + limit);
+  if (error) throw normalizeError(error);
+  const rows = data || [];
+  const hasMore = rows.length > limit;
+  return {
+    items: rows.slice(0, limit),
+    nextOffset: hasMore ? offset + limit : null,
+  };
+}
+
+export async function createMarketplaceStyleReferences(
+  createdBy: string,
+  references: Array<{ imageUrl: string; storagePath: string }>,
+): Promise<ProfileRecord[]> {
+  const { data, error } = await requireClient()
+    .from('marketplace_style_references')
+    .insert(references.map(reference => ({
+      image_url: reference.imageUrl,
+      storage_path: reference.storagePath,
+      created_by: createdBy,
+    })))
+    .select('id,image_url,created_at');
+  if (error) throw normalizeError(error);
+  return data || [];
+}
+
+export async function deleteMarketplaceStyleReference(referenceId: string): Promise<string | null> {
+  const { data, error } = await requireClient()
+    .from('marketplace_style_references')
+    .delete()
+    .eq('id', referenceId)
+    .select('storage_path')
+    .maybeSingle();
+  if (error) throw normalizeError(error);
+  return typeof data?.storage_path === 'string' ? data.storage_path : null;
+}
+
 export async function updateAuthorPromotion(uid: string, isPromoted: boolean): Promise<void> {
   const { error } = await requireClient().from('posts').update({ is_promoted: isPromoted, updated_at: new Date().toISOString() }).eq('author_id', uid);
   if (error) throw normalizeError(error);

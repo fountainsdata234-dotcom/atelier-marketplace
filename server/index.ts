@@ -82,6 +82,9 @@ import {
   getPromoPlansData,
   getSellerCollections,
   getAllSellerCollections,
+  listMarketplaceStyleReferences,
+  createMarketplaceStyleReferences,
+  deleteMarketplaceStyleReference,
   removeUserFromFollowers,
   getUsers,
   findNearbySellers,
@@ -1600,6 +1603,126 @@ app.get('/api/public/seller-collections', async (req: Request, res: Response) =>
   }
   const snapshot = await firestore.collectionGroup('sellerCollections').orderBy('createdAt', 'desc').limit(200).get();
   res.json(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) })));
+});
+
+app.get('/api/marketplace/style-references', async (req: Request, res: Response) => {
+  const requestedLimit = Number(req.query.limit);
+  const limit = Number.isInteger(requestedLimit) ? Math.min(30, Math.max(1, requestedLimit)) : 15;
+  const requestedOffset = Number(req.query.offset);
+  const offset = Number.isSafeInteger(requestedOffset) ? Math.max(0, Math.min(requestedOffset, 1_000_000)) : 0;
+  const page = await listMarketplaceStyleReferences(offset, limit);
+  res.json({
+    items: page.items.map(item => ({
+      id: String(item.id),
+      imageUrl: String(item.image_url),
+      createdAt: String(item.created_at),
+    })),
+    nextCursor: page.nextOffset === null ? null : String(page.nextOffset),
+    hasMore: page.nextOffset !== null,
+  });
+});
+
+app.post(
+  '/api/admin/style-references',
+  requireAuth,
+  requireActiveAccount,
+  requireAdmin,
+  requireAbuseLimit('image_upload'),
+  (req: Request, res: Response, next: NextFunction) => {
+    upload.array('images', 10)(req, res, error => {
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_UNEXPECTED_FILE') {
+        res.status(400).json({ error: 'Choose no more than 10 style reference images at a time.' });
+        return;
+      }
+      if (error) {
+        next(error);
+        return;
+      }
+      next();
+    });
+  },
+  async (req: AuthenticatedRequest, res: Response) => {
+    const files = Array.isArray(req.files) ? req.files : [];
+    if (files.length === 0 || files.length > 10) {
+      res.status(400).json({ error: 'Choose between 1 and 10 style reference images at a time.' });
+      return;
+    }
+
+    const preparedImages: Buffer[] = [];
+    try {
+      for (const file of files) {
+        let metadata: sharp.Metadata;
+        try {
+          metadata = await sharp(file.buffer, { limitInputPixels: 40_000_000 }).metadata();
+        } catch {
+          res.status(400).json({ error: 'One or more files are not valid images. Please choose another set.' });
+          return;
+        }
+        if (!metadata.width || !metadata.height || !['jpeg', 'png', 'webp'].includes(metadata.format || '')) {
+          res.status(400).json({ error: 'Use JPEG, PNG, or WebP images for style references.' });
+          return;
+        }
+        preparedImages.push(await sharp(file.buffer, { limitInputPixels: 40_000_000 })
+          .rotate()
+          .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 88, progressive: true, mozjpeg: true })
+          .toBuffer());
+      }
+
+      const uploadedAssets: Array<{ url: string; path: string }> = [];
+      try {
+        for (const image of preparedImages) {
+          uploadedAssets.push(await uploadImage(
+            'marketplace',
+            'style-references',
+            `style-${randomUUID()}.jpg`,
+            image,
+            'image/jpeg',
+          ));
+        }
+        const references = await createMarketplaceStyleReferences(
+          req.authUser!.uid,
+          uploadedAssets.map(asset => ({ imageUrl: asset.url, storagePath: asset.path })),
+        );
+        res.status(201).json(references.map(reference => ({
+          id: String(reference.id),
+          imageUrl: String(reference.image_url),
+          createdAt: String(reference.created_at),
+        })));
+      } catch (error) {
+        const cleanupResults = await Promise.allSettled(uploadedAssets.map(asset => deleteUpload(asset.path)));
+        cleanupResults.forEach(result => {
+          if (result.status === 'rejected') console.error('Style reference upload cleanup failed.', result.reason);
+        });
+        throw error;
+      }
+    } catch (error) {
+      console.error('Admin style reference upload failed.', error);
+      res.status(500).json({ error: 'The style reference images could not be saved.' });
+    }
+  },
+);
+
+app.delete('/api/admin/style-references/:referenceId', requireAuth, requireActiveAccount, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  const referenceId = String(req.params.referenceId || '').trim();
+  if (!/^[0-9a-f-]{36}$/i.test(referenceId)) {
+    res.status(400).json({ error: 'Choose a valid style reference to remove.' });
+    return;
+  }
+
+  const storagePath = await deleteMarketplaceStyleReference(referenceId);
+  if (!storagePath) {
+    res.status(404).json({ error: 'This style reference could not be found.' });
+    return;
+  }
+  try {
+    await deleteUpload(storagePath);
+  } catch (error) {
+    console.error('Style reference image cleanup failed.', error);
+    res.status(500).json({ error: 'The style reference was removed, but its stored image could not be cleaned up.' });
+    return;
+  }
+  res.status(204).send();
 });
 
 app.post('/api/seller-collections', requireAuth, async (req: AuthenticatedRequest, res: Response) => {

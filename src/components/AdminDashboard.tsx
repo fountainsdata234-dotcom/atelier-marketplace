@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Bot, Scissors, Trash2, Search, X, Flag, Activity, Database, Cloud, Gauge, Camera } from 'lucide-react';
-import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, MarketplaceAbuseFlag } from '../types';
+import { Shield, Users, UserPlus, UserX, Ban, CheckCircle2, MessageSquare, Send, Edit3, Save, Phone, Clock, DollarSign, Bot, Scissors, Trash2, Search, X, Flag, Activity, Database, Cloud, Gauge, Camera, LoaderCircle } from 'lucide-react';
+import { User, ClothPost, AdminPromoPlan, BroadcastMessage, ListingReport, MarketplaceAbuseFlag, MarketplaceStyleReferencePage } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
+import { MAX_IMAGE_UPLOAD_BYTES } from '../utils/mediaLimits';
 
 const LUMINA_WELCOME = "Hi? I’m Lumina ✨ What will you want me to help you with today, boss? 😂";
 type ProviderTelemetry = Awaited<ReturnType<typeof api.getProviderTelemetry>>;
@@ -50,7 +51,7 @@ interface AdminDashboardProps {
   onNavigate: (view: string) => void;
   onCloseLumina: () => void;
   isLuminaPage?: boolean;
-  initialTab?: 'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai';
+  initialTab?: 'sellers' | 'posts' | 'style_references' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai';
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -89,8 +90,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editablePlans, setEditablePlans] = useState<AdminPromoPlan[]>(safePromoPlans);
   const [planSaveStatus, setPlanSaveStatus] = useState<string | null>(null);
 
-  // Tab State: 'sellers' | 'posts' | 'promo_plans' | 'broadcast' | 'admins'
-  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai'>(initialTab);
+  // Admin workspace tab state.
+  const [activeTab, setActiveTab] = useState<'sellers' | 'posts' | 'style_references' | 'moderation' | 'reports' | 'abuse' | 'promo_plans' | 'broadcast' | 'admins' | 'ai'>(initialTab);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiReply, setAiReply] = useState<string | null>(null);
   const [aiActionId, setAiActionId] = useState<string | null>(null);
@@ -110,6 +111,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isClosingLumina, setIsClosingLumina] = useState(false);
   const [providerTelemetry, setProviderTelemetry] = useState<ProviderTelemetry | null>(null);
   const [providerTelemetryError, setProviderTelemetryError] = useState<string | null>(null);
+  const [adminStyleReferencePage, setAdminStyleReferencePage] = useState<MarketplaceStyleReferencePage | null>(null);
+  const [adminStyleReferencesLoading, setAdminStyleReferencesLoading] = useState(false);
+  const [adminStyleReferencesLoadingMore, setAdminStyleReferencesLoadingMore] = useState(false);
+  const [adminStyleReferencesUploading, setAdminStyleReferencesUploading] = useState(false);
+  const [adminStyleReferencesProgress, setAdminStyleReferencesProgress] = useState(0);
+  const [adminStyleReferenceFiles, setAdminStyleReferenceFiles] = useState<File[]>([]);
+  const [adminStyleReferenceStatus, setAdminStyleReferenceStatus] = useState<string | null>(null);
+  const [adminStyleReferenceDeletingId, setAdminStyleReferenceDeletingId] = useState<string | null>(null);
 
   const closeLumina = () => {
     if (isClosingLumina) return;
@@ -146,6 +155,118 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'style_references') return;
+    let active = true;
+    setAdminStyleReferencesLoading(true);
+    setAdminStyleReferenceStatus(null);
+    void api.getMarketplaceStyleReferences()
+      .then(page => { if (active) setAdminStyleReferencePage(page); })
+      .catch(error => {
+        if (active) setAdminStyleReferenceStatus(safeCustomerErrorMessage(error, 'Style references could not be loaded.'));
+      })
+      .finally(() => { if (active) setAdminStyleReferencesLoading(false); });
+    return () => { active = false; };
+  }, [activeTab]);
+
+  const handleStyleReferenceFilesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files || []);
+    event.currentTarget.value = '';
+    if (files.length > 10) {
+      setAdminStyleReferenceFiles([]);
+      setAdminStyleReferenceStatus('Choose no more than 10 images in one batch.');
+      return;
+    }
+    if (files.some(file => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) {
+      setAdminStyleReferenceFiles([]);
+      setAdminStyleReferenceStatus('Use JPEG, PNG, or WebP images.');
+      return;
+    }
+    if (files.some(file => file.size > MAX_IMAGE_UPLOAD_BYTES)) {
+      setAdminStyleReferenceFiles([]);
+      setAdminStyleReferenceStatus('Each image must be 8 MB or smaller.');
+      return;
+    }
+    setAdminStyleReferenceFiles(files);
+    setAdminStyleReferenceStatus(null);
+  };
+
+  const uploadStyleReferences = async () => {
+    if (!adminStyleReferenceFiles.length || adminStyleReferencesUploading) return;
+    const batchSize = adminStyleReferenceFiles.length;
+    setAdminStyleReferencesUploading(true);
+    setAdminStyleReferencesProgress(0);
+    setAdminStyleReferenceStatus(null);
+    try {
+      const uploaded = await api.uploadAdminStyleReferences(adminStyleReferenceFiles, setAdminStyleReferencesProgress);
+      setAdminStyleReferenceFiles([]);
+      try {
+        const page = await api.getMarketplaceStyleReferences();
+        setAdminStyleReferencePage(page);
+        setAdminStyleReferenceStatus(`${uploaded.length} style reference${uploaded.length === 1 ? '' : 's'} published.`);
+      } catch (error) {
+        console.warn('Published style references could not be refreshed.', error);
+        setAdminStyleReferencePage(current => current ? {
+          ...current,
+          items: [...uploaded, ...current.items].slice(0, 15),
+          nextCursor: null,
+          hasMore: false,
+        } : null);
+        setAdminStyleReferenceStatus(`${batchSize} images were published, but the list could not be refreshed.`);
+      }
+    } catch (error) {
+      setAdminStyleReferenceStatus(safeCustomerErrorMessage(error, 'The style references could not be uploaded.'));
+    } finally {
+      setAdminStyleReferencesUploading(false);
+    }
+  };
+
+  const loadMoreAdminStyleReferences = async () => {
+    const cursor = adminStyleReferencePage?.nextCursor;
+    if (!cursor || adminStyleReferencesLoadingMore) return;
+    setAdminStyleReferencesLoadingMore(true);
+    setAdminStyleReferenceStatus(null);
+    try {
+      const nextPage = await api.getMarketplaceStyleReferences(Number(cursor), 15);
+      setAdminStyleReferencePage(current => current ? {
+        items: [...current.items, ...nextPage.items.filter(item => !current.items.some(existing => existing.id === item.id))],
+        nextCursor: nextPage.nextCursor,
+        hasMore: nextPage.hasMore,
+      } : nextPage);
+    } catch (error) {
+      setAdminStyleReferenceStatus(safeCustomerErrorMessage(error, 'More style references could not be loaded.'));
+    } finally {
+      setAdminStyleReferencesLoadingMore(false);
+    }
+  };
+
+  const deleteStyleReference = async (referenceId: string) => {
+    if (adminStyleReferenceDeletingId) return;
+    if (!window.confirm('Remove this style reference from the marketplace?')) return;
+    setAdminStyleReferenceDeletingId(referenceId);
+    setAdminStyleReferenceStatus(null);
+    try {
+      await api.deleteMarketplaceStyleReference(referenceId);
+      try {
+        setAdminStyleReferencePage(await api.getMarketplaceStyleReferences());
+        setAdminStyleReferenceStatus('Style reference removed.');
+      } catch (refreshError) {
+        console.warn('Removed style references could not be refreshed.', refreshError);
+        setAdminStyleReferencePage(current => current ? {
+          ...current,
+          items: current.items.filter(reference => reference.id !== referenceId),
+          nextCursor: null,
+          hasMore: false,
+        } : current);
+        setAdminStyleReferenceStatus('Style reference removed, but the list could not be refreshed.');
+      }
+    } catch (error) {
+      setAdminStyleReferenceStatus(safeCustomerErrorMessage(error, 'This style reference could not be removed.'));
+    } finally {
+      setAdminStyleReferenceDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -772,6 +893,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
+            type="button"
+            onClick={() => setActiveTab('style_references')}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'style_references'
+                ? 'bg-amber-500 text-neutral-950 font-semibold shadow'
+                : 'bg-neutral-800/40 text-neutral-400 hover:text-white'
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5"><Camera className="h-3.5 w-3.5" /> Style references</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('moderation')}
             className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'moderation'
@@ -1329,6 +1462,111 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
+        </section>
+      )}
+
+      {activeTab === 'style_references' && (
+        <section className={`rounded-3xl border p-4 sm:p-6 ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
+          <header className="mb-6 flex flex-col gap-3 border-b border-neutral-800/60 pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Marketplace inspiration</p>
+              <h2 className="mt-1 text-xl font-serif font-bold">Style reference gallery</h2>
+              <p className={`mt-1 max-w-2xl text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                Share fashion or fabric inspiration for customers to discuss with a merchant. Upload up to 10 images per batch; references have no titles or tags.
+              </p>
+            </div>
+            <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[10px] font-semibold text-amber-500">Admin publishing only</span>
+          </header>
+
+          <div className={`rounded-2xl border p-4 sm:p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-neutral-50'}`}>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 text-xs font-bold text-amber-500 transition hover:bg-amber-500/15">
+                  <Camera className="h-4 w-4" />
+                  Choose images
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                    onChange={handleStyleReferenceFilesChange}
+                    className="sr-only"
+                  />
+                </label>
+                <p className={`text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>JPEG, PNG, or WebP · up to 10 images · 8 MB each</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void uploadStyleReferences()}
+                disabled={!adminStyleReferenceFiles.length || adminStyleReferencesUploading}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {adminStyleReferencesUploading && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {adminStyleReferencesUploading ? `Publishing ${adminStyleReferencesProgress}%` : 'Publish references'}
+              </button>
+            </div>
+            {adminStyleReferenceFiles.length > 0 && (
+              <p className={`mt-3 truncate text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
+                {adminStyleReferenceFiles.length} image{adminStyleReferenceFiles.length === 1 ? '' : 's'} selected: {adminStyleReferenceFiles.map(file => file.name).join(', ')}
+              </p>
+            )}
+            {adminStyleReferencesUploading && (
+              <div className={`mt-3 h-1.5 overflow-hidden rounded-full ${isDarkMode ? 'bg-neutral-800' : 'bg-neutral-200'}`}>
+                <div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${adminStyleReferencesProgress}%` }} />
+              </div>
+            )}
+            {adminStyleReferenceStatus && (
+              <p role="status" className={`mt-3 text-xs ${adminStyleReferenceStatus.toLowerCase().includes('could not') || adminStyleReferenceStatus.toLowerCase().includes('must') || adminStyleReferenceStatus.toLowerCase().includes('choose') || adminStyleReferenceStatus.toLowerCase().includes('use ') ? 'text-red-400' : 'text-emerald-400'}`}>
+                {adminStyleReferenceStatus}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-7 flex items-end justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold">Published inspiration</h3>
+              <p className={`mt-1 text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>Customers can browse these images and share one with a merchant.</p>
+            </div>
+            {adminStyleReferencePage && <span className="text-[11px] text-neutral-500">{adminStyleReferencePage.items.length} loaded</span>}
+          </div>
+          {adminStyleReferencesLoading ? (
+            <div className={`mt-4 rounded-xl border p-6 text-center text-xs ${isDarkMode ? 'border-neutral-800 text-neutral-400' : 'border-neutral-200 text-neutral-600'}`}>Loading published references…</div>
+          ) : adminStyleReferencePage?.items.length ? (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {adminStyleReferencePage.items.map(reference => (
+                <article key={reference.id} className={`overflow-hidden rounded-xl border ${isDarkMode ? 'border-neutral-800 bg-neutral-900/40' : 'border-neutral-200 bg-white'}`}>
+                  <div className="group relative aspect-[4/5] bg-[#f3f0e9]">
+                    <img src={reference.imageUrl} alt="Published style or material reference" loading="lazy" className="h-full w-full object-contain" />
+                    <button
+                      type="button"
+                      onClick={() => void deleteStyleReference(reference.id)}
+                      disabled={Boolean(adminStyleReferenceDeletingId)}
+                      aria-label="Remove style reference"
+                      className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-neutral-950/80 text-white transition hover:bg-red-600 disabled:opacity-50"
+                    >
+                      {adminStyleReferenceDeletingId === reference.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className={`mt-4 rounded-xl border p-6 text-center text-xs ${isDarkMode ? 'border-neutral-800 text-neutral-400' : 'border-neutral-200 text-neutral-600'}`}>
+              No style references are published yet. Add a few images to give customers a useful starting point.
+            </div>
+          )}
+          {adminStyleReferencePage?.hasMore && (
+            <div className="mt-5 flex justify-center">
+              <button
+                type="button"
+                onClick={() => void loadMoreAdminStyleReferences()}
+                disabled={adminStyleReferencesLoadingMore}
+                className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-4 text-xs font-semibold disabled:opacity-50 ${isDarkMode ? 'border-neutral-700 text-neutral-200 hover:border-amber-400' : 'border-neutral-300 text-neutral-700 hover:border-amber-500'}`}
+              >
+                {adminStyleReferencesLoadingMore && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                {adminStyleReferencesLoadingMore ? 'Loading more' : 'Load 15 more'}
+              </button>
+            </div>
+          )}
         </section>
       )}
 

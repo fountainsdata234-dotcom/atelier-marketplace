@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ChevronLeft, ChevronRight, TrendingUp, EyeOff, Flame } from 'lucide-react';
-import { ClothPost, CountryGeo, DiscoveryEvent, MarketplaceFeedView, MarketplaceSort, MarketplaceTrendCategory, MarketplaceTrendingPage, RecommendationEventType, RecommendationPreferences, SellerCollection, User, UserLocation } from '../types';
+import { ClothPost, CountryGeo, DiscoveryEvent, MarketplaceFeedView, MarketplaceSort, MarketplaceStyleReferencePage, MarketplaceTrendCategory, MarketplaceTrendingPage, RecommendationEventType, RecommendationPreferences, SellerCollection, User, UserLocation } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 import { MarketplaceInterlude } from './MarketplaceInterlude';
@@ -16,6 +16,7 @@ import { SearchableLocationField } from './SearchableLocationField';
 import { PostImage } from './PostImage';
 import { ContentSkeleton } from './ContentSkeleton';
 import { PromotedTailorRail, StoryRail } from './StoryRail';
+import { StyleReferenceGallery } from './StyleReferenceGallery';
 
 interface MarketplaceProps {
   posts: ClothPost[];
@@ -109,7 +110,7 @@ const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, 
         )}
       </div>
       <button type="button" onClick={() => onSelectPost(activePost)} className="group relative block h-[330px] w-full overflow-hidden text-left sm:h-[420px]">
-        <motion.img key={activePost.id} initial={{ opacity: 0.45, scale: 1.02 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.45 }} src={discoveryImage(activePost)} alt={activePost.imageAlt || activePost.title} className="absolute inset-0 h-full w-full object-cover" />
+        <motion.img key={activePost.id} initial={{ opacity: 0.45 }} animate={{ opacity: 1 }} transition={{ duration: 0.45 }} src={discoveryImage(activePost)} alt={activePost.imageAlt || activePost.title} className="absolute inset-0 h-full w-full bg-[#f3f0e9] object-contain" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-transparent" />
         <div className="absolute bottom-0 left-0 p-5 text-white sm:p-7">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-300">{activePost.authorName}</p>
@@ -120,7 +121,7 @@ const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, 
       <div className="grid grid-cols-4 gap-2 p-3 sm:grid-cols-6 lg:grid-cols-8">
         {availablePosts.slice(0, 8).map((post, index) => (
           <button key={post.id} type="button" aria-label={`Show ${post.title}`} onClick={() => setActiveIndex(index)} className={`aspect-square overflow-hidden rounded-xl border-2 ${index === activeIndex ? 'border-amber-400' : 'border-transparent opacity-70'}`}>
-            <img src={discoveryImage(post)} alt="" className="h-full w-full object-cover" />
+            <img src={discoveryImage(post)} alt="" className="h-full w-full bg-[#f3f0e9] object-contain" />
           </button>
         ))}
       </div>
@@ -176,6 +177,12 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [feedError, setFeedError] = useState<string | null>(null);
   const [feedRetry, setFeedRetry] = useState(0);
   const [publicCollections, setPublicCollections] = useState<SellerCollection[]>([]);
+  const [styleReferencePage, setStyleReferencePage] = useState<MarketplaceStyleReferencePage | null>(null);
+  const [styleReferenceLoading, setStyleReferenceLoading] = useState(true);
+  const [styleReferenceLoadingMore, setStyleReferenceLoadingMore] = useState(false);
+  const [styleReferenceError, setStyleReferenceError] = useState<string | null>(null);
+  const [showAllStyleReferences, setShowAllStyleReferences] = useState(false);
+  const [styleReferenceRetry, setStyleReferenceRetry] = useState(0);
   const [showAllCollections, setShowAllCollections] = useState(false);
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const [downloadMessage, setDownloadMessage] = useState<{ listingId: string; message: string } | null>(null);
@@ -372,6 +379,42 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       .catch(error => console.warn('Public seller collections could not be loaded.', error));
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    setStyleReferenceLoading(true);
+    setStyleReferenceError(null);
+    void api.getMarketplaceStyleReferences()
+      .then(page => { if (active) setStyleReferencePage(page); })
+      .catch(error => {
+        if (active) {
+          console.warn('Marketplace style references could not be loaded.', error);
+          setStyleReferenceError(safeCustomerErrorMessage(error, 'Style inspiration could not be loaded.'));
+        }
+      })
+      .finally(() => { if (active) setStyleReferenceLoading(false); });
+    return () => { active = false; };
+  }, [styleReferenceRetry]);
+
+  const loadMoreStyleReferences = async () => {
+    const cursor = styleReferencePage?.nextCursor;
+    if (!cursor || styleReferenceLoadingMore) return;
+    setStyleReferenceLoadingMore(true);
+    setStyleReferenceError(null);
+    try {
+      const nextPage = await api.getMarketplaceStyleReferences(Number(cursor), 15);
+      setStyleReferencePage(current => current ? {
+        items: [...current.items, ...nextPage.items.filter(item => !current.items.some(existing => existing.id === item.id))],
+        nextCursor: nextPage.nextCursor,
+        hasMore: nextPage.hasMore,
+      } : nextPage);
+    } catch (error) {
+      console.warn('Additional marketplace style references could not be loaded.', error);
+      setStyleReferenceError(safeCustomerErrorMessage(error, 'More style references could not be loaded. Please try again.'));
+    } finally {
+      setStyleReferenceLoadingMore(false);
+    }
+  };
 
   const trendScores = useMemo(() => new Map(
     (activeTrendingPage && !activeTrendingPage.fallback ? activeTrendingPage.items : []).map(post => [post.id, {
@@ -1171,6 +1214,22 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         pendingStoryFile={pendingStoryFile}
         onPendingStoryFileHandled={onPendingStoryFileHandled}
       />
+      {styleReferencePage?.items.length || styleReferenceLoading || styleReferenceError ? (
+        <StyleReferenceGallery
+          references={styleReferencePage?.items || []}
+          users={users}
+          isDarkMode={isDarkMode}
+          hasMore={styleReferencePage?.hasMore ?? false}
+          isLoading={styleReferenceLoading}
+          isLoadingMore={styleReferenceLoadingMore}
+          error={styleReferenceError}
+          isOpen={showAllStyleReferences}
+          onLoadMore={() => void loadMoreStyleReferences()}
+          onRetry={() => setStyleReferenceRetry(retry => retry + 1)}
+          onOpen={() => setShowAllStyleReferences(true)}
+          onClose={() => setShowAllStyleReferences(false)}
+        />
+      ) : null}
 
       <section aria-label="Marketplace discovery views" className={`rounded-2xl border p-3 sm:p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>
         <div role="tablist" aria-label="Browse marketplace listings" className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]">
@@ -1376,7 +1435,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 >
                   <div className="group/curated-image relative flex min-h-[260px] items-center justify-center overflow-hidden bg-[#f1ece3] p-3 sm:min-h-[340px] md:min-h-0 md:p-6">
                     <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center p-3 sm:p-5">
-                      {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500 group-hover/curated-image:scale-[1.025]" fit="cover" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
+                      {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500" fit="contain" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
                     </button>
                     <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:top-6">
                       {post.isPromoted && <span className="rounded-full bg-amber-400 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-neutral-950 shadow-sm">Promoted</span>}

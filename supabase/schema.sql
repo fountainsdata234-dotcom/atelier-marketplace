@@ -180,6 +180,17 @@ create table if not exists public.seller_collections (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.marketplace_style_references (
+  id uuid primary key default gen_random_uuid(),
+  image_url text not null,
+  storage_path text not null unique,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists marketplace_style_references_created_idx
+  on public.marketplace_style_references (created_at desc, id desc);
+
 create table if not exists public.collection_slot_payments (
   id uuid primary key default gen_random_uuid(),
   reference text not null unique,
@@ -406,6 +417,7 @@ alter table public.discovery_events enable row level security;
 alter table public.push_tokens enable row level security;
 alter table public.settings enable row level security;
 alter table public.seller_collections enable row level security;
+alter table public.marketplace_style_references enable row level security;
 
 create or replace function public.handles_profile_insert()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -443,6 +455,10 @@ create policy "Profiles are deletable only by admin"
 
 create policy "Seller collections are publicly readable"
   on public.seller_collections for select using (true);
+
+drop policy if exists "Marketplace style references are publicly readable" on public.marketplace_style_references;
+create policy "Marketplace style references are publicly readable"
+  on public.marketplace_style_references for select using (true);
 
 create policy "Sellers can create their own collections"
   on public.seller_collections for insert

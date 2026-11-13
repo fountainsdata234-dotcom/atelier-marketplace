@@ -10,6 +10,7 @@ export function uploadFormDataWithProgress<T>(
   formData: FormData,
   token: string | null,
   onProgress?: (progress: number) => void,
+  errorContext = '/api/stories',
 ): Promise<T> {
   onProgress?.(0);
   return new Promise<T>((resolve, reject) => {
@@ -26,7 +27,7 @@ export function uploadFormDataWithProgress<T>(
         const body = JSON.parse(request.responseText) as T & { error?: string; code?: string };
         if (request.status < 200 || request.status >= 300) {
           const message = body.error || request.statusText || 'The upload could not be completed.';
-          reject(new Error(customerMessageForHttpError(request.status, message, '/api/stories', body.code)));
+          reject(new Error(customerMessageForHttpError(request.status, message, errorContext, body.code)));
           return;
         }
         onProgress?.(100);
