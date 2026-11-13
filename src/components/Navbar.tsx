@@ -113,6 +113,28 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Artisan</span>
           </button>
 
+          <button
+            onClick={() => onNavigate('about')}
+            className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+              currentView === 'about'
+                ? 'text-amber-400 bg-amber-500/10 font-semibold'
+                : 'text-neutral-400 hover:text-neutral-100'
+            }`}
+          >
+            About us
+          </button>
+
+          <button
+            onClick={() => onNavigate('contact')}
+            className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+              currentView === 'contact'
+                ? 'text-amber-400 bg-amber-500/10 font-semibold'
+                : 'text-neutral-400 hover:text-neutral-100'
+            }`}
+          >
+            Contact us
+          </button>
+
           {currentUser && !isSeller && (
             <button
               onClick={() => onNavigate('collections')}
@@ -289,6 +311,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {!currentUser && <button type="button" onClick={() => navigate('landing')} className="mobile-nav-item"><House className="h-4 w-4" />Overview</button>}
                   <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
                   <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
+                  <button type="button" onClick={() => navigate('about')} className="mobile-nav-item"><Info className="h-4 w-4" />About us</button>
+                  <button type="button" onClick={() => navigate('contact')} className="mobile-nav-item"><Mail className="h-4 w-4" />Contact us</button>
                   {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
                   {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
                   {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}

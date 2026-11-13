@@ -216,6 +216,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth, onNavigate
                 {slide.action}
                 <ArrowUpRight aria-hidden="true" size={18} />
               </button>
+              <button type="button" className="landing-merchant-action" onClick={() => onOpenAuth('fabric_seller')}>
+                Join as a merchant
+                <ArrowUpRight aria-hidden="true" size={18} />
+              </button>
               <span className="landing-action-note"><Scissors aria-hidden="true" size={15} /> Made with intention</span>
             </div>
           </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { Search, MapPin, Filter, Star, Heart, Bookmark, Share2, Phone, Scissors, Sparkles, Navigation, Download, ExternalLink, ChevronLeft, ChevronRight, TrendingUp, EyeOff, Flame } from 'lucide-react';
 import { ClothPost, CountryGeo, DiscoveryEvent, MarketplaceFeedView, MarketplaceSort, MarketplaceStyleReferencePage, MarketplaceTrendCategory, MarketplaceTrendingPage, RecommendationEventType, RecommendationPreferences, SellerCollection, User, UserLocation } from '../types';
 import { storageService } from '../services/storage';
@@ -1107,22 +1107,30 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     );
   };
 
-  const hour = new Date().getHours();
-  const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const firstName = currentUser?.name.trim().split(/\s+/)[0];
+  const prefersReducedMotion = useReducedMotion();
 
   return (
     <div ref={marketplaceRootRef} className="relative z-10 w-full px-2 sm:px-6 lg:px-8 py-6 space-y-8">
       {/* Top Header & Search Bar */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-amber-500/15 pb-6">
         <div>
-          <div className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-semibold tracking-wider uppercase mb-1">
+          <motion.div
+            initial={prefersReducedMotion ? false : { opacity: 0, y: -18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', bounce: 0.35, delay: 0.55 }}
+            className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-semibold tracking-wider mb-1"
+          >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>{firstName ? `${timeGreeting}, ${firstName}` : timeGreeting} · Fabsattire marketplace</span>
-          </div>
-          <h1 className="max-w-3xl text-3xl leading-tight font-serif font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            <span>{currentUser ? 'Glad you came back 😇' : 'Welcome to Fabsattire'}</span>
+          </motion.div>
+          <motion.h1
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+            className="max-w-3xl text-3xl leading-tight font-serif font-bold tracking-tight sm:text-4xl lg:text-5xl"
+          >
             Find your next favourite piece.
-          </h1>
+          </motion.h1>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             Explore distinctive garments and fabrics, then contact each independent merchant directly on WhatsApp.
           </p>
@@ -1440,8 +1448,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   transition={{ duration: 0.35 }}
                   className="grid min-h-[500px] overflow-hidden bg-neutral-950 md:min-h-[390px] md:grid-cols-[1.15fr_0.85fr]"
                 >
-                  <div className="group/curated-image relative flex min-h-[340px] items-center justify-center overflow-hidden bg-[#f1ece3] p-3 sm:min-h-[340px] md:min-h-0 md:p-6">
-                    <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center p-3 sm:p-5">
+                  <div className="group/curated-image relative flex min-h-[min(72svh,620px)] items-center justify-center overflow-hidden bg-[#f1ece3] md:min-h-0">
+                    <button type="button" data-marketplace-listing-id={post.id} data-marketplace-seller-id={post.authorId} onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center">
                       {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500" fit="contain" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
                     </button>
                     <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:top-6">

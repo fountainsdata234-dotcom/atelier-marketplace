@@ -168,6 +168,7 @@
 }
 
 .landing-primary-action:focus-visible,
+.landing-merchant-action:focus-visible,
 .landing-control-button:focus-visible,
 .landing-slide-dots button:focus-visible,
 .landing-tailor-card:focus-visible {
@@ -180,6 +181,39 @@
 }
 
 .landing-primary-action:hover svg {
+  transform: translate(2px, -2px);
+}
+
+.landing-merchant-action {
+  display: inline-flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  border: 1px solid rgba(255, 250, 241, 0.5);
+  border-radius: 999px;
+  padding: 0.9rem 1.4rem;
+  color: #fffaf1;
+  background: rgba(25, 21, 17, 0.35);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 700;
+  transition: transform 220ms ease, border-color 220ms ease, color 220ms ease, background-color 220ms ease;
+}
+
+.landing-merchant-action:hover {
+  transform: translateY(-3px);
+  border-color: #f1c276;
+  color: #ffe3ad;
+  background: rgba(25, 21, 17, 0.68);
+}
+
+.landing-merchant-action svg {
+  transition: transform 200ms ease;
+}
+
+.landing-merchant-action:hover svg {
   transform: translate(2px, -2px);
 }
 
