@@ -149,10 +149,9 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
         <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/25 via-neutral-950 to-orange-900/30 p-6 sm:p-10">
           <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-neutral-950/95 via-neutral-950/75 to-neutral-950/35" />
           {collectionCoverUrl ? (
-            <button type="button" onClick={openCollection} aria-label={`Open ${seller.name}'s collection`} className="absolute inset-0 z-0 h-full w-full text-left">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0">
               <PostImage src={collectionCoverUrl} alt="" loading="eager" fit="cover" className="h-full w-full opacity-35" imageClassName="object-center" />
-              <span className="absolute bottom-5 left-6 z-10 inline-flex items-center gap-2 rounded-full border border-white/25 bg-neutral-950/70 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-sm">Explore the collection <ArrowRight className="h-3.5 w-3.5" /></span>
-            </button>
+            </div>
           ) : <img
             src={SELLER_ATELIER_IMAGE}
             alt=""
@@ -168,6 +167,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
               <div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-300">Atelier storefront</p><div className="flex flex-wrap items-center gap-2"><h1 className="mt-1 text-3xl font-serif font-bold text-white sm:text-4xl">{seller.name}</h1>{seller.isPromoted && <span className="rounded-full bg-amber-400 px-3 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-neutral-950 shadow-lg">Promoted</span>}</div><p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">{getRoleLabel(seller.role)}</p><p className="text-xs text-amber-100/70">{seller.handle}{seller.shopName ? ` · ${seller.shopName}` : ''}</p></div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={openCollection} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/70 bg-neutral-950/75 px-4 py-2.5 text-xs font-bold text-amber-100 backdrop-blur-sm hover:bg-neutral-900">Open collection <ArrowRight className="h-4 w-4" /></button>
               {currentUser?.id !== seller.id && <button type="button" onClick={() => onToggleFollow(seller)} className="rounded-xl border border-amber-400/60 px-4 py-2.5 text-xs font-bold text-amber-200 hover:bg-amber-400/10">{currentUser && seller.followers?.includes(currentUser.id) ? 'Following' : 'Follow'}</button>}
               {currentUser?.id !== seller.id && <button type="button" onClick={toggleBlockSeller} disabled={isSavingBlock || currentUser?.isBlocked} aria-pressed={isBlocked} className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-4 py-2.5 text-xs font-bold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"><Ban className="h-4 w-4" />{isSavingBlock ? 'Saving…' : isBlocked ? 'Unblock seller' : 'Block seller'}</button>}
               <button type="button" onClick={() => onShare(seller)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300"><Share2 className="h-4 w-4" /> Share profile</button>
@@ -219,7 +219,10 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
                       aria-pressed={selectedCollectionId === collection.id}
                       className={`group overflow-hidden rounded-2xl border text-left transition ${selectedCollectionId === collection.id ? 'border-amber-400 ring-2 ring-amber-400/40' : isDarkMode ? 'border-neutral-800 bg-neutral-950 hover:border-amber-500/50' : 'border-neutral-200 bg-neutral-50 hover:border-amber-500/50'}`}
                     >
-                      <PostImage src={collection.imageUrls[0] || SELLER_ATELIER_IMAGE} alt="" className="aspect-[16/9]" imageClassName="transition-transform group-hover:scale-105" loading="lazy" />
+                      <span className="relative block">
+                        <PostImage src={collection.imageUrls[0] || SELLER_ATELIER_IMAGE} alt="" className="aspect-[16/9]" imageClassName="transition-transform group-hover:scale-105" loading="lazy" />
+                        <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-neutral-950/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white">Open <ArrowRight className="h-3 w-3" /></span>
+                      </span>
                       <span className="block p-4">
                         <span className="block font-serif text-lg font-bold">{collection.title}</span>
                         <span className="mt-1 block text-xs text-neutral-400">{collection.imageUrls.length} item{collection.imageUrls.length === 1 ? '' : 's'}</span>

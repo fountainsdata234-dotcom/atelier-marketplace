@@ -2627,6 +2627,18 @@ app.put('/api/profile', requireAuth, requireActiveAccount, async (req: Authentic
   res.json(saved.data());
 });
 
+app.post('/api/profile/warning/acknowledge', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const uid = req.authUser!.uid;
+  const profile = await readProfile(uid);
+  if (!profile || !['tailor', 'fabric_seller'].includes(String(profile.role))) {
+    res.status(403).json({ error: 'Only a merchant can acknowledge a merchant warning.' });
+    return;
+  }
+  if (!await enforceAbuseLimit(req, res, 'profile_write', uid)) return;
+  await writeProfile(uid, { isWarned: false, updatedAt: new Date().toISOString() });
+  res.status(204).send();
+});
+
 app.delete('/api/profile', requireAuth, async (req: AuthenticatedRequest, res) => {
   const uid = req.authUser!.uid;
   if (supabaseDataEnabled) {

@@ -505,6 +505,7 @@ export const api = {
     body: JSON.stringify({ searchText, eventType, listingId, resultCount, sessionId: getMarketplaceSessionId() }),
   }),
   getMyListings: () => request<ClothPost[]>('/api/listings/mine'),
+  acknowledgeWarning: () => request<void>('/api/profile/warning/acknowledge', { method: 'POST' }),
   getListingsForModeration: () => request<ClothPost[]>('/api/admin/listings/moderation'),
   getListingReports: () => request<ListingReport[]>('/api/admin/listing-reports'),
   updateListingReport: (reportId: string, status: 'reviewed' | 'dismissed', reason: string) => request<void>(`/api/admin/listing-reports/${reportId}`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }),

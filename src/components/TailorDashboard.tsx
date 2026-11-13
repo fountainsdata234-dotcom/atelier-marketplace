@@ -131,11 +131,9 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [postStatus, setPostStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [fabricRequests, setFabricRequests] = useState<FabricRequest[]>([]);
   const [requestStatus, setRequestStatus] = useState<string | null>(null);
-  const warningNoticeKey = `fabsattire-dismissed-warning:${currentUser.id}:${encodeURIComponent(currentUser.warningNote || '')}`;
-  const [warningModalOpen, setWarningModalOpen] = useState(() => (
-    Boolean(currentUser.isWarned && currentUser.warningNote)
-    && localStorage.getItem(warningNoticeKey) !== 'dismissed'
-  ));
+  const [warningModalOpen, setWarningModalOpen] = useState(() => Boolean(currentUser.isWarned && currentUser.warningNote));
+  const [warningAckError, setWarningAckError] = useState('');
+  const [isAcknowledgingWarning, setIsAcknowledgingWarning] = useState(false);
   const [activeStudioTab, setActiveStudioTab] = useState<'overview' | 'posts' | 'plans'>(initialStudioTab || 'overview');
   useEffect(() => {
     if (initialStudioTab) setActiveStudioTab(initialStudioTab);
@@ -208,19 +206,23 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   }, [currentUser.role]);
 
   const acknowledgeWarning = async () => {
-    const cleared = storageService.updateUser(currentUser.id, { isWarned: false, warningNote: '' });
-    if (cleared) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cleared }));
-    localStorage.removeItem(warningNoticeKey);
-    setWarningModalOpen(false);
-    await api.saveProfile({ isWarned: false, warningNote: '' }).catch(() => undefined);
+    setWarningAckError('');
+    setIsAcknowledgingWarning(true);
+    try {
+      await api.acknowledgeWarning();
+      const cleared = storageService.updateUser(currentUser.id, { isWarned: false }) || { ...currentUser, isWarned: false };
+      window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cleared }));
+      setWarningModalOpen(false);
+    } catch (error) {
+      setWarningAckError(safeCustomerErrorMessage(error, "The warning couldn't be marked as read. Please try again."));
+    } finally {
+      setIsAcknowledgingWarning(false);
+    }
   };
 
   React.useEffect(() => {
-    setWarningModalOpen(
-      Boolean(currentUser.isWarned && currentUser.warningNote)
-      && localStorage.getItem(warningNoticeKey) !== 'dismissed',
-    );
-  }, [currentUser.isWarned, currentUser.warningNote, warningNoticeKey]);
+    setWarningModalOpen(Boolean(currentUser.isWarned && currentUser.warningNote));
+  }, [currentUser.isWarned, currentUser.warningNote]);
 
   React.useEffect(() => {
     const loadRequests = async () => {
@@ -486,10 +488,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-red-300">Studio notice</p>
                   <h2 className="mt-2 text-2xl font-serif font-bold text-white">Important account message</h2>
                 </div>
-                <button type="button" onClick={() => {
-                  localStorage.setItem(warningNoticeKey, 'dismissed');
-                  setWarningModalOpen(false);
-                }} className="rounded-full border border-white/10 p-2 text-neutral-400 transition hover:text-white" aria-label="Close notice">
+                <button type="button" onClick={() => setWarningModalOpen(false)} className="rounded-full border border-white/10 p-2 text-neutral-400 transition hover:text-white" aria-label="Close notice">
                   <AlertTriangle className="h-4 w-4" />
                 </button>
               </div>
@@ -498,9 +497,10 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 {currentUser.warningNote}
               </div>
 
+              {warningAckError && <p role="status" className="mt-4 text-xs text-red-300">{warningAckError}</p>}
               <div className="mt-5 flex justify-end">
-                <button type="button" onClick={() => void acknowledgeWarning()} className="rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-400">
-                  I have read this
+                <button type="button" onClick={() => void acknowledgeWarning()} disabled={isAcknowledgingWarning} className="rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-wait disabled:opacity-60">
+                  {isAcknowledgingWarning ? 'Saving…' : 'I have read this'}
                 </button>
               </div>
             </motion.div>

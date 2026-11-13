@@ -29,6 +29,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isAcknowledgingWarning, setIsAcknowledgingWarning] = useState(false);
+  const [warningAckStatus, setWarningAckStatus] = useState('');
 
   const uploadAvatar = async (file: File | undefined) => {
     const userId = await getAuthUserId();
@@ -53,12 +55,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   };
 
   const acknowledgeWarning = async () => {
-    const cleared = storageService.updateUser(currentUser.id, { isWarned: false, warningNote: '' });
-    if (cleared) window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cleared }));
+    setIsAcknowledgingWarning(true);
+    setWarningAckStatus('');
     try {
-      await api.saveProfile({ isWarned: false, warningNote: '' });
-    } catch {
-      setStatus('Notice cleared on this device.');
+      await api.acknowledgeWarning();
+      const cleared = storageService.updateUser(currentUser.id, { isWarned: false }) || { ...currentUser, isWarned: false };
+      window.dispatchEvent(new CustomEvent('atelier_auth_changed', { detail: cleared }));
+    } catch (error) {
+      setWarningAckStatus(safeCustomerErrorMessage(error, "The warning couldn't be marked as read. Please try again."));
+    } finally {
+      setIsAcknowledgingWarning(false);
     }
   };
 
@@ -150,7 +156,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
                 <h2 id="account-alert-title" className="text-sm font-bold text-red-200">Urgent account alert</h2>
                 <p className="mt-2 text-sm leading-relaxed text-red-100/90">{currentUser.warningNote}</p>
                 <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-red-300/70">Please review this notice before publishing or accepting new requests.</p>
-                <button type="button" onClick={() => void acknowledgeWarning()} className="mt-4 rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-400">OK, I have read this</button>
+                {warningAckStatus && <p role="status" className="mt-3 text-xs text-red-200">{warningAckStatus}</p>}
+                <button type="button" onClick={() => void acknowledgeWarning()} disabled={isAcknowledgingWarning} className="mt-4 rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-red-400 disabled:cursor-wait disabled:opacity-60">{isAcknowledgingWarning ? 'Saving…' : 'OK, I have read this'}</button>
               </div>
             </div>
           </section>

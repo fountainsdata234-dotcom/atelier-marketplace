@@ -522,10 +522,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     if (draft === null) return;
 
-    const result = storageService.warnUser(tailor.id, draft);
-    setAdminStatus(safeCustomerErrorMessage(new Error(result.message), 'The seller was notified.'));
+    const warningNote = draft.trim().slice(0, 500) || 'Please review the platform rules and avoid misuse of the marketplace.';
     try {
-      await api.updateUserProfile(tailor.id, { isWarned: true, warningNote: draft.trim().slice(0, 500) });
+      await api.updateUserProfile(tailor.id, { isWarned: true, warningNote });
+      storageService.warnUser(tailor.id, warningNote);
+      setAdminStatus(`Warning sent to ${tailor.name}.`);
     } catch (error) {
       setAdminStatus(safeCustomerErrorMessage(error, "The warning couldn't be sent. Please try again."));
     }
