@@ -15,7 +15,6 @@ import { animateActionFeedback } from '../utils/actionFeedback';
 import { SearchableLocationField } from './SearchableLocationField';
 import { PostImage } from './PostImage';
 import { ContentSkeleton } from './ContentSkeleton';
-import { useTypingText } from '../hooks/useTypingText';
 import { PromotedTailorRail, StoryRail } from './StoryRail';
 
 interface MarketplaceProps {
@@ -32,7 +31,6 @@ interface MarketplaceProps {
   onToggleFollow: (user: User) => void;
   onSelectSeller: (user: User) => void;
   isDarkMode: boolean;
-  enableGreetingTyping: boolean;
   onOpenPromotionPlans: () => void;
   pendingStoryFile: File | null;
   onPendingStoryFileHandled: () => void;
@@ -67,8 +65,8 @@ const DISCOVERY_CATEGORIES: Array<{ title: string; keywords: string[] }> = [
   { title: 'Casual Wear', keywords: ['casual', 'everyday', 'streetwear'] },
 ];
 
-const discoveryImage = (post: ClothPost) => post.imageAssets?.find(asset => asset.thumbnailUrl || asset.url)?.thumbnailUrl
-  || post.imageAssets?.[0]?.url
+const discoveryImage = (post: ClothPost) => post.imageAssets?.find(asset => asset.url)?.url
+  || post.imageAssets?.find(asset => asset.thumbnailUrl)?.thumbnailUrl
   || post.imageUrl;
 
 interface DiscoveryCarouselProps {
@@ -144,7 +142,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   onToggleFollow,
   onSelectSeller,
   isDarkMode,
-  enableGreetingTyping,
   onOpenPromotionPlans,
   pendingStoryFile,
   onPendingStoryFileHandled,
@@ -179,6 +176,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [feedError, setFeedError] = useState<string | null>(null);
   const [feedRetry, setFeedRetry] = useState(0);
   const [publicCollections, setPublicCollections] = useState<SellerCollection[]>([]);
+  const [showAllCollections, setShowAllCollections] = useState(false);
   const [pendingActions, setPendingActions] = useState<Set<string>>(new Set());
   const [downloadMessage, setDownloadMessage] = useState<{ listingId: string; message: string } | null>(null);
   const reportedAnalyticsFailures = useRef(new Set<string>());
@@ -186,6 +184,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const impressionRequestInFlight = useRef(false);
   const [failedPostImageUrls, setFailedPostImageUrls] = useState<Record<string, string>>({});
   const [failedAvatarUrls, setFailedAvatarUrls] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!showAllCollections) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowAllCollections(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [showAllCollections]);
   const postsRef = useRef(posts);
   postsRef.current = posts;
   const recommendationScope = useMemo(() => storageService.getRecommendationScope(currentUser?.id), [currentUser?.id]);
@@ -384,8 +390,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const getPostImageSource = (post: ClothPost): string | undefined => {
     const thumbnail = post.imageAssets?.[0]?.thumbnailUrl;
     const original = post.imageAssets?.[0]?.url || post.imageUrl;
-    if (thumbnail && failedPostImageUrls[post.id] !== thumbnail) return thumbnail;
     if (original && failedPostImageUrls[post.id] !== original) return original;
+    if (thumbnail && failedPostImageUrls[post.id] !== thumbnail) return thumbnail;
     return undefined;
   };
   const sellerPosts = useMemo(() => sourcePosts
@@ -723,17 +729,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [tailorPosts, userById, filterCountry, filterState, filterCity, nearMeActive, userCoords, searchQuery]);
 
   const visiblePosts = filteredPosts;
-
-  const getGreeting = (userName: string | null | undefined) => {
-    const hour = new Date().getHours();
-    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-    return `${greeting}${userName ? `, ${userName}` : ''}`;
-  };
-  const greetingMessages = useMemo(() => [
-    getGreeting(currentUser?.name || currentUser?.shopName || currentUser?.handle),
-    'Glad you came back 🎉',
-  ], [currentUser?.handle, currentUser?.name, currentUser?.shopName]);
-  const typedGreeting = useTypingText(greetingMessages, { enabled: enableGreetingTyping, repeat: true, typeDelayMs: 82, deleteDelayMs: 44 });
 
   useEffect(() => {
     if (carouselPosts.length < 2) return;
@@ -1073,13 +1068,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         <div>
           <div className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-semibold tracking-wider uppercase mb-1">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Curated Haute Couture & Fabrics</span>
+            <span>Fabsattire marketplace</span>
           </div>
-          <h1 aria-label={greetingMessages[0]} className="line-clamp-3 h-[3.6em] overflow-hidden text-3xl leading-tight font-serif font-bold tracking-tight sm:line-clamp-2 sm:h-[2.5em] sm:text-4xl">
-            <span aria-hidden="true" className="typing-caret">{typedGreeting}</span>
+          <h1 className="max-w-3xl text-3xl leading-tight font-serif font-bold tracking-tight sm:text-4xl lg:text-5xl">
+            Find your next favourite piece.
           </h1>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-            Discover handcrafted garments and premium fabrics from merchants who take the details seriously.
+            Explore distinctive garments and fabrics, then contact each independent merchant directly on WhatsApp.
           </p>
         </div>
 
@@ -1471,7 +1466,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           )}
           {trendingLoading && <p className="px-4 pt-4 text-xs text-neutral-400 sm:px-5" role="status">Loading popular pieces…</p>}
           {trendingPosts.length > 0 && (
-            <div id="marketplace-trends-list" className="marketplace-masonry scroll-mt-24 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">
+            <div id="marketplace-trends-list" className="marketplace-masonry scroll-mt-24 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3 2xl:grid-cols-4">
               {trendingPosts.map((post, index) => {
                 const imageSource = getPostImageSource(post);
                 const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
@@ -1517,7 +1512,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
                     <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
                       {imageSource
-                        ? <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="aspect-[4/3] w-full" imageClassName="brightness-110 saturate-110" loading="lazy" decoding="async" onError={() => handlePostImageError(post, imageSource)} />
+                        ? <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Trending atelier piece'} className="aspect-[4/3] w-full" loading="lazy" decoding="async" onError={() => handlePostImageError(post, imageSource)} />
                         : <div role="img" aria-label={`Image unavailable for ${post.title}`} className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-neutral-900/80 text-neutral-500"><Scissors aria-hidden="true" className="h-8 w-8 text-amber-500/70" /><span className="text-xs">Listing image unavailable</span></div>}
                       <span className="absolute left-2.5 top-2.5 rounded-md border border-orange-300/30 bg-neutral-950/90 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-orange-200">{activeTrendCategoryLabel}</span>
                       {post.isPromoted && <span className="absolute right-2.5 top-2.5 rounded-md bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950">Promoted</span>}
@@ -1832,7 +1827,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           </div>
         </div>
       ) : (
-        <div className="marketplace-masonry grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3">
+        <div className="marketplace-masonry grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 2xl:grid-cols-4">
           {visiblePosts.map((post, postIndex) => {
             const daySeed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
             const railInterval = 5 + ((daySeed * 7 + Math.max(0, visiblePosts.length) * 3) % 6);
@@ -1884,44 +1879,35 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     : 'bg-white border-neutral-200/90 hover:border-amber-500/40 shadow-sm'
                 } ${post.isPromoted ? 'border-amber-400/70 shadow-[0_18px_42px_rgba(251,191,36,0.14)]' : ''}`}
               >
-                {/* Garment Image with High-Res Zoom / Save */}
-                <div className="feed-card-image group/img relative w-full overflow-hidden bg-neutral-950">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const author = userById.get(post.authorId);
-                      if (author) onSelectSeller(author);
-                    }}
-                    className="absolute left-2.5 top-2.5 z-20 flex max-w-[calc(100%-6rem)] items-center gap-2 rounded-full border border-white/15 bg-black/65 p-1.5 pr-2.5 text-left text-white shadow-lg backdrop-blur-md"
-                  >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-400 text-[10px] font-black text-neutral-950">
+                <div className={`flex items-center justify-between gap-2 px-3 py-3 ${isDarkMode ? 'bg-[#121316]' : 'bg-white'}`}>
+                  <button type="button" onClick={() => {
+                    const author = userById.get(post.authorId);
+                    if (author) onSelectSeller(author);
+                  }} className="flex min-w-0 items-center gap-2.5 text-left">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-amber-500/15 text-xs font-bold text-amber-600">
                       {authorAvatar && !failedAvatarUrls.has(authorAvatar)
-                        ? <img
-                          src={authorAvatar}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          onError={() => setFailedAvatarUrls(current => new Set(current).add(authorAvatar))}
-                        />
-                        : post.authorName.charAt(0)}
+                        ? <img src={authorAvatar} alt="" className="h-full w-full object-cover" onError={() => setFailedAvatarUrls(current => new Set(current).add(authorAvatar))} />
+                        : getProfileInitials(post.authorName)}
                     </span>
                     <span className="min-w-0">
-                      <span className="flex items-center gap-1">
-                        <span className="max-w-[92px] truncate text-[10px] font-bold">{post.authorName}</span>
-                        {post.isPromoted && <span className="shrink-0 rounded-full bg-amber-400 px-1.5 py-0.5 text-[8px] font-black uppercase text-neutral-950">Promoted</span>}
-                      </span>
-                      <span className="block text-[8px] text-white/65">{new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                      <span className={`block truncate text-xs font-semibold ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{post.authorName}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-neutral-500">{locationLabel || getRoleLabel(post.authorRole)}</span>
                     </span>
                   </button>
+                  {post.isPromoted && <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-amber-600">Featured</span>}
+                </div>
+
+                <div className="feed-card-image group/img relative w-full overflow-hidden bg-[#f3f0e9]">
                   {postImageSource ? (
                     <PostImage
                       src={postImageSource}
                       alt={post.title}
-                      className="aspect-[4/5] w-full cursor-pointer sm:aspect-[4/5]"
-                      imageClassName="brightness-110 saturate-110 transition-[filter] duration-300 group-hover/img:brightness-125"
+                      className="aspect-[4/5] w-full cursor-pointer bg-[#f3f0e9]"
+                      imageClassName="transition-transform duration-500 group-hover/img:scale-[1.02]"
                       referrerPolicy="no-referrer"
                       loading="lazy"
                       decoding="async"
-                      fit="cover"
+                      fit="contain"
                       draggable={false}
                       onContextMenu={(event) => event.preventDefault()}
                       onClick={() => openListing(post)}
@@ -1940,10 +1926,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
                   {/* Top image overlay badges */}
                   <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold backdrop-blur-md bg-black/60 text-white border border-white/10">
+                    <span className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold ${isDarkMode ? 'border-neutral-800 bg-neutral-950/85 text-white' : 'border-neutral-200 bg-white/90 text-neutral-800'}`}>
                       {listingTypeLabel}
                     </span>
-                    {post.categoryId && <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold capitalize backdrop-blur-md bg-black/60 text-white border border-white/10">{post.categoryId.replace(/[-_]/g, ' ')}</span>}
+                    {post.categoryId && <span className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold capitalize ${isDarkMode ? 'border-neutral-800 bg-neutral-950/85 text-white' : 'border-neutral-200 bg-white/90 text-neutral-800'}`}>{post.categoryId.replace(/[-_]/g, ' ')}</span>}
                   </div>
                   {/* Save listing */}
                   <button
@@ -1992,43 +1978,45 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     <EyeOff className="h-4 w-4" />
                   </button>}
 
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%] bg-gradient-to-t from-black via-black/75 to-transparent" />
-                  <div className="absolute bottom-2.5 left-3 right-3 z-20">
-                    <div className="mb-2 flex items-end justify-between gap-2 text-white drop-shadow-md">
-                      <button type="button" onClick={() => openListing(post)} className="min-w-0 text-left">
-                        <h3 className="truncate text-sm font-bold leading-tight">{post.title}</h3>
-                        <span className="mt-0.5 block text-[8px] text-white/70">{listingTypeLabel}</span>
+                </div>
+
+                <div className="space-y-3 p-3.5 sm:p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <button type="button" onClick={() => openListing(post)} className="block max-w-full text-left">
+                        <h3 className={`line-clamp-2 text-sm font-semibold leading-snug ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{post.title}</h3>
                       </button>
-                      <span className="max-w-[42%] shrink-0 truncate text-xs font-black text-amber-300">{priceLabel}</span>
+                      <p className="mt-1 text-[10px] text-neutral-500">{listingTypeLabel}{locationLabel ? ` · ${locationLabel}` : ''}</p>
                     </div>
-                    <div className="flex items-end justify-between gap-2">
+                    <span className="shrink-0 text-right text-xs font-bold text-amber-600">{priceLabel}</span>
+                  </div>
+                  {post.description && <p className={`line-clamp-2 text-[11px] leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>{post.description}</p>}
+                  <div className={`flex items-center justify-between gap-2 border-t pt-3 ${isDarkMode ? 'border-neutral-800' : 'border-neutral-100'}`}>
                     <button
                       type="button"
                       disabled={pendingActions.has(post.id)}
                       aria-label={`${isLiked ? 'Unlike' : 'Like'} ${post.title}`}
                       aria-pressed={isLiked}
                       onClick={() => handleLike(post.id)}
-                      className={`flex h-9 items-center gap-1.5 rounded-full border px-2.5 text-xs font-bold backdrop-blur-xl shadow-lg ${
-                        isLiked ? 'border-red-300/50 bg-red-500 text-white' : 'border-white/25 bg-black/65 text-white'
+                      className={`flex h-9 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold ${
+                        isLiked ? 'border-red-300/50 bg-red-50 text-red-600' : isDarkMode ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800' : 'border-neutral-200 text-neutral-600 hover:bg-neutral-100'
                       }`}
                     >
-                      <Heart className={`h-4 w-4 ${isLiked ? 'fill-white' : ''}`} />
+                      <Heart className={`h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
                       {likeCount > 0 && <span>{likeCount}</span>}
                     </button>
                     <div className="flex items-center gap-2">
                       {getWhatsAppUrl(post) && (
-                        <button type="button" onClick={() => openWhatsApp(post)} className="flex h-9 items-center gap-1.5 rounded-full bg-emerald-500 px-2.5 text-xs font-bold text-white shadow-lg">
+                        <button type="button" onClick={() => openWhatsApp(post)} className="flex h-9 items-center gap-1.5 rounded-full bg-emerald-600 px-3 text-xs font-bold text-white transition-colors hover:bg-emerald-500">
                           <Phone className="h-4 w-4" />
-                          <span className="hidden min-[390px]:inline">WhatsApp</span>
+                          <span>WhatsApp</span>
                         </button>
                       )}
-                      <button type="button" onClick={() => openListing(post)} className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400 text-neutral-950 shadow-lg" aria-label={`Open ${post.title} details`}>
-                        <ChevronRight className="h-5 w-5" />
+                      <button type="button" onClick={() => openListing(post)} className={`flex h-9 items-center gap-1 rounded-full border px-3 text-xs font-semibold transition-colors ${isDarkMode ? 'border-neutral-700 text-neutral-200 hover:border-amber-400' : 'border-neutral-200 text-neutral-700 hover:border-amber-500'}`}>
+                        Details <ChevronRight className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
-                  </div>
-
                 </div>
                 {downloadMessage?.listingId === post.id && (
                   <p role="alert" className="border-t border-red-500/20 px-3 py-2 text-xs text-red-400">
@@ -2037,8 +2025,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 )}
 
               </motion.article>
-              {(postIndex + 1) % 12 === 0 && postIndex + 1 < filteredPosts.length && (
-                <div className="md:col-span-2 lg:col-span-3">
+              {(postIndex + 1) % 12 === 0 && postIndex + 1 < filteredPosts.length && (Math.floor((postIndex + 1) / 6) % 3 !== 2) && (
+                <div className="md:col-span-2 lg:col-span-3 2xl:col-span-4">
                   <MarketplaceInterlude posts={filteredPosts} users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
                 </div>
               )}
@@ -2048,24 +2036,54 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 const collection = visibleSellerCollections[(discoveryBatch - 1) % Math.max(visibleSellerCollections.length, 1)];
                 const tailor = topTailors[(discoveryBatch - 1) % Math.max(topTailors.length, 1)];
                 return (
-                  <div className="md:col-span-2 lg:col-span-3">
+                  <div className="md:col-span-2 lg:col-span-3 2xl:col-span-4">
                     {discoveryBatch % 3 === 1 && category && (
                       <DiscoveryCarousel title={category.title} subtitle="Explore the collection" posts={category.posts} isDarkMode={isDarkMode} onSelectPost={openListing} />
                     )}
                     {discoveryBatch % 3 === 2 && collection && (
                       <section className={`overflow-hidden rounded-[1.75rem] border ${isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm'}`}>
-                        <div className="grid gap-0 md:grid-cols-[0.8fr_1.2fr]">
-                          <div className="grid h-72 grid-cols-2 gap-1 bg-neutral-950 md:h-full">
-                            {collection.imageUrls.filter(Boolean).slice(0, 4).map((url, index) => <img key={`${collection.id}-${index}`} src={url} alt={index === 0 ? collection.title : ''} className="h-full min-h-0 w-full object-cover" />)}
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-800/50 px-5 py-4 sm:px-7">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Collection</p>
+                            <p className={`mt-1 text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>A considered edit from an independent merchant</p>
                           </div>
-                          <div className="flex flex-col justify-center p-5 sm:p-7">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">From a tailor's wardrobe</p>
-                            <h2 className="mt-1 font-serif text-2xl font-bold sm:text-3xl">{collection.title}</h2>
-                            {collection.description && <p className="mt-3 line-clamp-3 text-sm text-neutral-500">{collection.description}</p>}
+                          <button type="button" onClick={() => setShowAllCollections(true)} className={`min-h-10 rounded-full border px-4 text-xs font-semibold transition ${isDarkMode ? 'border-neutral-700 text-neutral-200 hover:border-amber-400' : 'border-neutral-300 text-neutral-700 hover:border-amber-500'}`}>
+                            See all collections
+                          </button>
+                        </div>
+                        <div className="p-4 sm:p-6">
+                          {(() => {
+                            const seller = userById.get(collection.sellerId);
+                            return (
+                              <button type="button" onClick={() => seller && onSelectSeller(seller)} disabled={!seller} className="mb-4 flex min-w-0 items-center gap-3 text-left disabled:cursor-default">
+                                <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full border border-amber-500/30 bg-amber-500/10 text-sm font-bold text-amber-500">
+                                  {seller?.avatarUrl
+                                    ? <img src={seller.avatarUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                                    : getProfileInitials(seller?.shopName || seller?.name || 'Atelier')}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block truncate text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">From the atelier of</span>
+                                  <span className={`mt-0.5 block truncate text-sm font-semibold ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{seller?.shopName || seller?.name || 'Independent merchant'}</span>
+                                </span>
+                              </button>
+                            );
+                          })()}
+                          <div className="grid h-52 grid-cols-2 gap-1 overflow-hidden rounded-2xl bg-neutral-950 sm:h-64 sm:grid-cols-4">
+                            {collection.imageUrls.filter(Boolean).slice(0, 4).map((url, index) => (
+                              <img key={`${collection.id}-${index}`} src={url} alt={index === 0 ? collection.title : ''} className="h-full min-h-0 w-full object-cover" loading="lazy" decoding="async" />
+                            ))}
+                          </div>
+                          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                            <div className="min-w-0">
+                              <h2 className={`font-serif text-2xl font-bold sm:text-3xl ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{collection.title}</h2>
+                              {collection.description && <p className="mt-2 line-clamp-2 max-w-2xl text-sm text-neutral-500">{collection.description}</p>}
+                            </div>
                             <button type="button" onClick={() => {
                               const seller = userById.get(collection.sellerId);
                               if (seller) onSelectSeller(seller);
-                            }} className="mt-5 min-h-11 w-fit rounded-full bg-amber-400 px-5 text-xs font-bold text-neutral-950">Explore the collection</button>
+                            }} className="inline-flex min-h-11 w-fit shrink-0 items-center gap-2 rounded-full bg-amber-400 px-5 text-xs font-bold text-neutral-950 transition hover:bg-amber-300">
+                              Explore collection <ChevronRight className="h-4 w-4" />
+                            </button>
                           </div>
                         </div>
                       </section>
@@ -2116,6 +2134,60 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         </div>
       )}
       </section>
+
+      {showAllCollections && (
+        <div
+          role="presentation"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setShowAllCollections(false);
+          }}
+          className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-5"
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="marketplace-collections-title" className={`max-h-[92dvh] w-full max-w-5xl overflow-y-auto rounded-t-3xl p-5 shadow-2xl sm:rounded-3xl sm:p-7 ${isDarkMode ? 'border border-neutral-800 bg-[#111214] text-white' : 'border border-neutral-200 bg-white text-neutral-900'}`}>
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-800/50 pb-5">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Independent ateliers</p>
+                <h2 id="marketplace-collections-title" className="mt-1 font-serif text-2xl font-bold sm:text-3xl">Browse collections</h2>
+                <p className="mt-1 text-xs text-neutral-500">Meet the makers behind each edit and explore their full storefront.</p>
+              </div>
+              <button type="button" onClick={() => setShowAllCollections(false)} className={`min-h-10 shrink-0 rounded-full border px-4 text-xs font-semibold ${isDarkMode ? 'border-neutral-700 hover:border-amber-400' : 'border-neutral-300 hover:border-amber-500'}`}>Close</button>
+            </div>
+            {publicCollections.length > 0 ? (
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {publicCollections.map(item => {
+                  const seller = userById.get(item.sellerId);
+                  return (
+                    <article key={item.id} className={`overflow-hidden rounded-2xl border ${isDarkMode ? 'border-neutral-800 bg-neutral-900/50' : 'border-neutral-200 bg-neutral-50'}`}>
+                      <div className="grid aspect-[1.7/1] grid-cols-2 gap-1 overflow-hidden bg-neutral-950">
+                        {item.imageUrls.filter(Boolean).slice(0, 2).map((url, index) => <img key={`${item.id}-modal-${index}`} src={url} alt={index === 0 ? item.title : ''} className="h-full w-full object-cover" loading="lazy" decoding="async" />)}
+                      </div>
+                      <div className="p-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-amber-500/15 text-xs font-bold text-amber-500">
+                            {seller?.avatarUrl ? <img src={seller.avatarUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" /> : getProfileInitials(seller?.shopName || seller?.name || 'Atelier')}
+                          </span>
+                          <span className="min-w-0 truncate text-xs font-semibold">{seller?.shopName || seller?.name || 'Independent merchant'}</span>
+                        </div>
+                        <h3 className="mt-3 truncate font-serif text-lg font-bold">{item.title}</h3>
+                        {item.description && <p className="mt-1 line-clamp-2 min-h-9 text-xs leading-relaxed text-neutral-500">{item.description}</p>}
+                        <button type="button" disabled={!seller} onClick={() => {
+                          if (!seller) return;
+                          setShowAllCollections(false);
+                          onSelectSeller(seller);
+                        }} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-full bg-amber-400 px-4 text-xs font-bold text-neutral-950 transition hover:bg-amber-300 disabled:cursor-default disabled:opacity-60">
+                          Visit atelier <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="py-12 text-center text-sm text-neutral-500">No public collections are available yet. Check back soon.</p>
+            )}
+          </section>
+        </div>
+      )}
 
     </div>
   );

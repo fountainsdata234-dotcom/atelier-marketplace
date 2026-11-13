@@ -2051,12 +2051,12 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
     const imagePipeline = () => sharp(req.file!.buffer, { limitInputPixels: 40_000_000 }).rotate();
     const [optimizedBuffer, thumbnailBuffer] = await Promise.all([
       imagePipeline()
-        .resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 78, progressive: true, mozjpeg: true })
+        .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 88, progressive: true, mozjpeg: true })
         .toBuffer(),
       imagePipeline()
-        .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 72, progressive: true, mozjpeg: true })
+        .resize({ width: 720, height: 720, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 84, progressive: true, mozjpeg: true })
         .toBuffer(),
     ]);
 

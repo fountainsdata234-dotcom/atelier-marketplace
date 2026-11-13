@@ -12,7 +12,7 @@ export interface ProcessedImageResult {
   blob?: Blob;
 }
 
-export async function compressImageBlob(file: Blob, maxDim = 1400): Promise<Blob> {
+export async function compressImageBlob(file: Blob, maxDim = 2048): Promise<Blob> {
   const bitmap = await createImageBitmap(file);
   let width = bitmap.width;
   let height = bitmap.height;
@@ -41,7 +41,7 @@ export async function compressImageBlob(file: Blob, maxDim = 1400): Promise<Blob
         return;
       }
       resolve(blob.size < file.size ? blob : file);
-    }, 'image/jpeg', 0.78);
+    }, 'image/jpeg', 0.9);
   });
 }
 
@@ -63,7 +63,7 @@ export async function compressAndGenerateImageLink(
           reject(new Error('Image dimensions must be 40 megapixels or smaller.'));
           return;
         }
-        const maxDim = 1400;
+        const maxDim = 2048;
         let { width, height } = img;
 
         if (width > maxDim || height > maxDim) {
@@ -107,7 +107,7 @@ export async function compressAndGenerateImageLink(
             height: keptOriginal ? img.naturalHeight : height,
             blob: selectedBlob,
           });
-        }, 'image/jpeg', 0.78);
+        }, 'image/jpeg', 0.9);
       };
       img.onerror = () => reject(new Error('Failed to load image file'));
       img.src = e.target?.result as string;

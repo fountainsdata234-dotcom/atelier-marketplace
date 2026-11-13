@@ -1298,7 +1298,6 @@ export default function App() {
                 onToggleFollow={handleToggleFollow}
                 onSelectSeller={handleSelectSeller}
                 isDarkMode={isDarkMode}
-                enableGreetingTyping={!isDataLoading && !showIntro}
                 onOpenPromotionPlans={() => window.dispatchEvent(new CustomEvent('navigate_to_tab', { detail: { view: 'dashboard', tab: 'plans' } }))}
                 pendingStoryFile={pendingStoryFile}
                 onPendingStoryFileHandled={clearPendingStoryFile}

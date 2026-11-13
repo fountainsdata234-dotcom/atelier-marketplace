@@ -6,6 +6,7 @@ import { TailorStory, User } from '../types';
 import { api, StoryUploadAsset } from '../services/api';
 import { getStoryUploadMimeType, getStoryUploadSizeError, getStoryUploadTypeError, MAX_STORY_IMAGE_UPLOAD_BYTES } from '../utils/mediaLimits';
 import { prepareStoryImageForUpload } from '../services/mediaUpload';
+import { buildWhatsAppUrl } from '../utils/whatsapp';
 
 const formatHandle = (handle?: string) => {
   const value = handle?.trim() || '';
@@ -471,6 +472,9 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [reply, setReply] = useState('');
+  const [replyStatus, setReplyStatus] = useState('');
+  const [replyFallbackUrl, setReplyFallbackUrl] = useState('');
+  const [isSharingReply, setIsSharingReply] = useState(false);
   const [liking, setLiking] = useState(false);
   const [deletingStory, setDeletingStory] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -502,6 +506,8 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
   useEffect(() => {
     setLiked(Boolean(story?.likedByViewer));
     setReply('');
+    setReplyStatus('');
+    setReplyFallbackUrl('');
     setLikeError('');
   }, [story?.id]);
 
@@ -583,6 +589,64 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
       setDeleteError(error instanceof Error ? error.message : 'The story could not be deleted.');
     } finally {
       setDeletingStory(false);
+    }
+  };
+
+  const sendReply = async () => {
+    const message = reply.trim();
+    if (!message || !story || isSharingReply) return;
+    const merchantName = tailor?.shopName || tailor?.name || 'the merchant';
+    const shareText = `Hello ${merchantName}, I'm replying to your FABSATTIRE story.\n\n${message}`;
+    const whatsappUrl = buildWhatsAppUrl(
+      tailor?.whatsappNumber || tailor?.phone,
+      `${shareText}\n\nStory image: ${story.mediaUrl}`,
+    );
+    if (!whatsappUrl) {
+      setReplyStatus('This merchant has not added a WhatsApp number yet.');
+      return;
+    }
+    if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function' || story.mediaType !== 'image') {
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      setReply('');
+      setReplyFallbackUrl('');
+      setReplyStatus('WhatsApp opened with your message and a link to this story image. Review and send it there.');
+      return;
+    }
+
+    setIsSharingReply(true);
+    setReplyStatus('Preparing the story image for sharing…');
+    setReplyFallbackUrl('');
+    try {
+      const response = await fetch(story.mediaUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error(`Story image request failed with status ${response.status}.`);
+      const imageBlob = await response.blob();
+      const imageType = imageBlob.type || response.headers.get('content-type')?.split(';')[0] || '';
+      if (!imageType.startsWith('image/')) throw new Error('The story media is not a shareable image.');
+      const extension = imageType.split('/')[1]?.replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
+      const imageFile = new File([imageBlob], `fabsattire-story-${story.id}.${extension}`, { type: imageType });
+      if (!navigator.canShare({ files: [imageFile] })) {
+        setReplyFallbackUrl(whatsappUrl);
+        setReplyStatus('This browser cannot attach images directly. You can still send the story link through WhatsApp.');
+        return;
+      }
+
+      await navigator.share({
+        files: [imageFile],
+        title: `Story from ${merchantName}`,
+        text: shareText,
+      });
+      setReply('');
+      setReplyStatus('The image and message are ready in the share sheet. Choose WhatsApp to send them to the merchant.');
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setReplyStatus('Sharing was canceled. Your reply is still here.');
+        return;
+      }
+      console.warn('Story image could not be attached to the reply.', error);
+      setReplyFallbackUrl(whatsappUrl);
+      setReplyStatus('Could not attach the image on this device. You can send the story link through WhatsApp instead.');
+    } finally {
+      setIsSharingReply(false);
     }
   };
 
@@ -672,13 +736,19 @@ export function StoriesViewer({ stories, tailor, owner, onDelete, onAdd, onClose
         </button>
         {!owner && (
           <div className="absolute bottom-4 left-4 right-4 z-40 flex items-center gap-2">
-            <input value={reply} onChange={event => setReply(event.target.value)} placeholder={`Reply to ${formatHandle(tailor?.handle) || '@merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur" />
-            <button type="button" aria-label="Send reply" disabled={!reply.trim()} onClick={() => setReply('')} className="grid h-11 w-11 place-items-center rounded-full bg-white text-neutral-950 disabled:opacity-50"><Send className="h-4 w-4" /></button>
+            <input value={reply} disabled={isSharingReply} onChange={event => { setReply(event.target.value); setReplyStatus(''); setReplyFallbackUrl(''); }} onKeyDown={event => { if (event.key === 'Enter' && reply.trim()) void sendReply(); }} placeholder={`Message ${formatHandle(tailor?.handle) || '@merchant'}...`} className="min-w-0 flex-1 rounded-full border border-white/35 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/65 backdrop-blur disabled:opacity-60" />
+            <button type="button" aria-label={isSharingReply ? 'Preparing story image' : 'Send story reply to WhatsApp'} disabled={!reply.trim() || isSharingReply} onClick={() => void sendReply()} className="grid h-11 w-11 place-items-center rounded-full bg-white text-neutral-950 disabled:opacity-50"><Send className="h-4 w-4" /></button>
             <button type="button" aria-label={liked ? `Unlike story (${story.likeCount} likes)` : `Like story (${story.likeCount} likes)`} disabled={liking} onClick={toggleLike} className="flex h-11 min-w-11 items-center justify-center gap-1 rounded-full bg-black/45 px-2 text-white backdrop-blur disabled:opacity-60">
               <Heart className="h-5 w-5" fill={liked ? 'currentColor' : 'none'} />
               <span className="text-xs tabular-nums">{story.likeCount}</span>
             </button>
           </div>
+        )}
+        {replyStatus && !owner && (
+          <p role="status" className="absolute bottom-[70px] left-4 right-4 z-50 rounded-lg bg-black/75 px-3 py-2 text-center text-xs text-white backdrop-blur">
+            {replyStatus}
+            {replyFallbackUrl && <a href={replyFallbackUrl} target="_blank" rel="noopener noreferrer" className="ml-1 font-bold underline underline-offset-2">Open WhatsApp</a>}
+          </p>
         )}
         {likeError && <p role="alert" className="absolute bottom-20 left-4 right-4 z-50 rounded-lg bg-red-950/90 px-3 py-2 text-xs text-red-100">{likeError}</p>}
         {owner && (

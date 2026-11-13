@@ -1397,8 +1397,7 @@
 
 .feed-card-wave:hover .feed-card-image img {
   transform: scale(1.025);
-  filter: brightness(1.04) saturate(1.04);
-  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), filter 500ms ease;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .whatsapp-contact-pulse {
@@ -1419,6 +1418,12 @@
 @media (min-width: 1024px) {
   .marketplace-masonry {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1536px) {
+  .marketplace-masonry {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

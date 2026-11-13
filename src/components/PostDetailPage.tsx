@@ -137,7 +137,7 @@ export const PostDetailPage: React.FC<PostDetailPageProps> = ({
 
   const renderRelatedCard = (relatedPost: ClothPost) => (
     <button key={relatedPost.id} type="button" onClick={() => onSelectPost(relatedPost)} className={`group min-w-0 overflow-hidden rounded-xl border text-left transition-colors hover:border-amber-500/50 ${surface}`}>
-      <PostImage src={relatedPost.imageAssets?.[0]?.thumbnailUrl || relatedPost.imageUrl} alt={relatedPost.title} className="aspect-[4/3]" imageClassName="brightness-110 saturate-110" />
+      <PostImage src={relatedPost.imageAssets?.find(asset => asset.url)?.url || relatedPost.imageUrl} alt={relatedPost.title} className="aspect-[4/3]" />
       <span className="block truncate px-3 pt-2.5 text-xs font-semibold">{relatedPost.title}</span>
       <span className={`block truncate px-3 pb-3 pt-1 text-[10px] ${muted}`}>{relatedPost.tags.slice(0, 2).map(tag => `#${tag}`).join(' ')}</span>
     </button>

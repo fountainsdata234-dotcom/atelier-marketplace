@@ -33,15 +33,7 @@ export const PostImage: React.FC<PostImageProps> = ({
   onContextMenu,
   fit = 'contain',
 }) => (
-  <div data-post-image="true" className={`relative isolate overflow-hidden bg-neutral-950 ${className}`}>
-    <img
-      src={src}
-      alt=""
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-90 blur-3xl brightness-[0.48] saturate-125"
-      loading={loading}
-      decoding={decoding}
-    />
+  <div data-post-image="true" className={`relative isolate overflow-hidden bg-transparent ${className}`}>
     <img
       src={src}
       alt={alt}
