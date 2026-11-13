@@ -1397,7 +1397,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                     </div>
                     <p className="mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">{post.authorName} <span className="px-1 text-neutral-600">/</span> {formatLocation(post.authorLocation)}</p>
                     <h2 className="mt-2 line-clamp-2 font-serif text-2xl font-bold leading-tight text-white sm:text-3xl lg:text-4xl">{post.title}</h2>
-                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-neutral-300 sm:text-base">{post.description}</p>
+                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-neutral-300 sm:text-base">{post.description || post.tags.slice(0, 3).map(tag => `#${tag}`).join(' ') || 'Explore this piece from the seller collection.'}</p>
                     <p className="mt-5 text-lg font-bold text-white">{post.pricing.basic > 0 ? `${post.pricing.currency || 'USD'} ${post.pricing.basic.toLocaleString()}` : 'Price on enquiry'}</p>
                     {post.tags.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{post.tags.slice(0, 3).map(tag => <span key={tag} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] text-neutral-300">#{tag}</span>)}</div>}
                     <button type="button" onClick={() => openListing(post)} className="mt-6 inline-flex min-h-11 w-fit items-center gap-2 rounded-xl bg-amber-400 px-5 text-sm font-bold text-neutral-950 transition hover:bg-amber-300">
@@ -1534,7 +1534,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                           <span className="font-semibold text-amber-500">{post.rating > 0 ? post.rating.toFixed(1) : 'New'}</span>
                           <span className={isDarkMode ? 'text-neutral-500' : 'text-neutral-500'}>({post.ratingCount || 0} reviews)</span>
                         </div>
-                        <p className={`mt-1 line-clamp-2 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>{post.description}</p>
+                        <p className={`mt-1 line-clamp-2 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-300' : 'text-neutral-600'}`}>{post.description || post.tags.slice(0, 3).map(tag => `#${tag}`).join(' ') || 'Contact the seller for details about this piece.'}</p>
                       </div>
                       <button type="button" onClick={() => openListing(post)} className="min-h-9 rounded-lg border border-amber-500/30 px-3 text-left text-[11px] font-semibold text-amber-500 hover:bg-amber-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
                         View listing details and gallery

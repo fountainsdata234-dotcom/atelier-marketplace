@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Scissors, Sparkles, Upload, Image as ImageIcon, Share2, Star, AlertTriangle, CheckCircle, Trash2, Heart, Bookmark, Phone, MessageSquare, DollarSign, Tag, Clock, Eye, Pause, Archive, RotateCcw, ChevronLeft, ChevronRight, Camera } from 'lucide-react';
+import { Scissors, Sparkles, Upload, Image as ImageIcon, Share2, Star, AlertTriangle, CheckCircle, Trash2, Heart, Bookmark, Phone, MessageSquare, DollarSign, Tag, Clock, Pause, Archive, RotateCcw, Camera } from 'lucide-react';
 import { User, ClothPost, AdminPromoPlan, FabricRequest, ListingImageAsset, ListingType } from '../types';
 import { compressAndGenerateImageLink, ProcessedImageResult } from '../utils/imageProgram';
 import { storageService } from '../services/storage';
@@ -110,7 +110,6 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const [leadTimeDays, setLeadTimeDays] = useState('');
   const [fulfilment, setFulfilment] = useState<'ready_made' | 'made_to_order'>('ready_made');
   const [editingListingId, setEditingListingId] = useState<string | null>(null);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const currentAvatarUrl = currentUser.avatarUrl && failedAvatarUrl !== currentUser.avatarUrl ? currentUser.avatarUrl : null;
   const [sellerListings, setSellerListings] = useState<ClothPost[]>(() => posts.filter(post => post.authorId === currentUser.id));
@@ -121,7 +120,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   const normalizeTags = (rawTags: string): string[] => {
     const normalized = rawTags
       .split(',')
-      .map(tag => tag.trim().toLowerCase())
+      .map(tag => tag.trim())
       .filter(Boolean);
 
     const matchTag = (value: string) => {
@@ -142,14 +141,21 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     const result: string[] = [];
     normalized.forEach(tag => {
       const mapped = matchTag(tag);
-      if (mapped && !result.includes(mapped)) {
-        result.push(mapped);
-      }
+      const cleanTag = mapped || tag;
+      if (!result.some(existing => existing.toLowerCase() === cleanTag.toLowerCase())) result.push(cleanTag);
     });
 
-    return result.slice(0, 4);
+    return result.slice(0, 20);
   };
-
+  const toggleTag = (tag: string) => {
+    setTagsInput(previous => {
+      const tags = previous.split(',').map(item => item.trim()).filter(Boolean);
+      const selectedIndex = tags.findIndex(item => item.toLowerCase() === tag.toLowerCase());
+      if (selectedIndex >= 0) tags.splice(selectedIndex, 1);
+      else tags.push(tag);
+      return tags.join(', ');
+    });
+  };
   // Image Program State
   const [imageUrl, setImageUrl] = useState('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
@@ -167,8 +173,34 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
   useEffect(() => {
     if (initialStudioTab) setActiveStudioTab(initialStudioTab);
   }, [initialStudioTab]);
-  const [postStep, setPostStep] = useState(0);
-
+  const resetPostForm = () => {
+    setTitle('');
+    setDescription('');
+    setImageAlt('');
+    setTagsInput('');
+    setImageUrl('');
+    setImageAssets([]);
+    setCompressionStats(null);
+    setPricingBasic('');
+    setPriceMax('');
+    setStockQuantity('');
+    setCategoryId('');
+    setListingType(currentUser.role === 'fabric_seller' ? 'FABRIC' : 'CLOTHING');
+    setFabricMaterial('');
+    setFabricColour('');
+    setFabricPattern('');
+    setFabricWidth('');
+    setFabricWidthUnit('cm');
+    setFabricPriceUnit('yard');
+    setFabricMinimumOrder('1');
+    setGarmentType('');
+    setGarmentGender('');
+    setGarmentSizes('');
+    setCustomizationOptions('');
+    setLeadTimeDays('');
+    setFulfilment('ready_made');
+    setEditingListingId(null);
+  };
   // Filter posts belonging to this tailor/seller
   const myPosts = sellerListings.filter(p => p.authorId === currentUser.id && !p.deletedAt).map(post => ({
     ...post,
@@ -289,43 +321,30 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     }
 
     if (!imageUrl.trim() || imageAssets.length === 0) {
-      setPostStep(0);
       setPostStatus({ type: 'error', message: 'Add at least one product photo before continuing.' });
       return;
     }
 
-    if (title.trim().length < 3 || description.trim().length < 10) {
-      setPostStep(1);
-      setPostStatus({ type: 'error', message: 'Add a title of at least 3 characters and a description of at least 10 characters.' });
-      return;
-    }
-
-    if (listingType === 'FABRIC' && (!fabricMaterial.trim() || !fabricColour.trim() || !Number.isFinite(Number(fabricMinimumOrder)) || Number(fabricMinimumOrder) <= 0)) {
-      setPostStep(1);
-      setPostStatus({ type: 'error', message: 'Add the fabric material and colour, and set a minimum order greater than zero.' });
-      return;
-    }
-
-    if (listingType === 'CLOTHING' && !garmentType.trim()) {
-      setPostStep(1);
-      setPostStatus({ type: 'error', message: 'Add a garment type before publishing.' });
-      return;
-    }
-
     const tags = normalizeTags(tagsInput);
+    if (tags.length === 0) {
+      setPostStatus({ type: 'error', message: 'Choose or add at least one tag.' });
+      return;
+    }
+
+    const postTitle = (title.trim() || `${tags[0]} by ${currentUser.shopName || currentUser.name}`).slice(0, 160);
 
     const details = listingType === 'FABRIC'
       ? {
-          material: fabricMaterial,
-          colour: fabricColour,
+          material: fabricMaterial.trim(),
+          colour: fabricColour.trim(),
           pattern: fabricPattern,
           width: fabricWidth ? Number(fabricWidth) : null,
           widthUnit: fabricWidthUnit,
-          priceUnit: fabricPriceUnit,
-          minimumOrder: Number(fabricMinimumOrder),
+          priceUnit: fabricPriceUnit || 'piece',
+          minimumOrder: Number(fabricMinimumOrder) || 1,
         }
       : {
-          garmentType,
+          garmentType: garmentType.trim() || postTitle,
           gender: garmentGender,
           sizes: garmentSizes.split(',').map(size => size.trim()).filter(Boolean),
           customizationOptions: customizationOptions.split(',').map(option => option.trim()).filter(Boolean),
@@ -341,7 +360,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       authorLocation: currentUser.location,
       authorWhatsapp: currentUser.whatsappNumber,
       isPromoted: currentUser.isPromoted,
-      title: title.trim(),
+      title: postTitle,
       description: description.trim(),
       listingType,
       categoryId,
@@ -352,7 +371,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       priceMin: pricingBasic === '' ? null : Number(pricingBasic),
       priceMax: priceMax === '' ? null : Number(priceMax),
       listingDetails: details,
-      tags: tags.length > 0 ? tags : [currentUser.role === 'fabric_seller' ? 'Fabrics' : 'Menwear'],
+      tags,
       pricing: {
         currency: currentUser.location.currency || 'USD',
         basic: Number(pricingBasic) || 0,
@@ -360,7 +379,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
         bespokeComplexity: 0,
       },
       imageUrl: imageUrl.trim(),
-      imageAlt: imageAlt.trim() || `${title.trim()} by ${currentUser.shopName || currentUser.name}`,
+      imageAlt: imageAlt.trim() || `${postTitle} by ${currentUser.shopName || currentUser.name}`,
       imageHostSource: compressionStats ? `Supabase Storage (${compressionStats.compressedSizeKb}KB)` : 'External Link'
     };
 
@@ -389,57 +408,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
     }
 
     setPostStatus({ type: 'success', message: intent === 'draft' ? 'Draft saved. It is visible only in your studio.' : 'Listing submitted for review and will appear in the marketplace after approval.' });
-    setTitle('');
-    setDescription('');
-    setImageAlt('');
-    setTagsInput('');
-    setImageUrl('');
-    setImageAssets([]);
-    setCompressionStats(null);
-    setPricingBasic('');
-    setPriceMax('');
-    setStockQuantity('');
-    setCategoryId('');
-    setFabricMaterial('');
-    setFabricColour('');
-    setFabricPattern('');
-    setFabricWidth('');
-    setFabricWidthUnit('cm');
-    setFabricPriceUnit('yard');
-    setFabricMinimumOrder('1');
-    setGarmentType('');
-    setGarmentGender('');
-    setGarmentSizes('');
-    setCustomizationOptions('');
-    setLeadTimeDays('');
-    setFulfilment('ready_made');
-    setEditingListingId(null);
-    setPostStep(0);
-  };
-
-  const continuePostStep = () => {
-    setPostStatus(null);
-    if (postStep === 0 && (!imageUrl.trim() || imageAssets.length === 0)) {
-      setPostStatus({ type: 'error', message: 'Upload at least one photo to continue.' });
-      return;
-    }
-
-    if (postStep === 1) {
-      if (title.trim().length < 3 || description.trim().length < 10) {
-        setPostStatus({ type: 'error', message: 'Add a title of at least 3 characters and a description of at least 10 characters.' });
-        return;
-      }
-      if (listingType === 'FABRIC' && (!fabricMaterial.trim() || !fabricColour.trim() || !Number.isFinite(Number(fabricMinimumOrder)) || Number(fabricMinimumOrder) <= 0)) {
-        setPostStatus({ type: 'error', message: 'Add the fabric material and colour, and set a minimum order greater than zero.' });
-        return;
-      }
-      if (listingType === 'CLOTHING' && !garmentType.trim()) {
-        setPostStatus({ type: 'error', message: 'Add the garment type to continue.' });
-        return;
-      }
-    }
-
-    setPostStep(current => Math.min(current + 1, 2));
+    resetPostForm();
   };
 
   // Delete Post
@@ -461,7 +430,6 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
   const editListing = (post: ClothPost) => {
     const details = post.listingDetails || {};
-    setPostStep(0);
     setEditingListingId(post.id);
     setListingType(post.listingType || (currentUser.role === 'fabric_seller' ? 'FABRIC' : 'CLOTHING'));
     setTitle(post.title);
@@ -513,26 +481,6 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
 
   return (
     <div className="relative z-10 flex w-full flex-col px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-      {isPreviewOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-label="Listing preview">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-neutral-700 bg-[#121316] shadow-2xl">
-            {imageUrl && <PostImage src={imageAssets.find(asset => asset.url === imageUrl)?.thumbnailUrl || imageUrl} alt={imageAlt || title} className="max-h-[50vh] w-full" />}
-            <div className="space-y-3 p-5">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400">{listingType.replace('_', ' ')}</div>
-              <h2 className="font-serif text-2xl font-bold">{title || 'Listing title'}</h2>
-              <p className="whitespace-pre-line text-sm text-neutral-300">{description || 'Listing description preview.'}</p>
-              <div className="flex justify-between border-t border-neutral-700 pt-3 text-sm">
-                <span>{currentUser.location.currency || 'USD'} {pricingBasic || 'Price on request'}{priceMax ? ` – ${priceMax}` : ''}</span>
-                <span>{[currentUser.location.city, currentUser.location.country].filter(Boolean).join(', ')}</span>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setIsPreviewOpen(false)} className="rounded-lg border border-neutral-600 px-4 py-2 text-xs font-semibold">Close preview</button>
-                <button type="button" onClick={() => setIsPreviewOpen(false)} className="rounded-lg bg-amber-400 px-4 py-2 text-xs font-bold text-neutral-950">Continue editing</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       <AnimatePresence>
         {warningModalOpen && currentUser.isWarned && currentUser.warningNote && (
           <motion.div
@@ -782,10 +730,9 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-xl font-serif font-bold">{currentUser.role === 'fabric_seller' ? 'List Fabric Material' : 'Publish Garment Post'}</h2>
-                  <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Create your listing in three simple steps.</p>
+                  <p className={`text-xs ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>Upload a photo, add tags, and publish.</p>
                 </div>
                 </div>
-                {postStep > 0 && imageUrl && <img src={imageAssets.find(asset => asset.url === imageUrl)?.thumbnailUrl || imageUrl} alt="Selected listing preview" className="h-14 w-14 shrink-0 rounded-xl border border-amber-500/40 bg-neutral-950 object-cover shadow-lg" />}
               </div>
 
               <AnimatePresence>
@@ -798,139 +745,53 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
               </AnimatePresence>
 
               <form id="listing-editor" onSubmit={handlePublishPost} className="space-y-5">
-                <div className="grid grid-cols-3 gap-2" aria-label="Post creation progress">
-                  {['Photos', 'Details', 'Pricing'].map((label, index) => (
-                    <div key={label} className={`rounded-xl border px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider ${postStep >= index ? 'border-amber-500/50 bg-amber-500/10 text-amber-300' : 'border-neutral-800 text-neutral-500'}`}>
-                      <span className="mr-1">{postStep > index ? '✓' : `${index + 1}.`}</span>{label}
-                    </div>
-                  ))}
-                </div>
-                <AnimatePresence mode="wait" initial={false}>
-                <motion.div key={postStep} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.2 }}>
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
                   <div className="space-y-4">
-                    {postStep === 0 && <div>
-                      <label className="mb-1.5 block text-xs font-medium text-neutral-400">Listing type *</label>
-                      <select value={listingType} disabled={currentUser.isBlocked || Boolean(editingListingId)} onChange={event => setListingType(event.target.value as ListingType)} className="w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-4 py-3 text-base focus:border-amber-500 focus:outline-none">
-                        {currentUser.role === 'fabric_seller'
-                          ? <option value="FABRIC">Fabric</option>
-                          : <><option value="CLOTHING">Clothing</option><option value="TAILOR_PORTFOLIO">Tailor portfolio</option></>}
-                      </select>
-                    </div>}
-                    {postStep === 1 && <>
-                    <div>
-                      <label className="block text-xs font-medium text-neutral-400 mb-1.5">Item Title *</label>
-                      <input type="text" minLength={3} maxLength={160} required disabled={currentUser.isBlocked} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={currentUser.role === 'fabric_seller' ? 'e.g. Royal Italian 100% Cashmere Wool' : 'e.g. Double-Breasted Tuxedo'} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-4 py-3 text-base focus:border-amber-500 focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-neutral-400 mb-1.5">Description & Labeling *</label>
-                      <textarea rows={5} minLength={10} maxLength={3000} required disabled={currentUser.isBlocked} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the fabric weave, fit silhouette, occasion, and turnaround time." className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800/40 p-4 text-base focus:border-amber-500 focus:outline-none" />
-                    </div>
-                    {listingType === 'FABRIC' ? (
-                      <div className="grid grid-cols-1 gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 sm:grid-cols-2">
-                        <label className="text-xs text-neutral-400">Material / fabric description *<input required type="text" value={fabricMaterial} onChange={event => setFabricMaterial(event.target.value)} maxLength={100} placeholder="Write the material in your own words" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                        <label className="text-xs text-neutral-400">Colour description *<input required type="text" value={fabricColour} onChange={event => setFabricColour(event.target.value)} maxLength={80} placeholder="Describe the colour in your own words" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                        <label className="text-xs text-neutral-400">Pattern / details<input type="text" value={fabricPattern} onChange={event => setFabricPattern(event.target.value)} maxLength={100} placeholder="Add any description you want" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                        <label className="text-xs text-neutral-400">Width<input type="number" min="0.1" step="0.1" value={fabricWidth} onChange={event => setFabricWidth(event.target.value)} placeholder="Optional" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                        <label className="text-xs text-neutral-400">Width unit<select value={fabricWidthUnit} onChange={event => setFabricWidthUnit(event.target.value as 'cm' | 'in')} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100"><option value="cm">Centimetres</option><option value="in">Inches</option></select></label>
-                        <label className="text-xs text-neutral-400">Price per *<select value={fabricPriceUnit} onChange={event => setFabricPriceUnit(event.target.value as 'yard' | 'metre' | 'piece' | 'roll')} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100"><option value="yard">Yard</option><option value="metre">Metre</option><option value="piece">Piece</option><option value="roll">Roll</option></select></label>
-                        <label className="text-xs text-neutral-400 sm:col-span-2">Minimum order *<input type="number" required min="0.001" step="0.001" value={fabricMinimumOrder} onChange={event => setFabricMinimumOrder(event.target.value)} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                      </div>
-                    ) : listingType === 'CLOTHING' ? (
-                      <div className="grid grid-cols-1 gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 sm:grid-cols-2">
-                        <label className="text-xs text-neutral-400">Garment type *<input required value={garmentType} onChange={event => setGarmentType(event.target.value)} maxLength={100} placeholder="Suit, dress, shirt…" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                        <label className="text-xs text-neutral-400">Gender / style<input value={garmentGender} onChange={event => setGarmentGender(event.target.value)} maxLength={40} placeholder="Unisex, womenswear…" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                        <label className="text-xs text-neutral-400 sm:col-span-2">Sizes<input value={garmentSizes} onChange={event => setGarmentSizes(event.target.value)} placeholder="Separate sizes with commas: S, M, L" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                        <label className="text-xs text-neutral-400 sm:col-span-2">Customization options<input value={customizationOptions} onChange={event => setCustomizationOptions(event.target.value)} placeholder="Separate options with commas" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                        <label className="text-xs text-neutral-400">Fulfilment<select value={fulfilment} onChange={event => setFulfilment(event.target.value as 'ready_made' | 'made_to_order')} className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100"><option value="ready_made">Ready-made</option><option value="made_to_order">Made to order</option></select></label>
-                        <label className="text-xs text-neutral-400">Lead time (days)<input type="number" min="0" max="365" value={leadTimeDays} onChange={event => setLeadTimeDays(event.target.value)} placeholder="Optional" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 text-xs text-neutral-400">Showcase a completed tailoring project in your portfolio. Include what was made, the techniques used, and any client-approved customization details.</div>
-                    )}
-                    <div>
-                      <label className="block text-xs font-medium text-neutral-400 mb-1.5">Tags</label>
-                      <input type="text" disabled={currentUser.isBlocked} value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. menwear, womenwear, formal, bridal" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-4 py-3 text-base focus:border-amber-500 focus:outline-none" />
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {TAG_OPTIONS.map(tag => (
-                          <button key={tag} type="button" onClick={() => setTagsInput(prev => { const currentValues = prev.split(',').map(item => item.trim()).filter(Boolean); return currentValues.includes(tag) ? prev : `${prev ? `${prev}, ` : ''}${tag}`; })} className="rounded-full border border-neutral-700 bg-neutral-800/60 px-3 py-2 text-xs text-neutral-300 hover:border-amber-500 hover:text-amber-300">{tag}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-neutral-400 mb-1.5">Image Alt Description</label>
-                      <input type="text" disabled={currentUser.isBlocked} value={imageAlt} onChange={(e) => setImageAlt(e.target.value)} placeholder="Describe the item in the photo" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-4 py-3 text-base focus:border-amber-500 focus:outline-none" />
-                      <p className="mt-1 text-[10px] text-neutral-500">This helps screen readers and makes the collection more professional.</p>
-                    </div>
-                    </>}
-                    {postStep === 2 && <div className="grid grid-cols-1 gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 sm:grid-cols-2">
-                      <label className="text-xs font-semibold text-amber-400">Minimum price ({currentUser.location.currency || 'USD'})<input type="number" min="0" step="0.01" disabled={currentUser.isBlocked} value={pricingBasic} onChange={event => setPricingBasic(event.target.value)} placeholder="Optional" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 font-mono text-base text-neutral-100" /></label>
-                      <label className="text-xs font-semibold text-amber-400">Maximum price<input type="number" min="0" step="0.01" disabled={currentUser.isBlocked} value={priceMax} onChange={event => setPriceMax(event.target.value)} placeholder="Optional" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 font-mono text-base text-neutral-100" /></label>
-                      <label className="text-xs text-neutral-400 sm:col-span-2">Available quantity<input type="number" min="0" step="0.001" disabled={currentUser.isBlocked} value={stockQuantity} onChange={event => setStockQuantity(event.target.value)} placeholder="Leave blank if availability is not quantity-based" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                      <label className="text-xs text-neutral-400 sm:col-span-2">Category<input value={categoryId} onChange={event => setCategoryId(event.target.value)} maxLength={80} placeholder="Optional category" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-3 text-base text-neutral-100" /></label>
-                    </div>}
-                  </div>
-
-                  {postStep === 0 && <div className="space-y-4">
-                    <label className="block text-xs font-medium text-neutral-400">{listingType === 'FABRIC' ? 'Fabric images *' : 'Garment / portfolio images *'}</label>
+                    <label className="block text-xs font-medium text-neutral-400">{listingType === 'FABRIC' ? 'Fabric photo *' : 'Post photo *'}</label>
                     <div
                       className="rounded-2xl border-2 border-dashed border-neutral-700 bg-neutral-900/30 p-6 text-center transition-all hover:border-amber-500/60"
                       onDragOver={event => event.preventDefault()}
                       onDrop={event => { event.preventDefault(); void processImageUpload(Array.from(event.dataTransfer.files)); }}
                     >
-                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="tailor-file-input" disabled={currentUser.isBlocked || isProcessingImage} onChange={handleFileUpload} className="hidden" />
+                      <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" id="tailor-file-input" disabled={currentUser.isBlocked || isProcessingImage} onChange={handleFileUpload} className="hidden" />
                       <label htmlFor="tailor-file-input" className="flex cursor-pointer flex-col items-center justify-center">
                         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400"><ImageIcon className="h-6 w-6" /></div>
-                        <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? `Uploading ${imageUploadProgress}%…` : 'Upload a product image'}</span>
-                        <span className="mt-1 text-[10px] text-neutral-500">One JPEG, PNG, WebP, or GIF photo, up to 8 MB. You can replace it before publishing.</span>
+                        <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? `Uploading ${imageUploadProgress}%…` : imageUrl ? 'Choose a different photo' : 'Choose a photo'}</span>
+                        <span className="mt-1 text-[10px] text-neutral-500">JPEG, PNG, WebP, or GIF · up to 8 MB</span>
                       </label>
                       {isProcessingImage && <div className="mx-auto mt-3 max-w-sm"><div className="h-1.5 overflow-hidden rounded-full bg-neutral-800"><div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${imageUploadProgress}%` }} /></div><p className="mt-1 text-[10px] text-amber-300">{imageUploadProgress}% uploaded</p></div>}
                     </div>
-                    {imageAssets.length > 0 && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{imageAssets.map((asset, index) => (
-                      <div key={asset.url} className="relative aspect-square overflow-hidden rounded-lg border border-neutral-700">
-                        <img src={asset.thumbnailUrl || asset.url} alt={`Listing image ${index + 1}`} className="h-full w-full object-cover" />
-                        <button type="button" onClick={() => {
-                          setImageAssets([]);
-                          setImageUrl('');
-                        }} className="absolute right-1 top-1 rounded bg-black/80 px-1.5 py-0.5 text-xs text-white" aria-label={`Remove image ${index + 1}`}>×</button>
-                        <span className="absolute bottom-1 left-1 rounded bg-black/80 px-2 py-1 text-[10px] text-amber-300">Post photo</span>
+                    {imageUrl && <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-neutral-900">
+                      <PostImage src={imageAssets.find(asset => asset.url === imageUrl)?.thumbnailUrl || imageUrl} alt={title || 'Selected post photo'} className="aspect-[4/3] w-full" />
+                      <button type="button" onClick={() => { setImageAssets([]); setImageUrl(''); }} aria-label="Remove selected photo" className="absolute right-3 top-3 rounded-full bg-black/75 px-3 py-1.5 text-xs font-semibold text-white">Remove</button>
+                    </div>}
+                  </div>
+                  <div className="space-y-5">
+                    <label className="block text-xs font-medium text-neutral-400">Cloth / item name <span className="text-neutral-500">(optional)</span>
+                      <input type="text" minLength={3} maxLength={160} disabled={currentUser.isBlocked} value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Indigo linen dress" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-4 py-3 text-base text-neutral-100 focus:border-amber-500 focus:outline-none" />
+                    </label>
+                    <div>
+                      <label htmlFor="post-tags" className="block text-xs font-medium text-neutral-400">Tags <span className="text-amber-400">*</span></label>
+                      <input id="post-tags" type="text" disabled={currentUser.isBlocked} value={tagsInput} onChange={event => setTagsInput(event.target.value)} placeholder="Choose tags or add your own, separated by commas" className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-4 py-3 text-base text-neutral-100 focus:border-amber-500 focus:outline-none" />
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {TAG_OPTIONS.map(tag => {
+                          const selected = normalizeTags(tagsInput).some(value => value.toLowerCase() === tag.toLowerCase());
+                          return <button key={tag} type="button" aria-pressed={selected} onClick={() => toggleTag(tag)} className={`rounded-full border px-3 py-2 text-xs font-medium transition ${selected ? 'border-amber-400 bg-amber-400 text-neutral-950' : 'border-neutral-700 bg-neutral-800/60 text-neutral-300 hover:border-amber-500 hover:text-amber-300'}`}>{selected ? '✓ ' : '+ '}{tag}</button>;
+                        })}
                       </div>
-                    ))}</div>}
-
-                    {compressionStats && (
-                      <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-400 font-mono">
-                        <span>Upload size: {compressionStats.originalSizeKb}KB → {compressionStats.compressedSizeKb}KB</span>
-                        <span>{compressionStats.compressedSizeKb < compressionStats.originalSizeKb ? `Saved ${Math.round((1 - compressionStats.compressedSizeKb / compressionStats.originalSizeKb) * 100)}%` : 'Original kept'}</span>
-                      </div>
-                    )}
-
-                    {imageUrl && (
-                      <div className="relative aspect-16/10 overflow-hidden rounded-2xl border border-amber-500/30 bg-neutral-900">
-                        <PostImage src={imageUrl} alt="Preview" className="h-full w-full" imageClassName="brightness-110 saturate-110" referrerPolicy="no-referrer" />
-                        <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-[9px] text-amber-300">Live preview</div>
-                      </div>
-                    )}
-                  </div>}
-                </div>
-                {postStep === 2 && <div className="flex items-center gap-4 rounded-2xl border border-neutral-800 bg-neutral-900/40 p-3">
-                  {imageUrl && <img src={imageAssets.find(asset => asset.url === imageUrl)?.thumbnailUrl || imageUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" />}
-                  <div className="min-w-0"><h3 className="truncate font-serif text-base font-bold">{title || 'Your listing title'}</h3><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{description || 'Your description will appear here.'}</p><p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-amber-400">{listingType === 'FABRIC' ? 'Fabric listing' : 'Tailor listing'} · {imageAssets.length} photo{imageAssets.length === 1 ? '' : 's'}</p></div>
-                </div>}
-                </motion.div>
-                </AnimatePresence>
-
-                <div className="flex items-center justify-between gap-3 border-t border-neutral-800 pt-4">
-                  <button type="button" onClick={() => setPostStep(current => Math.max(current - 1, 0))} disabled={postStep === 0} className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-neutral-700 px-4 py-3 text-sm font-semibold disabled:invisible"><ChevronLeft className="h-4 w-4" />Back</button>
-                  {postStep < 2 ? (
-                    <button type="button" onClick={continuePostStep} disabled={currentUser.isBlocked || isProcessingImage} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 px-6 py-3 text-sm font-semibold text-neutral-950 shadow-lg shadow-amber-500/10 disabled:opacity-50">Next step<ChevronRight className="h-4 w-4" /></button>
-                  ) : (
-                    <div className="flex flex-wrap justify-end gap-2">
-                      {editingListingId && <button type="button" onClick={() => { setEditingListingId(null); setTitle(''); setDescription(''); setImageUrl(''); setImageAssets([]); setPostStep(0); }} className="rounded-xl border border-neutral-700 px-4 py-3 text-xs font-semibold">Cancel edit</button>}
-                      <button type="button" onClick={() => setIsPreviewOpen(true)} disabled={!title.trim()} className="inline-flex items-center gap-2 rounded-xl border border-neutral-700 px-4 py-3 text-xs font-semibold disabled:opacity-40"><Eye className="h-4 w-4" />Preview</button>
-                      <button type="submit" name="intent" value="draft" disabled={currentUser.isBlocked || isProcessingImage} className="rounded-xl border border-neutral-600 px-4 py-3 text-xs font-semibold disabled:opacity-50">Save draft</button>
-                      <button type="submit" name="intent" value="publish" disabled={currentUser.isBlocked || isProcessingImage} className="rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-950 transition-all hover:shadow-lg hover:shadow-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50">{editingListingId ? 'Submit changes for review' : 'Publish post'}</button>
+                      <p className="mt-2 text-[10px] text-neutral-500">Add one or more tags to help shoppers discover your post.</p>
                     </div>
-                  )}
+                    {imageUrl && <div className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/50 p-3">
+                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-300">{listingType.replace('_', ' ')}</span>
+                      <span className="truncate text-xs text-neutral-400">{title.trim() || normalizeTags(tagsInput)[0] || 'Your post'}</span>
+                    </div>}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-800 pt-4">
+                  {editingListingId && <button type="button" onClick={() => { resetPostForm(); setPostStatus(null); }} className="rounded-xl border border-neutral-700 px-4 py-3 text-xs font-semibold">Cancel edit</button>}
+                  <button type="submit" name="intent" value="draft" disabled={currentUser.isBlocked || isProcessingImage} className="rounded-xl border border-neutral-600 px-4 py-3 text-xs font-semibold disabled:opacity-50">Save draft</button>
+                  <button type="submit" name="intent" value="publish" disabled={currentUser.isBlocked || isProcessingImage} className="rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 px-6 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-950 transition-all hover:shadow-lg hover:shadow-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50">{editingListingId ? 'Submit changes for review' : 'Publish post'}</button>
                 </div>
               </form>
             </section>
@@ -961,7 +822,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                         <div className="inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-amber-300">{(post.status || 'published').replace('_', ' ')}{post.moderationStatus === 'pending' ? ' · moderation pending' : ''}</div>
                         {post.moderationStatus === 'rejected' && post.moderationNote && <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-[10px] text-red-300">Review feedback: {post.moderationNote}</p>}
                         <h3 className="font-serif text-base font-bold leading-tight">{post.title}</h3>
-                        <p className="text-xs text-neutral-400 line-clamp-2">{post.description}</p>
+                        <p className="text-xs text-neutral-400 line-clamp-2">{post.description || post.tags.slice(0, 3).map(tag => `#${tag}`).join(' ') || 'No description added.'}</p>
                         <div className="flex items-center justify-between border-t border-neutral-800 pt-2 text-xs font-mono text-neutral-400">
                           <span>{post.likes.length} Likes</span>
                           <span>{post.saves.length} Saves</span>

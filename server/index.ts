@@ -1002,9 +1002,11 @@ function validateListingInput(input: Record<string, unknown>, userId: string, pr
     return { error: 'This listing type is not available for your seller account.' };
   }
 
-  const title = listingText(input.title, 160);
+  const sellerName = listingText(profile.shop_name || profile.shopName || profile.name, 120) || 'Atelier seller';
+  const title = listingText(input.title, 160)
+    || `${listingType === 'FABRIC' ? 'New fabric' : 'New design'} by ${sellerName}`.slice(0, 160);
   const description = listingText(input.description, 3000);
-  if (title.length < 3 || description.length < 10) return { error: 'Enter a title of at least 3 characters and a description of at least 10 characters.' };
+  if (title.length < 3) return { error: 'Enter a title of at least 3 characters.' };
 
   if (Array.isArray(input.imageAssets) && input.imageAssets.length > 8) return { error: 'A listing can include up to 8 images.' };
   const rawAssets = Array.isArray(input.imageAssets) ? input.imageAssets : [];
@@ -1053,11 +1055,16 @@ function validateListingInput(input: Record<string, unknown>, userId: string, pr
   if (listingType === 'FABRIC') {
     const material = listingText(rawDetails.material, 100);
     const colour = listingText(rawDetails.colour, 80);
-    const priceUnit = rawDetails.priceUnit;
-    const minimumOrder = Number(rawDetails.minimumOrder);
-    if (!material || !colour || !['yard', 'metre', 'piece', 'roll'].includes(String(priceUnit))
-      || !Number.isFinite(minimumOrder) || minimumOrder <= 0) {
-      return { error: 'Fabric listings require free-form material and colour descriptions, a price unit, and a positive minimum order.' };
+    const priceUnit = ['yard', 'metre', 'piece', 'roll'].includes(String(rawDetails.priceUnit))
+      ? String(rawDetails.priceUnit)
+      : rawDetails.priceUnit === undefined || rawDetails.priceUnit === null || rawDetails.priceUnit === ''
+        ? 'piece'
+        : '';
+    const minimumOrder = rawDetails.minimumOrder === undefined || rawDetails.minimumOrder === null || rawDetails.minimumOrder === ''
+      ? 1
+      : Number(rawDetails.minimumOrder);
+    if (!priceUnit || !Number.isFinite(minimumOrder) || minimumOrder <= 0) {
+      return { error: 'Enter a valid fabric price unit and minimum order.' };
     }
     if (stockQuantity !== null && minimumOrder > stockQuantity) return { error: 'Minimum order cannot exceed the available quantity.' };
     const width = rawDetails.width === undefined || rawDetails.width === null || rawDetails.width === '' ? null : Number(rawDetails.width);
@@ -1065,8 +1072,8 @@ function validateListingInput(input: Record<string, unknown>, userId: string, pr
       return { error: 'Fabric width must be a positive measurement.' };
     }
     Object.assign(listingDetails, {
-      material,
-      colour,
+      ...(material ? { material } : {}),
+      ...(colour ? { colour } : {}),
       pattern: listingText(rawDetails.pattern, 100),
       ...(width !== null ? { width } : {}),
       widthUnit: rawDetails.widthUnit === 'in' ? 'in' : 'cm',
@@ -1076,9 +1083,11 @@ function validateListingInput(input: Record<string, unknown>, userId: string, pr
     if (stockQuantity !== null) availability = 'limited';
   } else {
     const garmentType = listingText(rawDetails.garmentType, 100);
-    const fulfilment = rawDetails.fulfilment;
-    if (listingType === 'CLOTHING' && (!garmentType || !['ready_made', 'made_to_order'].includes(String(fulfilment)))) {
-      return { error: 'Clothing listings require a garment type and a ready-made or made-to-order selection.' };
+    const fulfilment = rawDetails.fulfilment === undefined || rawDetails.fulfilment === null || rawDetails.fulfilment === ''
+      ? 'ready_made'
+      : rawDetails.fulfilment;
+    if (listingType === 'CLOTHING' && !['ready_made', 'made_to_order'].includes(String(fulfilment))) {
+      return { error: 'Choose a valid clothing fulfilment option.' };
     }
     const leadTimeDays = rawDetails.leadTimeDays === undefined || rawDetails.leadTimeDays === null || rawDetails.leadTimeDays === '' ? null : Number(rawDetails.leadTimeDays);
     if (leadTimeDays !== null && (!Number.isInteger(leadTimeDays) || leadTimeDays < 0 || leadTimeDays > 365)) {
@@ -1102,7 +1111,7 @@ function validateListingInput(input: Record<string, unknown>, userId: string, pr
     ? input.tags.filter((tag): tag is string => typeof tag === 'string')
       .map(tag => listingText(tag, 40)).filter(Boolean).slice(0, 20)
     : [];
-  const imageAlt = listingText(input.imageAlt, 250) || `${title} by ${listingText(profile.shop_name || profile.shopName || profile.name, 120) || 'Atelier seller'}`;
+  const imageAlt = listingText(input.imageAlt, 250) || `${title} by ${sellerName}`;
   return {
     value: {
       listing_type: listingType,

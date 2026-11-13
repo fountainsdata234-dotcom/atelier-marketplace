@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Ban, MapPin, Phone, Search, Share2, Users, CheckCircle2, Grid3X3, Layers } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Ban, MapPin, Phone, Search, Share2, Users, CheckCircle2, Grid3X3, Layers } from 'lucide-react';
 import { ClothPost, User } from '../types';
 import { getProfileInitials, getRoleLabel } from '../utils/profile';
 import { api } from '../services/api';
@@ -32,6 +32,11 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
     && post.status !== 'sold_out'
     && !post.isBlocked,
   ), [posts, seller.id]);
+  const collectionCover = useMemo(() => [...allSellerPosts]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .find(post => Boolean(post.imageUrl)), [allSellerPosts]);
+  const collectionCoverUrl = collectionCover?.imageAssets?.find(asset => asset.url === collectionCover.imageUrl)?.thumbnailUrl
+    || collectionCover?.imageUrl;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState('all');
   const [sortBy, setSortBy] = useState<'newest' | 'price'>('newest');
@@ -59,6 +64,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   }), [allSellerPosts, searchQuery, selectedTag, sortBy]);
   const surface = isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white shadow-sm';
+  const openCollection = () => document.getElementById('seller-collection-listings')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   useEffect(() => {
     if (!featuredPostId || !allSellerPosts.some(post => post.id === featuredPostId)) return;
@@ -108,17 +114,22 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
         if (post) onSelectPost(post);
       }}>
         <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/25 via-neutral-950 to-orange-900/30 p-6 sm:p-10">
-          <img
+          <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-neutral-950/95 via-neutral-950/75 to-neutral-950/35" />
+          {collectionCoverUrl ? (
+            <button type="button" onClick={openCollection} aria-label={`Open ${seller.name}'s collection`} className="absolute inset-0 z-0 h-full w-full text-left">
+              <PostImage src={collectionCoverUrl} alt="" loading="eager" fit="cover" className="h-full w-full opacity-35" imageClassName="object-center" />
+              <span className="absolute bottom-5 left-6 z-10 inline-flex items-center gap-2 rounded-full border border-white/25 bg-neutral-950/70 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-sm">Explore the collection <ArrowRight className="h-3.5 w-3.5" /></span>
+            </button>
+          ) : <img
             src={SELLER_ATELIER_IMAGE}
-            alt={seller.name ? `${seller.name} showroom banner` : 'Seller showroom banner'}
+            alt=""
             aria-hidden="true"
             loading="lazy"
             decoding="async"
             className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-[0.16]"
-          />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-neutral-950/95 via-neutral-950/75 to-neutral-950/35" />
-          <div className="absolute -right-20 -top-28 h-72 w-72 rounded-full border border-amber-300/10 bg-amber-400/5" />
-          <div className="relative flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
+          />}
+          <div className="pointer-events-none absolute -right-20 -top-28 z-0 h-72 w-72 rounded-full border border-amber-300/10 bg-amber-400/5" />
+          <div className="relative z-10 flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-center gap-4">
               {seller.avatarUrl && !avatarUnavailable ? <img src={seller.avatarUrl} alt={seller.name} loading="lazy" decoding="async" onError={() => setAvatarUnavailable(true)} className="h-20 w-20 rounded-2xl object-cover ring-2 ring-amber-400/60" /> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-2xl font-black text-neutral-950">{getProfileInitials(seller.name)}</div>}
               <div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-300">Atelier storefront</p><div className="flex flex-wrap items-center gap-2"><h1 className="mt-1 text-3xl font-serif font-bold text-white sm:text-4xl">{seller.name}</h1>{seller.isPromoted && <span className="rounded-full bg-amber-400 px-3 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-neutral-950 shadow-lg">Promoted</span>}</div><p className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">{getRoleLabel(seller.role)}</p><p className="text-xs text-amber-100/70">{seller.handle}{seller.shopName ? ` · ${seller.shopName}` : ''}</p></div>
@@ -171,7 +182,7 @@ export const SellerProfilePage: React.FC<SellerProfilePageProps> = ({ seller, po
           </div>
           <p className="mt-2 text-[10px] text-neutral-500">{sellerPosts.length} matching piece{sellerPosts.length === 1 ? '' : 's'}</p>
         </div>
-        <div className="p-5 sm:p-8"><div className="mb-6 flex flex-col gap-4 border-b border-neutral-800/70 pb-5 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><Grid3X3 className="h-4 w-4 text-amber-500" /><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">The collection</p></div><h2 className="mt-1 text-2xl font-serif font-bold">{seller.name}'s edit</h2><p className="mt-1 max-w-xl text-xs text-neutral-400">A considered edit of garments and materials published by this {getRoleLabel(seller.role).toLowerCase()}.</p><div className="mt-3 flex flex-wrap gap-1.5">{collectionTags.map(tag => <span key={tag} className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-400">{tag}</span>)}</div></div><span className="text-xs text-neutral-400">{sellerPosts.length} piece{sellerPosts.length === 1 ? '' : 's'} available</span></div>{sellerPosts.length === 0 ? <p className="rounded-2xl border border-dashed border-neutral-700 p-8 text-center text-xs text-neutral-400">{allSellerPosts.length > 0 ? 'No pieces match these filters.' : 'This seller has not published a collection yet.'}</p> : <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{sellerPosts.map(post => <article id={`collection-post-${post.id}`} key={post.id} className={`group cursor-pointer overflow-hidden rounded-2xl border transition ${featuredPostId === post.id ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-xl shadow-amber-500/20' : isDarkMode ? 'border-neutral-800 bg-neutral-950/60 hover:border-amber-500/40' : 'border-neutral-200 bg-neutral-50 hover:border-amber-500/40'}`}><div className="relative overflow-hidden"><PostImage src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl} alt={post.title} className="aspect-[4/3]" imageClassName="brightness-110 saturate-110" loading="lazy" />{featuredPostId === post.id && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950"><CheckCircle2 className="h-3 w-3" /> Shared piece</span>}</div><div className="p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">{post.tags[0] || getRoleLabel(seller.role)}</p><h3 className="mt-1 font-serif text-lg font-bold">{post.title}</h3><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{post.description}</p><div className="mt-3 flex items-center justify-between text-[10px] text-neutral-400"><span>{post.likes?.length || 0} likes</span><span>{post.saves?.length || 0} saves</span>        <span>{new Date(post.createdAt).toLocaleDateString()}</span></div></div></article>)}</div>}</div>
+        <div id="seller-collection-listings" className="scroll-mt-24 p-5 sm:p-8"><div className="mb-6 flex flex-col gap-4 border-b border-neutral-800/70 pb-5 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2"><Grid3X3 className="h-4 w-4 text-amber-500" /><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">The collection</p></div><h2 className="mt-1 text-2xl font-serif font-bold">{seller.name}'s edit</h2><p className="mt-1 max-w-xl text-xs text-neutral-400">A considered edit of garments and materials published by this {getRoleLabel(seller.role).toLowerCase()}.</p><div className="mt-3 flex flex-wrap gap-1.5">{collectionTags.map(tag => <span key={tag} className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-400">{tag}</span>)}</div></div><span className="text-xs text-neutral-400">{sellerPosts.length} piece{sellerPosts.length === 1 ? '' : 's'} available</span></div>{sellerPosts.length === 0 ? <p className="rounded-2xl border border-dashed border-neutral-700 p-8 text-center text-xs text-neutral-400">{allSellerPosts.length > 0 ? 'No pieces match these filters.' : 'This seller has not published a collection yet.'}</p> : <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{sellerPosts.map(post => <article id={`collection-post-${post.id}`} key={post.id} className={`group cursor-pointer overflow-hidden rounded-2xl border transition ${featuredPostId === post.id ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-xl shadow-amber-500/20' : isDarkMode ? 'border-neutral-800 bg-neutral-950/60 hover:border-amber-500/40' : 'border-neutral-200 bg-neutral-50 hover:border-amber-500/40'}`}><div className="relative overflow-hidden"><PostImage src={post.imageAssets?.[0]?.thumbnailUrl || post.imageUrl} alt={post.title} className="aspect-[4/3]" imageClassName="brightness-110 saturate-110" loading="lazy" />{featuredPostId === post.id && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-neutral-950"><CheckCircle2 className="h-3 w-3" /> Shared piece</span>}</div><div className="p-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">{post.tags[0] || getRoleLabel(seller.role)}</p><h3 className="mt-1 font-serif text-lg font-bold">{post.title}</h3><p className="mt-1 line-clamp-2 text-xs text-neutral-400">{post.description || 'Contact the seller for details about this piece.'}</p><div className="mt-3 flex items-center justify-between text-[10px] text-neutral-400"><span>{post.likes?.length || 0} likes</span><span>{post.saves?.length || 0} saves</span>        <span>{new Date(post.createdAt).toLocaleDateString()}</span></div></div></article>)}</div>}</div>
       </section>
       <MarketplaceReviews
         type="seller"
