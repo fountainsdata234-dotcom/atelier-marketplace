@@ -171,7 +171,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [fulfilmentFilter, setFulfilmentFilter] = useState('');
   const [availabilityFilter, setAvailabilityFilter] = useState('');
   const [feedPosts, setFeedPosts] = useState<ClothPost[]>([]);
-  const [feedPageLengths, setFeedPageLengths] = useState<number[]>([]);
   const [featuredPosts, setFeaturedPosts] = useState<ClothPost[]>([]);
   const [featuredError, setFeaturedError] = useState<string | null>(null);
   const [featuredRetry, setFeaturedRetry] = useState(0);
@@ -219,7 +218,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     () => storageService.getRecommendationEvents(storageService.getRecommendationScope(currentUser?.id)),
   );
   const [recommendationNotice, setRecommendationNotice] = useState<string | null>(null);
-  const [recommendationRevision, setRecommendationRevision] = useState(0);
   const hasLoadedServerFeed = useRef(false);
   const actionLocks = useRef(new Set<string>());
   const feedGeneration = useRef(0);
@@ -229,7 +227,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   };
   const refreshRecommendationSignals = () => {
     setRecommendationEvents(storageService.getRecommendationEvents(recommendationScope));
-    setRecommendationRevision(value => value + 1);
   };
   const recordRecommendationSignal = (listingId: string, eventType: RecommendationEventType, reason?: string) => {
     const listing = feedPosts.find(post => post.id === listingId)
@@ -263,7 +260,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       if ((event as CustomEvent<string>).detail !== recommendationScope) return;
       setRecommendationPreferences(storageService.getRecommendationPreferences(recommendationScope));
       setRecommendationEvents(storageService.getRecommendationEvents(recommendationScope));
-      setRecommendationRevision(value => value + 1);
     };
     window.addEventListener('atelier_recommendations_updated', update);
     return () => window.removeEventListener('atelier_recommendations_updated', update);
@@ -352,22 +348,18 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     }
   };
 
-  const sourcePosts = useMemo(() => {
-    if (activeFeedView !== 'for-you' || sortOrder !== 'relevance') return feedPosts;
-    let offset = 0;
-    const pages = feedPageLengths.map(length => {
-      const page = feedPosts.slice(offset, offset + length);
-      offset += length;
-      return page;
-    });
-    if (offset < feedPosts.length) pages.push(feedPosts.slice(offset));
-    return rankMarketplaceListingPages(pages, users, recommendationEvents, recommendationPreferences, {
+  const rankFeedPage = (page: ClothPost[]) => {
+    if (activeFeedView !== 'for-you' || sortOrder !== 'relevance') return page;
+    return rankMarketplaceListingPages([page], users, recommendationEvents, recommendationPreferences, {
       search: searchQuery,
       searchHistory: storageService.getSearchHistory(currentUser?.id),
       currentUserId: currentUser?.id,
       categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
     });
-  }, [feedPosts, feedPageLengths, users, recommendationEvents, recommendationPreferences, activeFeedView, sortOrder, searchQuery, selectedCategory, recommendationRevision, currentUser?.id]);
+  };
+  const rankFeedPageRef = useRef(rankFeedPage);
+  rankFeedPageRef.current = rankFeedPage;
+  const sourcePosts = feedPosts;
   const getPostImageSource = (post: ClothPost): string | undefined => {
     const thumbnail = post.imageAssets?.[0]?.thumbnailUrl;
     const original = post.imageAssets?.[0]?.url || post.imageUrl;
@@ -469,8 +461,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   useEffect(() => {
     if (activeFeedView !== 'newest' && !hasLoadedServerFeed.current && posts.length > 0) {
       const initialPosts = posts.slice(0, 16);
-      setFeedPosts(initialPosts);
-      setFeedPageLengths([initialPosts.length]);
+      setFeedPosts(current => current.length
+        ? current
+        : rankFeedPageRef.current(initialPosts));
     }
   }, [activeFeedView, posts]);
 
@@ -482,7 +475,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     setFeedError(null);
     setFeedCursor(null);
     setFeedHasMore(false);
-    setFeedPageLengths([]);
     const timer = window.setTimeout(() => {
       void api.getMarketplaceFeed({
         view: activeFeedView,
@@ -510,16 +502,14 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           : activeFeedView === 'newest' || hasActiveFeedFilters
             ? []
             : postsRef.current.slice(0, 16);
-        setFeedPosts(initialPosts);
-        setFeedPageLengths(initialPosts.length > 0 ? [initialPosts.length] : []);
+        setFeedPosts(rankFeedPageRef.current(initialPosts));
         setFeedCursor(page.nextCursor);
         setFeedHasMore(page.hasMore);
         if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
       }).catch(error => {
         if (!cancelled && generation === feedGeneration.current) {
           const initialPosts = activeFeedView === 'newest' ? [] : postsRef.current.slice(0, 16);
-          setFeedPosts(initialPosts);
-          setFeedPageLengths(initialPosts.length > 0 ? [initialPosts.length] : []);
+          setFeedPosts(rankFeedPageRef.current(initialPosts));
           setFeedCursor(null);
           setFeedHasMore(false);
           setFeedError(activeFeedView === 'newest' || hasActiveFeedFilters
@@ -569,10 +559,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         existingIds.add(post.id);
         return true;
       });
-      setFeedPosts(current => {
-        return [...current, ...newItems];
-      });
-      if (newItems.length > 0) setFeedPageLengths(current => [...current, newItems.length]);
+      const rankedNewItems = rankFeedPageRef.current(newItems);
+      setFeedPosts(current => [...current, ...rankedNewItems]);
       setFeedCursor(page.nextCursor);
       setFeedHasMore(page.hasMore);
       if (searchQuery.trim().length >= 2) recordSearchEvent('impression', undefined, page.items.length);
@@ -637,7 +625,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     const recent = [query, ...recentSearches.filter(item => item.toLowerCase() !== query.toLowerCase())].slice(0, 6);
     setRecentSearches(recent);
     storageService.recordSearchTerm(query, currentUser?.id);
-    setRecommendationRevision(revision => revision + 1);
     try {
       sessionStorage.setItem('atelier_recent_marketplace_searches_v1', JSON.stringify(recent));
     } catch (error) {
@@ -742,7 +729,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     return result;
   }, [tailorPosts, userById, filterCountry, filterState, filterCity, nearMeActive, userCoords, searchQuery, activeFeedView]);
 
-  const visiblePosts = activeFeedView === 'newest' && feedLoading ? [] : filteredPosts;
+  const visiblePosts = feedLoading ? [] : filteredPosts;
 
   useEffect(() => {
     let cancelled = false;
@@ -1670,6 +1657,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       </button>
                       {getWhatsAppUrl(post) ? <button type="button" onClick={() => openWhatsApp(post)} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500"><Phone className="h-3.5 w-3.5" /><span>WhatsApp</span></button> : <span className="text-[10px] text-neutral-500">WhatsApp unavailable</span>}
                     </div>
+
                   </motion.article>
                 );
               })}
@@ -2023,13 +2011,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               {shouldShowPromotedRail && (
                 <PromotedTailorRail users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
               )}
-              <motion.article
+              <article
                 data-marketplace-listing-id={post.id}
                 data-marketplace-seller-id={post.authorId}
-                layout
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
                 onClick={(event) => {
                   if ((event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
                   openListing(post);
@@ -2116,24 +2100,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                         setRecommendationNotice('We will avoid this listing on this device and adjust its category and style signals.');
                         return;
                       }
-                      const feedPostIndex = feedPosts.findIndex(item => item.id === post.id);
                       setPendingActions(current => new Set(current).add(`feedback-${post.id}`));
                       void api.setRecommendationFeedback(post.id, 'not_interested', true)
                         .then(() => {
                           setFeedPosts(current => current.filter(item => item.id !== post.id));
-                          if (feedPostIndex >= 0) {
-                            setFeedPageLengths(current => {
-                              let offset = 0;
-                              const pageIndex = current.findIndex(length => {
-                                const containsPost = feedPostIndex < offset + length;
-                                if (!containsPost) offset += length;
-                                return containsPost;
-                              });
-                              return pageIndex < 0
-                                ? current
-                                : current.map((length, index) => index === pageIndex ? Math.max(0, length - 1) : length);
-                            });
-                          }
                           setRecommendationNotice('This listing is hidden from your recommendations for 30 days.');
                         })
                         .catch(error => {
@@ -2199,7 +2169,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                   </p>
                 )}
 
-              </motion.article>
+              </article>
               {activeFeedView !== 'newest' && (postIndex + 1) % 12 === 0 && postIndex + 1 < visiblePosts.length && (Math.floor((postIndex + 1) / 6) % 3 !== 2) && (
                 <div className="sm:col-span-2 lg:col-span-3">
                   <MarketplaceInterlude posts={visiblePosts} users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
