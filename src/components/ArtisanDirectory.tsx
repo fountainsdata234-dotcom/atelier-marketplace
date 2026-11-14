@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, MapPin, Navigation, Search } from 'lucide-react';
-import { ClothPost, LocationCity, LocationCountry, LocationRegion, NearbySellerMatch, User } from '../types';
+import { ClothPost, LocationCity, LocationCountry, LocationRegion, User } from '../types';
 import { findExactArtisanMatch, getSearchSuggestions } from '../utils/globe';
 import { countSellerAccounts, matchesLocationFilter } from '../utils/artisanFilters';
 import { calculateDistanceKm, isConfirmedBusinessLocation, NEARBY_SELLER_RADII_KM } from '../utils/nearbySellers';
@@ -84,10 +84,8 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const [nearMeOnly, setNearMeOnly] = useState(false);
   const [customerSearchLocation, setCustomerSearchLocation] = useState<{ lat: number; lng: number; accuracyMeters: number } | null>(null);
   const [nearbyRadiusKm, setNearbyRadiusKm] = useState<number>(5);
-  const [nearbyMatches, setNearbyMatches] = useState<NearbySellerMatch[]>([]);
   const [nearbySearchStatus, setNearbySearchStatus] = useState('');
   const [isNearbySearchLoading, setIsNearbySearchLoading] = useState(false);
-  const nearbySellerIds = useMemo(() => new Set(nearbyMatches.map(match => match.sellerId)), [nearbyMatches]);
 
   const artisans = useMemo(() => {
     return users.filter((user) => !user.isBlocked
@@ -138,6 +136,9 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
         };
       });
   }, [availablePostsBySeller, customerSearchLocation, users]);
+  const nearbySellerIds = useMemo(() => new Set(artisans
+    .filter(artisan => artisan.distanceKm !== null && artisan.distanceKm <= nearbyRadiusKm)
+    .map(artisan => artisan.id)), [artisans, nearbyRadiusKm]);
 
   const [resolvedLocationsById, setResolvedLocationsById] = useState<Map<string, User['location']>>(() => new Map());
   const globeArtisans = useMemo(() => {
@@ -315,41 +316,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
     const matchesAvailability = availabilityFilter === 'all' || artisan.availability.includes(availabilityFilter);
     return matchesSearch && matchesSpecialization && matchesListingServiceType && matchesPrice && matchesAvailability;
   });
-  useEffect(() => {
-    if (!nearMeOnly || !customerSearchLocation) {
-      setNearbyMatches([]);
-      return;
-    }
-    let active = true;
-    setIsNearbySearchLoading(true);
-    setNearbySearchStatus('');
-    void api.getNearbySellers(customerSearchLocation, nearbyRadiusKm).then(matches => {
-      if (active) {
-        setNearbyMatches(matches);
-        setNearbySearchStatus('');
-      }
-    }).catch(error => {
-      console.warn('Remote nearby-seller search timed out; using confirmed seller coordinates already loaded.', error);
-      if (active) {
-        const fallbackMatches = artisans
-          .filter(artisan => isConfirmedBusinessLocation(artisan.location))
-          .map(artisan => ({
-            sellerId: artisan.id,
-            distanceKm: calculateDistanceKm(customerSearchLocation, artisan.location),
-          }))
-          .filter(match => match.distanceKm <= nearbyRadiusKm)
-          .sort((left, right) => left.distanceKm - right.distanceKm);
-        setNearbyMatches(fallbackMatches);
-        setNearbySearchStatus(fallbackMatches.length > 0
-          ? 'Showing sellers from the confirmed locations already loaded.'
-          : 'Nearby sellers could not be loaded. Check your connection and retry.');
-      }
-    }).finally(() => {
-      if (active) setIsNearbySearchLoading(false);
-    });
-    return () => { active = false; };
-  }, [customerSearchLocation, nearMeOnly, nearbyRadiusKm]);
-
   const selectedGlobeArtisan = selectedArtisanId
     ? globeArtisans.find((artisan) => artisan.id === selectedArtisanId) ?? null
     : null;
@@ -368,7 +334,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
   const handleNearbySearch = () => {
     if (nearMeOnly) {
       setNearMeOnly(false);
-      setNearbyMatches([]);
       setNearbySearchStatus('');
       return;
     }
@@ -385,6 +350,7 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
         accuracyMeters: position.coords.accuracy,
       });
       setNearMeOnly(true);
+      setIsNearbySearchLoading(false);
     }, error => {
       const message = error.code === error.PERMISSION_DENIED
         ? 'Location permission was denied. You can still search manually by country, state, or city.'
@@ -395,23 +361,6 @@ export const ArtisanDirectory: React.FC<ArtisanDirectoryProps> = ({ users, selle
       setIsNearbySearchLoading(false);
     }, { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 });
   };
-
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    let active = true;
-    navigator.geolocation.getCurrentPosition(position => {
-      if (!active) return;
-      setCustomerSearchLocation({
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-        accuracyMeters: position.coords.accuracy,
-      });
-      setNearMeOnly(true);
-    }, () => {
-      // Location is optional; manual country, state, city, and area search remains available.
-    }, { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 });
-    return () => { active = false; };
-  }, []);
 
   const handleSuggestionPick = (artisan: typeof filteredArtisans[number]) => {
     focusArtisan(artisan);
