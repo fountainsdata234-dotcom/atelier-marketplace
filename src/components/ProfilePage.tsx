@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Bookmark, Camera, LogOut, Save, Trash2, UserRound } from 'lucide-react';
-import { User } from '../types';
+import { RecommendationPreferences, User } from '../types';
 import { api } from '../services/api';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/mediaUpload';
@@ -31,6 +31,103 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isAcknowledgingWarning, setIsAcknowledgingWarning] = useState(false);
   const [warningAckStatus, setWarningAckStatus] = useState('');
+  const recommendationScope = storageService.getRecommendationScope(currentUser.id);
+  const [recommendationPreferences, setRecommendationPreferences] = useState<RecommendationPreferences>(
+    () => storageService.getRecommendationPreferences(recommendationScope),
+  );
+  const [recommendationStatus, setRecommendationStatus] = useState<string | null>(null);
+  const [categoryPreferenceInput, setCategoryPreferenceInput] = useState('');
+  const [stylePreferenceInput, setStylePreferenceInput] = useState('');
+  const [minimumPriceInput, setMinimumPriceInput] = useState('');
+  const [maximumPriceInput, setMaximumPriceInput] = useState('');
+  const [currencyPreferenceInput, setCurrencyPreferenceInput] = useState('');
+  const [countryPreferenceInput, setCountryPreferenceInput] = useState('');
+  const [statePreferenceInput, setStatePreferenceInput] = useState('');
+
+  const loadRecommendationSettings = (preferences: RecommendationPreferences) => {
+    setRecommendationPreferences(preferences);
+    setCategoryPreferenceInput(preferences.categories.join(', '));
+    setStylePreferenceInput(preferences.styles.join(', '));
+    setMinimumPriceInput(preferences.minimumPrice === null ? '' : String(preferences.minimumPrice));
+    setMaximumPriceInput(preferences.maximumPrice === null ? '' : String(preferences.maximumPrice));
+    setCurrencyPreferenceInput(preferences.currency);
+    setCountryPreferenceInput(preferences.country);
+    setStatePreferenceInput(preferences.state);
+  };
+
+  useEffect(() => {
+    loadRecommendationSettings(storageService.getRecommendationPreferences(recommendationScope));
+    let cancelled = false;
+    void api.getRecommendationPreferences().then(({ preferences }) => {
+      if (cancelled || !preferences) return;
+      storageService.saveRecommendationPreferences(recommendationScope, preferences);
+      loadRecommendationSettings(preferences);
+    }).catch(error => {
+      if (!cancelled) {
+        console.warn('Account recommendation preferences could not be loaded.', error);
+        setRecommendationStatus('Account settings are temporarily unavailable; this device’s saved settings are still in use.');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [recommendationScope]);
+
+  const saveRecommendationSettings = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const minimum = minimumPriceInput.trim() ? Number(minimumPriceInput) : null;
+    const maximum = maximumPriceInput.trim() ? Number(maximumPriceInput) : null;
+    if ((minimum !== null && (!Number.isFinite(minimum) || minimum < 0))
+      || (maximum !== null && (!Number.isFinite(maximum) || maximum < 0))
+      || (minimum !== null && maximum !== null && minimum > maximum)
+      || ((minimum !== null || maximum !== null) && !currencyPreferenceInput.trim())) {
+      setRecommendationStatus('Enter a valid price range and its currency, with the minimum no greater than the maximum.');
+      return;
+    }
+    const splitList = (value: string) => Array.from(new Set(value.split(',').map(item => item.trim()).filter(Boolean))).slice(0, 20);
+    const next: RecommendationPreferences = {
+      ...recommendationPreferences,
+      categories: splitList(categoryPreferenceInput),
+      styles: splitList(stylePreferenceInput),
+      minimumPrice: minimum,
+      maximumPrice: maximum,
+      currency: currencyPreferenceInput.trim().toUpperCase().slice(0, 3),
+      country: countryPreferenceInput.trim().slice(0, 80),
+      state: statePreferenceInput.trim().slice(0, 80),
+    };
+    storageService.saveRecommendationPreferences(recommendationScope, next);
+    setRecommendationPreferences(next);
+    try {
+      await api.saveRecommendationPreferences(next);
+      setRecommendationStatus('Your discovery settings are saved to your account.');
+    } catch (error) {
+      setRecommendationStatus(`Saved on this device, but account sync could not be completed: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
+    }
+  };
+
+  const resetRecommendationSettings = async () => {
+    storageService.resetRecommendationData(recommendationScope);
+    const defaults = storageService.getRecommendationPreferences(recommendationScope);
+    loadRecommendationSettings(defaults);
+    setRecommendationStatus('Discovery settings and this device’s activity history were reset.');
+    try {
+      await api.resetRecommendationPreferences();
+    } catch (error) {
+      setRecommendationStatus(`Reset on this device, but account settings could not be cleared: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
+    }
+  };
+
+  const setRecommendationEnabled = async (enabled: boolean) => {
+    const next = { ...recommendationPreferences, enabled };
+    storageService.saveRecommendationPreferences(recommendationScope, next);
+    setRecommendationPreferences(next);
+    setRecommendationStatus(enabled
+      ? 'Activity-based recommendations are on.'
+      : 'Activity-based recommendations are off and local activity history was cleared.');
+    try {
+      await api.saveRecommendationPreferences(next);
+    } catch (error) {
+      setRecommendationStatus(`Your choice is saved on this device, but account sync could not be completed: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
+    }
+  };
 
   const uploadAvatar = async (file: File | undefined) => {
     const userId = await getAuthUserId();
@@ -184,6 +281,53 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ currentUser, isDarkMod
           )}
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2"><button type="submit" disabled={isUploadingAvatar} className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300 disabled:opacity-60"><Save className="h-4 w-4" /> Save profile</button>{status && <span className="text-xs text-emerald-400">{status}</span>}</div>
         </form>
+
+        <section className={`mt-8 rounded-2xl border p-4 sm:p-5 ${isDarkMode ? 'border-neutral-800 bg-neutral-900/30' : 'border-neutral-200 bg-neutral-50'}`} aria-labelledby="discovery-settings-title">
+          <div className="mb-4">
+            <h2 id="discovery-settings-title" className="text-base font-bold">Discovery settings</h2>
+            <p className="mt-1 text-xs leading-relaxed text-neutral-500">Recommendations learn from your searches, listing views, likes, saves, enquiries, and the sellers you follow. Activity is kept on this device for up to 180 days; no sensitive traits are inferred.</p>
+          </div>
+          <form onSubmit={saveRecommendationSettings} className="space-y-4">
+            <label className="flex items-start gap-3 text-xs">
+              <input
+                type="checkbox"
+                checked={recommendationPreferences.enabled}
+                onChange={event => void setRecommendationEnabled(event.target.checked)}
+                className="mt-0.5 accent-amber-400"
+              />
+              <span><strong>Use my activity to personalize recommendations</strong><span className="mt-1 block text-neutral-500">When turned off, locally stored activity is cleared. Your marketplace searches and filters continue to work normally.</span></span>
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-semibold">Preferred categories (optional)
+                <input value={categoryPreferenceInput} onChange={event => setCategoryPreferenceInput(event.target.value)} placeholder="Clothing, Fabric" className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" />
+              </label>
+              <label className="text-xs font-semibold">Styles or materials (optional)
+                <input value={stylePreferenceInput} onChange={event => setStylePreferenceInput(event.target.value)} placeholder="Senator, linen, Ankara" className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" />
+              </label>
+              <label className="text-xs font-semibold">Minimum price
+                <input type="number" min="0" step="any" value={minimumPriceInput} onChange={event => setMinimumPriceInput(event.target.value)} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" />
+              </label>
+              <label className="text-xs font-semibold">Maximum price
+                <input type="number" min="0" step="any" value={maximumPriceInput} onChange={event => setMaximumPriceInput(event.target.value)} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" />
+              </label>
+              <label className="text-xs font-semibold">Price currency (required with a price range)
+                <input value={currencyPreferenceInput} onChange={event => setCurrencyPreferenceInput(event.target.value.replace(/[^a-z]/gi, '').toUpperCase().slice(0, 3))} maxLength={3} placeholder="USD" className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" />
+              </label>
+              <label className="text-xs font-semibold">Preferred country
+                <input value={countryPreferenceInput} onChange={event => setCountryPreferenceInput(event.target.value)} maxLength={80} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" />
+              </label>
+              <label className="text-xs font-semibold">Preferred state or region
+                <input value={statePreferenceInput} onChange={event => setStatePreferenceInput(event.target.value)} maxLength={80} className="mt-1.5 w-full rounded-xl border border-neutral-700 bg-neutral-900/40 px-3 py-2.5 text-sm" />
+              </label>
+            </div>
+            <p className="text-[11px] text-neutral-500">These optional settings influence ranking but do not hide listings. Use marketplace filters when you need to restrict results.</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-bold text-neutral-950 hover:bg-amber-300"><Save className="h-4 w-4" /> Save discovery settings</button>
+              <button type="button" onClick={() => void resetRecommendationSettings()} className="rounded-xl border border-neutral-700 px-4 py-2.5 text-xs font-semibold hover:border-amber-400">Reset settings and activity</button>
+              {recommendationStatus && <span role="status" className="text-xs text-neutral-500">{recommendationStatus}</span>}
+            </div>
+          </form>
+        </section>
 
         <section className="mt-8 rounded-2xl border border-red-500/25 bg-red-500/5 p-4" aria-labelledby="delete-account-title">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

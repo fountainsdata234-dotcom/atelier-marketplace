@@ -19,7 +19,7 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_RECOMMENDATION_PREFERENCES: RecommendationPreferences = {
-  enabled: false,
+  enabled: true,
   categories: [],
   styles: [],
   minimumPrice: null,
@@ -32,6 +32,18 @@ const RECOMMENDATION_PREFERENCES_KEY = 'atelier_recommendation_preferences_v1';
 const RECOMMENDATION_EVENTS_KEY = 'atelier_recommendation_events_v1';
 const RECOMMENDATION_RETENTION_MS = 180 * 86_400_000;
 const RECOMMENDATION_EVENT_LIMIT = 500;
+
+const clearSearchHistoryForScope = (scope: string): void => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
+    const history: Record<string, unknown> = stored ? JSON.parse(stored) : {};
+    const key = scope.startsWith('user:') ? scope.slice('user:'.length) : 'guest';
+    delete history[key];
+    localStorage.setItem(STORAGE_KEYS.SEARCH_HISTORY, JSON.stringify(history));
+  } catch {
+    localStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
+  }
+};
 
 const DEFAULT_PROMO_PLANS: AdminPromoPlan[] = [
   {
@@ -206,7 +218,7 @@ export const storageService = {
       if (!raw) return { ...DEFAULT_RECOMMENDATION_PREFERENCES };
       const value = JSON.parse(raw) as Partial<RecommendationPreferences>;
       return {
-        enabled: value.enabled === true,
+        enabled: value.enabled !== false,
         categories: Array.isArray(value.categories) ? value.categories.filter(item => typeof item === 'string').slice(0, 20) : [],
         styles: Array.isArray(value.styles) ? value.styles.filter(item => typeof item === 'string').slice(0, 20) : [],
         minimumPrice: typeof value.minimumPrice === 'number' && Number.isFinite(value.minimumPrice) && value.minimumPrice >= 0 ? value.minimumPrice : null,
@@ -225,6 +237,7 @@ export const storageService = {
     storage.setItem(`${RECOMMENDATION_PREFERENCES_KEY}:${scope}`, JSON.stringify(preferences));
     if (!preferences.enabled) {
       storage.removeItem(`${RECOMMENDATION_EVENTS_KEY}:${scope}`);
+      clearSearchHistoryForScope(scope);
       try {
         const legacyEvents: DiscoveryEvent[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.DISCOVERY_EVENTS) || '[]');
         const owner = scope.startsWith('user:') ? scope.slice('user:'.length) : undefined;
@@ -293,6 +306,7 @@ export const storageService = {
 
   resetRecommendationData(scope: string): void {
     this.saveRecommendationPreferences(scope, { ...DEFAULT_RECOMMENDATION_PREFERENCES });
+    clearSearchHistoryForScope(scope);
   },
 
   getDiscoveryEvents(): DiscoveryEvent[] {
@@ -307,6 +321,7 @@ export const storageService = {
   recordSearchTerm(term: string, userId?: string): void {
     const normalizedTerm = term.trim().toLowerCase();
     if (normalizedTerm.length < 2) return;
+    if (!this.getRecommendationPreferences(this.getRecommendationScope(userId)).enabled) return;
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.SEARCH_HISTORY);
       const history: Record<string, { term: string; count: number; lastSearched: string }[]> = stored ? JSON.parse(stored) : {};

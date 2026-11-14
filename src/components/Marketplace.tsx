@@ -9,6 +9,7 @@ import { MarketplaceInterlude } from './MarketplaceInterlude';
 import { buildPostShareUrl, getProfileInitials, getRoleLabel } from '../utils/profile';
 import { matchesLocationFilter } from '../utils/artisanFilters';
 import { rankMarketplaceListingPages } from '../utils/marketplaceRanking';
+import { getMarketplaceSearchRelevance, parseMarketplaceSearch } from '../utils/marketplaceSearch';
 import { buildWhatsAppUrl } from '../utils/whatsapp';
 import { safeCustomerErrorMessage } from '../utils/customerMessages';
 import { animateActionFeedback } from '../utils/actionFeedback';
@@ -180,6 +181,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const [feedLoadingMore, setFeedLoadingMore] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [feedRetry, setFeedRetry] = useState(0);
+  const [similarListings, setSimilarListings] = useState<ClothPost[]>([]);
+  const [similarSearches, setSimilarSearches] = useState<string[]>([]);
+  const [similarListingsLoading, setSimilarListingsLoading] = useState(false);
+  const [similarListingsError, setSimilarListingsError] = useState<string | null>(null);
+  const [similarListingsRetry, setSimilarListingsRetry] = useState(0);
   const [publicCollections, setPublicCollections] = useState<SellerCollection[]>([]);
   const [styleReferencePage, setStyleReferencePage] = useState<MarketplaceStyleReferencePage | null>(null);
   const [styleReferenceLoading, setStyleReferenceLoading] = useState(true);
@@ -213,13 +219,6 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     () => storageService.getRecommendationEvents(storageService.getRecommendationScope(currentUser?.id)),
   );
   const [recommendationNotice, setRecommendationNotice] = useState<string | null>(null);
-  const [categoryPreferenceInput, setCategoryPreferenceInput] = useState('');
-  const [stylePreferenceInput, setStylePreferenceInput] = useState('');
-  const [minimumPriceInput, setMinimumPriceInput] = useState('');
-  const [maximumPriceInput, setMaximumPriceInput] = useState('');
-  const [currencyPreferenceInput, setCurrencyPreferenceInput] = useState('');
-  const [countryPreferenceInput, setCountryPreferenceInput] = useState('');
-  const [statePreferenceInput, setStatePreferenceInput] = useState('');
   const [recommendationRevision, setRecommendationRevision] = useState(0);
   const hasLoadedServerFeed = useRef(false);
   const actionLocks = useRef(new Set<string>());
@@ -233,99 +232,15 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     setRecommendationRevision(value => value + 1);
   };
   const recordRecommendationSignal = (listingId: string, eventType: RecommendationEventType, reason?: string) => {
-    const listing = feedPosts.find(post => post.id === listingId);
+    const listing = feedPosts.find(post => post.id === listingId)
+      || postsRef.current.find(post => post.id === listingId);
     storageService.recordRecommendationEvent(listingId, eventType, recommendationScope, listing, reason);
     refreshRecommendationSignals();
-  };
-  const saveRecommendationSettings = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const minimum = minimumPriceInput.trim() ? Number(minimumPriceInput) : null;
-    const maximum = maximumPriceInput.trim() ? Number(maximumPriceInput) : null;
-    if ((minimum !== null && (!Number.isFinite(minimum) || minimum < 0))
-      || (maximum !== null && (!Number.isFinite(maximum) || maximum < 0))
-      || (minimum !== null && maximum !== null && minimum > maximum)
-      || ((minimum !== null || maximum !== null) && !currencyPreferenceInput.trim())) {
-      setRecommendationNotice('Enter a valid price range and its currency, with the minimum no greater than the maximum.');
-      return;
-    }
-    const splitList = (value: string) => Array.from(new Set(value.split(',').map(item => item.trim()).filter(Boolean))).slice(0, 20);
-    const next: RecommendationPreferences = {
-      ...recommendationPreferences,
-      categories: splitList(categoryPreferenceInput),
-      styles: splitList(stylePreferenceInput),
-      minimumPrice: minimum,
-      maximumPrice: maximum,
-      currency: currencyPreferenceInput.trim().toUpperCase().slice(0, 3),
-      country: countryPreferenceInput.trim().slice(0, 80),
-      state: statePreferenceInput.trim().slice(0, 80),
-    };
-    storageService.saveRecommendationPreferences(recommendationScope, next);
-    setRecommendationPreferences(next);
-    if (currentUser) {
-      try {
-        await api.saveRecommendationPreferences(next);
-        setRecommendationNotice(next.enabled
-          ? 'Your preferences are saved to your account and will shape Explore recommendations.'
-          : 'Preferences saved. Personalization remains off until you enable it.');
-      } catch (error) {
-        setRecommendationNotice(`Preferences are saved on this device, but account sync could not be completed: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
-      }
-    } else {
-      setRecommendationNotice(next.enabled
-        ? 'Your preferences are saved on this device and will shape Explore.'
-        : 'Preferences saved. Personalization remains off until you enable it.');
-    }
-  };
-  const setRecommendationEnabled = async (enabled: boolean) => {
-    const next = { ...recommendationPreferences, enabled };
-    storageService.saveRecommendationPreferences(recommendationScope, next);
-    setRecommendationPreferences(next);
-    if (!enabled) {
-      setRecommendationEvents([]);
-      setRecommendationNotice('Personalization is off. Your local recommendation activity was cleared.');
-    } else {
-      setRecommendationNotice('Personalization is on. Recommendation activity stays on this device for up to 180 days.');
-    }
-    if (currentUser) {
-      try {
-        await api.saveRecommendationPreferences(next);
-      } catch (error) {
-        setRecommendationNotice(`Your choice is saved on this device, but account sync could not be completed: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
-      }
-    }
-  };
-  const resetRecommendations = async () => {
-    storageService.resetRecommendationData(recommendationScope);
-    const defaults = storageService.getRecommendationPreferences(recommendationScope);
-    setRecommendationPreferences(defaults);
-    setRecommendationEvents([]);
-    setCategoryPreferenceInput('');
-    setStylePreferenceInput('');
-    setMinimumPriceInput('');
-    setMaximumPriceInput('');
-    setCurrencyPreferenceInput('');
-    setCountryPreferenceInput('');
-    setStatePreferenceInput('');
-    setRecommendationNotice('Your recommendation preferences and local activity were reset.');
-    if (currentUser) {
-      try {
-        await api.resetRecommendationPreferences();
-      } catch (error) {
-        setRecommendationNotice(`Your settings were reset on this device, but account settings could not be cleared: ${safeCustomerErrorMessage(error, 'please try again later.')}`);
-      }
-    }
   };
   useEffect(() => {
     const preferences = storageService.getRecommendationPreferences(recommendationScope);
     setRecommendationPreferences(preferences);
     setRecommendationEvents(storageService.getRecommendationEvents(recommendationScope));
-    setCategoryPreferenceInput(preferences.categories.join(', '));
-    setStylePreferenceInput(preferences.styles.join(', '));
-    setMinimumPriceInput(preferences.minimumPrice === null ? '' : String(preferences.minimumPrice));
-    setMaximumPriceInput(preferences.maximumPrice === null ? '' : String(preferences.maximumPrice));
-    setCurrencyPreferenceInput(preferences.currency);
-    setCountryPreferenceInput(preferences.country);
-    setStatePreferenceInput(preferences.state);
   }, [recommendationScope]);
 
   useEffect(() => {
@@ -335,17 +250,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       if (cancelled || !preferences) return;
       storageService.saveRecommendationPreferences(recommendationScope, preferences);
       setRecommendationPreferences(preferences);
-      setCategoryPreferenceInput(preferences.categories.join(', '));
-      setStylePreferenceInput(preferences.styles.join(', '));
-      setMinimumPriceInput(preferences.minimumPrice === null ? '' : String(preferences.minimumPrice));
-      setMaximumPriceInput(preferences.maximumPrice === null ? '' : String(preferences.maximumPrice));
-      setCurrencyPreferenceInput(preferences.currency);
-      setCountryPreferenceInput(preferences.country);
-      setStatePreferenceInput(preferences.state);
     }).catch(error => {
       if (!cancelled) {
         console.warn('Account recommendation preferences could not be loaded.', error);
-        setRecommendationNotice('Account preferences are temporarily unavailable; this device’s saved settings are still in use.');
       }
     });
     return () => { cancelled = true; };
@@ -456,9 +363,11 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     if (offset < feedPosts.length) pages.push(feedPosts.slice(offset));
     return rankMarketplaceListingPages(pages, users, recommendationEvents, recommendationPreferences, {
       search: searchQuery,
+      searchHistory: storageService.getSearchHistory(currentUser?.id),
+      currentUserId: currentUser?.id,
       categoryId: selectedCategory === 'all' ? undefined : selectedCategory,
     });
-  }, [feedPosts, feedPageLengths, users, recommendationEvents, recommendationPreferences, activeFeedView, sortOrder, searchQuery, selectedCategory, recommendationRevision]);
+  }, [feedPosts, feedPageLengths, users, recommendationEvents, recommendationPreferences, activeFeedView, sortOrder, searchQuery, selectedCategory, recommendationRevision, currentUser?.id]);
   const getPostImageSource = (post: ClothPost): string | undefined => {
     const thumbnail = post.imageAssets?.[0]?.thumbnailUrl;
     const original = post.imageAssets?.[0]?.url || post.imageUrl;
@@ -714,16 +623,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     || filterCountry !== 'all'
     || filterState !== 'all'
     || filterCity !== 'all'
-    || nearMeActive
-    || (activeFeedView === 'for-you' && (
-      recommendationPreferences.enabled
-      || recommendationPreferences.categories.length > 0
-      || recommendationPreferences.styles.length > 0
-      || recommendationPreferences.minimumPrice !== null
-      || recommendationPreferences.maximumPrice !== null
-      || Boolean(recommendationPreferences.country)
-      || Boolean(recommendationPreferences.state)
-    )));
+    || nearMeActive);
 
   const trendingPosts = useMemo(
     () => (activeTrendingPage?.items || []).slice(0, showAllTrending ? 48 : 7),
@@ -736,11 +636,39 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     if (query.length < 2) return;
     const recent = [query, ...recentSearches.filter(item => item.toLowerCase() !== query.toLowerCase())].slice(0, 6);
     setRecentSearches(recent);
+    storageService.recordSearchTerm(query, currentUser?.id);
+    setRecommendationRevision(revision => revision + 1);
     try {
       sessionStorage.setItem('atelier_recent_marketplace_searches_v1', JSON.stringify(recent));
     } catch (error) {
       console.warn('Unable to retain recent marketplace searches for this session.', error);
     }
+  };
+  const resetMarketplaceFilters = (search = '') => {
+    setSearchQuery(search);
+    setSelectedCategory('all');
+    setSelectedTag('all');
+    setSortOrder('relevance');
+    setMinimumPriceFilter('');
+    setMaximumPriceFilter('');
+    setCurrencyFilter('');
+    setMaterialFilter('');
+    setColourFilter('');
+    setSizeFilter('');
+    setFulfilmentFilter('');
+    setAvailabilityFilter('');
+    setFilterCountry('all');
+    setFilterState('all');
+    setFilterCity('all');
+    setCountrySearch('');
+    setStateSearch('');
+    setCitySearch('');
+    setNearMeActive(false);
+    setUserCoords(null);
+  };
+  const applySimilarSearch = (term: string) => {
+    resetMarketplaceFilters(term);
+    rememberSearch(term);
   };
   const searchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -815,6 +743,117 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [tailorPosts, userById, filterCountry, filterState, filterCity, nearMeActive, userCoords, searchQuery, activeFeedView]);
 
   const visiblePosts = activeFeedView === 'newest' && feedLoading ? [] : filteredPosts;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (feedLoading || visiblePosts.length > 0 || feedError || postsLoadError) {
+      setSimilarListings([]);
+      setSimilarSearches([]);
+      setSimilarListingsError(null);
+      setSimilarListingsLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    const rawIntent = searchQuery.trim()
+      || (selectedTag !== 'all' ? selectedTag : '')
+      || (selectedCategory !== 'all' ? selectedCategory : '')
+      || materialFilter.trim()
+      || colourFilter.trim();
+    const parsedIntent = parseMarketplaceSearch(rawIntent);
+    const fallbackTerms = rawIntent
+      ? parsedIntent.termGroups.length > 1
+        ? parsedIntent.termGroups.map(group => group[0])
+        : parsedIntent.termGroups.flatMap(group => group.slice(1))
+      : [];
+    const searchTerms = Array.from(new Set(fallbackTerms.map(term => term.trim()).filter(term =>
+      term.length > 1 && term.toLowerCase() !== rawIntent.toLowerCase(),
+    ))).slice(0, 3);
+    const requestView: MarketplaceFeedView = activeFeedView === 'newest' ? 'all' : activeFeedView;
+    const requestSort: MarketplaceSort = activeFeedView === 'newest' ? 'newest' : 'relevance';
+
+    setSimilarListings([]);
+    setSimilarSearches([]);
+    setSimilarListingsError(null);
+    setSimilarListingsLoading(true);
+
+    const loadSimilarListings = async () => {
+      const settledSearches = await Promise.allSettled(searchTerms.map(term => api.getMarketplaceFeed({
+        view: requestView,
+        sort: 'relevance',
+        search: term,
+        limit: 6,
+      })));
+      const candidateById = new Map<string, ClothPost>();
+      const successfulSearches: string[] = [];
+      const failures: unknown[] = [];
+      settledSearches.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          failures.push(result.reason);
+          return;
+        }
+        if (result.value.items.length > 0) successfulSearches.push(searchTerms[index]);
+        result.value.items.forEach(post => candidateById.set(post.id, post));
+      });
+
+      if (candidateById.size === 0) {
+        try {
+          const broadPage = await api.getMarketplaceFeed({
+            view: requestView,
+            sort: requestSort,
+            limit: 12,
+          });
+          broadPage.items.forEach(post => candidateById.set(post.id, post));
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+
+      if (cancelled) return;
+      const candidates = Array.from(candidateById.values());
+      const scoringSearch = parsedIntent.termGroups.length ? parsedIntent : null;
+      candidates.sort((a, b) => {
+        const scoreA = scoringSearch ? getMarketplaceSearchRelevance(a, scoringSearch) : 0;
+        const scoreB = scoringSearch ? getMarketplaceSearchRelevance(b, scoringSearch) : 0;
+        const dateA = Date.parse(a.publishedAt || a.createdAt) || 0;
+        const dateB = Date.parse(b.publishedAt || b.createdAt) || 0;
+        return scoreB - scoreA || dateB - dateA || a.id.localeCompare(b.id);
+      });
+      setSimilarListings(candidates.slice(0, 6));
+      setSimilarSearches(successfulSearches);
+      if (!candidates.length && failures.length) {
+        setSimilarListingsError(safeCustomerErrorMessage(failures[0], 'Similar listings could not be loaded. Please try again.'));
+      }
+    };
+
+    void loadSimilarListings()
+      .catch(error => {
+        if (!cancelled) setSimilarListingsError(safeCustomerErrorMessage(error, 'Similar listings could not be loaded. Please try again.'));
+      })
+      .finally(() => {
+        if (!cancelled) setSimilarListingsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [
+    activeFeedView,
+    colourFilter,
+    feedError,
+    feedLoading,
+    materialFilter,
+    postsLoadError,
+    searchQuery,
+    selectedCategory,
+    selectedTag,
+    similarListingsRetry,
+    visiblePosts.length,
+  ]);
+
+  const fallbackSearchOptions = useMemo(() => {
+    if (similarSearches.length) return similarSearches;
+    return Array.from(new Set(similarListings.flatMap(post => [
+      ...(Array.isArray(post.tags) ? post.tags : []),
+      post.categoryId || '',
+    ]).map(term => term.trim()).filter(Boolean))).slice(0, 5);
+  }, [similarListings, similarSearches]);
 
   useEffect(() => {
     if (featuredPosts.length < 2) return;
@@ -1424,65 +1463,13 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           A place in your search (for example, “in Aba”) prioritizes matching seller locations but can include other areas; use the location filter to restrict results. Delivery availability is not inferred. Verified rating filters are unavailable because eligible rating-confidence data is not yet part of the feed.
         </p>
       </details>
-      {activeFeedView === 'for-you' && <details className={`rounded-2xl border p-4 ${isDarkMode ? 'border-neutral-800 bg-[#121316]/80' : 'border-neutral-200 bg-white shadow-sm'}`}>
-        <summary className="cursor-pointer text-sm font-semibold text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
-          Explore preferences and privacy
-        </summary>
-        <form onSubmit={saveRecommendationSettings} className="mt-4 space-y-4">
-          <label className={`flex items-start gap-3 text-xs ${isDarkMode ? 'text-neutral-200' : 'text-neutral-700'}`}>
-            <input
-              type="checkbox"
-              checked={recommendationPreferences.enabled}
-              onChange={event => setRecommendationEnabled(event.target.checked)}
-              className="mt-0.5 accent-amber-400"
-            />
-            <span><strong>Use my activity to personalize this feed</strong><span className="mt-1 block text-neutral-500">Off by default. If enabled, recent listing interactions are stored on this device for up to 180 days. Anonymous preferences last for this browser session. No sensitive attributes are inferred.</span></span>
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
-              Preferred categories (comma separated)
-              <input value={categoryPreferenceInput} onChange={event => setCategoryPreferenceInput(event.target.value)} placeholder="Clothing, Fabric" className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
-            </label>
-            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
-              Preferred styles or materials (comma separated)
-              <input value={stylePreferenceInput} onChange={event => setStylePreferenceInput(event.target.value)} placeholder="Senator, linen, Ankara" className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
-            </label>
-            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
-              Minimum price
-              <input type="number" min="0" step="any" value={minimumPriceInput} onChange={event => setMinimumPriceInput(event.target.value)} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
-            </label>
-            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
-              Maximum price
-              <input type="number" min="0" step="any" value={maximumPriceInput} onChange={event => setMaximumPriceInput(event.target.value)} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
-            </label>
-            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
-              Price currency (required with a price range)
-              <input value={currencyPreferenceInput} onChange={event => setCurrencyPreferenceInput(event.target.value.replace(/[^a-z]/gi, '').toUpperCase().slice(0, 3))} maxLength={3} placeholder="USD" className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
-            </label>
-            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
-              Preferred country (optional)
-              <input value={countryPreferenceInput} onChange={event => setCountryPreferenceInput(event.target.value)} maxLength={80} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
-            </label>
-            <label className={`text-xs ${isDarkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>
-              Preferred state or region (optional)
-              <input value={statePreferenceInput} onChange={event => setStatePreferenceInput(event.target.value)} maxLength={80} className={`mt-1 min-h-10 w-full rounded-lg border px-3 ${isDarkMode ? 'border-neutral-700 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-900'}`} />
-            </label>
-          </div>
-          <p className={`text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>Explore uses selected preferences, listing relevance and completeness, freshness, and merchant diversity. It does not reuse Trending scores. Verified rating-confidence and seller-reliability signals are not available to this ranker and are not guessed.</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="submit" className="min-h-10 rounded-lg bg-amber-400 px-4 text-xs font-bold text-neutral-950 hover:bg-amber-300">Save preferences</button>
-            <button type="button" onClick={resetRecommendations} className={`min-h-10 rounded-lg border px-4 text-xs font-semibold ${isDarkMode ? 'border-neutral-700 text-neutral-200 hover:border-amber-400' : 'border-neutral-300 text-neutral-700 hover:border-amber-500'}`}>Reset preferences and activity</button>
-            {recommendationNotice && <span role="status" className="text-xs text-neutral-500">{recommendationNotice}</span>}
-          </div>
-        </form>
-      </details>}
-
       {featuredError && (
         <div role="alert" className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs ${isDarkMode ? 'border-red-500/30 bg-red-500/10 text-red-200' : 'border-red-200 bg-red-50 text-red-800'}`}>
           <span>{featuredError}</span>
           <button type="button" onClick={() => setFeaturedRetry(value => value + 1)} className="shrink-0 font-semibold underline underline-offset-2">Retry</button>
         </div>
       )}
+      {recommendationNotice && <p role="status" className="text-xs text-neutral-500">{recommendationNotice}</p>}
 
       {featuredPosts.length > 0 && (
         <section aria-label="Featured marketplace listings" className="space-y-3">
@@ -1597,7 +1584,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
           )}
           {trendingLoading && <p className="px-4 pt-4 text-xs text-neutral-400 sm:px-5" role="status">Loading popular pieces…</p>}
           {trendingPosts.length > 0 && (
-            <div id="marketplace-trends-list" className="marketplace-masonry scroll-mt-24 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3 2xl:grid-cols-4">
+            <div id="marketplace-trends-list" className="marketplace-masonry scroll-mt-24 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3">
               {trendingPosts.map((post, index) => {
                 const imageSource = getPostImageSource(post);
                 const isLiked = currentUser ? post.likes.includes(currentUser.id) : false;
@@ -1882,7 +1869,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             {postsLoadError || feedError
               ? 'The atelier feed could not be reached'
               : hasActiveFeedFilters || sellerPosts.length > 0
-                ? 'No pieces match this view'
+                ? 'No exact matches found'
                 : currentUser?.role === 'tailor'
                   ? 'Your first collection is waiting to be shared'
                   : currentUser?.role === 'fabric_seller'
@@ -1894,7 +1881,9 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             {postsLoadError || feedError
               ? (feedError || 'Your saved listings are safe. Check your connection and try loading the feed again.')
               : hasActiveFeedFilters || sellerPosts.length > 0
-                ? 'Adjust your search, category, location, or Explore preferences to see more listings.'
+                ? searchQuery.trim()
+                  ? `No tailor, fabric, or listing matched “${searchQuery.trim()}”. Try a similar search or explore these available pieces.`
+                  : 'No listings matched these filters. Try a related search or broaden your filters to see more pieces.'
                 : currentUser?.role === 'tailor'
                   ? 'Publish garments, pricing, and fabric details for buyers to discover.'
                   : currentUser?.role === 'fabric_seller'
@@ -1917,28 +1906,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
             ) : hasActiveFeedFilters || sellerPosts.length > 0 ? (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('all');
-                  setSelectedTag('all');
-                  setSortOrder('relevance');
-                  setMinimumPriceFilter('');
-                  setMaximumPriceFilter('');
-                  setCurrencyFilter('');
-                  setMaterialFilter('');
-                  setColourFilter('');
-                  setSizeFilter('');
-                  setFulfilmentFilter('');
-                  setAvailabilityFilter('');
-                  setFilterCountry('all');
-                  setFilterState('all');
-                  setFilterCity('all');
-                  setCountrySearch('');
-                  setStateSearch('');
-                  setCitySearch('');
-                  setNearMeActive(false);
-                  setUserCoords(null);
-                }}
+                onClick={() => resetMarketplaceFilters()}
                 className="rounded-xl bg-amber-400 px-5 py-2.5 text-xs font-semibold text-neutral-950 transition hover:bg-amber-300"
               >
                 Reset search and filters
@@ -1958,17 +1926,69 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 {currentUser ? 'Join as Tailor / Fabric Seller' : 'Register as Tailor / Fabric Merchant to Post'}
               </button>
             )}
-            {activeFeedView === 'for-you' && hasActiveFeedFilters && <button
-              type="button"
-              onClick={resetRecommendations}
-              className="rounded-xl border border-amber-500/40 px-5 py-2.5 text-xs font-semibold text-amber-500 transition hover:bg-amber-500/10"
-            >
-              Reset Explore preferences
-            </button>}
           </div>
+          {!postsLoadError && !feedError && (
+            <section className="mt-8 border-t border-neutral-800/60 pt-6 text-left" aria-label="Similar searches and listings">
+              <h4 className={`text-left text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>
+                {similarSearches.length ? 'Similar searches' : 'Other pieces to explore'}
+              </h4>
+              {similarListingsLoading && <p role="status" className="mt-2 text-xs text-neutral-500">Looking for related listings…</p>}
+              {fallbackSearchOptions.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {fallbackSearchOptions.map(term => (
+                    <button
+                      key={term}
+                      type="button"
+                      onClick={() => applySimilarSearch(term)}
+                      className={`min-h-9 rounded-full border px-3 text-xs font-medium transition ${
+                        isDarkMode ? 'border-neutral-700 text-neutral-200 hover:border-amber-400' : 'border-neutral-300 text-neutral-700 hover:border-amber-500'
+                      }`}
+                    >
+                      Search “{term}”
+                    </button>
+                  ))}
+                </div>
+              )}
+              {similarListings.length > 0 && (
+                <div className="marketplace-masonry mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {similarListings.map(post => {
+                    const imageSource = getPostImageSource(post);
+                    return (
+                      <button
+                        key={post.id}
+                        type="button"
+                        onClick={() => openListing(post)}
+                        className={`marketplace-card overflow-hidden rounded-2xl border text-left transition hover:border-amber-500/60 ${
+                          isDarkMode ? 'border-neutral-800 bg-[#121316]' : 'border-neutral-200 bg-white'
+                        }`}
+                      >
+                        {imageSource
+                          ? <PostImage src={imageSource} alt={post.imageAlt || post.title} className="aspect-[4/5] w-full bg-[#f3f0e9]" loading="lazy" decoding="async" fit="contain" onError={() => handlePostImageError(post, imageSource)} />
+                          : <div className="flex aspect-[4/5] items-center justify-center bg-neutral-900/80 text-xs text-neutral-500">Image unavailable</div>}
+                        <span className="block p-3">
+                          <strong className={`block truncate text-sm ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>{post.title}</strong>
+                          <span className="mt-1 block truncate text-xs text-neutral-500">{post.authorName}</span>
+                          {post.tags.length > 0 && <span className="mt-2 block truncate text-[10px] text-amber-500">{post.tags.slice(0, 3).map(tag => `#${tag}`).join(' ')}</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {similarListingsError && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-red-400" role="alert">
+                  <span>{similarListingsError}</span>
+                  <button type="button" onClick={() => setSimilarListingsRetry(retry => retry + 1)} className="font-semibold underline underline-offset-2">Retry similar listings</button>
+                </div>
+              )}
+              {!similarListingsLoading && !similarListingsError && similarListings.length === 0 && (
+                <p className="mt-3 text-xs text-neutral-500">No close alternatives are available yet. Try a broader search or clear some filters.</p>
+              )}
+            </section>
+          )}
         </div>
       ) : (
-        <div className="marketplace-masonry grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="marketplace-masonry grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-3">
           {visiblePosts.map((post, postIndex) => {
             const daySeed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
             const railInterval = 5 + ((daySeed * 7 + Math.max(0, visiblePosts.length) * 3) % 6);
@@ -2181,7 +2201,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
               </motion.article>
               {activeFeedView !== 'newest' && (postIndex + 1) % 12 === 0 && postIndex + 1 < visiblePosts.length && (Math.floor((postIndex + 1) / 6) % 3 !== 2) && (
-                <div className="md:col-span-2 lg:col-span-3 2xl:col-span-4">
+                <div className="sm:col-span-2 lg:col-span-3">
                   <MarketplaceInterlude posts={visiblePosts} users={users} isDarkMode={isDarkMode} onSelectSeller={onSelectSeller} />
                 </div>
               )}
@@ -2191,7 +2211,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                 const collection = visibleSellerCollections[(discoveryBatch - 1) % Math.max(visibleSellerCollections.length, 1)];
                 const tailor = topTailors[(discoveryBatch - 1) % Math.max(topTailors.length, 1)];
                 return (
-                  <div className="md:col-span-2 lg:col-span-3 2xl:col-span-4">
+                  <div className="sm:col-span-2 lg:col-span-3">
                     {discoveryBatch % 3 === 1 && category && (
                       <DiscoveryCarousel title={category.title} subtitle="Explore the collection" posts={category.posts} isDarkMode={isDarkMode} onSelectPost={openListing} />
                     )}

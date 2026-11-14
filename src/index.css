@@ -1421,12 +1421,6 @@
   }
 }
 
-@media (min-width: 1536px) {
-  .marketplace-masonry {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .brand-thread,
   .trending-flame,

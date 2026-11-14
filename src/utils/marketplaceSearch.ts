@@ -7,9 +7,26 @@ const SEARCH_SYNONYMS: Record<string, string[]> = {
   'african wax print': ['ankara', 'wax print'],
   senetor: ['senator', 'senator wear'],
   ankaraa: ['ankara'],
+  cloth: ['fabric', 'fabrics', 'textile', 'textiles'],
+  fabric: ['cloth', 'textile', 'textiles'],
+  fabrics: ['cloth', 'textile', 'textiles'],
+  clothing: ['clothes', 'garment', 'garments'],
+  clothes: ['clothing', 'garment', 'garments'],
 };
 
 const IGNORED_TERMS = new Set(['a', 'an', 'and', 'for', 'in', 'of', 'on', 'the', 'to', 'with']);
+const normalizeWords = (value: string): string[] => value
+  .normalize('NFKC')
+  .toLowerCase()
+  .split(/[^\p{L}\p{N}]+/u)
+  .filter(Boolean);
+
+const containsPhrase = (text: string, phrase: string): boolean => {
+  const words = normalizeWords(text);
+  const sought = normalizeWords(phrase);
+  if (!sought.length || sought.length > words.length) return false;
+  return words.some((_, index) => sought.every((word, offset) => words[index + offset] === word));
+};
 
 export interface ParsedMarketplaceSearch {
   text: string;
@@ -51,29 +68,35 @@ export function getMarketplaceSearchRelevance(post: {
   title?: string;
   description?: string;
   categoryId?: string;
+  listingType?: string;
   tags?: string[];
   listingDetails?: object;
   authorName?: string;
   authorLocation?: { city?: string; state?: string; country?: string };
 }, search: ParsedMarketplaceSearch): number {
-  const tokens = [
-    post.title,
-    post.categoryId,
-    post.tags?.join(' '),
-    post.listingDetails ? Object.values(post.listingDetails).flat().join(' ') : '',
-    post.authorName,
-    post.description,
-  ].join(' ').toLowerCase();
-  const title = (post.title || '').toLowerCase();
-  const category = (post.categoryId || '').toLowerCase();
-  const matchedGroups = search.termGroups.filter(group => group.some(term =>
-    tokens.includes(term) || (term.length >= 4 && tokens.includes(term.slice(0, -1))),
-  )).length;
-  const requestedArea = search.locationHint.toLowerCase();
+  const title = post.title || '';
+  const category = post.categoryId || '';
+  const tags = Array.isArray(post.tags) ? post.tags.join(' ') : '';
+  const details = post.listingDetails ? Object.values(post.listingDetails).flat().join(' ') : '';
+  const description = post.description || '';
+  const searchableFields = [title, category, tags, details, description, post.authorName || '', post.listingType || ''];
+  const matchedGroups = search.termGroups.filter(group =>
+    group.some(term => searchableFields.some(field => containsPhrase(field, term))),
+  ).length;
+  const matchedIn = (field: string) => search.termGroups.filter(group =>
+    group.some(term => containsPhrase(field, term)),
+  ).length;
+  const requestedArea = search.locationHint;
   const location = [post.authorLocation?.city, post.authorLocation?.state, post.authorLocation?.country]
-    .filter(Boolean).join(' ').toLowerCase();
+    .filter(Boolean).join(' ');
+  const exactSearchIn = (field: string) => search.text && containsPhrase(field, search.text);
   return (matchedGroups / Math.max(1, search.termGroups.length)) * 10
-    + (search.text && title.includes(search.text) ? 6 : 0)
-    + (search.text && category.includes(search.text) ? 4 : 0)
-    + (requestedArea && location.includes(requestedArea) ? 2 : 0);
+    + matchedIn(title) * 1.5
+    + matchedIn(tags) * 1.8
+    + matchedIn(category) * 1.5
+    + matchedIn(details) * 1
+    + matchedIn(description) * 0.5
+    + (exactSearchIn(title) ? 4 : 0)
+    + (exactSearchIn(category) ? 3 : 0)
+    + (requestedArea && containsPhrase(location, requestedArea) ? 2 : 0);
 }

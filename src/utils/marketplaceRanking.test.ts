@@ -3,7 +3,7 @@ import { ClothPost, DiscoveryEvent, RecommendationPreferences, User } from '../t
 import { calculateFeedScore, getRatingQuality, getTopTailors, isNewSeller, rankMarketplaceListingPages, rankMarketplaceListings, rankTrendingPosts } from './marketplaceRanking';
 
 const defaultRecommendationPreferences: RecommendationPreferences = {
-  enabled: false,
+  enabled: true,
   categories: [],
   styles: [],
   minimumPrice: null,
@@ -69,7 +69,7 @@ describe('marketplace ranking', () => {
       .map(post => post.id)).toEqual(['strong-feedback', 'limited-feedback']);
   });
 
-  it('uses explicit preferences and soft-decayed activity only after opt-in', () => {
+  it('learns from activity by default and treats saved preferences as ranking hints', () => {
     const now = Date.parse('2026-09-26T12:00:00.000Z');
     const posts = [
       makePost('senator', { authorId: 'maker-a', categoryId: 'clothing', tags: ['senator'], priceMin: 80, currency: 'USD', createdAt: '2026-09-20T00:00:00.000Z' }),
@@ -85,16 +85,66 @@ describe('marketplace ranking', () => {
     }];
     const preferences = {
       ...defaultRecommendationPreferences,
-      enabled: true,
       categories: ['clothing'],
       styles: ['senator'],
       minimumPrice: 50,
       currency: 'USD',
     };
     const enabled = rankMarketplaceListings(posts, [], activities, preferences, { now });
-    const disabled = rankMarketplaceListings(posts, [], activities, defaultRecommendationPreferences, { now });
-    expect(enabled.map(post => post.id)).toEqual(['senator']);
-    expect(disabled).toHaveLength(2);
+    const disabled = rankMarketplaceListings(posts, [], activities, {
+      ...defaultRecommendationPreferences,
+      enabled: false,
+      categories: ['clothing'],
+      styles: ['senator'],
+      minimumPrice: 50,
+      currency: 'USD',
+    }, { now });
+    expect(enabled[0].id).toBe('senator');
+    expect(enabled).toHaveLength(2);
+    expect(disabled.map(post => post.id)).toEqual(['linen', 'senator']);
+  });
+
+  it('ranks followed sellers and searches from the current user’s activity', () => {
+    const posts = [
+      makePost('followed-seller-post', { authorId: 'seller-followed', tags: ['silk'] }),
+      makePost('other-seller-post', { authorId: 'seller-other', tags: ['ankara'] }),
+    ];
+    const users = [{
+      id: 'seller-followed',
+      email: 'followed@example.com',
+      name: 'Followed seller',
+      role: 'tailor' as const,
+      phone: '1',
+      countryCode: 'GH',
+      location: { country: 'Ghana', state: 'Greater Accra', city: 'Accra' },
+      handle: '@followed',
+      isPromoted: false,
+      isBlocked: false,
+      followers: ['buyer-1'],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    }, {
+      id: 'seller-other',
+      email: 'other@example.com',
+      name: 'Other seller',
+      role: 'fabric_seller' as const,
+      phone: '2',
+      countryCode: 'GH',
+      location: { country: 'Ghana', state: 'Greater Accra', city: 'Accra' },
+      handle: '@other',
+      isPromoted: false,
+      isBlocked: false,
+      followers: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    }];
+
+    expect(rankMarketplaceListings(posts, users, [], defaultRecommendationPreferences, {
+      currentUserId: 'buyer-1',
+      now: Date.parse('2026-09-26T12:00:00.000Z'),
+    })[0].id).toBe('followed-seller-post');
+    expect(rankMarketplaceListings(posts, [], [], defaultRecommendationPreferences, {
+      searchHistory: ['ankara'],
+      now: Date.parse('2026-09-26T12:00:00.000Z'),
+    })[0].id).toBe('other-seller-post');
   });
 
   it('measures Explore freshness from publication rather than draft creation', () => {

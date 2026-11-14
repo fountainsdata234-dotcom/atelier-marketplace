@@ -6,7 +6,7 @@ describe('marketplace search parsing and ranking', () => {
     expect(parseMarketplaceSearch('  BLACK   Senator fabric in Aba ')).toEqual({
       text: 'black senator fabric',
       locationHint: 'aba',
-      termGroups: [['black'], ['senator', 'senator wear', 'senator suit'], ['fabric']],
+      termGroups: [['black'], ['senator', 'senator wear', 'senator suit'], ['fabric', 'cloth', 'textile', 'textiles']],
     });
   });
 
@@ -28,5 +28,17 @@ describe('marketplace search parsing and ranking', () => {
       description: 'Black senator styles are available',
     }, parsed);
     expect(exact).toBeGreaterThan(descriptionOnly);
+  });
+
+  it('matches merchant tags and cloth aliases without substring false positives', () => {
+    const ankaraSearch = parseMarketplaceSearch('ankara');
+    const clothSearch = parseMarketplaceSearch('cloth');
+    const taggedAnkara = getMarketplaceSearchRelevance({ tags: ['Ankara print'] }, ankaraSearch);
+    const taggedFabric = getMarketplaceSearchRelevance({ tags: ['Kente fabric'] }, clothSearch);
+    const unrelated = getMarketplaceSearchRelevance({ title: 'Cart with accessories' }, parseMarketplaceSearch('art'));
+
+    expect(taggedAnkara).toBeGreaterThan(0);
+    expect(taggedFabric).toBeGreaterThan(0);
+    expect(unrelated).toBe(0);
   });
 });

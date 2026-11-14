@@ -139,6 +139,8 @@ export const rankMarketplaceListings = (
   preferences: RecommendationPreferences,
   options: {
     search?: string;
+    searchHistory?: string[];
+    currentUserId?: string;
     categoryId?: string;
     trendScores?: ReadonlyMap<string, { score: number; confidence: number }>;
     now?: number;
@@ -147,6 +149,12 @@ export const rankMarketplaceListings = (
   const now = options.now ?? Date.now();
   const userById = new Map(users.map(user => [user.id, user]));
   const postById = new Map(posts.map(post => [post.id, post]));
+  const currentUserId = options.currentUserId;
+  const followedSellerIds = new Set(
+    preferences.enabled && currentUserId
+      ? users.filter(user => user.followers?.includes(currentUserId)).map(user => user.id)
+      : [],
+  );
   const recentEvents = (preferences.enabled ? events : []).filter(event => {
     const timestamp = Date.parse(event.timestamp);
     return Number.isFinite(timestamp) && now - timestamp >= 0 && now - timestamp <= RECOMMENDATION_RETENTION_MS;
@@ -185,19 +193,11 @@ export const rankMarketplaceListings = (
   const preferredCategories = preferences.enabled ? preferences.categories.map(normalizeToken).filter(Boolean) : [];
   const preferredStyles = preferences.enabled ? preferences.styles.map(normalizeToken).filter(Boolean) : [];
   const parsedSearch = options.search ? parseMarketplaceSearch(options.search) : null;
-  const searchTerms = (parsedSearch?.text || '').split(/\s+/).filter(term => term.length > 1);
+  const historicalSearches = preferences.enabled
+    ? (options.searchHistory || []).slice(0, 12).filter(term => parseMarketplaceSearch(term).termGroups.length > 0)
+    : [];
   const candidates = posts.filter(post => {
     const seller = userById.get(post.authorId);
-    const hasPricePreference = preferences.enabled
-      && (preferences.minimumPrice !== null || preferences.maximumPrice !== null);
-    const priceMin = post.priceMin ?? post.pricing?.basic ?? null;
-    const priceMax = post.priceMax ?? priceMin;
-    const priceCurrency = normalizeToken(post.currency || post.pricing?.currency || post.authorLocation?.currency || '');
-    const withinPreferredPrice = !hasPricePreference || (priceMin !== null
-      && Boolean(preferences.currency)
-      && priceCurrency === normalizeToken(preferences.currency)
-      && (preferences.minimumPrice === null || priceMax === null || priceMax >= preferences.minimumPrice)
-      && (preferences.maximumPrice === null || priceMin <= preferences.maximumPrice));
     return !hiddenListings.has(post.id)
       && !seller?.isBlocked
       && !post.isBlocked
@@ -205,8 +205,7 @@ export const rankMarketplaceListings = (
       && (post.status === undefined || post.status === 'published')
       && (post.moderationStatus === undefined || post.moderationStatus === 'approved')
       && post.availability !== 'unavailable'
-      && post.status !== 'sold_out'
-      && withinPreferredPrice;
+      && post.status !== 'sold_out';
   }).map(post => {
     const tags = (Array.isArray(post.tags) ? post.tags : []).map(normalizeToken).filter(Boolean);
     const category = normalizeToken(post.categoryId || '');
@@ -228,23 +227,32 @@ export const rankMarketplaceListings = (
       && normalizeToken(post.authorLocation?.country || '') === normalizeToken(preferences.country);
     const stateMatches = preferences.state
       && normalizeToken(post.authorLocation?.state || '') === normalizeToken(preferences.state);
-    const searchMatchCount = searchTerms.filter(term =>
-      `${post.title} ${post.description} ${tags.join(' ')} ${post.authorName}`.toLowerCase().includes(term),
-    ).length;
-    const queryMatch = searchTerms.length ? searchMatchCount / searchTerms.length : 0;
+    const queryMatch = parsedSearch?.termGroups.length
+      ? clamp01(getMarketplaceSearchRelevance(post, parsedSearch) / 16)
+      : 0;
+    const historicalSearchMatch = historicalSearches.reduce((sum, term, index) => {
+      const parsed = parseMarketplaceSearch(term);
+      return sum + getMarketplaceSearchRelevance(post, parsed) * Math.pow(0.7, index);
+    }, 0);
+    const searchInterest = clamp01(historicalSearchMatch / (historicalSearchMatch + 12));
     const chosenCategoryMatch = options.categoryId && category === normalizeToken(options.categoryId) ? 1 : 0;
-    const preferenceMatches = (explicitCategoryMatch ? 0.4 : 0)
-      + Math.min(0.35, explicitStyleMatches * 0.12)
-      + (priceMatches && (preferences.minimumPrice !== null || preferences.maximumPrice !== null) ? 0.15 : 0)
-      + (countryMatches ? 0.07 : 0)
-      + (stateMatches ? 0.03 : 0);
+    const preferenceMatches = preferences.enabled
+      ? (explicitCategoryMatch ? 0.4 : 0)
+        + Math.min(0.35, explicitStyleMatches * 0.12)
+        + (priceMatches && (preferences.minimumPrice !== null || preferences.maximumPrice !== null) ? 0.15 : 0)
+        + (countryMatches ? 0.07 : 0)
+        + (stateMatches ? 0.03 : 0)
+      : 0;
     const learnedInterest = allTokens.reduce((sum, token) => sum + (interestByToken.get(token) || 0), 0);
     const positiveLearnedInterest = clamp01(Math.max(0, learnedInterest) / (Math.max(0, learnedInterest) + 3));
     const negativeLearnedInterest = clamp01(Math.max(0, -learnedInterest) / (Math.max(0, -learnedInterest) + 3));
     const directIntent = listingSignals.get(post.id) || 0;
+    const followedSellerMatch = followedSellerIds.has(post.authorId);
     const personalRelevance = clamp01(
       Math.max(queryMatch, chosenCategoryMatch, preferenceMatches)
       + (preferences.enabled ? positiveLearnedInterest * 0.35 : 0)
+      + (preferences.enabled ? searchInterest * 0.3 : 0)
+      + (followedSellerMatch ? 0.35 : 0)
       - negativeLearnedInterest * 0.5
       + clamp01(Math.max(0, directIntent) / (Math.max(0, directIntent) + 5)) * 0.25,
     );
@@ -274,7 +282,11 @@ export const rankMarketplaceListings = (
         : 0);
     const reason = preferences.enabled && preferenceMatches > 0
       ? 'Matches your selected preferences'
-      : countryMatches
+      : followedSellerMatch
+        ? 'From a seller you follow'
+        : positiveLearnedInterest > 0.25 || searchInterest > 0.25
+          ? 'Based on your recent activity'
+          : countryMatches
         ? 'In your selected country'
         : trendScore > 0 && trendConfidence >= 0.5
           ? 'Recent marketplace interest'
