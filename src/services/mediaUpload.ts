@@ -1,7 +1,7 @@
 import { compressImageBlob } from '../utils/imageProgram';
 import { customerMessageForHttpError } from '../utils/customerMessages';
 import { getAuthToken } from './auth';
-import { getStoryUploadMimeType, MAX_STORY_IMAGE_UPLOAD_BYTES } from '../utils/mediaLimits';
+import { getStoryUploadMimeType, MAX_IMAGE_UPLOAD_BYTES, MAX_STORY_IMAGE_UPLOAD_BYTES } from '../utils/mediaLimits';
 
 const tokenHeader = (token: string) => ['Bea' + 'rer', token].join(' ');
 
@@ -50,7 +50,7 @@ export async function prepareStoryImageForUpload(file: File): Promise<File> {
 
   let compressed: Blob;
   try {
-    compressed = await compressImageBlob(file, 1600);
+    compressed = await compressImageBlob(file, 2048);
   } catch {
     throw new Error('This photo could not be compressed on your device. Choose a JPEG or PNG photo under 5 MB.');
   }
@@ -74,7 +74,9 @@ export async function uploadUserImage(
     || (window.location.hostname === 'localhost' ? 'http://localhost:8787' : window.location.origin);
   const token = await getAuthToken();
   const formData = new FormData();
-  const compressedFile = file.type.startsWith('image/') && !alreadyOptimized ? await compressImageBlob(file) : file;
+  const compressedFile = file.type.startsWith('image/') && !alreadyOptimized && file.size > MAX_IMAGE_UPLOAD_BYTES
+    ? await compressImageBlob(file)
+    : file;
   formData.append('image', compressedFile, `${fileName.replace(/\.[^.]+$/, '')}.jpg`);
   formData.append('folder', folder);
   formData.append('userId', userId);

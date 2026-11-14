@@ -1667,8 +1667,8 @@ app.post(
         }
         preparedImages.push(await sharp(file.buffer, { limitInputPixels: 40_000_000 })
           .rotate()
-          .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 88, progressive: true, mozjpeg: true })
+          .resize({ width: 2560, height: 2560, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 92, progressive: true, mozjpeg: true })
           .toBuffer());
       }
 
@@ -1895,10 +1895,10 @@ function uploadCompressedStoryToCloudinary(buffer: Buffer, userId: string, media
       folder: `stories/${userId}`,
       public_id: `story-${randomUUID()}`,
       transformation: [{
-        ...(mediaType === 'image' ? { width: 1400, height: 1400 } : { width: 1080, height: 1920 }),
+        ...(mediaType === 'image' ? { width: 2048, height: 2048 } : { width: 1080, height: 1920 }),
         crop: 'limit',
         quality: 'auto:good',
-        ...(mediaType === 'image' ? { format: 'jpg' } : {}),
+        format: mediaType === 'image' ? 'jpg' : 'mp4',
         ...(mediaType === 'video' ? { video_codec: 'auto' } : {}),
       }],
     }, (error, result) => {
@@ -2159,9 +2159,7 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
         res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.publicId, mediaType: 'video', mimeType: req.file.mimetype });
         return;
       }
-      const fileName = `story-${randomUUID()}${req.file.mimetype === 'video/quicktime' ? '.mov' : req.file.mimetype === 'video/webm' ? '.webm' : '.mp4'}`;
-      const uploaded = await uploadImage(req.authUser!.uid, safeFolder, fileName, req.file.buffer, req.file.mimetype);
-      res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.path, mediaType: 'video', mimeType: req.file.mimetype });
+      res.status(503).json({ error: 'Story video compression is temporarily unavailable. Please try again later.' });
       return;
     }
     const metadata = await sharp(req.file.buffer, { limitInputPixels: 40_000_000 }).metadata();
@@ -2177,12 +2175,12 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
     const imagePipeline = () => sharp(req.file!.buffer, { limitInputPixels: 40_000_000 }).rotate();
     const [optimizedBuffer, thumbnailBuffer] = await Promise.all([
       imagePipeline()
-        .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 88, progressive: true, mozjpeg: true })
+        .resize({ width: 2560, height: 2560, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 92, progressive: true, mozjpeg: true })
         .toBuffer(),
       imagePipeline()
         .resize({ width: 720, height: 720, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 84, progressive: true, mozjpeg: true })
+        .jpeg({ quality: 86, progressive: true, mozjpeg: true })
         .toBuffer(),
     ]);
 

@@ -71,6 +71,13 @@ const discoveryImage = (post: ClothPost) => post.imageAssets?.find(asset => asse
   || post.imageAssets?.find(asset => asset.thumbnailUrl)?.thumbnailUrl
   || post.imageUrl;
 
+const getTimeBasedGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning.';
+  if (hour < 17) return 'Good afternoon.';
+  return 'Good evening.';
+};
+
 interface DiscoveryCarouselProps {
   title: string;
   subtitle: string;
@@ -81,13 +88,16 @@ interface DiscoveryCarouselProps {
 
 const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, posts, isDarkMode, onSelectPost }) => {
   const [activeIndex, setActiveIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const suppressClick = useRef(false);
+  const prefersReducedMotion = useReducedMotion();
   const availablePosts = posts.filter(post => Boolean(discoveryImage(post)));
 
   useEffect(() => {
-    if (availablePosts.length < 2) return;
+    if (availablePosts.length < 2 || prefersReducedMotion) return;
     const timer = window.setInterval(() => setActiveIndex(index => (index + 1) % availablePosts.length), 12000);
     return () => window.clearInterval(timer);
-  }, [availablePosts.length]);
+  }, [availablePosts.length, prefersReducedMotion]);
 
   useEffect(() => {
     if (activeIndex >= availablePosts.length) setActiveIndex(0);
@@ -110,8 +120,40 @@ const DiscoveryCarousel: React.FC<DiscoveryCarouselProps> = ({ title, subtitle, 
           </div>
         )}
       </div>
-      <button type="button" onClick={() => onSelectPost(activePost)} className="group relative block h-[min(68svh,560px)] min-h-[420px] w-full overflow-hidden text-left sm:h-[420px]">
-        <motion.img key={activePost.id} initial={{ opacity: 0.45 }} animate={{ opacity: 1 }} transition={{ duration: 0.45 }} src={discoveryImage(activePost)} alt={activePost.imageAlt || activePost.title} className="absolute inset-0 h-full w-full bg-[#f3f0e9] object-contain" />
+      <button
+        type="button"
+        onClick={event => {
+          if (suppressClick.current) {
+            suppressClick.current = false;
+            event.preventDefault();
+            return;
+          }
+          onSelectPost(activePost);
+        }}
+        onTouchStart={event => { touchStartX.current = event.changedTouches[0]?.clientX ?? null; }}
+        onTouchEnd={event => {
+          if (touchStartX.current === null) return;
+          const distance = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(distance) < 48) return;
+          suppressClick.current = true;
+          window.setTimeout(() => { suppressClick.current = false; }, 500);
+          setActiveIndex(index => (index + (distance < 0 ? 1 : -1) + availablePosts.length) % availablePosts.length);
+        }}
+        className="group relative block h-[min(68svh,560px)] min-h-[420px] w-full touch-pan-y overflow-hidden text-left sm:h-[420px]"
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.img
+            key={activePost.id}
+            initial={prefersReducedMotion ? false : { opacity: 0, x: 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={prefersReducedMotion ? undefined : { opacity: 0, x: -28 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.55, ease: [0.22, 1, 0.36, 1] }}
+            src={discoveryImage(activePost)}
+            alt={activePost.imageAlt || activePost.title}
+            className="absolute inset-0 h-full w-full bg-[#f3f0e9] object-contain"
+          />
+        </AnimatePresence>
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-transparent" />
         <div className="absolute bottom-0 left-0 p-5 text-white sm:p-7">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-300">{activePost.authorName}</p>
@@ -276,6 +318,10 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   const locationDataRequestRef = useRef<Promise<CountryGeo[]> | null>(null);
   const [trendingRetry, setTrendingRetry] = useState(0);
   const activeTrendingPage = trendingPage?.category === activeTrendCategory ? trendingPage : null;
+  const [animatedHeading, setAnimatedHeading] = useState('Find your next favourite piece.');
+  const carouselTouchStartX = useRef<number | null>(null);
+  const suppressFeaturedClick = useRef(false);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     let active = true;
@@ -843,36 +889,83 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
   }, [similarListings, similarSearches]);
 
   useEffect(() => {
-    if (featuredPosts.length < 2) return;
+    if (featuredPosts.length < 2 || prefersReducedMotion) return;
     const timer = window.setInterval(() => setActiveCarouselIndex(index => (index + 1) % featuredPosts.length), 4500);
     return () => window.clearInterval(timer);
-  }, [featuredPosts.length]);
+  }, [featuredPosts.length, prefersReducedMotion]);
 
   useEffect(() => {
     let cancelled = false;
-    setTrendingLoading(true);
-    setTrendingError(null);
-    api.getMarketplaceTrending({
-      category: activeTrendCategory,
-      limit: showAllTrending ? 48 : 7,
-    }).then(page => {
-      if (!cancelled) setTrendingPage(page);
-    }).catch(error => {
-      if (!cancelled) {
-        const reason = safeCustomerErrorMessage(error, "We couldn't load popular listings. Please try again.");
-        setTrendingPage(current => current?.category === activeTrendCategory && !current.fallback ? current : null);
-        setTrendingError(reason);
-      }
-    }).finally(() => {
-      if (!cancelled) setTrendingLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [activeTrendCategory, showAllTrending, trendingRetry]);
+    let timer: number | undefined;
+    const refreshTrends = () => {
+      setTrendingLoading(true);
+      setTrendingError(null);
+      void api.getMarketplaceTrending({ category: activeTrendCategory, limit: 7 })
+        .then(page => {
+          if (!cancelled) setTrendingPage(page);
+        })
+        .catch(error => {
+          if (!cancelled) {
+            const reason = safeCustomerErrorMessage(error, "We couldn't refresh marketplace trends.");
+            console.warn('Marketplace trend data could not be refreshed.', error);
+            setTrendingPage(current => current?.category === activeTrendCategory ? current : null);
+            setTrendingError(reason);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setTrendingLoading(false);
+            timer = window.setTimeout(refreshTrends, 60_000);
+          }
+        });
+    };
+    refreshTrends();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [activeTrendCategory, trendingRetry]);
 
   useEffect(() => {
-    if (!showAllTrending || trendingLoading || trendingError) return;
-    document.getElementById('marketplace-trends-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [showAllTrending, trendingLoading, trendingError, activeTrendingPage]);
+    if (prefersReducedMotion) return;
+    const messages = ['Find your next favourite piece.', getTimeBasedGreeting(), 'Glad you came back.'];
+    let messageIndex = 0;
+    let characterIndex = messages[0].length;
+    let deleting = false;
+    let timer: number;
+
+    const step = () => {
+      const message = messages[messageIndex];
+      if (!deleting && characterIndex < message.length) {
+        characterIndex += 1;
+        setAnimatedHeading(message.slice(0, characterIndex));
+        timer = window.setTimeout(step, 65);
+        return;
+      }
+      if (deleting && characterIndex > 0) {
+        characterIndex -= 1;
+        setAnimatedHeading(message.slice(0, characterIndex));
+        timer = window.setTimeout(step, 32);
+        return;
+      }
+      if (!deleting) {
+        timer = window.setTimeout(() => {
+          deleting = true;
+          step();
+        }, 1400);
+        return;
+      }
+      messageIndex = (messageIndex + 1) % messages.length;
+      deleting = false;
+      timer = window.setTimeout(step, 220);
+    };
+
+    timer = window.setTimeout(() => {
+      deleting = true;
+      step();
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [prefersReducedMotion]);
 
   useEffect(() => {
     const root = marketplaceRootRef.current;
@@ -1034,7 +1127,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
         window.dispatchEvent(new CustomEvent('atelier_posts_updated'));
       })
       .catch(error => {
-        setLocationStatus(safeCustomerErrorMessage(error, "We couldn't update your saved listings. Please try again."));
+        setLocationStatus(safeCustomerErrorMessage(error, "We couldn't update this like. Please try again."));
         storageService.toggleLikePost(postId, currentUser.id);
         setFeedPosts(current => current.map(post => post.id === postId
           ? { ...post, likes: previousPost?.likes || [], likeCount: previousPost?.likeCount ?? previousPost?.likes.length ?? 0 }
@@ -1176,29 +1269,19 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
     );
   };
 
-  const prefersReducedMotion = useReducedMotion();
-
   return (
     <div ref={marketplaceRootRef} className="relative z-10 w-full px-2 sm:px-6 lg:px-8 py-6 space-y-8">
       {/* Top Header & Search Bar */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-amber-500/15 pb-6">
         <div>
-          <motion.div
-            initial={prefersReducedMotion ? false : { opacity: 0, y: -18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', bounce: 0.35, delay: 0.55 }}
-            className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-semibold tracking-wider mb-1"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{currentUser ? 'Glad you came back 😇' : 'Welcome to Fabsattire'}</span>
-          </motion.div>
           <motion.h1
             initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-            className="max-w-3xl text-3xl leading-tight font-serif font-bold tracking-tight sm:text-4xl lg:text-5xl"
+            className="h-[2.6em] max-w-3xl overflow-hidden text-3xl leading-tight font-serif font-bold tracking-tight sm:text-4xl lg:text-5xl"
           >
-            Find your next favourite piece.
+            <span>{prefersReducedMotion ? 'Find your next favourite piece.' : animatedHeading}</span>
+            {!prefersReducedMotion && <span aria-hidden="true" className="ml-0.5 inline-block h-[0.85em] translate-y-0.5 border-r-2 border-amber-500 motion-safe:animate-pulse" />}
           </motion.h1>
           <p className={`text-xs mt-1 ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
             Explore distinctive garments and fabrics, then contact each independent merchant directly on WhatsApp.
@@ -1472,15 +1555,41 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
               const post = featuredPosts[activeCarouselIndex % featuredPosts.length];
               const imageSource = getPostImageSource(post);
               return (
-                <motion.div
-                  key={post.id}
-                  initial={{ opacity: 0.5, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35 }}
-                  className="grid min-h-[500px] overflow-hidden bg-neutral-950 md:min-h-[390px] md:grid-cols-[1.15fr_0.85fr]"
-                >
-                  <div className="group/curated-image relative flex min-h-[min(72svh,620px)] items-center justify-center overflow-hidden bg-[#f1ece3] md:min-h-0">
-                    <button type="button" onClick={() => openListing(post)} aria-label={`View ${post.title}`} className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={post.id}
+                    initial={prefersReducedMotion ? false : { opacity: 0, x: 28 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={prefersReducedMotion ? undefined : { opacity: 0, x: -28 }}
+                    transition={{ duration: prefersReducedMotion ? 0 : 0.55, ease: [0.22, 1, 0.36, 1] }}
+                    className="grid min-h-[500px] overflow-hidden bg-neutral-950 md:min-h-[390px] md:grid-cols-[1.15fr_0.85fr]"
+                  >
+                  <div
+                    className="group/curated-image relative flex min-h-[min(72svh,620px)] touch-pan-y items-center justify-center overflow-hidden bg-[#f1ece3] md:min-h-0"
+                    onTouchStart={event => { carouselTouchStartX.current = event.changedTouches[0]?.clientX ?? null; }}
+                    onTouchEnd={event => {
+                      if (carouselTouchStartX.current === null) return;
+                      const distance = (event.changedTouches[0]?.clientX ?? carouselTouchStartX.current) - carouselTouchStartX.current;
+                      carouselTouchStartX.current = null;
+                      if (Math.abs(distance) < 48) return;
+                      suppressFeaturedClick.current = true;
+                      window.setTimeout(() => { suppressFeaturedClick.current = false; }, 500);
+                      setActiveCarouselIndex(index => (index + (distance < 0 ? 1 : -1) + featuredPosts.length) % featuredPosts.length);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={event => {
+                        if (suppressFeaturedClick.current) {
+                          suppressFeaturedClick.current = false;
+                          event.preventDefault();
+                          return;
+                        }
+                        openListing(post);
+                      }}
+                      aria-label={`View ${post.title}`}
+                      className="absolute inset-0 flex h-full w-full cursor-pointer items-center justify-center"
+                    >
                       {imageSource && <PostImage src={imageSource} alt={post.imageAlt || post.title || 'Atelier garment listing'} className="absolute inset-0 h-full w-full" imageClassName="transition-transform duration-500" fit="contain" loading="eager" onError={() => handlePostImageError(post, imageSource)} />}
                     </button>
                     <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2 sm:left-6 sm:top-6">
@@ -1504,7 +1613,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
                       Discover this piece <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
-                </motion.div>
+                  </motion.div>
+                </AnimatePresence>
               );
             })()}
             {featuredPosts.length > 1 && (
@@ -1522,7 +1632,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       )}
 
       {(trendingPosts.length > 0 || trendingLoading || trendingError || Boolean(activeTrendingPage?.fallbackMessage)) && (
-        <section className={`overflow-hidden rounded-[1.75rem] border ${isDarkMode ? 'border-orange-400/20 bg-[#13110f]' : 'border-orange-300/50 bg-[#fffaf3] shadow-sm'}`}>
+        <section hidden aria-hidden="true" className={`hidden overflow-hidden rounded-[1.75rem] border ${isDarkMode ? 'border-orange-400/20 bg-[#13110f]' : 'border-orange-300/50 bg-[#fffaf3] shadow-sm'}`}>
           <div className={`flex flex-col gap-4 border-b p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 ${isDarkMode ? 'border-white/10 bg-gradient-to-r from-orange-950/50 via-neutral-950 to-neutral-950' : 'border-orange-200 bg-gradient-to-r from-orange-100 via-white to-amber-50'}`}>
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-orange-400/30 bg-gradient-to-br from-orange-500/20 to-amber-400/10">
