@@ -71,11 +71,10 @@ const discoveryImage = (post: ClothPost) => post.imageAssets?.find(asset => asse
   || post.imageAssets?.find(asset => asset.thumbnailUrl)?.thumbnailUrl
   || post.imageUrl;
 
-const getTimeBasedGreeting = () => {
+const getTimeBasedGreeting = (name?: string) => {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning.';
-  if (hour < 17) return 'Good afternoon.';
-  return 'Good evening.';
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  return `${greeting}${name ? `, ${name}` : ''}.`;
 };
 
 interface DiscoveryCarouselProps {
@@ -928,7 +927,8 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
 
   useEffect(() => {
     if (prefersReducedMotion) return;
-    const messages = ['Find your next favourite piece.', getTimeBasedGreeting(), 'Glad you came back.'];
+    const userName = currentUser?.name.trim() || currentUser?.handle?.trim().replace(/^@+/, '');
+    const messages = ['Find your next favourite piece.', getTimeBasedGreeting(userName), 'Glad you came back 😇'];
     let messageIndex = 0;
     let characterIndex = messages[0].length;
     let deleting = false;
@@ -965,7 +965,7 @@ export const Marketplace: React.FC<MarketplaceProps> = ({
       step();
     }, 1400);
     return () => window.clearTimeout(timer);
-  }, [prefersReducedMotion]);
+  }, [prefersReducedMotion, currentUser?.name, currentUser?.handle]);
 
   useEffect(() => {
     const root = marketplaceRootRef.current;
