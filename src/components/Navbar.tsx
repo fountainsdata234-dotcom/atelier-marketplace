@@ -312,9 +312,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
                 <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
                 <button type="button" onClick={() => navigate('about')} className="mobile-nav-item"><Info className="h-4 w-4" />About</button>
-                <button type="button" onClick={() => navigate('contact')} className="mobile-nav-item"><Mail className="h-4 w-4" />Contact</button>
-                <button type="button" onClick={() => navigate('privacy')} className="mobile-nav-item"><Shield className="h-4 w-4" />Privacy policy</button>
-                <a href="mailto:fountainsdsata234@gmail.com" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-item"><Mail className="h-4 w-4" />Email us</a>
                 <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item text-amber-300"><UserRound className="h-4 w-4" />Sign in</button>
               </div>
             ) : (
@@ -324,9 +321,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button type="button" onClick={() => navigate('marketplace')} className="mobile-nav-item"><Compass className="h-4 w-4" />Marketplace</button>
                   <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
                   <button type="button" onClick={() => navigate('about')} className="mobile-nav-item"><Info className="h-4 w-4" />About us</button>
-                  <button type="button" onClick={() => navigate('contact')} className="mobile-nav-item"><Mail className="h-4 w-4" />Contact us</button>
-                  <button type="button" onClick={() => navigate('privacy')} className="mobile-nav-item"><Shield className="h-4 w-4" />Privacy policy</button>
-                  <a href="mailto:fountainsdsata234@gmail.com" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-item"><Mail className="h-4 w-4" />Email us</a>
                   {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
                   {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
                   {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}

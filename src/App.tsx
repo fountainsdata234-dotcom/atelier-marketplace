@@ -1482,9 +1482,9 @@ export default function App() {
       <Footer isDarkMode={isDarkMode} onNavigate={navigateToView} />
 
       <AnimatePresence>
-        {currentUser && (
+        {(currentUser || ['about', 'contact', 'privacy'].includes(currentView)) && (
           <MobileBottomNav
-            key="authenticated-mobile-bottom-nav"
+            key={currentUser ? 'authenticated-mobile-bottom-nav' : 'legal-mobile-bottom-nav'}
             currentUser={currentUser}
             currentView={currentView}
             onNavigate={navigateToView}

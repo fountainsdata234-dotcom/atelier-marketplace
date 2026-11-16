@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Compass, User as UserIcon, Shield, Scissors, LogIn, Users, Info, Download } from 'lucide-react';
+import { Compass, User as UserIcon, Shield, Scissors, LogIn, Users, Info, Download, Mail } from 'lucide-react';
 import { User } from '../types';
 
 interface MobileBottomNavProps {
@@ -29,6 +29,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   const studioLabel = currentUser?.role === 'admin' ? 'Admin' : 'Studio';
   const studioView = currentUser?.role === 'admin' ? 'admin' : 'dashboard';
   const handleNavigate = (view: string) => onNavigate(view);
+  const showLegalLinks = ['about', 'contact', 'privacy'].includes(currentView);
 
   return (
     <motion.div
@@ -64,7 +65,17 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               <span className="text-[10px] font-medium">{currentUser ? 'Explore' : 'Home'}</span>
             </button>
 
-            {currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller' || currentUser.role === 'admin') ? (
+            {showLegalLinks ? (
+              <button
+                onClick={() => handleNavigate('contact')}
+                className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
+                  primaryActionIsActive('contact') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+                }`}
+              >
+                <Mail className="w-5 h-5" />
+                <span className="text-[10px] font-medium">Contact</span>
+              </button>
+            ) : currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller' || currentUser.role === 'admin') ? (
               <button
                 onClick={() => handleNavigate(studioView)}
                 className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
@@ -84,15 +95,27 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               </button>
             )}
 
-            <button
-              onClick={() => handleNavigate('artisan')}
-              className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
-                primaryActionIsActive('artisan') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Artisans</span>
-            </button>
+            {showLegalLinks ? (
+              <button
+                onClick={() => handleNavigate('privacy')}
+                className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
+                  primaryActionIsActive('privacy') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+                }`}
+              >
+                <Shield className="w-5 h-5" />
+                <span className="text-[10px] font-medium">Privacy</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleNavigate('artisan')}
+                className={`tap-spring flex min-h-[3.2rem] flex-col items-center justify-center gap-0.5 rounded-2xl p-2 transition-all ${
+                  primaryActionIsActive('artisan') ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-400'
+                }`}
+              >
+                <Users className="w-5 h-5" />
+                <span className="text-[10px] font-medium">Artisans</span>
+              </button>
+            )}
 
             <button
               onClick={() => handleNavigate(currentUser ? 'profile' : 'about')}
