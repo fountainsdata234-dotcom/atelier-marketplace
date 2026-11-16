@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Contrast, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw, Share2, Info, Mail, House, UserRound } from 'lucide-react';
+import { Contrast, Shield, LogOut, Compass, Bookmark, Download, WifiOff, Scissors, Users, Menu, X, RefreshCw, Share2, Info, Mail, House, UserRound, Bell } from 'lucide-react';
 import { User } from '../types';
 
 interface NavbarProps {
@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden items-center gap-1.5 text-xs font-medium">
+        <nav className="hidden items-center gap-1.5 text-xs font-medium lg:flex">
           {!currentUser && (
             <button
               onClick={() => onNavigate('landing')}
@@ -115,28 +115,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Users className="w-3.5 h-3.5 text-amber-500" />
             <span>Artisan</span>
-          </button>
-
-          <button
-            onClick={() => onNavigate('about')}
-            className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              currentView === 'about'
-                ? 'text-amber-400 bg-amber-500/10 font-semibold'
-                : 'text-neutral-400 hover:text-neutral-100'
-            }`}
-          >
-            About us
-          </button>
-
-          <button
-            onClick={() => onNavigate('contact')}
-            className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              currentView === 'contact'
-                ? 'text-amber-400 bg-amber-500/10 font-semibold'
-                : 'text-neutral-400 hover:text-neutral-100'
-            }`}
-          >
-            Contact us
           </button>
 
           {currentUser && !isSeller && (
@@ -312,6 +290,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className={`absolute right-3 top-[calc(100%-1px)] z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border p-3 shadow-2xl sm:right-6 lg:right-8 ${
             isDarkMode ? 'border-neutral-800 bg-[#111317]' : 'border-neutral-200 bg-white'
           }`}>
+            <div className="hidden grid-cols-1 gap-2 lg:grid">
+              <button type="button" onClick={() => { setMobileMenuOpen(false); currentUser ? onOpenMessages() : onOpenAuth(); }} className="mobile-nav-item">
+                <Bell className="h-4 w-4" />Notifications
+                {unreadCount > 0 && <span className="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+              </button>
+              <button type="button" onClick={() => navigate('contact')} className="mobile-nav-item"><Mail className="h-4 w-4" />Contact us</button>
+              <button type="button" onClick={() => navigate('privacy')} className="mobile-nav-item"><Shield className="h-4 w-4" />Privacy policy</button>
+              <button type="button" onClick={() => navigate('about')} className="mobile-nav-item"><Info className="h-4 w-4" />About us</button>
+            </div>
+            <div className="lg:hidden">
             {currentUser && (
               <button type="button" onClick={() => navigate('profile')} className="mb-2 flex w-full items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-left">
                 {avatarUrl ? <img src={avatarUrl} alt="" onError={() => setFailedAvatarUrl(avatarUrl)} className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-xs font-bold text-amber-300">{currentUser.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</span>}
@@ -351,6 +339,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               </div>
             )}
+            </div>
           </div>
         )}
       </div>
