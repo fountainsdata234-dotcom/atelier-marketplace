@@ -31,24 +31,7 @@ import { api } from './services/api';
 import { buildPostShareUrl, buildSellerShareUrl, getHandleSlug } from './utils/profile';
 import { buildWhatsAppUrl } from './utils/whatsapp';
 import { animateActionFeedback } from './utils/actionFeedback';
-
-const PUBLIC_VIEW_BY_PATH: Record<string, string> = {
-  '/': 'landing',
-  '/marketplace': 'marketplace',
-  '/artisan': 'artisan',
-  '/about': 'about',
-  '/privacy': 'privacy',
-  '/terms': 'terms',
-  '/contact': 'contact',
-  '/profile': 'profile',
-  '/collections': 'collections',
-  '/dashboard': 'dashboard',
-  '/premium/verify': 'dashboard',
-  '/assistant': 'assistant',
-  '/admin': 'admin',
-};
-
-const PATH_BY_VIEW: Record<string, string> = Object.fromEntries(Object.entries(PUBLIC_VIEW_BY_PATH).map(([path, view]) => [view, path]));
+import { getPathForView, resolveAppView } from './utils/navigation';
 
 const hasPasswordResetQuery = () => {
   const params = new URLSearchParams(window.location.search);
@@ -58,11 +41,13 @@ const hasPasswordResetQuery = () => {
 };
 
 const getInitialView = () => {
-  const path = window.location.pathname.replace(/\/$/, '') || '/';
-  if (/^\/@[^/]+\/post\/[^/]+$/i.test(path)) return 'post';
-  if (/^\/@[^/]+$/i.test(path)) return 'seller';
   const storedView = sessionStorage.getItem('fabsattire_active_view') || sessionStorage.getItem('fabrilux_active_view');
-  return PUBLIC_VIEW_BY_PATH[path] || (storedView === 'lumina' ? 'admin' : storedView) || 'landing';
+  return resolveAppView(
+    window.location.pathname,
+    window.location.search,
+    window.history.state,
+    storedView === 'lumina' ? 'admin' : storedView || undefined,
+  );
 };
 
 const getInitialPostId = () => {
@@ -85,6 +70,22 @@ const normalizeMarketplacePosts = (remotePosts: ClothPost[]): ClothPost[] => rem
   ratingCount: Number(post.ratingCount) || 0,
   authorLocation: post.authorLocation || { country: '', state: '', city: '' },
 }));
+
+function updateBrowserHistory(view: string, path: string, replace = false) {
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
+  if (replace) {
+    window.history.replaceState({ view }, '', path);
+    return;
+  }
+  if (currentUrl !== path) {
+    window.history.pushState({ view }, '', path);
+    return;
+  }
+  const historyView = window.history.state && typeof window.history.state === 'object'
+    ? (window.history.state as { view?: unknown }).view
+    : undefined;
+  if (historyView !== view) window.history.replaceState({ view }, '', path);
+}
 
 export default function App() {
   const sharedPathMatch = window.location.pathname.match(/^\/@([^/]+)(?:\/post\/([^/]+))?$/i);
@@ -162,6 +163,8 @@ export default function App() {
 
   // Application Data States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
   const [users, setUsers] = useState<User[]>(() => storageService.getUsers());
   const [sellerDirectoryDataStatus, setSellerDirectoryDataStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [posts, setPosts] = useState<ClothPost[]>(() => storageService.getPosts());
@@ -462,9 +465,7 @@ export default function App() {
   const canRefreshMarketplaceData = document.visibilityState === 'visible' && marketplaceViews.includes(currentView);
 
   const navigateToView = (view: string) => {
-    const nextPath = view === 'lumina' ? `${PATH_BY_VIEW.admin}?lumina=1` : PATH_BY_VIEW[view] || '/';
-    const currentUrl = `${window.location.pathname}${window.location.search}`;
-    if (currentUrl !== nextPath) window.history.pushState({ view }, '', nextPath);
+    updateBrowserHistory(view, getPathForView(view));
     setSharedSeller(null);
     setSharedPostId(null);
     setSelectedPostId(null);
@@ -477,18 +478,25 @@ export default function App() {
     setSharedPostId(null);
     setSelectedPostId(null);
     setCurrentView('assistant');
-    window.history.pushState({ view: 'assistant' }, '', '/assistant');
+    updateBrowserHistory('assistant', getPathForView('assistant'));
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, []);
 
   useEffect(() => {
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
       const params = new URLSearchParams(window.location.search);
       const pathMatch = window.location.pathname.match(/^\/@([^/]+)(?:\/post\/([^/]+))?$/i);
       const handle = (pathMatch?.[1] || params.get('seller') || '').replace(/^@/, '').toLowerCase();
       if (handle) {
         const seller = users.find(user => getHandleSlug(user.handle) === getHandleSlug(handle));
-        if (!seller) return;
+        if (!seller) {
+          setSharedSeller(null);
+          setSharedPostId(null);
+          setSelectedPostId(null);
+          setCurrentView('marketplace');
+          updateBrowserHistory('marketplace', getPathForView('marketplace'), true);
+          return;
+        }
         setSharedSeller(seller);
         const postId = pathMatch?.[2] || params.get('post');
         setSharedPostId(postId || null);
@@ -499,8 +507,14 @@ export default function App() {
       setSharedSeller(null);
       setSharedPostId(null);
       setSelectedPostId(null);
-      const path = window.location.pathname.replace(/\/$/, '') || '/';
-      setCurrentView(PUBLIC_VIEW_BY_PATH[path] || sessionStorage.getItem('fabsattire_active_view') || sessionStorage.getItem('fabrilux_active_view') || 'landing');
+      const nextView = resolveAppView(window.location.pathname, window.location.search, event.state);
+      const privateViews = ['admin', 'lumina', 'dashboard', 'profile', 'collections', 'messages'];
+      if (!currentUserRef.current && privateViews.includes(nextView)) {
+        setCurrentView('landing');
+        updateBrowserHistory('landing', getPathForView('landing'), true);
+        return;
+      }
+      setCurrentView(nextView);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -569,7 +583,12 @@ export default function App() {
         }
         if (!authUser) {
           lastAuthEventUserId.current = null;
+          currentUserRef.current = null;
           setCurrentUser(null);
+          if (['admin', 'lumina', 'dashboard', 'profile', 'collections', 'messages'].includes(currentViewRef.current)) {
+            setCurrentView('landing');
+            updateBrowserHistory('landing', getPathForView('landing'), true);
+          }
           return;
         }
         if (
@@ -613,18 +632,42 @@ export default function App() {
           };
         };
         const user = storageService.upsertUser(mergeProfile());
+        currentUserRef.current = user;
         setCurrentUser(user);
+        const roleDefaultView = user.role === 'admin'
+          ? 'admin'
+          : user.role === 'tailor' || user.role === 'fabric_seller'
+            ? 'dashboard'
+            : 'marketplace';
+        let nextView = currentViewRef.current;
         if (publicSellerRoute) {
-          setCurrentView(publicPostRoute ? 'post' : 'seller');
-        } else if (user.role === 'admin') {
-          setCurrentView('admin');
-        } else if (user.role === 'tailor' || user.role === 'fabric_seller') {
-          setCurrentView('dashboard');
-        } else {
-          setCurrentView('marketplace');
+          nextView = publicPostRoute ? 'post' : 'seller';
+        } else if (event === 'INITIAL_SESSION') {
+          const storedView = sessionStorage.getItem('fabsattire_active_view') || sessionStorage.getItem('fabrilux_active_view');
+          const initialRouteView = resolveAppView(
+            window.location.pathname,
+            window.location.search,
+            window.history.state,
+            storedView === 'lumina' ? 'admin' : storedView || undefined,
+          );
+          nextView = initialRouteView === 'landing' ? roleDefaultView : initialRouteView;
+        } else if (event === 'SIGNED_IN') {
+          nextView = roleDefaultView;
+        }
+        setCurrentView(nextView);
+        if (event === 'INITIAL_SESSION') {
+          const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
+          const preserveUrl = publicSellerRoute || currentPath !== '/' || hasPasswordResetQuery();
+          const nextPath = preserveUrl
+            ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+            : getPathForView(nextView);
+          updateBrowserHistory(nextView, nextPath, true);
+        } else if (event === 'SIGNED_IN') {
+          updateBrowserHistory(nextView, getPathForView(nextView), true);
         }
         void api.getProfile().then((savedProfile: Partial<User>) => {
           const syncedUser = storageService.upsertUser(mergeProfile(savedProfile));
+          currentUserRef.current = syncedUser;
           setCurrentUser(syncedUser);
           if (!savedProfile.avatarUrl && authUser.avatarUrl) {
             void api.saveProfile({ avatarUrl: authUser.avatarUrl }).catch((error: unknown) => {
@@ -646,7 +689,10 @@ export default function App() {
     const handleUsersUpdate = () => setUsers(storageService.getUsers());
     const handlePostsUpdate = () => setPosts(storageService.getPosts());
     const handlePlansUpdate = () => setPromoPlans(storageService.getPromoPlans());
-    const handleAuthChange = (e: any) => setCurrentUser(e.detail);
+    const handleAuthChange = (e: any) => {
+      currentUserRef.current = e.detail;
+      setCurrentUser(e.detail);
+    };
     const handleBroadcastsUpdate = () => setBroadcasts(storageService.getBroadcasts());
     const handleNavigateTab = (e: any) => {
       if (typeof e.detail === 'object' && e.detail?.view) {
@@ -867,7 +913,9 @@ export default function App() {
       const localUsers = storageService.getUsers();
       const localPosts = storageService.getPosts();
       const availablePosts = localPosts.length > 0 ? localPosts : posts;
-      setCurrentUser(storageService.getCurrentUser());
+      const savedUser = storageService.getCurrentUser();
+      currentUserRef.current = savedUser;
+      setCurrentUser(savedUser);
 
       if (localUsers.length > 0) {
         setUsers(localUsers);
@@ -1052,21 +1100,24 @@ export default function App() {
   };
 
   const handleAuthSuccess = (user: User) => {
+    currentUserRef.current = user;
     setCurrentUser(user);
-    if (user.role === 'admin') {
-      setCurrentView('admin');
-    } else if (user.role === 'tailor' || user.role === 'fabric_seller') {
-      setCurrentView('dashboard');
-    } else {
-      setCurrentView('marketplace');
-    }
+    const view = user.role === 'admin'
+      ? 'admin'
+      : user.role === 'tailor' || user.role === 'fabric_seller'
+        ? 'dashboard'
+        : 'marketplace';
+    setCurrentView(view);
+    updateBrowserHistory(view, getPathForView(view), true);
   };
 
   const handleLogout = () => {
     import('./services/auth').then(({ signOutAuth }) => signOutAuth()).catch((error) => console.error('Authentication logout failed', error));
     storageService.setCurrentUser(null);
+    currentUserRef.current = null;
     setCurrentUser(null);
     setCurrentView('landing');
+    updateBrowserHistory('landing', getPathForView('landing'), true);
   };
 
   const handleContactSeller = (post: ClothPost) => {
@@ -1090,14 +1141,16 @@ export default function App() {
 
   const handleSelectPost = (post: ClothPost) => {
     setSelectedPostId(post.id);
-    window.history.pushState({ view: 'post' }, '', buildPostShareUrl(window.location.origin, post.authorHandle, post.id));
+    const postUrl = new URL(buildPostShareUrl(window.location.origin, post.authorHandle, post.id));
+    updateBrowserHistory('post', `${postUrl.pathname}${postUrl.search}`);
     setCurrentView('post');
   };
 
   const handleSelectSeller = (seller: User) => {
     setSharedSeller(seller);
     setSharedPostId(null);
-    window.history.pushState({ view: 'seller' }, '', buildSellerShareUrl(window.location.origin, seller.handle));
+    const sellerUrl = new URL(buildSellerShareUrl(window.location.origin, seller.handle));
+    updateBrowserHistory('seller', `${sellerUrl.pathname}${sellerUrl.search}`);
     setCurrentView('seller');
   };
 
@@ -1374,7 +1427,7 @@ export default function App() {
 
           {currentView === 'profile' && currentUser && (
             <motion.div key="profile" initial={{ opacity: 0, x: '7%', rotateY: 2 }} animate={{ opacity: 1, x: 0, rotateY: 0 }} exit={{ opacity: 0, x: '-7%', rotateY: -2 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }} style={{ transformOrigin: 'left center', perspective: 1200 }}>
-              <ProfilePage currentUser={currentUser} isDarkMode={isDarkMode} onNavigate={setCurrentView} onLogout={handleLogout} />
+              <ProfilePage currentUser={currentUser} isDarkMode={isDarkMode} onNavigate={navigateToView} onLogout={handleLogout} />
             </motion.div>
           )}
 
@@ -1455,7 +1508,7 @@ export default function App() {
           )}
 
           {(currentView === 'about' || currentView === 'privacy' || currentView === 'terms' || currentView === 'contact') && (
-            <LegalPage page={currentView === 'contact' ? 'contact' : currentView} isDarkMode={isDarkMode} onBack={() => setCurrentView(currentUser ? 'marketplace' : 'landing')} />
+            <LegalPage page={currentView === 'contact' ? 'contact' : currentView} isDarkMode={isDarkMode} onBack={() => navigateToView(currentUser ? 'marketplace' : 'landing')} />
           )}
           </AnimatePresence>
         </Suspense>}
@@ -1556,7 +1609,7 @@ export default function App() {
           defaultRole={authDefaultRole}
           onSuccess={handleAuthSuccess}
           isDarkMode={isDarkMode}
-          onNavigate={setCurrentView}
+          onNavigate={navigateToView}
         />
       </Suspense>}
       {passwordRecoveryOpen && <Suspense fallback={null}>
