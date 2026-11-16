@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowUp, Download, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole, AppNotification, DirectMessage } from './types';
+import { User, ClothPost, AdminPromoPlan, BroadcastMessage, UserRole, AppNotification } from './types';
 import { storageService } from './services/storage';
 import { NeedleThreadBackground } from './components/NeedleThreadBackground';
 import { IntroLoader } from './components/IntroLoader';
@@ -730,31 +730,46 @@ export default function App() {
   }, [users]);
 
   useEffect(() => {
-    if (!currentUser || (currentView !== 'messages' && !directMessageOpen)) {
+    if (!currentUser) {
       setUnreadCount(0);
       return;
     }
+    let active = true;
     const refreshUnreadCount = async () => {
       try {
-        const messages = await api.getMessages();
-        setUnreadCount(messages.filter((message: DirectMessage) => message.recipientId === currentUser.id && !message.isRead).length);
-      } catch {
-        setUnreadCount(storageService.getMessages(currentUser.id).filter(message => message.recipientId === currentUser.id && !message.isRead).length);
+        const { count } = await api.getUnreadInboxCount();
+        if (!active) return;
+        setUnreadCount(count);
+      } catch (error) {
+        console.warn('Unread inbox count could not be refreshed.', error);
+        if (!active) return;
+        const unreadMessages = storageService.getMessages(currentUser.id).filter(message => message.recipientId === currentUser.id && !message.isRead).length;
+        const unreadNotifications = storageService.getNotifications(currentUser.id).filter(notification => !notification.isRead).length;
+        setUnreadCount(unreadMessages + unreadNotifications);
       }
     };
     void refreshUnreadCount();
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refreshUnreadCount();
-    }, 120_000);
+    }, 60_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void refreshUnreadCount();
+    };
     const handleMessageUpdate = () => void refreshUnreadCount();
+    const handleNotificationUpdate = () => void refreshUnreadCount();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('atelier_message_received', handleMessageUpdate);
     window.addEventListener('atelier_messages_read', handleMessageUpdate);
+    window.addEventListener('atelier_notifications_updated', handleNotificationUpdate);
     return () => {
+      active = false;
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('atelier_message_received', handleMessageUpdate);
       window.removeEventListener('atelier_messages_read', handleMessageUpdate);
+      window.removeEventListener('atelier_notifications_updated', handleNotificationUpdate);
     };
-  }, [currentUser?.id, currentView, directMessageOpen]);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (currentUser?.role !== 'admin') return;
@@ -1014,13 +1029,6 @@ export default function App() {
       storageService.mergeNotifications(remoteNotifications);
       setNotifications(storageService.getNotifications(currentUser.id).slice(0, 4));
     }).catch((error: unknown) => console.warn('Remote notifications could not be loaded.', error));
-    const markAsRead = () => {
-      storageService.markNotificationsRead(currentUser.id);
-      void api.markNotificationsRead().catch(() => undefined);
-    };
-    markAsRead();
-    const timer = window.setTimeout(markAsRead, 1500);
-    return () => window.clearTimeout(timer);
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -1227,6 +1235,8 @@ export default function App() {
         onShare={handleShareApp}
         onRefresh={handlePageRefresh}
         isRefreshing={isRefreshing}
+        unreadCount={unreadCount}
+        onOpenMessages={() => setDirectMessageOpen(true)}
       />
 
       <button
@@ -1553,6 +1563,19 @@ export default function App() {
         <PasswordRecoveryModal
           isDarkMode={isDarkMode}
           onComplete={() => setPasswordRecoveryOpen(false)}
+        />
+      </Suspense>}
+      {directMessageOpen && currentUser && <Suspense fallback={null}>
+        <DirectMessaging
+          currentUser={currentUser}
+          recipientUser={directMessageRecipient}
+          selectedPost={directMessagePost}
+          onClose={() => {
+            setDirectMessageOpen(false);
+            setDirectMessageRecipient(null);
+            setDirectMessagePost(null);
+          }}
+          isDarkMode={isDarkMode}
         />
       </Suspense>}
 

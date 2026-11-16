@@ -97,6 +97,9 @@ async function request<T>(path: string, options: RequestInit = {}, hasRetried = 
   if (path.startsWith('/api/notifications') && !token) {
     throw new Error('Please sign in to view your notifications.');
   }
+  if (path.startsWith('/api/inbox') && !token) {
+    throw new Error('Please sign in to view your inbox.');
+  }
   if (path === '/api/profile' && !token) {
     throw new Error('Please sign in again to continue.');
   }
@@ -564,6 +567,7 @@ export const api = {
   getDiscoveryEvents: () => request<DiscoveryEvent[]>('/api/discovery-events'),
   getNotifications: () => request<AppNotification[]>('/api/notifications'),
   markNotificationsRead: () => request<void>('/api/notifications/read', { method: 'POST' }),
+  getUnreadInboxCount: () => request<{ count: number }>('/api/inbox/unread-count'),
   getMessages: () => request<DirectMessage[]>('/api/messages'),
   registerPushToken: (token: string) => request<{ ok: boolean }>('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ token }) }),
   removePushToken: (token: string) => request<void>('/api/push/subscribe', { method: 'DELETE', body: JSON.stringify({ token }) }),

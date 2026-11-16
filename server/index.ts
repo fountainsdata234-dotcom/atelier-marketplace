@@ -29,6 +29,7 @@ import {
   createSellerCollection,
   deleteSellerCollection,
   createListingReport,
+  deleteInboxRecordsOlderThan,
   deleteUserUploads,
   deleteMessage,
   getAdminMarketplacePosts,
@@ -37,6 +38,7 @@ import {
   getDiscoveryEvents,
   getFabricRequests,
   getMessages,
+  getUnreadInboxCount,
   getNotifications,
   getPost,
   getPostInteractions,
@@ -1947,6 +1949,18 @@ async function cleanupExpiredStories() {
   }
 }
 
+let expiredInboxCleanupRunning = false;
+async function cleanupExpiredInboxRecords() {
+  if (expiredInboxCleanupRunning) return;
+  expiredInboxCleanupRunning = true;
+  try {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    await deleteInboxRecordsOlderThan(cutoff);
+  } finally {
+    expiredInboxCleanupRunning = false;
+  }
+}
+
 app.get('/api/stories', async (req: AuthenticatedRequest, res) => {
   res.set('Cache-Control', 'private, no-store, max-age=0');
   try {
@@ -2266,6 +2280,26 @@ app.get('/api/notifications', requireAuth, async (req: AuthenticatedRequest, res
   res.json(snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) })));
 });
 
+app.get('/api/inbox/unread-count', requireAuth, async (req: AuthenticatedRequest, res) => {
+  if (supabaseDataEnabled) {
+    res.json({ count: await getUnreadInboxCount(req.authUser!.uid) });
+    return;
+  }
+  const [messages, notifications] = await Promise.all([
+    firestore.collection('messages')
+      .where('recipientId', '==', req.authUser!.uid)
+      .where('isRead', '==', false)
+      .count()
+      .get(),
+    firestore.collection('profiles').doc(req.authUser!.uid)
+      .collection('notifications')
+      .where('isRead', '==', false)
+      .count()
+      .get(),
+  ]);
+  res.json({ count: messages.data().count + notifications.data().count });
+});
+
 app.post('/api/notifications/read', requireAuth, async (req: AuthenticatedRequest, res) => {
   if (supabaseDataEnabled) {
     await markNotificationsRead(req.authUser!.uid);
@@ -2280,6 +2314,34 @@ app.post('/api/notifications/read', requireAuth, async (req: AuthenticatedReques
   }
   res.status(204).send();
 });
+
+async function createWarningNotification(userId: string, userName: string, warningNote: string) {
+  const createdAt = new Date().toISOString();
+  const notification = {
+    title: 'Account warning',
+    body: `An administrator has issued an account warning to ${userName}. ${warningNote}`,
+    type: 'system',
+    createdAt,
+    isRead: false,
+    actionUrl: '/profile',
+  };
+  if (supabaseDataEnabled) {
+    await createNotifications([{
+      user_id: userId,
+      title: notification.title,
+      body: notification.body,
+      type: notification.type,
+      created_at: notification.createdAt,
+      is_read: notification.isRead,
+      action_url: notification.actionUrl,
+    }]);
+    return;
+  }
+  await firestore.collection('profiles').doc(userId).collection('notifications').add({
+    userId,
+    ...notification,
+  });
+}
 
 app.get('/api/promo-plans', async (_req, res) => {
   if (supabaseDataEnabled) {
@@ -2563,6 +2625,13 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
     } else {
       await writeProfile(uid, updates);
     }
+    if (updates.isWarned === true && (existing.isWarned !== true || updates.warningNote !== existing.warningNote)) {
+      await createWarningNotification(
+        uid,
+        String(existing.name || existing.handle || 'seller'),
+        String(updates.warningNote || existing.warningNote || 'Please review the platform rules.'),
+      );
+    }
     invalidatePublicCaches();
     res.json({ id: uid, ...(await readProfile(uid) || {}) });
     return;
@@ -2585,6 +2654,13 @@ app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: Authen
   }
 
   await profileRef.set(updates, { merge: true });
+  if (updates.isWarned === true && (existing.isWarned !== true || updates.warningNote !== existing.warningNote)) {
+    await createWarningNotification(
+      uid,
+      String(existing.name || existing.handle || 'seller'),
+      String(updates.warningNote || existing.warningNote || 'Please review the platform rules.'),
+    );
+  }
 
   if (typeof req.body?.isPromoted === 'boolean') {
     const postsSnapshot = await firestore.collection('posts').where('authorId', '==', uid).get();
@@ -4738,6 +4814,13 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (_req: Authenticate
           ? { isWarned: true, warningNote: pending.reason }
           : { isPromoted: true };
       await writeProfile(pending.targetId, updates);
+      if (pending.action === 'warn') {
+        await createWarningNotification(
+          pending.targetId,
+          String(profile.name || profile.handle || 'seller'),
+          pending.reason,
+        );
+      }
       if (pending.action === 'block') await adminAuth.updateUser(pending.targetId, { disabled: true });
       res.json({ ok: true, message: `${pending.action === 'block' ? 'Blocked' : pending.action === 'warn' ? 'Warned' : 'Promoted'} ${profile.name || profile.handle || 'seller'} successfully.` });
     });
@@ -6159,9 +6242,19 @@ app.listen(port, () => {
         console.error('Unable to clean up expired story media.', error);
       }
     };
+    const cleanupInbox = async () => {
+      try {
+        await cleanupExpiredInboxRecords();
+      } catch (error) {
+        console.error('Unable to clean up expired inbox records.', error);
+      }
+    };
     void cleanupStories();
     const storyCleanupTimer = setInterval(() => { void cleanupStories(); }, 5 * 60 * 1000);
     storyCleanupTimer.unref();
+    void cleanupInbox();
+    const inboxCleanupTimer = setInterval(() => { void cleanupInbox(); }, 5 * 60 * 1000);
+    inboxCleanupTimer.unref();
   }
   const trendRefreshTimer = setInterval(() => { void refreshTrends(); }, 10 * 60 * 1000);
   trendRefreshTimer.unref();

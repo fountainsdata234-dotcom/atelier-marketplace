@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, MessageSquare, Phone, User as UserIcon, Scissors, ArrowLeft, Check, CheckCheck, Megaphone } from 'lucide-react';
-import { User, DirectMessage, ClothPost } from '../types';
+import { User, DirectMessage, ClothPost, AppNotification } from '../types';
 import { storageService } from '../services/storage';
 import { api } from '../services/api';
 
@@ -23,7 +23,9 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [activePartner, setActivePartner] = useState<User | null>(initialRecipient || null);
   const [inputText, setInputText] = useState('');
-  const [activeTab, setActiveTab] = useState<'conversations' | 'announcements'>('conversations');
+  const [activeTab, setActiveTab] = useState<'conversations' | 'announcements'>('announcements');
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [inboxError, setInboxError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Load all user conversations
@@ -31,19 +33,49 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
   useEffect(() => {
-    Promise.all([api.getMessages(), api.getUsers()]).then(([remoteMessages, remoteUsers]) => {
-      setAllMessages(remoteMessages);
-      setAllUsers(remoteUsers);
-      void api.markMessagesRead().catch(() => undefined);
-      storageService.markMessagesRead(currentUser.id);
-      window.dispatchEvent(new CustomEvent('atelier_messages_read'));
-    }).catch(() => {
-      setAllMessages(storageService.getMessages(currentUser.id));
-      setAllUsers(storageService.getUsers());
-    });
+    let active = true;
+    const loadInbox = async () => {
+      try {
+        const [remoteMessages, remoteUsers, remoteNotifications] = await Promise.all([
+          api.getMessages(),
+          api.getUsers(),
+          api.getNotifications(),
+        ]);
+        if (!active) return;
+        setAllMessages(remoteMessages);
+        setAllUsers(remoteUsers);
+        setNotifications(remoteNotifications);
+      } catch (error) {
+        console.warn('The inbox could not be refreshed from the server.', error);
+        if (!active) return;
+        setInboxError('The latest inbox messages could not be loaded. Showing saved messages where available.');
+        setAllMessages(storageService.getMessages(currentUser.id));
+        setAllUsers(storageService.getUsers());
+        setNotifications(storageService.getNotifications(currentUser.id));
+        return;
+      }
+
+      try {
+        await Promise.all([api.markMessagesRead(), api.markNotificationsRead()]);
+        storageService.markMessagesRead(currentUser.id);
+        storageService.markNotificationsRead(currentUser.id);
+        setAllMessages(previous => previous.map(message => (
+          message.recipientId === currentUser.id ? { ...message, isRead: true } : message
+        )));
+        setNotifications(previous => previous.map(notification => ({ ...notification, isRead: true })));
+        window.dispatchEvent(new CustomEvent('atelier_messages_read'));
+        window.dispatchEvent(new CustomEvent('atelier_notifications_updated'));
+      } catch (error) {
+        console.warn('Inbox messages could not all be marked as read.', error);
+        if (active) setInboxError('Some messages could not be marked as read. Please reopen your inbox to try again.');
+      }
+    };
+    void loadInbox();
+    return () => { active = false; };
   }, [currentUser.id]);
 
   const announcementMessages = allMessages.filter(message => message.recipientId === currentUser.id && (message.type === 'general' || message.senderId === 'atelier-system'));
+  const hasUnreadAnnouncements = announcementMessages.some(message => !message.isRead) || notifications.some(notification => !notification.isRead);
   const conversationPartnerIds = new Set(allMessages
     .filter(message => message.type !== 'general' && message.senderId !== 'atelier-system')
     .flatMap(message => [message.senderId, message.recipientId])
@@ -141,21 +173,33 @@ export const DirectMessaging: React.FC<DirectMessagingProps> = ({
             </button>
           </div>
 
+          {inboxError && <p role="status" className="border-b border-amber-500/20 px-4 py-2 text-[11px] text-amber-300">{inboxError}</p>}
           <div className="grid grid-cols-2 gap-1 border-b border-neutral-800/60 p-2">
             <button type="button" onClick={() => { setActiveTab('conversations'); setActivePartner(null); }} className={`rounded-xl px-2 py-2 text-[10px] font-bold uppercase tracking-wider ${activeTab === 'conversations' ? 'bg-amber-500/15 text-amber-300' : 'text-neutral-400 hover:bg-neutral-800/40'}`}>Conversations</button>
-            <button type="button" onClick={() => { setActiveTab('announcements'); setActivePartner(null); }} className={`relative rounded-xl px-2 py-2 text-[10px] font-bold uppercase tracking-wider ${activeTab === 'announcements' ? 'bg-amber-500/15 text-amber-300' : 'text-neutral-400 hover:bg-neutral-800/40'}`}><Megaphone className="mr-1 inline h-3 w-3" />Announcements{announcementMessages.some(message => !message.isRead) && <span className="absolute right-2 top-1.5 h-2 w-2 rounded-full bg-amber-400" />}</button>
+            <button type="button" onClick={() => { setActiveTab('announcements'); setActivePartner(null); }} className={`relative rounded-xl px-2 py-2 text-[10px] font-bold uppercase tracking-wider ${activeTab === 'announcements' ? 'bg-amber-500/15 text-amber-300' : 'text-neutral-400 hover:bg-neutral-800/40'}`}><Megaphone className="mr-1 inline h-3 w-3" />Announcements{hasUnreadAnnouncements && <span className="absolute right-2 top-1.5 h-2 w-2 rounded-full bg-amber-400" />}</button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {activeTab === 'announcements' ? announcementMessages.length === 0 ? (
+            {activeTab === 'announcements' ? announcementMessages.length === 0 && notifications.length === 0 ? (
               <div className="p-6 text-center text-xs text-neutral-400">No announcements yet.</div>
-            ) : announcementMessages.map(message => (
-              <article key={message.id} className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3">
-                <div className="flex items-center gap-2 text-amber-300"><Megaphone className="h-4 w-4" /><strong className="text-xs">{message.postTitle || 'Atelier announcement'}</strong></div>
-                <p className="mt-2 text-xs leading-relaxed text-neutral-300">{message.content}</p>
-                <p className="mt-2 text-[10px] text-neutral-500">From {message.senderName} · {new Date(message.timestamp).toLocaleDateString()}</p>
-              </article>
-            )) : conversationPartners.length === 0 ? (
+            ) : (
+              <>
+                {notifications.map(notification => (
+                  <article key={notification.id} className={`rounded-2xl border p-3 ${notification.isRead ? 'border-neutral-800 bg-neutral-900/30' : 'border-amber-500/30 bg-amber-500/5'}`}>
+                    <div className="flex items-center gap-2 text-amber-300"><Megaphone className="h-4 w-4" /><strong className="text-xs">{notification.title}</strong></div>
+                    <p className="mt-2 text-xs leading-relaxed text-neutral-300">{notification.body}</p>
+                    <p className="mt-2 text-[10px] text-neutral-500">{new Date(notification.createdAt).toLocaleDateString()}</p>
+                  </article>
+                ))}
+                {announcementMessages.map(message => (
+                  <article key={message.id} className={`rounded-2xl border p-3 ${message.isRead ? 'border-neutral-800 bg-neutral-900/30' : 'border-amber-500/30 bg-amber-500/5'}`}>
+                    <div className="flex items-center gap-2 text-amber-300"><Megaphone className="h-4 w-4" /><strong className="text-xs">{message.postTitle || 'Atelier announcement'}</strong></div>
+                    <p className="mt-2 text-xs leading-relaxed text-neutral-300">{message.content}</p>
+                    <p className="mt-2 text-[10px] text-neutral-500">From {message.senderName} · {new Date(message.timestamp).toLocaleDateString()}</p>
+                  </article>
+                ))}
+              </>
+            ) : conversationPartners.length === 0 ? (
               <div className="p-6 text-center text-xs text-neutral-400">
                 No conversations yet. Inquire about a seller’s work to start chatting.
               </div>

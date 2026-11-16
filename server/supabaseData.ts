@@ -1507,9 +1507,20 @@ export async function updateReviewReport(options: {
 }
 
 export async function getMessages(userId: string): Promise<MessageRecord[]> {
-  const { data, error } = await requireClient().from('messages').select('*').or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).order('timestamp', { ascending: true }).limit(200);
+  const { data, error } = await requireClient().from('messages').select('*').or(`sender_id.eq.${userId},recipient_id.eq.${userId}`).order('timestamp', { ascending: false }).limit(500);
   if (error) throw normalizeError(error);
-  return data || [];
+  return (data || []).reverse();
+}
+
+export async function getUnreadInboxCount(userId: string): Promise<number> {
+  const supabase = requireClient();
+  const [messages, notifications] = await Promise.all([
+    supabase.from('messages').select('id', { count: 'exact', head: true }).eq('recipient_id', userId).eq('is_read', false),
+    supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false),
+  ]);
+  if (messages.error) throw normalizeError(messages.error);
+  if (notifications.error) throw normalizeError(notifications.error);
+  return (messages.count ?? 0) + (notifications.count ?? 0);
 }
 
 export async function createMessage(values: ProfileRecord): Promise<MessageRecord> {
@@ -1521,6 +1532,15 @@ export async function createMessage(values: ProfileRecord): Promise<MessageRecor
 export async function markMessagesRead(userId: string): Promise<void> {
   const { error } = await requireClient().from('messages').update({ is_read: true, read_at: new Date().toISOString() }).eq('recipient_id', userId).eq('is_read', false);
   if (error) throw normalizeError(error);
+}
+
+export async function deleteInboxRecordsOlderThan(cutoff: string): Promise<void> {
+  const [messages, notifications] = await Promise.all([
+    requireClient().from('messages').delete().lt('timestamp', cutoff),
+    requireClient().from('notifications').delete().lt('created_at', cutoff),
+  ]);
+  if (messages.error) throw normalizeError(messages.error);
+  if (notifications.error) throw normalizeError(notifications.error);
 }
 
 export async function getFabricRequests(userId: string): Promise<FabricRequestRecord[]> {

@@ -17,6 +17,8 @@ const content = {
     paragraphs: [
       'We use account details to authenticate you, provide marketplace features, process requests, and keep the service secure. We do not sell personal information.',
       'You can request profile corrections or account removal by contacting the FABSATTIRE administrator. Public seller details are shown only as needed for marketplace discovery.',
+      'In-app direct messages, warnings, and broadcast notifications stored in Supabase are automatically deleted seven days after they are created. A seller warning indicator remains on the account until the seller acknowledges it, even after its inbox message expires. Story media is removed after its 24-hour story period.',
+      'Contact us if you have questions about your information or want to request an account-data change. Information required to operate or protect the marketplace may be retained when legally or operationally necessary.',
     ],
   },
   terms: {

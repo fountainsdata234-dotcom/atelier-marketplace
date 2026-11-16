@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Sparkles } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 
 interface FooterProps {
   isDarkMode: boolean;
@@ -53,9 +53,6 @@ export const Footer: React.FC<FooterProps> = ({ isDarkMode, onNavigate }) => {
 
         <div className={`mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t pt-3 text-center text-[11px] ${border} ${mutedText}`}>
           <span className="inline-flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5 text-amber-500" />In-app messaging</span>
-          <a href="mailto:fountainsdsata234@gmail.com" className="inline-flex items-center gap-1.5 break-all transition hover:text-amber-400">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" />fountainsdsata234@gmail.com
-          </a>
         </div>
         <div className="mt-2 text-center text-[10px] leading-relaxed text-neutral-500">
           © 2026 Fabsattire. Crafted for bespoke fashion and premium fabric discovery.

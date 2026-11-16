@@ -16,6 +16,8 @@ interface NavbarProps {
   onShare: () => void;
   onRefresh: () => void;
   isRefreshing?: boolean;
+  unreadCount: number;
+  onOpenMessages: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -31,7 +33,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onInstall,
   onShare,
   onRefresh,
-  isRefreshing = false
+  isRefreshing = false,
+  unreadCount,
+  onOpenMessages,
 }) => {
   const isSeller = currentUser && (currentUser.role === 'tailor' || currentUser.role === 'fabric_seller');
   const isPublicLanding = !currentUser && currentView === 'landing';
@@ -75,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-1.5 text-xs font-medium">
+        <nav className="hidden items-center gap-1.5 text-xs font-medium">
           {!currentUser && (
             <button
               onClick={() => onNavigate('landing')}
@@ -278,16 +282,34 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           type="button"
+          onClick={currentUser ? onOpenMessages : onOpenAuth}
+          aria-label={currentUser ? `Open inbox${unreadCount ? `, ${unreadCount} unread` : ''}` : 'Sign in to open messages'}
+          title={currentUser ? 'Inbox' : 'Sign in to messages'}
+          className={`relative flex h-10 w-10 items-center justify-center rounded-xl border transition ${
+            unreadCount > 0
+              ? 'border-amber-500/50 text-amber-300'
+              : 'border-neutral-700/60 text-neutral-300 hover:border-amber-500/50 hover:text-amber-300'
+          }`}
+        >
+          <Mail className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
           aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           aria-expanded={mobileMenuOpen}
           onClick={() => setMobileMenuOpen(open => !open)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700/60 text-neutral-300 transition hover:border-amber-500/50 hover:text-amber-300 lg:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-700/60 text-neutral-300 transition hover:border-amber-500/50 hover:text-amber-300"
         >
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
 
         {mobileMenuOpen && (
-          <div className={`absolute left-3 right-3 top-[calc(100%-1px)] z-50 rounded-2xl border p-3 shadow-2xl lg:hidden ${
+          <div className={`absolute right-3 top-[calc(100%-1px)] z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border p-3 shadow-2xl sm:right-6 lg:right-8 ${
             isDarkMode ? 'border-neutral-800 bg-[#111317]' : 'border-neutral-200 bg-white'
           }`}>
             {currentUser && (
@@ -303,6 +325,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
                 <button type="button" onClick={() => navigate('about')} className="mobile-nav-item"><Info className="h-4 w-4" />About</button>
                 <button type="button" onClick={() => navigate('contact')} className="mobile-nav-item"><Mail className="h-4 w-4" />Contact</button>
+                <button type="button" onClick={() => navigate('privacy')} className="mobile-nav-item"><Shield className="h-4 w-4" />Privacy policy</button>
+                <a href="mailto:fountainsdsata234@gmail.com" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-item"><Mail className="h-4 w-4" />Email us</a>
                 <button type="button" onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }} className="mobile-nav-item text-amber-300"><UserRound className="h-4 w-4" />Sign in</button>
               </div>
             ) : (
@@ -313,6 +337,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button type="button" onClick={() => navigate('artisan')} className="mobile-nav-item"><Users className="h-4 w-4" />Artisans</button>
                   <button type="button" onClick={() => navigate('about')} className="mobile-nav-item"><Info className="h-4 w-4" />About us</button>
                   <button type="button" onClick={() => navigate('contact')} className="mobile-nav-item"><Mail className="h-4 w-4" />Contact us</button>
+                  <button type="button" onClick={() => navigate('privacy')} className="mobile-nav-item"><Shield className="h-4 w-4" />Privacy policy</button>
+                  <a href="mailto:fountainsdsata234@gmail.com" onClick={() => setMobileMenuOpen(false)} className="mobile-nav-item"><Mail className="h-4 w-4" />Email us</a>
                   {currentUser && <button type="button" onClick={() => navigate('collections')} className="mobile-nav-item"><Bookmark className="h-4 w-4" />{isSeller ? 'Collection' : 'Saved'}</button>}
                   {isSeller && <button type="button" onClick={() => navigate('dashboard')} className="mobile-nav-item"><Scissors className="h-4 w-4" />Studio</button>}
                   {(currentUser?.role === 'admin' || currentUser?.isSuperAdmin) && <button type="button" onClick={() => navigate('admin')} className="mobile-nav-item"><Shield className="h-4 w-4" />Admin</button>}
