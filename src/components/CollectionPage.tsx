@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bookmark, Image as ImageIcon, Trash2, Sparkles, ShieldAlert, Plus, X, Layers, Upload, CheckCircle2 } from 'lucide-react';
+import { Bookmark, Image as ImageIcon, Trash2, Sparkles, Plus, X, Layers, Upload, CheckCircle2 } from 'lucide-react';
 import { SavedPhoto, SellerCollection, User } from '../types';
 import { storageService } from '../services/storage';
 import { uploadUserImage } from '../services/mediaUpload';
@@ -546,15 +546,6 @@ export const CollectionPage: React.FC<CollectionPageProps> = ({ currentUser, isD
         )}
       </div>
 
-      <div className={`rounded-3xl border p-4 sm:p-5 ${isDarkMode ? 'bg-[#121316] border-neutral-800' : 'bg-white border-neutral-200 shadow-sm'}`}>
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <ShieldAlert className="w-4 h-4 text-amber-400" />
-          Monetization & Ads Flow
-        </div>
-        <p className={`mt-2 text-xs leading-relaxed ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'}`}>
-          For a real production setup, the cleanest path is to offer 5 free collection slots, then unlock extra storage through a low-friction paid plan or ad-supported booster. You can integrate Monetag, AdSense, or a custom rewarded-video offer wall later without changing the UI structure.
-        </p>
-      </div>
     </div>
   );
 };
