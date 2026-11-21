@@ -200,7 +200,7 @@ export const getAuthErrorMessage = (error: unknown) => {
     return 'Too many sign-up attempts were made recently. Wait a few minutes before trying again. If you have already created an account, sign in or reset your password instead.';
   }
   if (code === 'weak_password' || /password.*(weak|short|at least|minimum)|weak password/.test(normalizedMessage)) {
-    return 'That password does not meet the security requirements. Use at least 8 characters.';
+    return 'That password does not meet the security requirements. Use at least 12 characters.';
   }
   if (['user_already_registered', 'email_exists', 'user_already_exists'].includes(code)
     || /already registered|already exists|email.*in use/.test(normalizedMessage)) {
@@ -213,7 +213,7 @@ export const getAuthErrorMessage = (error: unknown) => {
     return 'New account creation is temporarily unavailable. Please try again later.';
   }
   if (/email not confirmed|email_not_confirmed/.test(`${code} ${normalizedMessage}`)) {
-    return 'This account could not sign in. Check your email and password, then try again.';
+    return 'Confirm your email using the link we sent you before signing in. Check your inbox and spam folder.';
   }
   if (code === 'invalid_credentials' || /invalid login credentials|invalid email or password/.test(normalizedMessage)) {
     return 'The email or password is incorrect. Check your details or reset your password.';

@@ -3,6 +3,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import { fulfillCollectionSlotPayment } from './collectionSlotFulfillment.js';
 import { getMessaging } from 'firebase-admin/messaging';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { Transaction } from 'firebase-admin/firestore';
@@ -2446,27 +2447,11 @@ app.get('/api/paystack/verify', requireAuth, async (req: AuthenticatedRequest, r
 async function activateCollectionSlot(reference: string, providerData: Record<string, unknown> = {}) {
   const supabase = paystackSupabase();
   if (!supabase) throw new Error('Supabase is required for collection slots.');
-  const { data: payment } = await supabase.from('collection_slot_payments').select('*').eq('reference', reference).maybeSingle();
-  if (!payment || payment.status === 'successful' || payment.status === 'refunded') return payment;
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('collection_slots_purchased')
-    .eq('id', payment.user_id)
-    .single();
-  if (profileError) throw profileError;
-  const purchasedSlots = Math.min(28, Number(profile.collection_slots_purchased || 0) + 1);
-  const { error: profileUpdateError } = await supabase.from('profiles').update({
-    collection_slots_purchased: purchasedSlots,
-    updated_at: new Date().toISOString(),
-  }).eq('id', payment.user_id);
-  if (profileUpdateError) throw profileUpdateError;
-  await supabase.from('collection_slot_payments').update({
-    status: 'successful',
-    provider_data: providerData,
-    updated_at: new Date().toISOString(),
-  }).eq('reference', reference);
-  return { ...payment, purchasedSlots };
+  return fulfillCollectionSlotPayment(
+    (functionName: string, args: Record<string, unknown>) => supabase.rpc(functionName, args),
+    reference,
+    providerData,
+  );
 }
 
 app.post('/api/collection-slots/initialize', requireAuth, requireActiveAccount, async (req: AuthenticatedRequest, res: Response) => {
@@ -2536,9 +2521,8 @@ app.get('/api/collection-slots/verify', requireAuth, async (req: AuthenticatedRe
     res.status(400).json({ error: 'This collection slot payment could not be verified.' });
     return;
   }
-  const activated = await activateCollectionSlot(reference, provider.data as Record<string, unknown>);
+  await activateCollectionSlot(reference, provider.data as Record<string, unknown>);
   const { data: profile } = await supabase.from('profiles').select('collection_slots_purchased').eq('id', req.authUser!.uid).single();
-  void activated;
   res.json({ purchasedSlots: Number(profile?.collection_slots_purchased || 0) });
 });
 

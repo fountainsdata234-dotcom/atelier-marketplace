@@ -14,7 +14,7 @@ describe('authentication error messages', () => {
 
   it('explains weak password responses with the signup requirements', () => {
     expect(getAuthErrorMessage({ code: 'weak_password', message: 'Password too weak' }))
-      .toContain('at least 8 characters');
+      .toContain('at least 12 characters');
   });
 
   it('explains invalid login credentials and offers recovery steps', () => {
@@ -24,7 +24,7 @@ describe('authentication error messages', () => {
 
   it('does not expose Supabase email-confirmation configuration details', () => {
     expect(getAuthErrorMessage({ code: 'email_not_confirmed', message: 'Email not confirmed' }))
-      .toMatch(/account could not sign in.*check your email and password/i);
+      .toMatch(/confirm your email.*link.*inbox and spam folder/i);
   });
 
   it('directs possibly existing accounts to sign in or recover access', () => {

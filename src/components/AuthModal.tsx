@@ -421,7 +421,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     accountCreated = true;
 
     if (!signupResult.hasSession) {
-      setSuccessMsg('Your account was created. Please sign in with your email and password.');
+      setSuccessMsg('Your account was created. Check your email, including the spam folder, for a confirmation link. Confirm your email before signing in.');
       setPassword('');
       setConfirmPassword('');
       setIsRegistering(false);
