@@ -368,6 +368,7 @@ async function activatePaystackPayment(reference: string, paymentData?: Record<s
     .maybeSingle();
   if (error) throw error;
   if (!payment || payment.status === 'refunded') return null;
+  if (payment.status === 'successful') return payment;
 
   const plan = PAYSTACK_PLANS[payment.plan_id as keyof typeof PAYSTACK_PLANS];
   if (!plan) throw new Error('Unknown premium plan.');
@@ -1169,12 +1170,24 @@ function buildProfileUpdate(input: Record<string, unknown>) {
   if (typeof input.role === 'string' && ['buyer', 'tailor', 'fabric_seller'].includes(input.role)) updates.role = input.role;
   if (typeof input.phone === 'string') updates.phone = input.phone.slice(0, 40);
   if (typeof input.countryCode === 'string') updates.countryCode = input.countryCode.slice(0, 8);
-  if (input.location && typeof input.location === 'object') updates.location = input.location;
+  if (input.location && typeof input.location === 'object' && !Array.isArray(input.location)) {
+    const serializedLocation = JSON.stringify(input.location);
+    if (serializedLocation.length <= 10_000) {
+      updates.location = JSON.parse(serializedLocation) as Record<string, unknown>;
+    }
+  }
   if (typeof input.whatsappNumber === 'string') updates.whatsappNumber = input.whatsappNumber.slice(0, 40);
   if (typeof input.shopName === 'string') updates.shopName = input.shopName.trim().slice(0, 120);
   if (typeof input.bio === 'string') updates.bio = input.bio.trim().slice(0, 1000);
   if (typeof input.handle === 'string') updates.handle = input.handle.trim().slice(0, 60);
-  if (typeof input.avatarUrl === 'string') updates.avatarUrl = input.avatarUrl.slice(0, 2_000_000);
+  if (typeof input.avatarUrl === 'string') {
+    const avatarUrl = input.avatarUrl.trim();
+    if (!avatarUrl) {
+      updates.avatarUrl = '';
+    } else if (/^https:\/\//i.test(avatarUrl) && avatarUrl.length <= 2048) {
+      updates.avatarUrl = avatarUrl;
+    }
+  }
   if (input.promotionTargeting && typeof input.promotionTargeting === 'object' && !Array.isArray(input.promotionTargeting)) {
     const targeting = input.promotionTargeting as Record<string, unknown>;
     updates.promotionTargeting = {
@@ -1188,9 +1201,10 @@ function buildProfileUpdate(input: Record<string, unknown>) {
   if (typeof input.isBlocked === 'boolean') updates.isBlocked = input.isBlocked;
   if (typeof input.isWarned === 'boolean') updates.isWarned = input.isWarned;
   if (typeof input.warningNote === 'string') updates.warningNote = input.warningNote.trim().slice(0, 500);
-  if (typeof input.isSuperAdmin === 'boolean') updates.isSuperAdmin = input.isSuperAdmin;
-  if (typeof input.addedByEmail === 'string') updates.addedByEmail = input.addedByEmail.slice(0, 200);
-  if (Array.isArray(input.followers)) updates.followers = input.followers.filter((item): item is string => typeof item === 'string').slice(0, 200);
+  // Privilege/sensitive fields are server-controlled and must not be client-writable through generic profile updates.
+  delete updates.isSuperAdmin;
+  delete updates.addedByEmail;
+  delete updates.followers;
   updates.updatedAt = new Date().toISOString();
 
   return updates;
@@ -2526,7 +2540,7 @@ app.get('/api/collection-slots/verify', requireAuth, async (req: AuthenticatedRe
   res.json({ purchasedSlots: Number(profile?.collection_slots_purchased || 0) });
 });
 
-app.get('/api/paystack/config-status', async (_req: Request, res: Response) => {
+app.get('/api/paystack/config-status', requireAuth, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
   if (!secret) {
     res.json({ configured: false, keyMode: null, providerReachable: false });
@@ -2576,6 +2590,10 @@ app.put('/api/promo-plans', requireAuth, requireAdmin, async (req: Authenticated
 
 app.put('/api/users/:uid/profile', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res) => {
   const updates = buildProfileUpdate(req.body || {});
+  delete updates.isSuperAdmin;
+  delete updates.addedByEmail;
+  delete updates.followers;
+  delete updates.role;
   const uid = req.params.uid;
   const existing = await readProfile(uid);
   if (!existing) {
@@ -5783,8 +5801,13 @@ app.post('/api/messages', requireAuth, requireActiveAccount, async (req: Authent
       return;
     }
   }
+  const senderProfile = await readProfile(req.authUser!.uid);
+  const senderName = String(senderProfile?.name || senderProfile?.handle || senderProfile?.shopName || req.authUser!.email?.split('@')[0] || 'Atelier member').trim().slice(0, 120);
+  const senderRole = req.authUser!.admin === true || senderProfile?.role === 'admin'
+    ? 'admin'
+    : ['buyer', 'tailor', 'fabric_seller'].includes(String(senderProfile?.role)) ? String(senderProfile?.role) : 'buyer';
   const message = {
-    sender_id: req.authUser!.uid, sender_name: String(input.senderName || '').slice(0, 120), sender_role: String(input.senderRole || 'buyer'),
+    sender_id: req.authUser!.uid, sender_name: senderName, sender_role: senderRole,
     recipient_id: input.recipientId, recipient_name: String(input.recipientName || '').slice(0, 120),
     post_id: typeof input.postId === 'string' ? input.postId : '', post_title: typeof input.postTitle === 'string' ? input.postTitle.slice(0, 160) : '',
     content: input.content.trim().slice(0, 3000), timestamp: new Date().toISOString(), is_read: false,
