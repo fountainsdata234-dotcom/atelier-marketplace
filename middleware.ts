@@ -57,7 +57,6 @@ export default async function middleware(request: Request) {
   const contentType = originResponse.headers.get('content-type') || '';
   const headers = new Headers(originResponse.headers);
   headers.set('Content-Security-Policy', csp);
-  headers.delete('content-length');
 
   if (!contentType.includes('text/html')) {
     return new Response(originResponse.body, {
@@ -66,6 +65,9 @@ export default async function middleware(request: Request) {
       headers,
     });
   }
+
+  headers.delete('content-length');
+  headers.delete('content-encoding');
 
   if (request.method === 'HEAD') {
     return new Response(null, {
