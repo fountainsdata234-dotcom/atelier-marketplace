@@ -1657,7 +1657,7 @@ app.post(
     const preparedImages: Buffer[] = [];
     try {
       for (const file of files) {
-        let metadata: sharp.Metadata;
+        let metadata: Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
         try {
           metadata = await sharp(file.buffer, { limitInputPixels: 40_000_000 }).metadata();
         } catch {
