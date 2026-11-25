@@ -308,7 +308,7 @@ export const api = {
   uploadAdminStyleReferences: async (files: File[], onProgress?: (progress: number) => void) => {
     if (files.length < 1 || files.length > 10) throw new Error('Choose between 1 and 10 style reference images at a time.');
     const oversizedFile = files.find(file => file.size > MAX_IMAGE_UPLOAD_BYTES);
-    if (oversizedFile) throw new Error('Style reference images must be 8 MB or smaller each.');
+    if (oversizedFile) throw new Error('Style reference images must be 3 MB or smaller each.');
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
     files.forEach(file => formData.append('images', file, file.name));
@@ -551,7 +551,7 @@ export const api = {
   moderateListing: (listingId: string, decision: 'approve' | 'reject', reason?: string) => request<ClothPost>(`/api/admin/listings/${listingId}/moderation`, { method: 'PATCH', body: JSON.stringify({ decision, reason }) }),
   reportListing: (listingId: string, reason: string, details?: string) => request<{ ok: boolean }>(`/api/posts/${listingId}/report`, { method: 'POST', body: JSON.stringify({ reason, details }) }),
   uploadListingImage: async (file: Blob, fileName: string, onProgress?: (progress: number) => void): Promise<ListingImageAsset> => {
-    if (file.size > MAX_IMAGE_UPLOAD_BYTES) throw new Error('Post images must be 8 MB or smaller.');
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) throw new Error('Post images must be 3 MB or smaller.');
     const token = await getAuthTokenForRequest();
     const formData = new FormData();
     formData.append('image', file, fileName.replace(/\.[^.]+$/, '') + '.jpg');

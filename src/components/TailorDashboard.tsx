@@ -271,7 +271,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
       if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
         throw new Error('Choose JPEG, PNG, WebP, or GIF images.');
       }
-      if (file.size > 8 * 1024 * 1024) throw new Error(`${file.name} exceeds the 8 MB image limit.`);
+      if (file.size > 3 * 1024 * 1024) throw new Error(`${file.name} exceeds the 3 MB image limit.`);
       const result = await compressAndGenerateImageLink(file);
       if (!result.blob) throw new Error('Please sign in again before uploading an image.');
       const uploadedAsset = await api.uploadListingImage(result.blob, `${Date.now()}-${file.name}`, setImageUploadProgress);
@@ -758,7 +758,7 @@ export const TailorDashboard: React.FC<TailorDashboardProps> = ({
                       <label htmlFor="tailor-file-input" className="flex cursor-pointer flex-col items-center justify-center">
                         <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400"><ImageIcon className="h-6 w-6" /></div>
                         <span className="text-xs font-semibold text-neutral-200">{isProcessingImage ? `Uploading ${imageUploadProgress}%…` : imageUrl ? 'Choose a different photo' : 'Choose a photo'}</span>
-                        <span className="mt-1 text-[10px] text-neutral-500">JPEG, PNG, WebP, or GIF · up to 8 MB</span>
+                        <span className="mt-1 text-[10px] text-neutral-500">JPEG, PNG, WebP, or GIF · up to 3 MB</span>
                       </label>
                       {isProcessingImage && <div className="mx-auto mt-3 max-w-sm"><div className="h-1.5 overflow-hidden rounded-full bg-neutral-800"><div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${imageUploadProgress}%` }} /></div><p className="mt-1 text-[10px] text-amber-300">{imageUploadProgress}% uploaded</p></div>}
                     </div>

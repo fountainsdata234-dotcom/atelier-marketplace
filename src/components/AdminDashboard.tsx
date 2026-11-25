@@ -189,7 +189,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     if (files.some(file => file.size > MAX_IMAGE_UPLOAD_BYTES)) {
       setAdminStyleReferenceFiles([]);
-      setAdminStyleReferenceStatus('Each image must be 8 MB or smaller.');
+      setAdminStyleReferenceStatus('Each image must be 3 MB or smaller.');
       return;
     }
     setAdminStyleReferenceFiles(files);
@@ -1535,7 +1535,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="sr-only"
                   />
                 </label>
-                <p className={`text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>JPEG, PNG, or WebP · up to 10 images · 8 MB each</p>
+                <p className={`text-[11px] ${isDarkMode ? 'text-neutral-500' : 'text-neutral-600'}`}>JPEG, PNG, or WebP · up to 10 images · 3 MB each</p>
               </div>
               <button
                 type="button"

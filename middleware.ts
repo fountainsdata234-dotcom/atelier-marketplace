@@ -1,5 +1,7 @@
 ﻿import { next } from '@vercel/functions';
 
+const NONCE_FETCH_HEADER = 'x-csp-nonce-fetch';
+
 const buildCsp = (nonce: string) =>
   [
     "default-src 'self'",
@@ -21,33 +23,62 @@ const buildCsp = (nonce: string) =>
   ].join('; ');
 
 const injectNonce = (html: string, nonce: string) =>
-  html.replace(/<(script|style)(\s|>)/gi, (_, tag: string, tail: string) => `<${tag} nonce="${nonce}"${tail}`);
+  html.replace(/<(script|style|link)(\s|>)/gi, (_, tag: string, tail: string) => `<${tag} nonce="${nonce}"${tail}`);
 
 export const config = {
-  matcher: ['/((?!api/|_next/static|_next/image|favicon.ico|.*\\.[^/]+$).*)'],
+  matcher: ['/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?!html$)[^/]+$).*)'],
 };
 
 export default async function middleware(request: Request) {
   const nonce = crypto.randomUUID().replace(/-/g, '');
-  const response = await next();
-  const contentType = response.headers.get('content-type') || '';
+  const csp = buildCsp(nonce);
+
+  if (request.headers.get(NONCE_FETCH_HEADER) === '1') {
+    return next({ headers: { 'Content-Security-Policy': csp } });
+  }
+
+  const accept = request.headers.get('accept') || '';
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return next({ headers: { 'Content-Security-Policy': csp } });
+  }
+
+  if (!accept.includes('text/html')) {
+    return next({ headers: { 'Content-Security-Policy': csp } });
+  }
+
+  const originHeaders = new Headers(request.headers);
+  originHeaders.set(NONCE_FETCH_HEADER, '1');
+  const originResponse = await fetch(request.url, {
+    method: request.method,
+    headers: originHeaders,
+    redirect: 'manual',
+  });
+
+  const contentType = originResponse.headers.get('content-type') || '';
+  const headers = new Headers(originResponse.headers);
+  headers.set('Content-Security-Policy', csp);
+  headers.delete('content-length');
 
   if (!contentType.includes('text/html')) {
-    const headers = new Headers(response.headers);
-    headers.set('Content-Security-Policy', buildCsp(nonce));
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
+    return new Response(originResponse.body, {
+      status: originResponse.status,
+      statusText: originResponse.statusText,
       headers,
     });
   }
 
-  const html = await response.text();
-  const headers = new Headers(response.headers);
-  headers.set('Content-Security-Policy', buildCsp(nonce));
+  if (request.method === 'HEAD') {
+    return new Response(null, {
+      status: originResponse.status,
+      statusText: originResponse.statusText,
+      headers,
+    });
+  }
+
+  const html = await originResponse.text();
   return new Response(injectNonce(html, nonce), {
-    status: response.status,
-    statusText: response.statusText,
+    status: originResponse.status,
+    statusText: originResponse.statusText,
     headers,
   });
 }

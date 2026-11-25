@@ -269,10 +269,52 @@ function isLocalNetworkOrigin(origin: string) {
   }
 }
 
+const MAX_UPLOAD_BYTES = Math.max(MAX_IMAGE_UPLOAD_BYTES, MAX_STORY_IMAGE_UPLOAD_BYTES, MAX_STORY_VIDEO_UPLOAD_BYTES);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMAGE_UPLOAD_BYTES },
+  limits: { fileSize: MAX_UPLOAD_BYTES },
 });
+
+const IMAGE_SIGNATURES = [
+  { mime: 'image/jpeg', check: (buffer: Buffer) => buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff },
+  { mime: 'image/png', check: (buffer: Buffer) => buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 && buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a },
+  { mime: 'image/gif', check: (buffer: Buffer) => buffer.length >= 6 && (buffer.toString('ascii', 0, 6) === 'GIF87a' || buffer.toString('ascii', 0, 6) === 'GIF89a') },
+  { mime: 'image/webp', check: (buffer: Buffer) => buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP' },
+  { mime: 'image/heic', check: (buffer: Buffer) => isFtypBrand(buffer, ['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1']) },
+  { mime: 'image/heif', check: (buffer: Buffer) => isFtypBrand(buffer, ['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1']) },
+] as const;
+
+function isFtypBrand(buffer: Buffer, brands: string[]) {
+  if (buffer.length < 12 || buffer.toString('ascii', 4, 8) !== 'ftyp') return false;
+  const major = buffer.toString('ascii', 8, 12).toLowerCase();
+  if (brands.includes(major)) return true;
+  for (let offset = 16; offset + 4 <= Math.min(buffer.length, 64); offset += 4) {
+    const brand = buffer.toString('ascii', offset, offset + 4).toLowerCase();
+    if (brands.includes(brand)) return true;
+  }
+  return false;
+}
+
+function detectImageMime(buffer: Buffer) {
+  return IMAGE_SIGNATURES.find(signature => signature.check(buffer))?.mime ?? null;
+}
+
+function detectVideoMime(buffer: Buffer) {
+  if (buffer.length < 12) return null;
+  if (buffer.toString('ascii', 4, 8) === 'ftyp') {
+    const major = buffer.toString('ascii', 8, 12).toLowerCase();
+    const brands: string[] = [major];
+    for (let offset = 16; offset + 4 <= Math.min(buffer.length, 64); offset += 4) {
+      brands.push(buffer.toString('ascii', offset, offset + 4).toLowerCase());
+    }
+    if (brands.some(brand => brand === 'qt  ' || brand === 'qt')) return 'video/quicktime';
+    if (brands.some(brand => ['isom', 'iso2', 'mp41', 'mp42', 'm4v ', 'avc1'].includes(brand))) return 'video/mp4';
+  }
+  if (buffer.length >= 4 && buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) {
+    return 'video/webm';
+  }
+  return null;
+}
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -1671,6 +1713,15 @@ app.post(
     const preparedImages: Buffer[] = [];
     try {
       for (const file of files) {
+        if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+          res.status(413).json({ error: 'Each style reference image must be 3 MB or smaller.' });
+          return;
+        }
+        const detectedImageMime = detectImageMime(file.buffer);
+        if (!detectedImageMime || !['image/jpeg', 'image/png', 'image/webp'].includes(detectedImageMime)) {
+          res.status(400).json({ error: 'Use valid JPEG, PNG, or WebP images for style references.' });
+          return;
+        }
         let metadata: Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
         try {
           metadata = await sharp(file.buffer, { limitInputPixels: 40_000_000 }).metadata();
@@ -2131,7 +2182,11 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
 
   const requestedFolder = String(req.body?.folder || 'atelier');
   const safeFolder = ['profiles', 'posts', 'atelier', 'stories'].includes(requestedFolder) ? requestedFolder : 'atelier';
-  const isVideo = req.file.mimetype.startsWith('video/');
+  const detectedImageMime = detectImageMime(req.file.buffer);
+  const detectedVideoMime = detectVideoMime(req.file.buffer);
+  const declaredMime = req.file.mimetype.toLowerCase();
+  const isVideo = declaredMime.startsWith('video/') || detectedVideoMime !== null;
+
   if (isVideo && safeFolder !== 'stories') {
     res.status(400).json({ error: 'Video uploads are only supported for stories.' });
     return;
@@ -2144,8 +2199,8 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
       error: safeFolder === 'stories' && isVideo
         ? 'Story videos must be 5 MB or smaller.'
         : safeFolder === 'stories'
-          ? 'Story photos must be 5 MB or smaller.'
-          : 'Images must be 8 MB or smaller.',
+          ? 'Story photos must be 3 MB or smaller.'
+          : 'Images must be 3 MB or smaller.',
     });
     return;
   }
@@ -2169,7 +2224,11 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
   }
 
   try {
-    if (safeFolder === 'stories' && ['image/heic', 'image/heif'].includes(req.file.mimetype)) {
+    if (safeFolder === 'stories' && (['image/heic', 'image/heif'].includes(declaredMime) || ['image/heic', 'image/heif'].includes(detectedImageMime || ''))) {
+      if (!['image/heic', 'image/heif'].includes(detectedImageMime || '')) {
+        res.status(400).json({ error: 'The uploaded file is not a valid HEIC/HEIF image.' });
+        return;
+      }
       if (!cloudinaryConfigured) {
         res.status(415).json({ error: 'HEIC photos need Cloudinary processing. Choose a JPEG or PNG photo instead.' });
         return;
@@ -2178,19 +2237,31 @@ app.post('/api/upload', requireAuth, requireActiveAccount, requireAbuseLimit('im
       res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.publicId, mediaType: 'image', mimeType: 'image/jpeg' });
       return;
     }
-    if (safeFolder === 'stories' && req.file.mimetype.startsWith('video/')) {
-      if (!['video/mp4', 'video/webm', 'video/quicktime'].includes(req.file.mimetype)) {
+    if (safeFolder === 'stories' && isVideo) {
+      const allowedVideoMimes = ['video/mp4', 'video/webm', 'video/quicktime'];
+      if (!detectedVideoMime || !allowedVideoMimes.includes(detectedVideoMime)) {
+        res.status(400).json({ error: 'Upload a valid MP4, WebM, or MOV video up to 5 MB.' });
+        return;
+      }
+      if (declaredMime.startsWith('video/') && !allowedVideoMimes.includes(declaredMime)) {
         res.status(400).json({ error: 'Upload an MP4, WebM, or MOV video up to 5 MB.' });
         return;
       }
       if (cloudinaryConfigured) {
         const uploaded = await uploadCompressedStoryToCloudinary(req.file.buffer, req.authUser!.uid, 'video');
-        res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.publicId, mediaType: 'video', mimeType: req.file.mimetype });
+        res.status(201).json({ url: uploaded.url, thumbnailUrl: uploaded.url, publicId: uploaded.publicId, mediaType: 'video', mimeType: detectedVideoMime });
         return;
       }
       res.status(503).json({ error: 'Story video compression is temporarily unavailable. Please try again later.' });
       return;
     }
+
+    const allowedImageMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!detectedImageMime || !allowedImageMimes.includes(detectedImageMime)) {
+      res.status(400).json({ error: 'Upload a valid JPEG, PNG, WebP, or GIF image.' });
+      return;
+    }
+
     const metadata = await sharp(req.file.buffer, { limitInputPixels: 40_000_000 }).metadata();
     if (!metadata.width || !metadata.height || !['jpeg', 'png', 'webp', 'gif'].includes(metadata.format || '')) {
       res.status(400).json({ error: 'Upload a valid JPEG, PNG, WebP, or GIF image.' });
@@ -6224,7 +6295,7 @@ app.delete('/api/admin/sellers/:uid', requireAuth, requireAdmin, async (req: Aut
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-    res.status(413).json({ error: 'Images must be 8 MB or smaller. Story photos and videos must be 5 MB or smaller.', code: 'UPLOAD_TOO_LARGE' });
+    res.status(413).json({ error: 'Images must be 3 MB or smaller. Story videos must be 5 MB or smaller.', code: 'UPLOAD_TOO_LARGE' });
     return;
   }
   console.error('API error', error);
