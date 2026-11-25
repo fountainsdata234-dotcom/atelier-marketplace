@@ -49,7 +49,7 @@ export async function compressAndGenerateImageLink(
   file: File
 ): Promise<ProcessedImageResult> {
   if (file.size > 8 * 1024 * 1024) {
-    throw new Error('Images must be 8 MB or smaller.');
+    throw new Error('Images must be 3 MB or smaller.');
   }
   const originalSizeKb = Math.round(file.size / 1024);
 

@@ -1,5 +1,5 @@
-export const MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024;
-export const MAX_STORY_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
+export const MAX_STORY_IMAGE_UPLOAD_BYTES = 3 * 1024 * 1024;
 export const MAX_STORY_VIDEO_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 const STORY_MEDIA_MIME_BY_EXTENSION: Record<string, string> = {
@@ -32,7 +32,7 @@ export function getStoryUploadTypeError(file: File): string | null {
 
 export function getImageSizeError(file: File): string | null {
   return file.size > MAX_IMAGE_UPLOAD_BYTES
-    ? `${file.name} exceeds the 8 MB image limit.`
+    ? `${file.name} exceeds the 3 MB image limit.`
     : null;
 }
 
