@@ -340,8 +340,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError('Please enter your active phone number.');
       return;
     }
-    if (password.length < 8) {
-      setError(`Password is too short. Add ${8 - password.length} more character${8 - password.length === 1 ? '' : 's'} (8 minimum).`);
+    if (password.length < 12) {
+      setError(`Password is too short. Add ${12 - password.length} more character${12 - password.length === 1 ? '' : 's'} (12 minimum).`);
       return;
     }
     const selectedCountryInput = countrySearch.trim().toLowerCase();
@@ -421,7 +421,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     accountCreated = true;
 
     if (!signupResult.hasSession) {
-      setSuccessMsg('Your account was created. Please sign in with your email and password.');
+      setSuccessMsg('Your account was created. Check your email, including the spam folder, for a confirmation link. Confirm your email before signing in.');
       setPassword('');
       setConfirmPassword('');
       setIsRegistering(false);
@@ -940,7 +940,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use at least 8 characters. Longer passwords are welcome.</p>}
+            {isRegistering && <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">Use at least 12 characters. Longer passwords are welcome.</p>}
           </div>
 
           {isRegistering && (

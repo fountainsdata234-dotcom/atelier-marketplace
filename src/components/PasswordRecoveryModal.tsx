@@ -18,8 +18,8 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({ is
     event.preventDefault();
     setError(null);
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.');
+    if (password.length < 12) {
+      setError('Password must be at least 12 characters long.');
       return;
     }
     if (password !== confirmPassword) {
@@ -88,7 +88,7 @@ export const PasswordRecoveryModal: React.FC<PasswordRecoveryModalProps> = ({ is
               className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-800/40 px-3 py-3 text-sm focus:border-amber-500 focus:outline-none"
             />
           </label>
-          <p className="text-xs text-neutral-500">Use at least 8 characters.</p>
+          <p className="text-xs text-neutral-500">Use at least 12 characters.</p>
           <button
             type="submit"
             disabled={isSubmitting || success}
