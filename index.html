@@ -92,6 +92,22 @@
 
     <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      (function () {
+        var nonce = document.currentScript && (document.currentScript.nonce || document.currentScript.getAttribute('nonce'));
+        if (!nonce) return;
+        var originalCreateElement = document.createElement;
+        document.createElement = function (tagName, options) {
+          var element = originalCreateElement.call(document, tagName, options);
+          var tag = String(tagName || '').toLowerCase();
+          if (tag === 'style' || tag === 'script' || tag === 'link') {
+            element.setAttribute('nonce', nonce);
+          }
+          return element;
+        };
+        window.__webpack_nonce__ = nonce;
+      })();
+    </script>
   </head>
   <body class="bg-[#0c0d10] text-[#f4f4f6] antialiased selection:bg-amber-500/30 selection:text-amber-200">
     <div id="root">
