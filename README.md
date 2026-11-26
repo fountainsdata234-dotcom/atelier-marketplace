@@ -15,7 +15,7 @@ You do not need Android Studio or an Android SDK on your computer. GitHub Action
 
 After a signed APK is published, Android visitors can use the website's **Install app** button to download it. Android will still require the user to open the downloaded APK and approve the installation; websites cannot silently install Android packages. The button is hidden when Chrome can confirm that the native app is already installed. The workflow publishes each successful APK build as the latest GitHub Release, which is the download used by that button.
 
-The signing key is permanent for app updates and domain verification. Never generate a replacement after publishing unless you intend to migrate the Android app signing identity. For local Android Studio builds, run `npm run android:twa:update` and `npm run android:twa:build`.
+The signing key is permanent for app updates and domain verification. Never generate a replacement after publishing unless you intend to migrate the Android app signing identity. The checked-in `android/` project is built directly by the GitHub Actions workflow; the web application's dependency install does not include Android project-generation tooling.
 
 FABSATTIRE is a fashion and textile marketplace built to help shoppers discover real tailors, fabric sellers, and makers in their area. The app is designed around a practical problem: people often struggle to find reliable local artisans, compare services, and buy custom clothing or fabric without dealing with fragmented WhatsApp-only chains.
 
